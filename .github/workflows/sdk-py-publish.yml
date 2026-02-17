@@ -53,13 +53,16 @@ jobs:
 
       - name: Resolve publish mode
         shell: bash
+        env:
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+          INPUT_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
             echo "PY_SDK_TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
             echo "PY_SDK_DRY_RUN=false" >> "$GITHUB_ENV"
           else
-            input_tag="${{ github.event.inputs.tag }}"
+            input_tag="${INPUT_TAG}"
             if [[ -z "$input_tag" ]]; then
               version="$(python -c 'from pathlib import Path; import tomllib; doc = tomllib.loads(Path("packages/python-sdk/pyproject.toml").read_text(encoding="utf-8")); print(doc.get("project", {}).get("version", ""))')"
               if [[ -z "$version" ]]; then
@@ -69,7 +72,7 @@ jobs:
               input_tag="py-sdk-v${version}"
             fi
             echo "PY_SDK_TAG=$input_tag" >> "$GITHUB_ENV"
-            echo "PY_SDK_DRY_RUN=${{ github.event.inputs.dry_run }}" >> "$GITHUB_ENV"
+            echo "PY_SDK_DRY_RUN=${INPUT_DRY_RUN}" >> "$GITHUB_ENV"
           fi
 
       - name: Release contract checks
