@@ -56,7 +56,12 @@ jobs:
           else
             input_tag="${{ github.event.inputs.tag }}"
             if [[ -z "$input_tag" ]]; then
-              input_tag="sdk-v$(jq -r '.version' packages/sdk/package.json)"
+              version="$(node -e 'const fs=require(\"fs\"); const p=JSON.parse(fs.readFileSync(\"packages/sdk/package.json\",\"utf8\")); process.stdout.write((p&&p.version)||\"\");')"
+              if [[ -z "$version" ]]; then
+                echo "failed to resolve sdk version from packages/sdk/package.json" >&2
+                exit 1
+              fi
+              input_tag="sdk-v${version}"
             fi
             echo "SDK_TAG=$input_tag" >> "$GITHUB_ENV"
             echo "SDK_DRY_RUN=${{ github.event.inputs.dry_run }}" >> "$GITHUB_ENV"

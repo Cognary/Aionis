@@ -18,11 +18,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if ! command -v jq >/dev/null 2>&1; then
-  echo "jq is required." >&2
-  exit 1
-fi
-
 has_match() {
   local pattern="$1"
   local file="$2"
@@ -37,8 +32,13 @@ PKG_JSON="packages/sdk/package.json"
 CHANGELOG="packages/sdk/CHANGELOG.md"
 MATRIX="docs/SDK_COMPATIBILITY_MATRIX.md"
 
-version="$(jq -r '.version' "$PKG_JSON")"
-if [[ -z "$version" || "$version" == "null" ]]; then
+if ! command -v node >/dev/null 2>&1; then
+  echo "node is required." >&2
+  exit 1
+fi
+
+version="$(node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write((p&&p.version)||"");' "$PKG_JSON")"
+if [[ -z "$version" ]]; then
   echo "invalid sdk version in $PKG_JSON" >&2
   exit 1
 fi
