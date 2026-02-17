@@ -23,6 +23,16 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
+has_match() {
+  local pattern="$1"
+  local file="$2"
+  if command -v rg >/dev/null 2>&1; then
+    rg -n -- "$pattern" "$file" >/dev/null
+  else
+    grep -En -- "$pattern" "$file" >/dev/null
+  fi
+}
+
 PKG_JSON="packages/sdk/package.json"
 CHANGELOG="packages/sdk/CHANGELOG.md"
 MATRIX="docs/SDK_COMPATIBILITY_MATRIX.md"
@@ -48,12 +58,12 @@ if [[ -n "$TAG" ]]; then
   fi
 fi
 
-if ! rg -n "^## \\[$version\\]" "$CHANGELOG" >/dev/null; then
+if ! has_match "^## \\[$version\\]" "$CHANGELOG"; then
   echo "missing changelog entry for version $version in $CHANGELOG" >&2
   exit 1
 fi
 
-if ! rg -n "$minor_x|$version" "$MATRIX" >/dev/null; then
+if ! has_match "$minor_x|$version" "$MATRIX"; then
   echo "missing compatibility matrix entry for $minor_x or $version in $MATRIX" >&2
   exit 1
 fi
