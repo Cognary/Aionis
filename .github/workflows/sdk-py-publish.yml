@@ -56,7 +56,11 @@ jobs:
           else
             input_tag="${{ github.event.inputs.tag }}"
             if [[ -z "$input_tag" ]]; then
-              version="$(python -c 'import re; from pathlib import Path; text = Path("packages/python-sdk/pyproject.toml").read_text(encoding="utf-8"); m = re.search(r"^\\s*version\\s*=\\s*\"([^\"]+)\"\\s*$", text, re.MULTILINE); print(m.group(1) if m else "")')"
+              version="$(python -c 'from pathlib import Path; import tomllib; doc = tomllib.loads(Path("packages/python-sdk/pyproject.toml").read_text(encoding="utf-8")); print(doc.get("project", {}).get("version", ""))')"
+              if [[ -z "$version" ]]; then
+                echo "failed to resolve python sdk version from packages/python-sdk/pyproject.toml" >&2
+                exit 1
+              fi
               input_tag="py-sdk-v${version}"
             fi
             echo "PY_SDK_TAG=$input_tag" >> "$GITHUB_ENV"
