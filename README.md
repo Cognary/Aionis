@@ -45,6 +45,10 @@ Apply deletion:
 ./examples/killer_demo_cleanup.sh --all --apply
 ```
 
+External developer quick onboarding:
+
+- [5-Minute Developer Onboarding](docs/ONBOARDING_5MIN.md)
+
 ## Requirements
 
 - Docker Desktop (recommended) OR a local Postgres 16+ with `pgvector` installed
