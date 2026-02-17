@@ -5,8 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 TMP_LINKS="$(mktemp -t aionis-doc-links.XXXXXX)"
-TMP_TARGETS="$(mktemp -t aionis-doc-targets.XXXXXX)"
-trap 'rm -f "$TMP_LINKS" "$TMP_TARGETS"' EXIT
+trap 'rm -f "$TMP_LINKS"' EXIT
 
 perl -ne '
   while (/\[[^\]]*\]\(([^)]+)\)/g) {
@@ -21,22 +20,37 @@ perl -ne '
   }
 ' README.md docs/*.md src/jobs/README.md > "$TMP_LINKS"
 
-awk -F: '{print $3}' "$TMP_LINKS" | sort -u > "$TMP_TARGETS"
-
 missing=0
-while IFS= read -r target; do
+while IFS= read -r entry; do
+  src="${entry%%:*}"
+  rest="${entry#*:}"
+  line_no="${rest%%:*}"
+  target="${rest#*:}"
+
+  if [[ "$target" == "" ]]; then
+    continue
+  fi
+
   if [[ "$target" == /* ]]; then
-    if [[ ! -e "$target" ]]; then
-      echo "MISSING: $target"
-      missing=$((missing + 1))
-    fi
+    resolved="$target"
   else
-    if [[ ! -e "$ROOT_DIR/$target" ]]; then
-      echo "MISSING: $target"
-      missing=$((missing + 1))
+    src_dir="$(dirname "$src")"
+    if [[ "$src_dir" == "." ]]; then
+      resolved="$ROOT_DIR/$target"
+    else
+      resolved="$ROOT_DIR/$src_dir/$target"
     fi
   fi
-done < "$TMP_TARGETS"
+
+  if [[ ! -e "$resolved" ]]; then
+    if [[ "$target" == /* ]]; then
+      echo "MISSING: $target"
+    else
+      echo "MISSING: $target (from $src:$line_no)"
+    fi
+    missing=$((missing + 1))
+  fi
+done < "$TMP_LINKS"
 
 if [[ $missing -gt 0 ]]; then
   echo "docs-check: failed ($missing missing links)"
