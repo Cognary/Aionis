@@ -40,6 +40,11 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Install release-check tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
