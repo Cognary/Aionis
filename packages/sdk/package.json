@@ -1,0 +1,38 @@
+{
+  "name": "@aionis/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for Aionis Memory Graph API",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "pack:dry-run": "npm pack --dry-run --cache /tmp/aionis-npm-cache"
+  },
+  "keywords": [
+    "aionis",
+    "memory-graph",
+    "sdk",
+    "typescript"
+  ],
+  "author": "Aionis Core",
+  "license": "UNLICENSED"
+}

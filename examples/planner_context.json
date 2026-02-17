@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "run": {
+    "id": "run_2026_02_09_0001",
+    "mode": "interactive"
+  },
+  "request": {
+    "endpoint": "/v1/memory/recall_text",
+    "method": "POST"
+  },
+  "intent": "json",
+  "provider": "minimax",
+  "model": "minimax:embo-01",
+  "agent": {
+    "id": "agent_planner_primary",
+    "team_id": "team_default",
+    "role": "planner"
+  },
+  "tool": {
+    "name": "psql"
+  },
+  "user": {
+    "id": "lucio"
+  },
+  "scope": "default",
+  "tags": [
+    "memory",
+    "graph"
+  ],
+  "input": {
+    "content_type": "text/plain",
+    "pii_redaction_enabled": true
+  },
+  "output": {
+    "desired_format": "json"
+  }
+}

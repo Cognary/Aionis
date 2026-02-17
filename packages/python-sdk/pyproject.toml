@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aionis-sdk"
+version = "0.1.0"
+description = "Python SDK for Aionis Memory Graph API"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Aionis Core" }]
+license = { text = "UNLICENSED" }
+keywords = ["aionis", "memory-graph", "sdk", "python"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: Other/Proprietary License",
+]
+dependencies = []
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

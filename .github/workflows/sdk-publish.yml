@@ -1,0 +1,76 @@
+name: SDK Publish
+
+on:
+  push:
+    tags:
+      - "sdk-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. sdk-v0.1.0). Leave empty to use package version."
+        required: false
+        type: string
+      dry_run:
+        description: "If true, run publish dry-run only."
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build SDK
+        run: npm run -s sdk:build
+
+      - name: Resolve publish mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            echo "SDK_TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+            echo "SDK_DRY_RUN=false" >> "$GITHUB_ENV"
+          else
+            input_tag="${{ github.event.inputs.tag }}"
+            if [[ -z "$input_tag" ]]; then
+              input_tag="sdk-v$(jq -r '.version' packages/sdk/package.json)"
+            fi
+            echo "SDK_TAG=$input_tag" >> "$GITHUB_ENV"
+            echo "SDK_DRY_RUN=${{ github.event.inputs.dry_run }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Release contract checks
+        run: npm run -s sdk:release-check -- --tag "$SDK_TAG"
+
+      - name: Publish dry-run
+        if: env.SDK_DRY_RUN == 'true'
+        run: npm run -s sdk:publish:dry-run
+
+      - name: Publish to npm
+        if: env.SDK_DRY_RUN != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "NPM_TOKEN secret is required for publish" >&2
+            exit 1
+          fi
+          npm run -s sdk:publish

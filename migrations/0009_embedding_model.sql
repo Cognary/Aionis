@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE memory_nodes
+  ADD COLUMN IF NOT EXISTS embedding_model TEXT NULL;
+
+COMMIT;
+

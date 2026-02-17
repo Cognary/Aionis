@@ -1,0 +1,90 @@
+name: Python SDK Publish
+
+on:
+  push:
+    tags:
+      - "py-sdk-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. py-sdk-v0.1.0). Leave empty to use pyproject version."
+        required: false
+        type: string
+      dry_run:
+        description: "If true, run build+twine check only."
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      TWINE_USERNAME: __token__
+      TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+          npm ci
+
+      - name: Resolve publish mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            echo "PY_SDK_TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+            echo "PY_SDK_DRY_RUN=false" >> "$GITHUB_ENV"
+          else
+            input_tag="${{ github.event.inputs.tag }}"
+            if [[ -z "$input_tag" ]]; then
+              input_tag="py-sdk-v$(python - <<'PY'
+import re
+from pathlib import Path
+text = Path('packages/python-sdk/pyproject.toml').read_text(encoding='utf-8')
+m = re.search(r'^\s*version\s*=\s*"([^"]+)"\s*$', text, re.MULTILINE)
+print(m.group(1) if m else '')
+PY
+)"
+            fi
+            echo "PY_SDK_TAG=$input_tag" >> "$GITHUB_ENV"
+            echo "PY_SDK_DRY_RUN=${{ github.event.inputs.dry_run }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Release contract checks
+        run: npm run -s sdk:py:release-check -- --tag "$PY_SDK_TAG"
+
+      - name: Build dist
+        run: npm run -s sdk:py:build-dist
+
+      - name: Twine check
+        run: npm run -s sdk:py:publish:dry-run
+
+      - name: Publish to PyPI
+        if: env.PY_SDK_DRY_RUN != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${TWINE_PASSWORD:-}" ]]; then
+            echo "PYPI_API_TOKEN secret is required for publish" >&2
+            exit 1
+          fi
+          npm run -s sdk:py:publish

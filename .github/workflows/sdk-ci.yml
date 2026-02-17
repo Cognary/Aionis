@@ -1,0 +1,74 @@
+name: SDK CI
+
+on:
+  pull_request:
+    paths:
+      - "packages/sdk/**"
+      - "src/sdk/**"
+      - "src/dev/sdk-*.ts"
+      - "examples/rules_evaluate.sh"
+      - "examples/tools_select.sh"
+      - "scripts/sdk-release-check.sh"
+      - "scripts/sdk-python-release-check.sh"
+      - "docs/SDK*.md"
+      - "package.json"
+      - "package-lock.json"
+      - "packages/python-sdk/**"
+      - "src/dev/python-sdk-smoke.py"
+  push:
+    branches: ["main"]
+    paths:
+      - "packages/sdk/**"
+      - "src/sdk/**"
+      - "src/dev/sdk-*.ts"
+      - "examples/rules_evaluate.sh"
+      - "examples/tools_select.sh"
+      - "scripts/sdk-release-check.sh"
+      - "scripts/sdk-python-release-check.sh"
+      - "docs/SDK*.md"
+      - "package.json"
+      - "package-lock.json"
+      - "packages/python-sdk/**"
+      - "src/dev/python-sdk-smoke.py"
+
+jobs:
+  sdk-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Root build
+        run: npm run -s build
+
+      - name: SDK build
+        run: npm run -s sdk:build
+
+      - name: SDK release checks
+        run: npm run -s sdk:release-check
+
+      - name: Python SDK compile
+        run: npm run -s sdk:py:compile
+
+      - name: Python SDK release checks
+        run: npm run -s sdk:py:release-check
+
+      - name: SDK package dry-run
+        run: npm run -s sdk:pack-dry-run
+
+      - name: Docs check
+        run: npm run -s docs:check

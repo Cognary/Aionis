@@ -1,0 +1,140 @@
+name: GTM Phase3 Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_perf:
+        description: "Run perf matrix inside Gate C"
+        required: false
+        default: true
+        type: boolean
+      perf_profile:
+        description: "Perf profile (balanced|recall_slo|write_slo|worker_slo)"
+        required: false
+        default: "recall_slo"
+        type: string
+      scales:
+        description: "Perf scales CSV (e.g. 100000 or 100000,300000)"
+        required: false
+        default: "100000"
+        type: string
+      require_scale:
+        description: "Required scale evidence (empty means max(scales))"
+        required: false
+        default: ""
+        type: string
+      require_write_case:
+        description: "Require write case coverage"
+        required: false
+        default: false
+        type: boolean
+      upload_artifacts:
+        description: "Upload artifacts/gtm/gate_c/*"
+        required: false
+        default: true
+        type: boolean
+      artifact_retention_days:
+        description: "Artifact retention days"
+        required: false
+        default: "14"
+        type: string
+  schedule:
+    - cron: "0 4 * * 3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gtm-phase3-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase3-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GATEC_FAIL_ON_FAIL: true
+      GATEC_RUN_PERF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_perf || 'true' }}
+      GATEC_PERF_PROFILE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.perf_profile || 'recall_slo' }}
+      GATEC_SCALES: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scales || '100000' }}
+      GATEC_REQUIRE_SCALE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.require_scale || '' }}
+      GATEC_REQUIRE_WRITE_CASE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.require_write_case || 'false' }}
+      GATEC_ENFORCE_PARTITION_FIRST_RESET: true
+      GATEC_RESET_IMPL: scope_purge
+      GATEC_RESET_PURGE_MODE: partition
+      GATEC_RESET_PURGE_FAIL_ON_DELETE: true
+      GATEC_RESET_PURGE_ALLOW_FALLBACK_DELETE: false
+      START_SERVICES_IF_NEEDED: false
+      GATEC_PERF_OFFLINE_WINDOW: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Ensure env file
+        run: |
+          if [[ ! -f .env ]]; then
+            cp .env.example .env
+          fi
+
+      - name: Start stack
+        run: docker compose up -d
+
+      - name: Wait API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for _ in {1..120}; do
+            if curl -fsS "http://localhost:3001/health" >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "${ok}" -ne 1 ]]; then
+            echo "API not healthy on localhost:3001" >&2
+            exit 1
+          fi
+
+      - name: Run GTM Phase3 Gate C
+        run: npm run -s gtm:phase3:gatec
+
+      - name: Publish Gate C summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary_file="$(find artifacts/gtm/gate_c -type f -name summary.json | sort | tail -n 1 || true)"
+          {
+            echo "## GTM Phase3 Gate C"
+            echo
+            if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then
+              echo "summary: \`${summary_file}\`"
+              echo
+              jq '.' "${summary_file}"
+            else
+              echo "summary not found"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload Gate C artifacts
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtm-phase3-gate-artifacts
+          path: artifacts/gtm/gate_c/
+          retention-days: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.event.inputs.artifact_retention_days || '14') }}
+          if-no-files-found: warn
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v

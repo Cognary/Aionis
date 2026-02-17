@@ -1,0 +1,296 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+# Load .env for consistent scope/provider inference (same behavior as other repo scripts/jobs).
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+SCOPE="${MEMORY_SCOPE:-default}"
+STRICT_WARNINGS=false
+CONSISTENCY_SAMPLE=20
+QUALITY_ARGS=()
+AUTO_BACKFILL=true
+BACKFILL_LIMIT=5000
+BACKFILL_MODEL=""
+AUTO_PRIVATE_LANE_BACKFILL=true
+PRIVATE_LANE_BACKFILL_LIMIT=5000
+PRIVATE_LANE_DEFAULT_OWNER_AGENT=""
+PRIVATE_LANE_DEFAULT_OWNER_TEAM=""
+PRIVATE_LANE_SHARED_FALLBACK=true
+
+usage() {
+  cat <<USAGE
+Usage: scripts/health-gate.sh [options]
+
+Options:
+  --scope <scope>              Scope to evaluate (default: MEMORY_SCOPE or "default")
+  --strict-warnings            Treat consistency warnings as gate failures
+  --consistency-sample <n>     Sample size for consistency-check (default: 20)
+  --skip-backfill              Skip pre-gate embedding_model backfill
+  --backfill-limit <n>         Max rows for embedding_model backfill (default: 5000)
+  --backfill-model <model>     Force model label for embedding_model backfill
+  --skip-private-lane-backfill Skip pre-gate private-lane owner backfill
+  --private-lane-backfill-limit <n>
+                               Max rows for private-lane owner backfill (default: 5000)
+  --private-lane-default-owner-agent <id>
+                               Optional fallback owner_agent_id when producer owner is missing
+  --private-lane-default-owner-team <id>
+                               Optional fallback owner_team_id when producer owner is missing
+  --private-lane-no-shared-fallback
+                               Keep unresolved private rows as-is (default is move_shared fallback)
+  --quality-arg <arg>          Extra arg forwarded to job:quality-eval (repeatable)
+  -h, --help                   Show help
+
+Exit codes:
+  0  gate passed
+  2  gate failed (data quality/integrity conditions not met)
+  1  usage/runtime error
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --scope)
+      SCOPE="${2:-}"
+      shift 2
+      ;;
+    --strict-warnings)
+      STRICT_WARNINGS=true
+      shift
+      ;;
+    --consistency-sample)
+      CONSISTENCY_SAMPLE="${2:-}"
+      shift 2
+      ;;
+    --skip-backfill)
+      AUTO_BACKFILL=false
+      shift
+      ;;
+    --backfill-limit)
+      BACKFILL_LIMIT="${2:-}"
+      shift 2
+      ;;
+    --backfill-model)
+      BACKFILL_MODEL="${2:-}"
+      shift 2
+      ;;
+    --skip-private-lane-backfill)
+      AUTO_PRIVATE_LANE_BACKFILL=false
+      shift
+      ;;
+    --private-lane-backfill-limit)
+      PRIVATE_LANE_BACKFILL_LIMIT="${2:-}"
+      shift 2
+      ;;
+    --private-lane-default-owner-agent)
+      PRIVATE_LANE_DEFAULT_OWNER_AGENT="${2:-}"
+      shift 2
+      ;;
+    --private-lane-default-owner-team)
+      PRIVATE_LANE_DEFAULT_OWNER_TEAM="${2:-}"
+      shift 2
+      ;;
+    --private-lane-no-shared-fallback)
+      PRIVATE_LANE_SHARED_FALLBACK=false
+      shift
+      ;;
+    --quality-arg)
+      QUALITY_ARGS+=("${2:-}")
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+if ! [[ "$CONSISTENCY_SAMPLE" =~ ^[0-9]+$ ]]; then
+  echo "--consistency-sample must be an integer" >&2
+  exit 1
+fi
+if ! [[ "$BACKFILL_LIMIT" =~ ^[0-9]+$ ]]; then
+  echo "--backfill-limit must be an integer" >&2
+  exit 1
+fi
+if ! [[ "$PRIVATE_LANE_BACKFILL_LIMIT" =~ ^[0-9]+$ ]]; then
+  echo "--private-lane-backfill-limit must be an integer" >&2
+  exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "jq is required" >&2
+  exit 1
+fi
+
+infer_backfill_model() {
+  local provider="${EMBEDDING_PROVIDER:-}"
+  case "$provider" in
+    minimax)
+      if [[ -n "${MINIMAX_EMBED_MODEL:-}" ]]; then
+        echo "minimax:${MINIMAX_EMBED_MODEL}"
+      else
+        echo ""
+      fi
+      ;;
+    openai)
+      if [[ -n "${OPENAI_EMBEDDING_MODEL:-}" ]]; then
+        echo "openai:${OPENAI_EMBEDDING_MODEL}"
+      else
+        echo ""
+      fi
+      ;;
+    fake)
+      echo "fake:deterministic"
+      ;;
+    "")
+      echo ""
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+
+backfill_json='{"ok":true,"skipped":true}'
+backfill_ok=true
+if [[ "$AUTO_BACKFILL" == "true" ]]; then
+  model="$BACKFILL_MODEL"
+  if [[ -z "$model" ]]; then
+    model="$(infer_backfill_model)"
+  fi
+
+  if [[ -z "$model" ]]; then
+    backfill_json='{"ok":true,"skipped":true,"reason":"cannot_infer_embedding_model"}'
+  else
+    backfill_cmd=(npm run -s job:embedding-model-backfill -- --scope "$SCOPE" --limit "$BACKFILL_LIMIT" --model "$model")
+    set +e
+    backfill_raw="$("${backfill_cmd[@]}" 2>&1)"
+    backfill_ec=$?
+    set -e
+    if [[ $backfill_ec -ne 0 ]]; then
+      backfill_ok=false
+      backfill_json="$(jq -n --arg error "$backfill_raw" --arg model "$model" --argjson exit_code "$backfill_ec" '{ok:false, error:$error, model:$model, exit_code:$exit_code}')"
+    else
+      if echo "$backfill_raw" | jq -e . >/dev/null 2>&1; then
+        backfill_json="$backfill_raw"
+      else
+        backfill_ok=false
+        backfill_json="$(jq -n --arg error "$backfill_raw" --arg model "$model" '{ok:false, error:"non_json_backfill_output", raw:$error, model:$model}')"
+      fi
+    fi
+  fi
+fi
+
+private_lane_backfill_json='{"ok":true,"skipped":true}'
+private_lane_backfill_ok=true
+if [[ "$AUTO_PRIVATE_LANE_BACKFILL" == "true" ]]; then
+  lane_cmd=(npm run -s job:private-lane-owner-backfill -- --scope "$SCOPE" --limit "$PRIVATE_LANE_BACKFILL_LIMIT")
+  if [[ -n "$PRIVATE_LANE_DEFAULT_OWNER_AGENT" ]]; then
+    lane_cmd+=(--default-owner-agent "$PRIVATE_LANE_DEFAULT_OWNER_AGENT")
+  fi
+  if [[ -n "$PRIVATE_LANE_DEFAULT_OWNER_TEAM" ]]; then
+    lane_cmd+=(--default-owner-team "$PRIVATE_LANE_DEFAULT_OWNER_TEAM")
+  fi
+  if [[ "$PRIVATE_LANE_SHARED_FALLBACK" != "true" ]]; then
+    lane_cmd+=(--no-shared-fallback)
+  fi
+  set +e
+  lane_raw="$("${lane_cmd[@]}" 2>&1)"
+  lane_ec=$?
+  set -e
+  if [[ $lane_ec -ne 0 ]]; then
+    private_lane_backfill_ok=false
+    private_lane_backfill_json="$(jq -n --arg error "$lane_raw" --argjson exit_code "$lane_ec" '{ok:false, error:$error, exit_code:$exit_code}')"
+  else
+    if echo "$lane_raw" | jq -e . >/dev/null 2>&1; then
+      private_lane_backfill_json="$lane_raw"
+    else
+      private_lane_backfill_ok=false
+      private_lane_backfill_json="$(jq -n --arg error "$lane_raw" '{ok:false, error:"non_json_private_lane_backfill_output", raw:$error}')"
+    fi
+  fi
+fi
+
+consistency_json="$(npm run -s job:consistency-check -- --scope "$SCOPE" --sample "$CONSISTENCY_SAMPLE")"
+quality_cmd=(npm run -s job:quality-eval -- --scope "$SCOPE")
+if [[ ${#QUALITY_ARGS[@]} -gt 0 ]]; then
+  quality_cmd+=("${QUALITY_ARGS[@]}")
+fi
+quality_json="$("${quality_cmd[@]}")"
+
+consistency_errors="$(echo "$consistency_json" | jq -r '.summary.errors // 0')"
+consistency_warnings="$(echo "$consistency_json" | jq -r '.summary.warnings // 0')"
+quality_pass="$(echo "$quality_json" | jq -r '.summary.pass // false')"
+
+fail_reasons='[]'
+if [[ "$backfill_ok" != "true" ]]; then
+  fail_reasons="$(echo "$fail_reasons" | jq '. + ["backfill_failed"]')"
+fi
+if [[ "$private_lane_backfill_ok" != "true" ]]; then
+  fail_reasons="$(echo "$fail_reasons" | jq '. + ["private_lane_backfill_failed"]')"
+fi
+if [[ "$consistency_errors" != "0" ]]; then
+  fail_reasons="$(echo "$fail_reasons" | jq '. + ["consistency_errors"]')"
+fi
+if [[ "$STRICT_WARNINGS" == "true" && "$consistency_warnings" != "0" ]]; then
+  fail_reasons="$(echo "$fail_reasons" | jq '. + ["consistency_warnings"]')"
+fi
+if [[ "$quality_pass" != "true" ]]; then
+  fail_reasons="$(echo "$fail_reasons" | jq '. + ["quality_eval_failed"]')"
+fi
+
+ok="true"
+if [[ "$(echo "$fail_reasons" | jq 'length')" != "0" ]]; then
+  ok="false"
+fi
+
+jq -n \
+  --arg scope "$SCOPE" \
+  --argjson strict_warnings "$([[ "$STRICT_WARNINGS" == "true" ]] && echo true || echo false)" \
+  --argjson consistency_errors "$consistency_errors" \
+  --argjson consistency_warnings "$consistency_warnings" \
+  --argjson quality_pass "$([[ "$quality_pass" == "true" ]] && echo true || echo false)" \
+  --argjson fail_reasons "$fail_reasons" \
+  --argjson backfill "$(echo "$backfill_json" | jq '.')" \
+  --argjson private_lane_backfill "$(echo "$private_lane_backfill_json" | jq '.')" \
+  --argjson consistency "$(echo "$consistency_json" | jq '.')" \
+  --argjson quality "$(echo "$quality_json" | jq '.')" \
+  --argjson ok "$([[ "$ok" == "true" ]] && echo true || echo false)" \
+  '{
+    ok: $ok,
+    scope: $scope,
+    gate: {
+      strict_warnings: $strict_warnings,
+      fail_reasons: $fail_reasons
+    },
+    backfill: $backfill,
+    private_lane_backfill: $private_lane_backfill,
+    consistency: {
+      errors: $consistency_errors,
+      warnings: $consistency_warnings,
+      summary: ($consistency.summary // {}),
+      checks: ($consistency.checks // [])
+    },
+    quality: {
+      pass: $quality_pass,
+      summary: ($quality.summary // {}),
+      failed_checks: ($quality.failed_checks // [])
+    }
+  }'
+
+if [[ "$ok" != "true" ]]; then
+  exit 2
+fi

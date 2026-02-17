@@ -1,0 +1,116 @@
+name: Docker Publish
+
+on:
+  push:
+    tags:
+      - "docker-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (e.g. 0.1.0). Leave empty to derive from git."
+        required: false
+        type: string
+      image_repo:
+        description: "GHCR image repo (default: ghcr.io/<owner>/aionis-memory-graph)"
+        required: false
+        type: string
+      platforms:
+        description: "Build platforms CSV"
+        required: false
+        default: "linux/amd64,linux/arm64"
+        type: string
+      publish_latest:
+        description: "Also publish latest tag"
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: "If true, build only (no push)"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve publish inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            version="${GITHUB_REF_NAME#docker-v}"
+            dry_run=false
+            publish_latest=true
+          else
+            version="${{ github.event.inputs.tag }}"
+            if [[ -z "${version}" ]]; then
+              version="${GITHUB_SHA::12}"
+            fi
+            dry_run="${{ github.event.inputs.dry_run }}"
+            publish_latest="${{ github.event.inputs.publish_latest }}"
+          fi
+
+          image_repo="${{ github.event.inputs.image_repo }}"
+          if [[ -z "${image_repo}" ]]; then
+            owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+            image_repo="ghcr.io/${owner_lc}/aionis-memory-graph"
+          fi
+
+          echo "IMAGE_REPO=${image_repo}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${version}" >> "$GITHUB_ENV"
+          echo "PLATFORMS=${{ github.event.inputs.platforms || 'linux/amd64,linux/arm64' }}" >> "$GITHUB_ENV"
+          echo "DRY_RUN=${dry_run}" >> "$GITHUB_ENV"
+          echo "PUBLISH_LATEST=${publish_latest}" >> "$GITHUB_ENV"
+          tags="${image_repo}:${version}"
+          if [[ "${publish_latest}" == "true" ]]; then
+            tags="${tags}"$'\n'"${image_repo}:latest"
+          fi
+          {
+            echo "TAGS<<EOF"
+            echo "${tags}"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Login to GHCR
+        if: env.DRY_RUN != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (dry-run)
+        if: env.DRY_RUN == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dry_platform="${PLATFORMS%%,*}"
+          docker buildx build \
+            --platform "${dry_platform}" \
+            -t "${IMAGE_REPO}:${IMAGE_TAG}" \
+            --load \
+            .
+
+      - name: Build and push
+        if: env.DRY_RUN != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: ${{ env.TAGS }}

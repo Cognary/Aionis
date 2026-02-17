@@ -1,0 +1,9 @@
+.DS_Store
+.env
+.env.bak*
+node_modules
+dist
+.pytest_cache
+artifacts
+.tmp
+pgdata

@@ -1,0 +1,16 @@
+node_modules
+dist
+.env
+.DS_Store
+.tmp
+pgdata
+artifacts
+.git
+.github
+docs
+packages
+examples
+sql
+migrations
+scripts
+*.log

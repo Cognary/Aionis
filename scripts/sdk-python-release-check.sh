@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+TAG=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tag)
+      TAG="${2:-}"
+      shift 2
+      ;;
+    *)
+      echo "unknown arg: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required." >&2
+  exit 1
+fi
+
+PKG_TOML="packages/python-sdk/pyproject.toml"
+CHANGELOG="packages/python-sdk/CHANGELOG.md"
+MATRIX="docs/SDK_COMPATIBILITY_MATRIX.md"
+
+version="$(python3 - <<'PY'
+import re
+from pathlib import Path
+text = Path("packages/python-sdk/pyproject.toml").read_text(encoding="utf-8")
+m = re.search(r'^\s*version\s*=\s*"([^"]+)"\s*$', text, re.MULTILINE)
+print(m.group(1) if m else "")
+PY
+)"
+
+if [[ -z "$version" ]]; then
+  echo "invalid sdk version in $PKG_TOML" >&2
+  exit 1
+fi
+
+if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "python sdk version must be semver x.y.z, got: $version" >&2
+  exit 1
+fi
+
+minor_x="${version%.*}.x"
+
+if [[ -n "$TAG" ]]; then
+  expected_tag="py-sdk-v${version}"
+  if [[ "$TAG" != "$expected_tag" ]]; then
+    echo "tag/version mismatch: tag=$TAG expected=$expected_tag" >&2
+    exit 1
+  fi
+fi
+
+if ! rg -n "^## \\[$version\\]" "$CHANGELOG" >/dev/null; then
+  echo "missing changelog entry for version $version in $CHANGELOG" >&2
+  exit 1
+fi
+
+if ! rg -n "python|aionis-sdk|$minor_x|$version" "$MATRIX" >/dev/null; then
+  echo "missing compatibility matrix entry for python sdk $minor_x or $version in $MATRIX" >&2
+  exit 1
+fi
+
+echo "sdk-python-release-check: ok"
+echo "version=$version"
+if [[ -n "$TAG" ]]; then
+  echo "tag=$TAG"
+fi

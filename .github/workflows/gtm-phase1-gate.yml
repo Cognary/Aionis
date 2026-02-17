@@ -1,0 +1,252 @@
+name: GTM Phase1 Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: "Gate A rehearsal iterations"
+        required: false
+        default: "3"
+        type: string
+      min_pass_rate:
+        description: "Minimum rehearsal pass rate (0-1)"
+        required: false
+        default: "0.8"
+        type: string
+      min_executed:
+        description: "Minimum executed runs"
+        required: false
+        default: "3"
+        type: string
+      lookback_days:
+        description: "Weekly report lookback window (days)"
+        required: false
+        default: "7"
+        type: string
+      upload_artifacts:
+        description: "Upload artifacts/gtm/ci_gate/*"
+        required: false
+        default: true
+        type: boolean
+      artifact_retention_days:
+        description: "Artifact retention days"
+        required: false
+        default: "14"
+        type: string
+      require_ttfv_signal:
+        description: "Require non-zero TTFV signal for Go decision"
+        required: false
+        default: true
+        type: boolean
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gtm-phase1-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase1-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      ITERATIONS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.iterations || '3' }}
+      MIN_PASS_RATE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.min_pass_rate || '0.8' }}
+      MIN_EXECUTED: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.min_executed || '3' }}
+      LOOKBACK_DAYS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.lookback_days || '7' }}
+      OWNER: github-actions
+      PHASE: Phase 1
+      REQUIRE_TTFV_SIGNAL: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.require_ttfv_signal || 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Ensure env file
+        run: |
+          if [[ ! -f .env ]]; then
+            cp .env.example .env
+          fi
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Start stack
+        run: docker compose up -d
+
+      - name: Wait API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for _ in {1..120}; do
+            if curl -fsS "http://localhost:3001/health" >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "${ok}" -ne 1 ]]; then
+            echo "API not healthy on localhost:3001" >&2
+            exit 1
+          fi
+
+      - name: Run GTM Phase1 CI gate
+        run: npm run -s gtm:phase1:ci-gate
+
+      - name: Publish Review package to step summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          review_file="$(find artifacts/gtm/ci_gate -type f -name REVIEW_PACKAGE.md | sort | tail -n 1 || true)"
+          if [[ -n "${review_file}" && -f "${review_file}" ]]; then
+            {
+              echo "## GTM Phase1 Review Package"
+              echo
+              cat "${review_file}"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "## GTM Phase1 Review Package" >> "${GITHUB_STEP_SUMMARY}"
+            echo "review package not found in artifacts." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Publish Fix tasks to step summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          fix_file="$(find artifacts/gtm/ci_gate -type f -name FIX_TASKS.md | sort | tail -n 1 || true)"
+          if [[ -n "${fix_file}" && -f "${fix_file}" ]]; then
+            {
+              echo
+              echo "## GTM Phase1 Fix Tasks"
+              echo
+              cat "${fix_file}"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo >> "${GITHUB_STEP_SUMMARY}"
+            echo "## GTM Phase1 Fix Tasks" >> "${GITHUB_STEP_SUMMARY}"
+            echo "fix tasks not found in artifacts." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Publish Fix CSV export to step summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          jira_csv="$(find artifacts/gtm/ci_gate -type f -name jira_import.csv | sort | tail -n 1 || true)"
+          linear_csv="$(find artifacts/gtm/ci_gate -type f -name linear_import.csv | sort | tail -n 1 || true)"
+          jira_p0_csv="$(find artifacts/gtm/ci_gate -type f -name jira_import_p0.csv | sort | tail -n 1 || true)"
+          jira_p1p2_csv="$(find artifacts/gtm/ci_gate -type f -name jira_import_p1p2.csv | sort | tail -n 1 || true)"
+          linear_p0_csv="$(find artifacts/gtm/ci_gate -type f -name linear_import_p0.csv | sort | tail -n 1 || true)"
+          linear_p1p2_csv="$(find artifacts/gtm/ci_gate -type f -name linear_import_p1p2.csv | sort | tail -n 1 || true)"
+          {
+            echo
+            echo "## GTM Phase1 Fix CSV Export"
+            echo
+            if [[ -n "${jira_csv}" && -f "${jira_csv}" ]]; then
+              echo "- Jira CSV: \`${jira_csv}\`"
+            else
+              echo "- Jira CSV: not found"
+            fi
+            if [[ -n "${linear_csv}" && -f "${linear_csv}" ]]; then
+              echo "- Linear CSV: \`${linear_csv}\`"
+            else
+              echo "- Linear CSV: not found"
+            fi
+            if [[ -n "${jira_p0_csv}" && -f "${jira_p0_csv}" ]]; then
+              echo "- Jira P0 CSV: \`${jira_p0_csv}\`"
+            else
+              echo "- Jira P0 CSV: not found"
+            fi
+            if [[ -n "${jira_p1p2_csv}" && -f "${jira_p1p2_csv}" ]]; then
+              echo "- Jira P1+P2 CSV: \`${jira_p1p2_csv}\`"
+            else
+              echo "- Jira P1+P2 CSV: not found"
+            fi
+            if [[ -n "${linear_p0_csv}" && -f "${linear_p0_csv}" ]]; then
+              echo "- Linear P0 CSV: \`${linear_p0_csv}\`"
+            else
+              echo "- Linear P0 CSV: not found"
+            fi
+            if [[ -n "${linear_p1p2_csv}" && -f "${linear_p1p2_csv}" ]]; then
+              echo "- Linear P1+P2 CSV: \`${linear_p1p2_csv}\`"
+            else
+              echo "- Linear P1+P2 CSV: not found"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Capture docker diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps > /tmp/gtm_phase1_compose_ps.txt || true
+          docker compose logs --no-color > /tmp/gtm_phase1_compose_logs.txt || true
+
+      - name: Upload GTM artifacts
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtm-phase1-artifacts
+          path: |
+            artifacts/gtm/ci_gate/
+            /tmp/gtm_phase1_compose_ps.txt
+            /tmp/gtm_phase1_compose_logs.txt
+          retention-days: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.event.inputs.artifact_retention_days || '14') }}
+          if-no-files-found: warn
+
+      - name: Upload GTM review package
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtm-phase1-review-package
+          path: |
+            artifacts/gtm/ci_gate/**/review/**/REVIEW_PACKAGE.md
+            artifacts/gtm/ci_gate/**/review/**/summary.json
+          retention-days: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.event.inputs.artifact_retention_days || '14') }}
+          if-no-files-found: warn
+
+      - name: Upload GTM fix tasks
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtm-phase1-fix-tasks
+          path: |
+            artifacts/gtm/ci_gate/**/fix_plan/**/FIX_TASKS.md
+            artifacts/gtm/ci_gate/**/fix_plan/**/tasks.json
+            artifacts/gtm/ci_gate/**/fix_plan/**/summary.json
+          retention-days: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.event.inputs.artifact_retention_days || '14') }}
+          if-no-files-found: warn
+
+      - name: Upload GTM fix CSV export
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtm-phase1-fix-csv
+          path: |
+            artifacts/gtm/ci_gate/**/fix_export/**/jira_import.csv
+            artifacts/gtm/ci_gate/**/fix_export/**/linear_import.csv
+            artifacts/gtm/ci_gate/**/fix_export/**/jira_import_p0.csv
+            artifacts/gtm/ci_gate/**/fix_export/**/jira_import_p1p2.csv
+            artifacts/gtm/ci_gate/**/fix_export/**/linear_import_p0.csv
+            artifacts/gtm/ci_gate/**/fix_export/**/linear_import_p1p2.csv
+            artifacts/gtm/ci_gate/**/fix_export/**/summary.json
+          retention-days: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.event.inputs.artifact_retention_days || '14') }}
+          if-no-files-found: warn
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v

@@ -1,0 +1,68 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: aionis
+      POSTGRES_PASSWORD: aionis
+      POSTGRES_DB: aionis_memory
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/migrations:ro
+      - ./sql:/sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aionis -d aionis_memory"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    image: postgres:16
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: aionis
+      PGPASSWORD: aionis
+      PGDATABASE: aionis_memory
+    volumes:
+      - ./migrations:/migrations:ro
+      - ./scripts/docker-migrate.sh:/docker-migrate.sh:ro
+    entrypoint: ["/bin/sh", "/docker-migrate.sh"]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      # Override host-local DATABASE_URL for in-network access.
+      DATABASE_URL: postgres://aionis:aionis@db:5432/aionis_memory
+    ports:
+      - "${PORT:-3001}:${PORT:-3001}"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://aionis:aionis@db:5432/aionis_memory
+    command: ["npm", "run", "job:outbox-worker"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
