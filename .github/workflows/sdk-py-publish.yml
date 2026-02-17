@@ -56,14 +56,8 @@ jobs:
           else
             input_tag="${{ github.event.inputs.tag }}"
             if [[ -z "$input_tag" ]]; then
-              input_tag="py-sdk-v$(python - <<'PY'
-import re
-from pathlib import Path
-text = Path('packages/python-sdk/pyproject.toml').read_text(encoding='utf-8')
-m = re.search(r'^\s*version\s*=\s*"([^"]+)"\s*$', text, re.MULTILINE)
-print(m.group(1) if m else '')
-PY
-)"
+              version="$(python -c 'import re; from pathlib import Path; text = Path("packages/python-sdk/pyproject.toml").read_text(encoding="utf-8"); m = re.search(r"^\\s*version\\s*=\\s*\"([^\"]+)\"\\s*$", text, re.MULTILINE); print(m.group(1) if m else "")')"
+              input_tag="py-sdk-v${version}"
             fi
             echo "PY_SDK_TAG=$input_tag" >> "$GITHUB_ENV"
             echo "PY_SDK_DRY_RUN=${{ github.event.inputs.dry_run }}" >> "$GITHUB_ENV"
