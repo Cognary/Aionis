@@ -1,3 +1,7 @@
+---
+title: "Planner Context (Recommended Shape)"
+---
+
 # Planner Context (Recommended Shape)
 
 This document defines a **recommended, stable JSON shape** for the execution system (planner/tool selector) to send into:

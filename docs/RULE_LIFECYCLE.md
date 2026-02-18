@@ -1,3 +1,7 @@
+---
+title: "Rule Lifecycle (DRAFT -> SHADOW -> ACTIVE)"
+---
+
 # Rule Lifecycle (DRAFT -> SHADOW -> ACTIVE)
 
 This repo stores rule state in `memory_rule_defs.state`.

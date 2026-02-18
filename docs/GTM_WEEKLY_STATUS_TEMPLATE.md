@@ -1,3 +1,7 @@
+---
+title: "GTM Weekly Status Template"
+---
+
 # GTM Weekly Status Template
 
 Use this template for the Phase 1-4 weekly cadence in `/Users/lucio/Desktop/Aionis/docs/GO_TO_MARKET_EXECUTION_PLAN.md`.

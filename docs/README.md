@@ -1,3 +1,7 @@
+---
+title: "Docs Index"
+---
+
 # Docs Index
 
 This index is the entry point for project documentation.
@@ -62,6 +66,20 @@ cd /Users/lucio/Desktop/Aionis
 npm run docs:check
 ```
 
+## Docs Website (GitHub Pages)
+
+- Publish workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docs-pages.yml`
+- Site config: `/Users/lucio/Desktop/Aionis/docs/_config.yml`
+- Expected URL after Pages is enabled:
+  - `https://cognary.github.io/Aionis/`
+
+Local preview (Docker-based Jekyll):
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+docker run --rm -it -p 4000:4000 -v "$PWD/docs:/srv/jekyll" jekyll/jekyll:pages jekyll serve --host 0.0.0.0
+```
+
 Verification stamp:
-- Last reviewed: `2026-02-17`
+- Last reviewed: `2026-02-18`
 - Reviewer: `codex`

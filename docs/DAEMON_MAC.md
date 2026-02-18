@@ -1,3 +1,7 @@
+---
+title: "macOS Daemon (launchd)"
+---
+
 # macOS Daemon (launchd)
 
 This repo already ships a long-running worker loop (`npm run job:outbox-worker`).  

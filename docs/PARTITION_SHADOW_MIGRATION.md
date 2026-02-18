@@ -1,3 +1,7 @@
+---
+title: "Partition Shadow Migration (Phase B Scaffold)"
+---
+
 # Partition Shadow Migration (Phase B Scaffold)
 
 ## Purpose

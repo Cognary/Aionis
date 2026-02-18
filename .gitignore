@@ -2,7 +2,11 @@
 .env
 .env.bak*
 node_modules
+**/node_modules
+.next
+**/.next
 dist
+*.tsbuildinfo
 .pytest_cache
 artifacts
 .tmp

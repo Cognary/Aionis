@@ -1,3 +1,7 @@
+---
+title: "Product / Scale / Cognition Priority Plan"
+---
+
 # Product / Scale / Cognition Priority Plan
 
 Last updated: `2026-02-16`

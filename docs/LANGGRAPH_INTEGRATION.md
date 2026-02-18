@@ -1,3 +1,7 @@
+---
+title: "LangGraph Integration (Adapter Pattern)"
+---
+
 # LangGraph Integration (Adapter Pattern)
 
 This document provides a minimal integration pattern for LangGraph-style agent flows with Aionis.

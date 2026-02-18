@@ -1,3 +1,7 @@
+---
+title: "Two-Phase Migrations (Gentle Constraints)"
+---
+
 # Two-Phase Migrations (Gentle Constraints)
 
 Goal: enforce strong constraints (typically `NOT NULL`) **without** taking long locks unexpectedly on large tables.

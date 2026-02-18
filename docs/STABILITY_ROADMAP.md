@@ -1,3 +1,7 @@
+---
+title: "Stability Roadmap (Executable Checklist)"
+---
+
 # Stability Roadmap (Executable Checklist)
 
 This file is the **source of truth** for making this project stable over time. Work should be driven by the items below (add a short note + link to code changes when completed) so we don't lose context or repeat mistakes.

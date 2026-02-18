@@ -1,3 +1,7 @@
+---
+title: "Operator Runbook"
+---
+
 # Operator Runbook
 
 This runbook defines a practical cadence and thresholds for operating Aionis in production.

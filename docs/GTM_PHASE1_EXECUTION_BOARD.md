@@ -1,3 +1,7 @@
+---
+title: "GTM Phase 1 Execution Board (Day 1-30)"
+---
+
 # GTM Phase 1 Execution Board (Day 1-30)
 
 Source plan: `/Users/lucio/Desktop/Aionis/docs/GO_TO_MARKET_EXECUTION_PLAN.md`  

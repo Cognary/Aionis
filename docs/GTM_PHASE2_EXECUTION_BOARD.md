@@ -1,3 +1,7 @@
+---
+title: "GTM Phase 2 Execution Board (Day 31-60)"
+---
+
 # GTM Phase 2 Execution Board (Day 31-60)
 
 ## 1) Objective

@@ -1,3 +1,7 @@
+---
+title: "Aionis Personal + Custom Go-To-Market Plan"
+---
+
 # Aionis Personal + Custom Go-To-Market Plan
 
 Status: active  

@@ -1,3 +1,7 @@
+---
+title: "E2E Regression Checklist (Local Terminal)"
+---
+
 # E2E Regression Checklist (Local Terminal)
 
 This is a pragmatic, repeatable checklist for verifying the end-to-end loop:

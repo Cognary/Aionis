@@ -1,3 +1,7 @@
+---
+title: "Long-Term Memory Roadmap (Executable)"
+---
+
 # Long-Term Memory Roadmap (Executable)
 
 This file is the source of truth for building Aionis from persistent storage into true cognitive long-term memory.

@@ -1,0 +1,27 @@
+title: Aionis Docs
+description: Production documentation for Aionis memory infrastructure.
+theme: minima
+url: https://cognary.github.io
+baseurl: /Aionis
+permalink: pretty
+markdown: kramdown
+kramdown:
+  input: GFM
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: true
+defaults:
+  - scope:
+      path: ""
+      type: pages
+    values:
+      layout: default
+header_pages:
+  - index.md
+  - ONBOARDING_5MIN.md
+  - API_CONTRACT.md
+  - SDK.md
+  - OPERATOR_RUNBOOK.md
+  - DOCKER_RELEASE.md

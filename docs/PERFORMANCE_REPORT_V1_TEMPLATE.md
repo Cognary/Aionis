@@ -1,3 +1,7 @@
+---
+title: "Performance Report v1 (Template)"
+---
+
 # Performance Report v1 (Template)
 
 Use this template for publishable benchmark snapshots.

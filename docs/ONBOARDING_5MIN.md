@@ -1,3 +1,7 @@
+---
+title: "5-Minute Developer Onboarding"
+---
+
 # 5-Minute Developer Onboarding
 
 Last updated: `2026-02-17`

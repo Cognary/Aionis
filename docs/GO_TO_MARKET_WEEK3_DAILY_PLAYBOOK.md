@@ -1,3 +1,7 @@
+---
+title: "Go-To-Market Week 3 Daily Playbook"
+---
+
 # Go-To-Market Week 3 Daily Playbook
 
 Status: active  

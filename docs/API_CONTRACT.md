@@ -1,3 +1,7 @@
+---
+title: "API Contract (Hard)"
+---
+
 # API Contract (Hard)
 
 This document defines **hard, server-enforced contracts** for Aionis Memory Graph API responses. These rules exist to prevent:

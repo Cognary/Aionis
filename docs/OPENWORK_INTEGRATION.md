@@ -1,3 +1,7 @@
+---
+title: "OpenWork (OpenCode Desktop) Integration"
+---
+
 # OpenWork (OpenCode Desktop) Integration
 
 This project exposes an **MCP server** so OpenWork/OpenCode can call Aionis Memory Graph as tools.
