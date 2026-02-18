@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import stableStringify from "fast-json-stable-stringify";
 import type pg from "pg";
 import { sha256Hex } from "../util/crypto.js";
+import { badRequest } from "../util/http.js";
 import { normalizeText } from "../util/normalize.js";
 import { redactPII } from "../util/redaction.js";
 import { RuleFeedbackRequest } from "./schemas.js";
@@ -33,6 +34,24 @@ export async function ruleFeedback(
 
   const noteNorm = parsed.note ? normalizeText(parsed.note, opts.maxTextLen) : undefined;
   const note = opts.piiRedaction && noteNorm ? redactPII(noteNorm).text : noteNorm;
+
+  const ruleExistsRes = await client.query(
+    `
+    SELECT 1
+    FROM memory_nodes
+    WHERE scope = $1
+      AND id = $2
+      AND type = 'rule'
+    `,
+    [scope, parsed.rule_node_id],
+  );
+  if ((ruleExistsRes.rowCount ?? 0) !== 1) {
+    badRequest("rule_not_found_in_scope", "rule_node_id was not found in this scope", {
+      rule_node_id: parsed.rule_node_id,
+      scope: tenancy.scope,
+      tenant_id: tenancy.tenant_id,
+    });
+  }
 
   // Parent commit is optional for feedback events; for now, we use the latest commit in scope as parent if present.
   const parentRes = await client.query<{ id: string; commit_hash: string }>(

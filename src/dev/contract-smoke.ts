@@ -158,6 +158,33 @@ async function run() {
     neighborhood_hops: 2,
   });
 
+  // Empty-seed contract: return public scope + tenant_id (never internal scope key), and keep stable response shape.
+  const empty = new FakePgClient({
+    stage1: [],
+    edges: [],
+    nodeIds: [],
+    nodes: [],
+    ruleDefs: [],
+    debugEmbeddings: [],
+  });
+  const emptyOut = await memoryRecallParsed(
+    empty as any,
+    MemoryRecallRequest.parse({
+      scope: "project-alpha",
+      tenant_id: "tenant-a",
+      query_embedding: Array.from({ length: 1536 }, () => 0),
+    }),
+    "default",
+    "default",
+    { allow_debug_embeddings: false },
+  );
+  assert.equal(emptyOut.scope, "project-alpha");
+  assert.equal((emptyOut as any).tenant_id, "tenant-a");
+  assert.equal(emptyOut.subgraph.nodes.length, 0);
+  assert.equal(emptyOut.subgraph.edges.length, 0);
+  assert.equal(emptyOut.ranked.length, 0);
+  assert.equal(emptyOut.context.text, "");
+
   // Default contract: no embeddings in subgraph node DTO.
   const out = await memoryRecallParsed(fake as any, baseReq, "default", "default", { allow_debug_embeddings: false });
   assert.equal(out.subgraph.edges.length, 1);

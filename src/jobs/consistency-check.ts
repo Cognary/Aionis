@@ -60,10 +60,13 @@ async function runCheck(
   sampleArgs: any[],
   sampleLimit: number,
   note?: string,
+  opts?: { sampleWhenZero?: boolean },
 ): Promise<CheckResult> {
   try {
     const cr = await client.query<{ n: string }>(countSql, countArgs);
     const count = Number(cr.rows[0]?.n ?? 0);
+    const shouldSample = count > 0 || opts?.sampleWhenZero === true;
+    if (!shouldSample) return { name, severity, count, sample: [], note };
     const sr = await client.query(sampleSql.replace("__LIMIT__", String(sampleLimit)), sampleArgs);
     return { name, severity, count, sample: sr.rows ?? [], note };
   } catch (e: any) {
@@ -72,11 +75,22 @@ async function runCheck(
   }
 }
 
+function zeroCheck(name: string, severity: Severity, note?: string): CheckResult {
+  return { name, severity, count: 0, sample: [], note };
+}
+
 async function main() {
   const scope = argValue("--scope") ?? env.MEMORY_SCOPE;
   const sampleLimit = clampInt(Number(argValue("--sample") ?? "20"), 1, 200);
   const strict = hasFlag("--strict");
   const strictWarnings = hasFlag("--strict-warnings");
+  const checkSetRaw = (argValue("--check-set") ?? "all").toLowerCase();
+  if (checkSetRaw !== "all" && checkSetRaw !== "scope" && checkSetRaw !== "cross_tenant") {
+    throw new Error("invalid --check-set (expected one of: all|scope|cross_tenant)");
+  }
+  const checkSet = checkSetRaw as "all" | "scope" | "cross_tenant";
+  const includeScopeChecks = checkSet === "all" || checkSet === "scope";
+  const includeCrossTenantChecks = checkSet === "all" || checkSet === "cross_tenant";
 
   const checks = await withTx(db, async (client) => {
     const out: CheckResult[] = [];
@@ -89,23 +103,37 @@ async function main() {
     const hasTargetAgentId = await hasColumn(client, "memory_rule_defs", "target_agent_id");
     const hasTargetTeamId = await hasColumn(client, "memory_rule_defs", "target_team_id");
     const hasFailedAt = await hasColumn(client, "memory_outbox", "failed_at");
+    const hasTenantScopedRowsRes = await client.query<{ ok: boolean }>(
+      `
+      SELECT (
+        EXISTS (SELECT 1 FROM memory_commits WHERE scope LIKE 'tenant:%')
+        OR EXISTS (SELECT 1 FROM memory_nodes WHERE scope LIKE 'tenant:%')
+        OR EXISTS (SELECT 1 FROM memory_edges WHERE scope LIKE 'tenant:%')
+        OR EXISTS (SELECT 1 FROM memory_rule_defs WHERE scope LIKE 'tenant:%')
+        OR EXISTS (SELECT 1 FROM memory_rule_feedback WHERE scope LIKE 'tenant:%')
+        OR EXISTS (SELECT 1 FROM memory_outbox WHERE scope LIKE 'tenant:%')
+      ) AS ok
+      `,
+    );
+    const hasTenantScopedRows = !!hasTenantScopedRowsRes.rows[0]?.ok;
 
     // 1) Edge scope consistency (only meaningful if cross-scope edges are disallowed).
-    out.push(
-      await runCheck(
-        client,
-        "edges_cross_scope",
-        env.ALLOW_CROSS_SCOPE_EDGES ? "warning" : "error",
-        `
+    if (includeScopeChecks) {
+      out.push(
+        await runCheck(
+          client,
+          "edges_cross_scope",
+          env.ALLOW_CROSS_SCOPE_EDGES ? "warning" : "error",
+          `
         SELECT count(*)::text AS n
         FROM memory_edges e
         JOIN memory_nodes s ON s.id = e.src_id
         JOIN memory_nodes d ON d.id = e.dst_id
         WHERE e.scope = $1
           AND (s.scope <> e.scope OR d.scope <> e.scope)
-        `,
-        [scope],
-        `
+          `,
+          [scope],
+          `
         SELECT e.id, e.type::text AS type, e.scope AS edge_scope, s.scope AS src_scope, d.scope AS dst_scope, e.src_id, e.dst_id
         FROM memory_edges e
         JOIN memory_nodes s ON s.id = e.src_id
@@ -114,22 +142,34 @@ async function main() {
           AND (s.scope <> e.scope OR d.scope <> e.scope)
         ORDER BY e.created_at DESC
         LIMIT __LIMIT__
-        `,
-        [scope],
-        sampleLimit,
-        env.ALLOW_CROSS_SCOPE_EDGES
-          ? "ALLOW_CROSS_SCOPE_EDGES=true; treating cross-scope edges as warning."
-          : "Cross-scope edges are disallowed by default.",
-      ),
-    );
+          `,
+          [scope],
+          sampleLimit,
+          env.ALLOW_CROSS_SCOPE_EDGES
+            ? "ALLOW_CROSS_SCOPE_EDGES=true; treating cross-scope edges as warning."
+            : "Cross-scope edges are disallowed by default.",
+        ),
+      );
+    } else {
+      out.push(
+        zeroCheck(
+          "edges_cross_scope",
+          env.ALLOW_CROSS_SCOPE_EDGES ? "warning" : "error",
+          "Scope checks skipped by --check-set=cross_tenant.",
+        ),
+      );
+    }
 
     // 1b) Cross-tenant scope-key consistency (Phase C multi-tenant hardening).
-    out.push(
-      await runCheck(
-        client,
-        "tenant_scope_key_malformed",
-        "error",
-        `
+    // Fast path for single-tenant datasets: if there are no tenant-prefixed scopes at all,
+    // all cross-tenant mismatch checks are provably zero and can be skipped safely.
+    if (includeCrossTenantChecks && hasTenantScopedRows) {
+      out.push(
+        await runCheck(
+          client,
+          "tenant_scope_key_malformed",
+          "error",
+          `
         WITH scopes AS (
           SELECT 'memory_commits'::text AS table_name, scope FROM memory_commits
           UNION ALL
@@ -147,9 +187,9 @@ async function main() {
         FROM scopes
         WHERE scope LIKE 'tenant:%'
           AND scope !~ '^tenant:[A-Za-z0-9][A-Za-z0-9._-]{0,63}::scope:.+$'
-        `,
-        [],
-        `
+          `,
+          [],
+          `
         WITH scopes AS (
           SELECT 'memory_commits'::text AS table_name, scope FROM memory_commits
           UNION ALL
@@ -169,19 +209,19 @@ async function main() {
           AND scope !~ '^tenant:[A-Za-z0-9][A-Za-z0-9._-]{0,63}::scope:.+$'
         ORDER BY table_name, scope
         LIMIT __LIMIT__
-        `,
-        [],
-        sampleLimit,
-        "Tenant-prefixed scope keys must match tenant:<tenant_id>::scope:<scope>.",
-      ),
-    );
+          `,
+          [],
+          sampleLimit,
+          "Tenant-prefixed scope keys must match tenant:<tenant_id>::scope:<scope>.",
+        ),
+      );
 
-    out.push(
-      await runCheck(
-        client,
-        "cross_tenant_edge_scope_mismatch",
-        "error",
-        `
+      out.push(
+        await runCheck(
+          client,
+          "cross_tenant_edge_scope_mismatch",
+          "error",
+          `
         WITH x AS (
           SELECT
             e.id,
@@ -203,13 +243,16 @@ async function main() {
           FROM memory_edges e
           JOIN memory_nodes s ON s.id = e.src_id
           JOIN memory_nodes d ON d.id = e.dst_id
+          WHERE e.scope LIKE 'tenant:%'
+             OR s.scope LIKE 'tenant:%'
+             OR d.scope LIKE 'tenant:%'
         )
         SELECT count(*)::text AS n
         FROM x
         WHERE edge_tenant <> src_tenant OR edge_tenant <> dst_tenant
-        `,
-        [env.MEMORY_TENANT_ID],
-        `
+          `,
+          [env.MEMORY_TENANT_ID],
+          `
         WITH x AS (
           SELECT
             e.id,
@@ -235,25 +278,28 @@ async function main() {
           FROM memory_edges e
           JOIN memory_nodes s ON s.id = e.src_id
           JOIN memory_nodes d ON d.id = e.dst_id
+          WHERE e.scope LIKE 'tenant:%'
+             OR s.scope LIKE 'tenant:%'
+             OR d.scope LIKE 'tenant:%'
         )
         SELECT id, type, edge_scope, src_scope, dst_scope, edge_tenant, src_tenant, dst_tenant
         FROM x
         WHERE edge_tenant <> src_tenant OR edge_tenant <> dst_tenant
         ORDER BY id
         LIMIT __LIMIT__
-        `,
-        [env.MEMORY_TENANT_ID],
-        sampleLimit,
-        "Edge tenant ownership must match both endpoint nodes.",
-      ),
-    );
+          `,
+          [env.MEMORY_TENANT_ID],
+          sampleLimit,
+          "Edge tenant ownership must match both endpoint nodes.",
+        ),
+      );
 
-    out.push(
-      await runCheck(
-        client,
-        "cross_tenant_rule_def_scope_mismatch",
-        "error",
-        `
+      out.push(
+        await runCheck(
+          client,
+          "cross_tenant_rule_def_scope_mismatch",
+          "error",
+          `
         WITH x AS (
           SELECT
             d.rule_node_id,
@@ -269,13 +315,15 @@ async function main() {
             END AS node_tenant
           FROM memory_rule_defs d
           JOIN memory_nodes n ON n.id = d.rule_node_id
+          WHERE d.scope LIKE 'tenant:%'
+             OR n.scope LIKE 'tenant:%'
         )
         SELECT count(*)::text AS n
         FROM x
         WHERE def_tenant <> node_tenant
-        `,
-        [env.MEMORY_TENANT_ID],
-        `
+          `,
+          [env.MEMORY_TENANT_ID],
+          `
         WITH x AS (
           SELECT
             d.rule_node_id,
@@ -294,25 +342,27 @@ async function main() {
             END AS node_tenant
           FROM memory_rule_defs d
           JOIN memory_nodes n ON n.id = d.rule_node_id
+          WHERE d.scope LIKE 'tenant:%'
+             OR n.scope LIKE 'tenant:%'
         )
         SELECT rule_node_id, state, def_scope, node_scope, def_tenant, node_tenant
         FROM x
         WHERE def_tenant <> node_tenant
         ORDER BY rule_node_id
         LIMIT __LIMIT__
-        `,
-        [env.MEMORY_TENANT_ID],
-        sampleLimit,
-        "Rule definitions must stay in the same tenant as their rule node.",
-      ),
-    );
+          `,
+          [env.MEMORY_TENANT_ID],
+          sampleLimit,
+          "Rule definitions must stay in the same tenant as their rule node.",
+        ),
+      );
 
-    out.push(
-      await runCheck(
-        client,
-        "cross_tenant_rule_feedback_scope_mismatch",
-        "error",
-        `
+      out.push(
+        await runCheck(
+          client,
+          "cross_tenant_rule_feedback_scope_mismatch",
+          "error",
+          `
         WITH x AS (
           SELECT
             f.id,
@@ -328,13 +378,15 @@ async function main() {
             END AS node_tenant
           FROM memory_rule_feedback f
           JOIN memory_nodes n ON n.id = f.rule_node_id
+          WHERE f.scope LIKE 'tenant:%'
+             OR n.scope LIKE 'tenant:%'
         )
         SELECT count(*)::text AS n
         FROM x
         WHERE fb_tenant <> node_tenant
-        `,
-        [env.MEMORY_TENANT_ID],
-        `
+          `,
+          [env.MEMORY_TENANT_ID],
+          `
         WITH x AS (
           SELECT
             f.id,
@@ -354,25 +406,27 @@ async function main() {
             END AS node_tenant
           FROM memory_rule_feedback f
           JOIN memory_nodes n ON n.id = f.rule_node_id
+          WHERE f.scope LIKE 'tenant:%'
+             OR n.scope LIKE 'tenant:%'
         )
         SELECT id, rule_node_id, feedback_scope, node_scope, outcome, fb_tenant, node_tenant
         FROM x
         WHERE fb_tenant <> node_tenant
         ORDER BY id DESC
         LIMIT __LIMIT__
-        `,
-        [env.MEMORY_TENANT_ID],
-        sampleLimit,
-        "Rule feedback tenant must match the target rule node tenant.",
-      ),
-    );
+          `,
+          [env.MEMORY_TENANT_ID],
+          sampleLimit,
+          "Rule feedback tenant must match the target rule node tenant.",
+        ),
+      );
 
-    out.push(
-      await runCheck(
-        client,
-        "cross_tenant_outbox_scope_mismatch",
-        "error",
-        `
+      out.push(
+        await runCheck(
+          client,
+          "cross_tenant_outbox_scope_mismatch",
+          "error",
+          `
         WITH x AS (
           SELECT
             o.id,
@@ -388,13 +442,15 @@ async function main() {
             END AS commit_tenant
           FROM memory_outbox o
           JOIN memory_commits c ON c.id = o.commit_id
+          WHERE o.scope LIKE 'tenant:%'
+             OR c.scope LIKE 'tenant:%'
         )
         SELECT count(*)::text AS n
         FROM x
         WHERE outbox_tenant <> commit_tenant
-        `,
-        [env.MEMORY_TENANT_ID],
-        `
+          `,
+          [env.MEMORY_TENANT_ID],
+          `
         WITH x AS (
           SELECT
             o.id,
@@ -414,25 +470,27 @@ async function main() {
             END AS commit_tenant
           FROM memory_outbox o
           JOIN memory_commits c ON c.id = o.commit_id
+          WHERE o.scope LIKE 'tenant:%'
+             OR c.scope LIKE 'tenant:%'
         )
         SELECT id, event_type, outbox_scope, commit_scope, commit_id, outbox_tenant, commit_tenant
         FROM x
         WHERE outbox_tenant <> commit_tenant
         ORDER BY id DESC
         LIMIT __LIMIT__
-        `,
-        [env.MEMORY_TENANT_ID],
-        sampleLimit,
-        "Outbox rows must stay within the same tenant as the referenced commit.",
-      ),
-    );
+          `,
+          [env.MEMORY_TENANT_ID],
+          sampleLimit,
+          "Outbox rows must stay within the same tenant as the referenced commit.",
+        ),
+      );
 
-    out.push(
-      await runCheck(
-        client,
-        "cross_tenant_commit_parent_scope_mismatch",
-        "error",
-        `
+      out.push(
+        await runCheck(
+          client,
+          "cross_tenant_commit_parent_scope_mismatch",
+          "error",
+          `
         WITH x AS (
           SELECT
             c.id,
@@ -448,13 +506,15 @@ async function main() {
             END AS parent_tenant
           FROM memory_commits c
           JOIN memory_commits p ON p.id = c.parent_id
+          WHERE c.scope LIKE 'tenant:%'
+             OR p.scope LIKE 'tenant:%'
         )
         SELECT count(*)::text AS n
         FROM x
         WHERE commit_tenant <> parent_tenant
-        `,
-        [env.MEMORY_TENANT_ID],
-        `
+          `,
+          [env.MEMORY_TENANT_ID],
+          `
         WITH x AS (
           SELECT
             c.id,
@@ -473,19 +533,39 @@ async function main() {
             END AS parent_tenant
           FROM memory_commits c
           JOIN memory_commits p ON p.id = c.parent_id
+          WHERE c.scope LIKE 'tenant:%'
+             OR p.scope LIKE 'tenant:%'
         )
         SELECT id, parent_id, commit_scope, parent_scope, commit_tenant, parent_tenant
         FROM x
         WHERE commit_tenant <> parent_tenant
         ORDER BY id DESC
         LIMIT __LIMIT__
-        `,
-        [env.MEMORY_TENANT_ID],
-        sampleLimit,
-        "Commit chains must not cross tenant boundaries.",
-      ),
-    );
+          `,
+          [env.MEMORY_TENANT_ID],
+          sampleLimit,
+          "Commit chains must not cross tenant boundaries.",
+        ),
+      );
+    } else if (includeCrossTenantChecks) {
+      const note = "No tenant-prefixed scopes found; cross-tenant checks skipped for this run.";
+      out.push(zeroCheck("tenant_scope_key_malformed", "error", note));
+      out.push(zeroCheck("cross_tenant_edge_scope_mismatch", "error", note));
+      out.push(zeroCheck("cross_tenant_rule_def_scope_mismatch", "error", note));
+      out.push(zeroCheck("cross_tenant_rule_feedback_scope_mismatch", "error", note));
+      out.push(zeroCheck("cross_tenant_outbox_scope_mismatch", "error", note));
+      out.push(zeroCheck("cross_tenant_commit_parent_scope_mismatch", "error", note));
+    } else {
+      const note = "Cross-tenant checks skipped by --check-set=scope.";
+      out.push(zeroCheck("tenant_scope_key_malformed", "error", note));
+      out.push(zeroCheck("cross_tenant_edge_scope_mismatch", "error", note));
+      out.push(zeroCheck("cross_tenant_rule_def_scope_mismatch", "error", note));
+      out.push(zeroCheck("cross_tenant_rule_feedback_scope_mismatch", "error", note));
+      out.push(zeroCheck("cross_tenant_outbox_scope_mismatch", "error", note));
+      out.push(zeroCheck("cross_tenant_commit_parent_scope_mismatch", "error", note));
+    }
 
+    if (includeScopeChecks) {
     // 2) Embedding dim mismatch (should never happen for vector(1536)).
     out.push(
       await runCheck(
@@ -1351,6 +1431,7 @@ async function main() {
           [],
           sampleLimit,
           "Should be validated after migration 0015_validate_private_rule_owner_guard.sql.",
+          { sampleWhenZero: true },
         ),
       );
 
@@ -1581,6 +1662,7 @@ async function main() {
         note: "missing memory_outbox.failed_at column; apply migrations (0007_outbox_failed.sql) for dead-letter support.",
       });
     }
+    }
 
     return out;
   });
@@ -1601,6 +1683,7 @@ async function main() {
       {
         ok: true,
         scope,
+        check_set: checkSet,
         strict,
         strict_warnings: strictWarnings,
         summary: { errors, warnings, sample_limit: sampleLimit },

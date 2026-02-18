@@ -241,8 +241,7 @@ export async function memoryRecallParsed(
           AND n.embedding IS NOT NULL
           AND n.embedding_status = 'ready'
           AND (
-            $5::text IS NULL
-            OR n.memory_lane = 'shared'::memory_lane
+            n.memory_lane = 'shared'::memory_lane
             OR (n.memory_lane = 'private'::memory_lane AND n.owner_agent_id = $5::text)
             OR ($6::text IS NOT NULL AND n.memory_lane = 'private'::memory_lane AND n.owner_team_id = $6::text)
           )
@@ -293,7 +292,15 @@ export async function memoryRecallParsed(
   const seedIds = seeds.map((s) => s.id);
 
   if (seedIds.length === 0) {
-    return { scope, seeds: [], subgraph: { nodes: [], edges: [] }, ranked: [] };
+    return {
+      scope: tenancy.scope,
+      tenant_id: tenancy.tenant_id,
+      seeds: [],
+      subgraph: { nodes: [], edges: [] },
+      ranked: [],
+      context: { text: "", items: [], citations: [] },
+      ...(parsed.return_debug ? { debug: { neighborhood_counts: { nodes: 0, edges: 0 }, embeddings: undefined } } : {}),
+    };
   }
 
   // Stage 2: fetch 1-2 hop neighborhood edges/nodes.
@@ -489,8 +496,7 @@ export async function memoryRecallParsed(
       WHERE scope = $1
         AND id = ANY($2::uuid[])
         AND (
-          $3::text IS NULL
-          OR memory_lane = 'shared'::memory_lane
+          memory_lane = 'shared'::memory_lane
           OR (memory_lane = 'private'::memory_lane AND owner_agent_id = $3::text)
           OR ($4::text IS NOT NULL AND memory_lane = 'private'::memory_lane AND owner_team_id = $4::text)
         )

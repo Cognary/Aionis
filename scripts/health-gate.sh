@@ -15,6 +15,7 @@ fi
 SCOPE="${MEMORY_SCOPE:-default}"
 STRICT_WARNINGS=false
 CONSISTENCY_SAMPLE=20
+CONSISTENCY_CHECK_SET="${HEALTH_GATE_CONSISTENCY_CHECK_SET:-all}"
 QUALITY_ARGS=()
 AUTO_BACKFILL=true
 BACKFILL_LIMIT=5000
@@ -33,6 +34,8 @@ Options:
   --scope <scope>              Scope to evaluate (default: MEMORY_SCOPE or "default")
   --strict-warnings            Treat consistency warnings as gate failures
   --consistency-sample <n>     Sample size for consistency-check (default: 20)
+  --consistency-check-set <set>
+                               Check set: all|scope|cross_tenant (default: HEALTH_GATE_CONSISTENCY_CHECK_SET or all)
   --skip-backfill              Skip pre-gate embedding_model backfill
   --backfill-limit <n>         Max rows for embedding_model backfill (default: 5000)
   --backfill-model <model>     Force model label for embedding_model backfill
@@ -67,6 +70,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --consistency-sample)
       CONSISTENCY_SAMPLE="${2:-}"
+      shift 2
+      ;;
+    --consistency-check-set)
+      CONSISTENCY_CHECK_SET="${2:-}"
       shift 2
       ;;
     --skip-backfill)
@@ -119,6 +126,10 @@ done
 
 if ! [[ "$CONSISTENCY_SAMPLE" =~ ^[0-9]+$ ]]; then
   echo "--consistency-sample must be an integer" >&2
+  exit 1
+fi
+if [[ "$CONSISTENCY_CHECK_SET" != "all" && "$CONSISTENCY_CHECK_SET" != "scope" && "$CONSISTENCY_CHECK_SET" != "cross_tenant" ]]; then
+  echo "--consistency-check-set must be one of: all|scope|cross_tenant" >&2
   exit 1
 fi
 if ! [[ "$BACKFILL_LIMIT" =~ ^[0-9]+$ ]]; then
@@ -224,7 +235,8 @@ if [[ "$AUTO_PRIVATE_LANE_BACKFILL" == "true" ]]; then
   fi
 fi
 
-consistency_json="$(npm run -s job:consistency-check -- --scope "$SCOPE" --sample "$CONSISTENCY_SAMPLE")"
+consistency_cmd=(npm run -s job:consistency-check -- --scope "$SCOPE" --sample "$CONSISTENCY_SAMPLE" --check-set "$CONSISTENCY_CHECK_SET")
+consistency_json="$("${consistency_cmd[@]}")"
 quality_cmd=(npm run -s job:quality-eval -- --scope "$SCOPE")
 if [[ ${#QUALITY_ARGS[@]} -gt 0 ]]; then
   quality_cmd+=("${QUALITY_ARGS[@]}")
@@ -259,6 +271,7 @@ fi
 
 jq -n \
   --arg scope "$SCOPE" \
+  --arg consistency_check_set "$CONSISTENCY_CHECK_SET" \
   --argjson strict_warnings "$([[ "$STRICT_WARNINGS" == "true" ]] && echo true || echo false)" \
   --argjson consistency_errors "$consistency_errors" \
   --argjson consistency_warnings "$consistency_warnings" \
@@ -272,6 +285,7 @@ jq -n \
   '{
     ok: $ok,
     scope: $scope,
+    consistency_check_set: $consistency_check_set,
     gate: {
       strict_warnings: $strict_warnings,
       fail_reasons: $fail_reasons

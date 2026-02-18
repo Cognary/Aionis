@@ -275,12 +275,13 @@ export async function prepareMemoryWrite(
   }
 
   const edges: PreparedEdge[] = parsed.edges.map((e) => {
+    const edgeScopePublic = resolveScope(e.scope, tenancy.scope);
+    const edgeScope = toTenantScopeKey(edgeScopePublic, tenancy.tenant_id, defaultTenantId);
     const id =
       e.id ??
       stableUuid(
-        `${scope}:edge:${inputText ?? parsed.input_sha256 ?? "noinput"}:${e.type}:${e.src.id ?? e.src.client_id}:${e.dst.id ?? e.dst.client_id}`,
+        `${edgeScope}:edge:${inputText ?? parsed.input_sha256 ?? "noinput"}:${e.type}:${e.src.id ?? e.src.client_id}:${e.dst.id ?? e.dst.client_id}`,
       );
-    const edgeScope = resolveScope(e.scope, scope);
     const src_id = resolveId(e.src, clientIdToId);
     const dst_id = resolveId(e.dst, clientIdToId);
     return { ...e, id, scope: edgeScope, src_id, dst_id };

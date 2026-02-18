@@ -20,6 +20,26 @@ export async function updateRuleState(client: pg.PoolClient, body: unknown, defa
   const actor = parsed.actor ?? "system";
   const inputSha = parsed.input_sha256 ?? sha256Hex(parsed.input_text!);
 
+  // Hard isolation guard: state updates must target an existing rule node in the same scope.
+  // Without this, ON CONFLICT(rule_node_id) can mutate another scope's rule row.
+  const ruleNodeScopeRes = await client.query(
+    `
+    SELECT 1
+    FROM memory_nodes
+    WHERE scope = $1
+      AND id = $2
+      AND type = 'rule'
+    `,
+    [scope, parsed.rule_node_id],
+  );
+  if ((ruleNodeScopeRes.rowCount ?? 0) !== 1) {
+    badRequest("rule_not_found_in_scope", "rule_node_id was not found in this scope", {
+      rule_node_id: parsed.rule_node_id,
+      scope: tenancy.scope,
+      tenant_id: tenancy.tenant_id,
+    });
+  }
+
   // If promoting into an execution-relevant state, validate the rule definition shape.
   // This keeps /rules/evaluate predictable and prevents arbitrary JSON from reaching the planner/tool selector.
   if (parsed.state === "shadow" || parsed.state === "active") {
@@ -163,6 +183,7 @@ export async function updateRuleState(client: pg.PoolClient, body: unknown, defa
       state = EXCLUDED.state,
       commit_id = EXCLUDED.commit_id,
       updated_at = now()
+    WHERE memory_rule_defs.scope = EXCLUDED.scope
     `,
     [
       scope,

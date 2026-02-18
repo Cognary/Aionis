@@ -26,6 +26,7 @@ function sleep(ms: number) {
 
 async function processBatch(): Promise<{
   scope: string;
+  scopes_claimed: string[];
   claimed: number;
   processed: number;
   topic_cluster_runs: number;
@@ -33,8 +34,6 @@ async function processBatch(): Promise<{
   failed_marked: number;
   topic_commit_hashes: string[];
 }> {
-  const scope = env.MEMORY_SCOPE;
-
   // 0) Mark outbox items as FAILED once they exceed max attempts (dead-letter).
   // This prevents silent limbo when attempts reach OUTBOX_MAX_ATTEMPTS and the claim query excludes them.
   const failedMarked = await withTx(db, async (client) => {
@@ -43,10 +42,9 @@ async function processBatch(): Promise<{
       WITH to_fail AS (
         SELECT id
         FROM memory_outbox
-        WHERE scope = $1
-          AND published_at IS NULL
+        WHERE published_at IS NULL
           AND failed_at IS NULL
-          AND attempts >= $2
+          AND attempts >= $1
       )
       UPDATE memory_outbox o
       SET failed_at = now(), failed_reason = 'max_attempts_exceeded', claimed_at = NULL
@@ -54,7 +52,7 @@ async function processBatch(): Promise<{
       WHERE o.id = f.id
       RETURNING 1
       `,
-      [scope, env.OUTBOX_MAX_ATTEMPTS],
+      [env.OUTBOX_MAX_ATTEMPTS],
     );
     return r.rowCount ?? 0;
   });
@@ -63,6 +61,7 @@ async function processBatch(): Promise<{
   const claimed = await withTx(db, async (client) => {
     const rows = await client.query<{
       id: number;
+      scope: string;
       commit_id: string;
       event_type: string;
       payload: any;
@@ -70,30 +69,29 @@ async function processBatch(): Promise<{
       claimed_at: string;
     }>(
       `
-      WITH eligible AS (
-        SELECT id
-        FROM memory_outbox
-        WHERE scope = $1
-          AND published_at IS NULL
-          AND failed_at IS NULL
-          AND attempts < $4
-          AND (
-            claimed_at IS NULL
-            OR claimed_at < now() - ($3::int * interval '1 millisecond')
-          )
-        ORDER BY
-          CASE WHEN event_type = 'embed_nodes' THEN 0 WHEN event_type = 'topic_cluster' THEN 1 ELSE 2 END,
-          id ASC
-        LIMIT $2
-        FOR UPDATE SKIP LOCKED
-      )
-      UPDATE memory_outbox o
-      SET claimed_at = now(), attempts = attempts + 1
-      FROM eligible e
-      WHERE o.id = e.id
-      RETURNING o.id, o.commit_id::text AS commit_id, o.event_type, o.payload, o.attempts, o.claimed_at::text
+        WITH eligible AS (
+          SELECT id
+          FROM memory_outbox
+          WHERE published_at IS NULL
+            AND failed_at IS NULL
+            AND attempts < $3
+            AND (
+              claimed_at IS NULL
+              OR claimed_at < now() - ($2::int * interval '1 millisecond')
+            )
+          ORDER BY
+            CASE WHEN event_type = 'embed_nodes' THEN 0 WHEN event_type = 'topic_cluster' THEN 1 ELSE 2 END,
+            id ASC
+          LIMIT $1
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE memory_outbox o
+        SET claimed_at = now(), attempts = attempts + 1
+        FROM eligible e
+        WHERE o.id = e.id
+        RETURNING o.id, o.scope, o.commit_id::text AS commit_id, o.event_type, o.payload, o.attempts, o.claimed_at::text
       `,
-      [scope, env.OUTBOX_BATCH_SIZE, env.OUTBOX_CLAIM_TIMEOUT_MS, env.OUTBOX_MAX_ATTEMPTS],
+      [env.OUTBOX_BATCH_SIZE, env.OUTBOX_CLAIM_TIMEOUT_MS, env.OUTBOX_MAX_ATTEMPTS],
     );
     return rows.rows;
   });
@@ -124,7 +122,7 @@ async function processBatch(): Promise<{
 
           const out = await runEmbedBackfill(
             client,
-            { scope, nodes: parsedNodes, maxTextLen: env.MAX_TEXT_LEN, piiRedaction: env.PII_REDACTION },
+            { scope: r.scope, nodes: parsedNodes, maxTextLen: env.MAX_TEXT_LEN, piiRedaction: env.PII_REDACTION },
             embedder,
             { force_reembed: forceReembed },
           );
@@ -137,13 +135,15 @@ async function processBatch(): Promise<{
             // Idempotent enqueue: job_key prevents duplicate topic_cluster rows for the same commit+payload.
             const payload = { event_ids: afterEventIds };
             const payloadSha = sha256Hex(stableStringify(payload));
-            const jobKey = sha256Hex(stableStringify({ v: 1, scope, commit_id: r.commit_id, event_type: "topic_cluster", payloadSha }));
+            const jobKey = sha256Hex(
+              stableStringify({ v: 1, scope: r.scope, commit_id: r.commit_id, event_type: "topic_cluster", payloadSha }),
+            );
 
             await client.query(
               `INSERT INTO memory_outbox (scope, commit_id, event_type, job_key, payload_sha256, payload)
                VALUES ($1, $2, 'topic_cluster', $3, $4, $5::jsonb)
                ON CONFLICT (scope, event_type, job_key) DO NOTHING`,
-              [scope, r.commit_id, jobKey, payloadSha, JSON.stringify(payload)],
+              [r.scope, r.commit_id, jobKey, payloadSha, JSON.stringify(payload)],
             );
           }
 
@@ -194,7 +194,7 @@ async function processBatch(): Promise<{
 
           if (eventIds.length > 0) {
             const out = await runTopicClusterForEventIds(client, {
-              scope,
+              scope: r.scope,
               eventIds,
               simThreshold: env.TOPIC_SIM_THRESHOLD,
               minEventsPerTopic: env.TOPIC_MIN_EVENTS_PER_TOPIC,
@@ -263,8 +263,10 @@ async function processBatch(): Promise<{
     });
   }
 
+  const scopesClaimed = Array.from(new Set(claimed.map((r) => r.scope))).sort();
   return {
-    scope,
+    scope: "all",
+    scopes_claimed: scopesClaimed,
     claimed: claimed.length,
     processed,
     topic_cluster_runs: clustered,

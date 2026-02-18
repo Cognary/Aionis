@@ -118,8 +118,16 @@ Options:
 
 - `--scope <scope>` (default: `MEMORY_SCOPE`)
 - `--sample <n>` (default: `20`, max `200`)
+- `--check-set <all|scope|cross_tenant>` (default: `all`)
 - `--strict` (non-zero exit if any **errors**)
 - `--strict-warnings` (non-zero exit if any errors **or warnings**)
+
+Large-tenant operation tip (split fast scope checks from global cross-tenant checks):
+
+```bash
+npm run job:consistency-check:scope -- --scope default --strict-warnings
+npm run job:consistency-check:cross-tenant -- --strict-warnings
+```
 
 Cross-tenant integrity checks (Phase C) are included by default:
 
