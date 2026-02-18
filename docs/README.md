@@ -30,6 +30,7 @@ This index is the entry point for project documentation.
 
 - [OpenWork Integration](./OPENWORK_INTEGRATION.md)
 - [LangGraph Integration](./LANGGRAPH_INTEGRATION.md)
+- [Website Skeleton (Next.js + HeroUI)](./WEBSITE_NEXTJS_HEROUI_SKELETON.md)
 - [Go-To-Market 120-Day Plan](./GO_TO_MARKET_EXECUTION_PLAN.md)
 - [Go-To-Market Personal + Custom Plan](./GO_TO_MARKET_PERSONAL_PLUS_CUSTOM_PLAN.md)
 - [Go-To-Market Personal + Custom Weekly Board](./GO_TO_MARKET_PERSONAL_PLUS_CUSTOM_WEEKLY_BOARD.md)
