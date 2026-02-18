@@ -23,6 +23,9 @@ This runbook covers publishing the Aionis API image to GHCR.
 4. For local publish, set:
    - `GHCR_USERNAME` (or `GITHUB_ACTOR`)
    - `GHCR_TOKEN` (or `GITHUB_TOKEN`)
+5. For GitHub Actions publish (recommended for stable automation), set repository/org secrets:
+   - `GHCR_USERNAME`
+   - `GHCR_TOKEN` (`write:packages` scope)
 
 ## Local build + push
 
@@ -62,6 +65,12 @@ Or manual `workflow_dispatch` in `Docker Publish` with:
 3. `platforms` (default `linux/amd64,linux/arm64`)
 4. `publish_latest`
 5. `dry_run`
+
+Credential behavior in workflow:
+
+1. If `GHCR_USERNAME` + `GHCR_TOKEN` secrets exist, workflow uses them (recommended).
+2. Otherwise it falls back to `${{ github.actor }}` + `${{ secrets.GITHUB_TOKEN }}`.
+3. If fallback hits `403 Forbidden` on push, configure the GHCR secrets above.
 
 ## Verification
 

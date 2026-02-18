@@ -85,13 +85,38 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
+      - name: Resolve GHCR credentials
+        if: env.DRY_RUN != 'true'
+        shell: bash
+        env:
+          GHCR_USERNAME_SECRET: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN_SECRET: ${{ secrets.GHCR_TOKEN }}
+          GITHUB_TOKEN_SECRET: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          username="${GHCR_USERNAME_SECRET:-}"
+          password="${GHCR_TOKEN_SECRET:-}"
+          source_name="ghcr_secret"
+          if [[ -z "${username}" || -z "${password}" ]]; then
+            username="${GITHUB_ACTOR}"
+            password="${GITHUB_TOKEN_SECRET}"
+            source_name="github_token"
+          fi
+          if [[ -z "${username}" || -z "${password}" ]]; then
+            echo "missing GHCR credentials (set repo/org secrets GHCR_USERNAME + GHCR_TOKEN or ensure GITHUB_TOKEN is available)." >&2
+            exit 1
+          fi
+          echo "GHCR_USERNAME=${username}" >> "$GITHUB_ENV"
+          echo "GHCR_PASSWORD=${password}" >> "$GITHUB_ENV"
+          echo "GHCR_CREDENTIAL_SOURCE=${source_name}" >> "$GITHUB_ENV"
+
       - name: Login to GHCR
         if: env.DRY_RUN != 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ env.GHCR_USERNAME }}
+          password: ${{ env.GHCR_PASSWORD }}
 
       - name: Build (dry-run)
         if: env.DRY_RUN == 'true'
@@ -114,3 +139,6 @@ jobs:
           platforms: ${{ env.PLATFORMS }}
           push: true
           tags: ${{ env.TAGS }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
