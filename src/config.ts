@@ -3,6 +3,9 @@ import { z } from "zod";
 const EnvSchema = z.object({
   APP_ENV: z.enum(["dev", "ci", "prod"]).default("dev"),
   DATABASE_URL: z.string().min(1),
+  DB_POOL_MAX: z.coerce.number().int().positive().max(200).default(30),
+  DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  DB_POOL_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   PORT: z.coerce.number().int().positive().default(3001),
   MEMORY_SCOPE: z.string().min(1).default("default"),
   MEMORY_TENANT_ID: z.string().min(1).default("default"),
@@ -28,6 +31,10 @@ const EnvSchema = z.object({
   RATE_LIMIT_TTL_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
   RECALL_RATE_LIMIT_RPS: z.coerce.number().positive().default(10),
   RECALL_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(20),
+  // Upstream-protection limiter for recall_text query embeddings.
+  RECALL_TEXT_EMBED_RATE_LIMIT_RPS: z.coerce.number().positive().default(4),
+  RECALL_TEXT_EMBED_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(8),
+  RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS: z.coerce.number().int().min(0).max(5000).default(600),
   DEBUG_EMBED_RATE_LIMIT_RPS: z.coerce.number().positive().default(0.2), // ~1 request per 5s
   DEBUG_EMBED_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(2),
   WRITE_RATE_LIMIT_RPS: z.coerce.number().positive().default(5),
@@ -42,6 +49,9 @@ const EnvSchema = z.object({
     .transform((v) => v === "true"),
   TENANT_RECALL_RATE_LIMIT_RPS: z.coerce.number().positive().default(30),
   TENANT_RECALL_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(60),
+  TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_RPS: z.coerce.number().positive().default(8),
+  TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(16),
+  TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS: z.coerce.number().int().min(0).max(5000).default(800),
   TENANT_DEBUG_EMBED_RATE_LIMIT_RPS: z.coerce.number().positive().default(1),
   TENANT_DEBUG_EMBED_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(4),
   TENANT_WRITE_RATE_LIMIT_RPS: z.coerce.number().positive().default(10),
@@ -56,6 +66,24 @@ const EnvSchema = z.object({
     .transform((v) => v === "true"),
   RECALL_TEXT_EMBED_CACHE_MAX_KEYS: z.coerce.number().int().positive().max(200000).default(2000),
   RECALL_TEXT_EMBED_CACHE_TTL_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
+  RECALL_TEXT_EMBED_BATCH_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  RECALL_TEXT_EMBED_BATCH_MAX_SIZE: z.coerce.number().int().positive().max(256).default(24),
+  RECALL_TEXT_EMBED_BATCH_MAX_WAIT_MS: z.coerce.number().int().min(0).max(100).default(8),
+  RECALL_TEXT_EMBED_BATCH_MAX_INFLIGHT: z.coerce.number().int().positive().max(64).default(4),
+  RECALL_TEXT_EMBED_BATCH_QUEUE_MAX: z.coerce.number().int().positive().max(200000).default(12000),
+  RECALL_TEXT_EMBED_BATCH_QUEUE_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(5_000),
+  // API inflight gates: coarse server-side backpressure for read/write paths.
+  API_RECALL_MAX_INFLIGHT: z.coerce.number().int().positive().max(5000).default(256),
+  API_RECALL_QUEUE_MAX: z.coerce.number().int().min(0).max(200000).default(6000),
+  API_RECALL_QUEUE_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(2_000),
+  API_WRITE_MAX_INFLIGHT: z.coerce.number().int().positive().max(5000).default(96),
+  API_WRITE_QUEUE_MAX: z.coerce.number().int().min(0).max(200000).default(3000),
+  API_WRITE_QUEUE_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(2_000),
   // Server-side default recall tuning profile used when callers omit recall knobs.
   MEMORY_RECALL_PROFILE: z.enum(["legacy", "strict_edges", "quality_first"]).default("strict_edges"),
   PII_REDACTION: z

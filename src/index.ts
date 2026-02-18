@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { ZodError } from "zod";
 import { loadEnv } from "./config.js";
-import { createDb, withTx } from "./db.js";
+import { createDb, withClient, withTx } from "./db.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "./memory/write.js";
 import { rehydrateArchiveNodes } from "./memory/rehydrate.js";
 import { activateMemoryNodes } from "./memory/nodes-activate.js";
@@ -25,6 +25,8 @@ import { sha256Hex } from "./util/crypto.js";
 import { TokenBucketLimiter } from "./util/ratelimit.js";
 import { LruTtlCache } from "./util/lru_ttl_cache.js";
 import { createAuthResolver, type AuthPrincipal } from "./util/auth.js";
+import { EmbedQueryBatcher, EmbedQueryBatcherError } from "./util/embed_query_batcher.js";
+import { InflightGate, InflightGateError, type InflightGateToken } from "./util/inflight_gate.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
@@ -63,6 +65,15 @@ const writeLimiter = env.RATE_LIMIT_ENABLED
     })
   : null;
 
+const recallTextEmbedLimiter = env.RATE_LIMIT_ENABLED
+  ? new TokenBucketLimiter({
+      rate_per_sec: env.RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
+      burst: env.RECALL_TEXT_EMBED_RATE_LIMIT_BURST,
+      ttl_ms: env.RATE_LIMIT_TTL_MS,
+      sweep_every_n: 500,
+    })
+  : null;
+
 const tenantRecallLimiter = env.TENANT_QUOTA_ENABLED
   ? new TokenBucketLimiter({
       rate_per_sec: env.TENANT_RECALL_RATE_LIMIT_RPS,
@@ -90,6 +101,15 @@ const tenantWriteLimiter = env.TENANT_QUOTA_ENABLED
     })
   : null;
 
+const tenantRecallTextEmbedLimiter = env.TENANT_QUOTA_ENABLED
+  ? new TokenBucketLimiter({
+      rate_per_sec: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
+      burst: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_BURST,
+      ttl_ms: env.RATE_LIMIT_TTL_MS,
+      sweep_every_n: 500,
+    })
+  : null;
+
 const recallTextEmbedCache =
   embedder && env.RECALL_TEXT_EMBED_CACHE_ENABLED
     ? new LruTtlCache<string, number[]>({
@@ -98,7 +118,31 @@ const recallTextEmbedCache =
       })
     : null;
 
-const recallTextEmbedInflight = new Map<string, Promise<number[]>>();
+const recallTextEmbedInflight = new Map<string, Promise<{ vector: number[]; queue_wait_ms: number; batch_size: number }>>();
+const recallTextEmbedBatcher =
+  embedder && env.RECALL_TEXT_EMBED_BATCH_ENABLED
+    ? new EmbedQueryBatcher({
+        maxBatchSize: env.RECALL_TEXT_EMBED_BATCH_MAX_SIZE,
+        maxBatchWaitMs: env.RECALL_TEXT_EMBED_BATCH_MAX_WAIT_MS,
+        maxInflightBatches: env.RECALL_TEXT_EMBED_BATCH_MAX_INFLIGHT,
+        maxQueue: env.RECALL_TEXT_EMBED_BATCH_QUEUE_MAX,
+        queueTimeoutMs: env.RECALL_TEXT_EMBED_BATCH_QUEUE_TIMEOUT_MS,
+        runBatch: async (texts) => {
+          return await embedder.embed(texts);
+        },
+      })
+    : null;
+
+const recallInflightGate = new InflightGate({
+  maxInflight: env.API_RECALL_MAX_INFLIGHT,
+  maxQueue: env.API_RECALL_QUEUE_MAX,
+  queueTimeoutMs: env.API_RECALL_QUEUE_TIMEOUT_MS,
+});
+const writeInflightGate = new InflightGate({
+  maxInflight: env.API_WRITE_MAX_INFLIGHT,
+  maxQueue: env.API_WRITE_QUEUE_MAX,
+  queueTimeoutMs: env.API_WRITE_QUEUE_TIMEOUT_MS,
+});
 
 type RecallProfileDefaults = {
   limit: number;
@@ -190,6 +234,17 @@ app.log.info(
     memory_recall_profile_defaults: recallProfileDefaults,
     write_rate_limit_wait_ms: env.WRITE_RATE_LIMIT_MAX_WAIT_MS,
     tenant_write_rate_limit_wait_ms: env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS,
+    recall_text_embed_rate_limit_rps: env.RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
+    tenant_recall_text_embed_rate_limit_rps: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
+    recall_text_embed_batch_enabled: !!recallTextEmbedBatcher,
+    recall_text_embed_batch_max_size: env.RECALL_TEXT_EMBED_BATCH_MAX_SIZE,
+    recall_text_embed_batch_max_wait_ms: env.RECALL_TEXT_EMBED_BATCH_MAX_WAIT_MS,
+    recall_text_embed_batch_max_inflight: env.RECALL_TEXT_EMBED_BATCH_MAX_INFLIGHT,
+    db_pool_max: env.DB_POOL_MAX,
+    api_recall_max_inflight: env.API_RECALL_MAX_INFLIGHT,
+    api_recall_queue_max: env.API_RECALL_QUEUE_MAX,
+    api_write_max_inflight: env.API_WRITE_MAX_INFLIGHT,
+    api_write_queue_max: env.API_WRITE_QUEUE_MAX,
     shadow_dual_write_enabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
     shadow_dual_write_strict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
   },
@@ -209,73 +264,78 @@ app.post("/v1/memory/write", async (req, reply) => {
   const body = withIdentityFromRequest(req, req.body, principal, "write");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
-  const prepared = await prepareMemoryWrite(
-    body,
-    env.MEMORY_SCOPE,
-    env.MEMORY_TENANT_ID,
-    { maxTextLen: env.MAX_TEXT_LEN, piiRedaction: env.PII_REDACTION, allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES },
-    embedder,
-  );
+  const gate = await acquireInflightSlot("write");
+  try {
+    const prepared = await prepareMemoryWrite(
+      body,
+      env.MEMORY_SCOPE,
+      env.MEMORY_TENANT_ID,
+      { maxTextLen: env.MAX_TEXT_LEN, piiRedaction: env.PII_REDACTION, allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES },
+      embedder,
+    );
 
-  const policy = computeEffectiveWritePolicy(prepared, {
-    autoTopicClusterOnWrite: env.AUTO_TOPIC_CLUSTER_ON_WRITE,
-    topicClusterAsyncOnWrite: env.TOPIC_CLUSTER_ASYNC_ON_WRITE,
-  });
-
-  const out = await withTx(db, async (client) => {
-    // Attach effective policy for applyMemoryWrite(outbox enqueue) and handler sync execution.
-    (prepared as any).trigger_topic_cluster = policy.trigger_topic_cluster;
-    (prepared as any).topic_cluster_async = policy.topic_cluster_async;
-
-    const writeRes = await applyMemoryWrite(client, prepared, {
-      maxTextLen: env.MAX_TEXT_LEN,
-      piiRedaction: env.PII_REDACTION,
-      allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
-      shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
-      shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+    const policy = computeEffectiveWritePolicy(prepared, {
+      autoTopicClusterOnWrite: env.AUTO_TOPIC_CLUSTER_ON_WRITE,
+      topicClusterAsyncOnWrite: env.TOPIC_CLUSTER_ASYNC_ON_WRITE,
     });
 
-    // Optional synchronous topic clustering (if requested and not async).
-    if (policy.trigger_topic_cluster && !policy.topic_cluster_async) {
-      const eventIds = prepared.nodes.filter((n) => n.type === "event").map((n) => n.id);
-      if (eventIds.length > 0) {
-        const clusterRes = await runTopicClusterForEventIds(client, {
-          scope: prepared.scope,
-          eventIds,
-          simThreshold: env.TOPIC_SIM_THRESHOLD,
-          minEventsPerTopic: env.TOPIC_MIN_EVENTS_PER_TOPIC,
-          maxCandidatesPerEvent: env.TOPIC_MAX_CANDIDATES_PER_EVENT,
-          maxTextLen: env.MAX_TEXT_LEN,
-          piiRedaction: env.PII_REDACTION,
-          strategy: env.TOPIC_CLUSTER_STRATEGY,
-        });
-        if (clusterRes.processed_events > 0) {
-          writeRes.topic_cluster = clusterRes;
+    const out = await withTx(db, async (client) => {
+      // Attach effective policy for applyMemoryWrite(outbox enqueue) and handler sync execution.
+      (prepared as any).trigger_topic_cluster = policy.trigger_topic_cluster;
+      (prepared as any).topic_cluster_async = policy.topic_cluster_async;
+
+      const writeRes = await applyMemoryWrite(client, prepared, {
+        maxTextLen: env.MAX_TEXT_LEN,
+        piiRedaction: env.PII_REDACTION,
+        allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+        shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+        shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+      });
+
+      // Optional synchronous topic clustering (if requested and not async).
+      if (policy.trigger_topic_cluster && !policy.topic_cluster_async) {
+        const eventIds = prepared.nodes.filter((n) => n.type === "event").map((n) => n.id);
+        if (eventIds.length > 0) {
+          const clusterRes = await runTopicClusterForEventIds(client, {
+            scope: prepared.scope,
+            eventIds,
+            simThreshold: env.TOPIC_SIM_THRESHOLD,
+            minEventsPerTopic: env.TOPIC_MIN_EVENTS_PER_TOPIC,
+            maxCandidatesPerEvent: env.TOPIC_MAX_CANDIDATES_PER_EVENT,
+            maxTextLen: env.MAX_TEXT_LEN,
+            piiRedaction: env.PII_REDACTION,
+            strategy: env.TOPIC_CLUSTER_STRATEGY,
+          });
+          if (clusterRes.processed_events > 0) {
+            writeRes.topic_cluster = clusterRes;
+          }
         }
       }
-    }
 
-    return writeRes;
-  });
+      return writeRes;
+    });
 
-  const ms = performance.now() - t0;
-  req.log.info(
-    {
-      write: {
-        scope: out.scope ?? prepared.scope_public ?? env.MEMORY_SCOPE,
-        tenant_id: out.tenant_id ?? prepared.tenant_id ?? env.MEMORY_TENANT_ID,
-        commit_id: out.commit_id,
-        nodes: out.nodes?.length ?? 0,
-        edges: out.edges?.length ?? 0,
-        embedding_backfill_enqueued: !!out.embedding_backfill?.enqueued,
-        embedding_pending_nodes: out.embedding_backfill?.pending_nodes ?? 0,
-        topic_cluster_enqueued: (out as any).topic_cluster?.enqueued === true,
-        ms,
+    const ms = performance.now() - t0;
+    req.log.info(
+      {
+        write: {
+          scope: out.scope ?? prepared.scope_public ?? env.MEMORY_SCOPE,
+          tenant_id: out.tenant_id ?? prepared.tenant_id ?? env.MEMORY_TENANT_ID,
+          commit_id: out.commit_id,
+          nodes: out.nodes?.length ?? 0,
+          edges: out.edges?.length ?? 0,
+          embedding_backfill_enqueued: !!out.embedding_backfill?.enqueued,
+          embedding_pending_nodes: out.embedding_backfill?.pending_nodes ?? 0,
+          topic_cluster_enqueued: (out as any).topic_cluster?.enqueued === true,
+          ms,
+        },
       },
-    },
-    "memory write",
-  );
-  return reply.code(200).send(out);
+      "memory write",
+    );
+    return reply.code(200).send(out);
+  } finally {
+    gate.release();
+  }
 });
 
 // On-demand archive retrieval policy: rehydrate selected nodes from archive/cold back to warm/hot.
@@ -321,39 +381,44 @@ app.post("/v1/memory/recall", async (req, reply) => {
   await enforceTenantQuota(req, reply, "recall", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
   if (wantDebugEmbeddings) await enforceRateLimit(req, reply, "debug_embeddings");
   if (wantDebugEmbeddings) await enforceTenantQuota(req, reply, "debug_embeddings", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
-  const out = await withTx(db, async (client) => {
-    const base = await memoryRecallParsed(client, parsed, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, auth, {
-      timing: (stage, ms) => {
-        timings[stage] = (timings[stage] ?? 0) + ms;
-      },
-    }, "recall");
-
-    if (parsed.rules_context !== undefined && parsed.rules_context !== null) {
-      const rulesRes = await evaluateRules(
-        client,
-        {
-          scope: parsed.scope ?? env.MEMORY_SCOPE,
-          tenant_id: parsed.tenant_id ?? env.MEMORY_TENANT_ID,
-          context: parsed.rules_context,
-          include_shadow: parsed.rules_include_shadow,
-          limit: parsed.rules_limit,
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await withClient(db, async (client) => {
+      const base = await memoryRecallParsed(client, parsed, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, auth, {
+        timing: (stage, ms) => {
+          timings[stage] = (timings[stage] ?? 0) + ms;
         },
-        env.MEMORY_SCOPE,
-        env.MEMORY_TENANT_ID,
-      );
+      }, "recall");
 
-      (base as any).rules = {
-        scope: rulesRes.scope,
-        considered: rulesRes.considered,
-        matched: rulesRes.matched,
-        skipped_invalid_then: rulesRes.skipped_invalid_then,
-        invalid_then_sample: rulesRes.invalid_then_sample,
-        applied: rulesRes.applied,
-      };
-    }
+      if (parsed.rules_context !== undefined && parsed.rules_context !== null) {
+        const rulesRes = await evaluateRules(
+          client,
+          {
+            scope: parsed.scope ?? env.MEMORY_SCOPE,
+            tenant_id: parsed.tenant_id ?? env.MEMORY_TENANT_ID,
+            context: parsed.rules_context,
+            include_shadow: parsed.rules_include_shadow,
+            limit: parsed.rules_limit,
+          },
+          env.MEMORY_SCOPE,
+          env.MEMORY_TENANT_ID,
+        );
 
-    return base as any;
-  });
+        (base as any).rules = {
+          scope: rulesRes.scope,
+          considered: rulesRes.considered,
+          matched: rulesRes.matched,
+          skipped_invalid_then: rulesRes.skipped_invalid_then,
+          invalid_then_sample: rulesRes.invalid_then_sample,
+          applied: rulesRes.applied,
+        };
+      }
+      return base as any;
+    });
+  } finally {
+    gate.release();
+  }
   const ms = performance.now() - t0;
   req.log.info(
     {
@@ -397,6 +462,7 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
   await enforceTenantQuota(req, reply, "recall", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
   if (wantDebugEmbeddingsText) await enforceRateLimit(req, reply, "debug_embeddings");
   if (wantDebugEmbeddingsText) await enforceTenantQuota(req, reply, "debug_embeddings", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
+  await enforceRecallTextEmbedQuota(req, reply, parsed.tenant_id ?? env.MEMORY_TENANT_ID);
   const scope = parsed.scope ?? env.MEMORY_SCOPE;
   const qNorm = normalizeText(parsed.query_text, env.MAX_TEXT_LEN);
   const q = env.PII_REDACTION ? redactPII(qNorm).text : qNorm;
@@ -405,89 +471,100 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
   let embedMs = 0;
   let embedCacheHit = false;
   let embedSingleflightJoin = false;
+  let embedQueueWaitMs = 0;
+  let embedBatchSize = 1;
+  let recallParsed: any;
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
   try {
-    const emb = await embedRecallTextQuery(embedder, q);
-    vec = emb.vec;
-    embedMs = emb.ms;
-    embedCacheHit = emb.cache_hit;
-    embedSingleflightJoin = emb.singleflight_join;
-  } catch (err: any) {
-    const mapped = mapRecallTextEmbeddingError(err);
-    if (mapped.retry_after_sec) reply.header("retry-after", mapped.retry_after_sec);
-    req.log.warn(
-      {
-        recall_text: {
-          scope,
-          tenant_id: parsed.tenant_id ?? env.MEMORY_TENANT_ID,
-          embedding_provider: embedder.name,
-          query_len: q.length,
-          mapped_error: mapped.code,
-          mapped_status: mapped.statusCode,
-          err_message: String(err?.message ?? err),
-        },
-      },
-      "recall_text embedding failed",
-    );
-    throw new HttpError(mapped.statusCode, mapped.code, mapped.message, mapped.details);
-  }
-
-  const recallParsed = MemoryRecallRequest.parse({
-    tenant_id: parsed.tenant_id,
-    scope,
-    query_embedding: vec,
-    consumer_agent_id: parsed.consumer_agent_id,
-    consumer_team_id: parsed.consumer_team_id,
-    limit: parsed.limit,
-    neighborhood_hops: parsed.neighborhood_hops,
-    return_debug: parsed.return_debug,
-    include_embeddings: parsed.include_embeddings,
-    include_meta: parsed.include_meta,
-    include_slots: parsed.include_slots,
-    include_slots_preview: parsed.include_slots_preview,
-    slots_preview_keys: parsed.slots_preview_keys,
-    max_nodes: parsed.max_nodes,
-    max_edges: parsed.max_edges,
-    ranked_limit: parsed.ranked_limit,
-    min_edge_weight: parsed.min_edge_weight,
-    min_edge_confidence: parsed.min_edge_confidence,
-    rules_context: parsed.rules_context,
-    rules_include_shadow: parsed.rules_include_shadow,
-    rules_limit: parsed.rules_limit,
-  });
-  const wantDebugEmbeddings = recallParsed.return_debug && recallParsed.include_embeddings;
-  const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
-  const out = await withTx(db, async (client) => {
-    const base = await memoryRecallParsed(client, recallParsed, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, auth, {
-      timing: (stage, ms) => {
-        timings[stage] = (timings[stage] ?? 0) + ms;
-      },
-    }, "recall_text");
-
-    if (recallParsed.rules_context !== undefined && recallParsed.rules_context !== null) {
-      const rulesRes = await evaluateRules(
-        client,
+    try {
+      const emb = await embedRecallTextQuery(embedder, q);
+      vec = emb.vec;
+      embedMs = emb.ms;
+      embedCacheHit = emb.cache_hit;
+      embedSingleflightJoin = emb.singleflight_join;
+      embedQueueWaitMs = emb.queue_wait_ms;
+      embedBatchSize = emb.batch_size;
+    } catch (err: any) {
+      const mapped = mapRecallTextEmbeddingError(err);
+      if (mapped.retry_after_sec) reply.header("retry-after", mapped.retry_after_sec);
+      req.log.warn(
         {
-          scope: recallParsed.scope ?? env.MEMORY_SCOPE,
-          tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
-          context: recallParsed.rules_context,
-          include_shadow: recallParsed.rules_include_shadow,
-          limit: recallParsed.rules_limit,
+          recall_text: {
+            scope,
+            tenant_id: parsed.tenant_id ?? env.MEMORY_TENANT_ID,
+            embedding_provider: embedder.name,
+            query_len: q.length,
+            mapped_error: mapped.code,
+            mapped_status: mapped.statusCode,
+            err_message: String(err?.message ?? err),
+          },
         },
-        env.MEMORY_SCOPE,
-        env.MEMORY_TENANT_ID,
+        "recall_text embedding failed",
       );
-      (base as any).rules = {
-        scope: rulesRes.scope,
-        considered: rulesRes.considered,
-        matched: rulesRes.matched,
-        skipped_invalid_then: rulesRes.skipped_invalid_then,
-        invalid_then_sample: rulesRes.invalid_then_sample,
-        applied: rulesRes.applied,
-      };
+      throw new HttpError(mapped.statusCode, mapped.code, mapped.message, mapped.details);
     }
 
-    return base as any;
-  });
+    recallParsed = MemoryRecallRequest.parse({
+      tenant_id: parsed.tenant_id,
+      scope,
+      query_embedding: vec,
+      consumer_agent_id: parsed.consumer_agent_id,
+      consumer_team_id: parsed.consumer_team_id,
+      limit: parsed.limit,
+      neighborhood_hops: parsed.neighborhood_hops,
+      return_debug: parsed.return_debug,
+      include_embeddings: parsed.include_embeddings,
+      include_meta: parsed.include_meta,
+      include_slots: parsed.include_slots,
+      include_slots_preview: parsed.include_slots_preview,
+      slots_preview_keys: parsed.slots_preview_keys,
+      max_nodes: parsed.max_nodes,
+      max_edges: parsed.max_edges,
+      ranked_limit: parsed.ranked_limit,
+      min_edge_weight: parsed.min_edge_weight,
+      min_edge_confidence: parsed.min_edge_confidence,
+      rules_context: parsed.rules_context,
+      rules_include_shadow: parsed.rules_include_shadow,
+      rules_limit: parsed.rules_limit,
+    });
+    const wantDebugEmbeddings = recallParsed.return_debug && recallParsed.include_embeddings;
+    const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
+    out = await withClient(db, async (client) => {
+      const base = await memoryRecallParsed(client, recallParsed, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, auth, {
+        timing: (stage, ms) => {
+          timings[stage] = (timings[stage] ?? 0) + ms;
+        },
+      }, "recall_text");
+
+      if (recallParsed.rules_context !== undefined && recallParsed.rules_context !== null) {
+        const rulesRes = await evaluateRules(
+          client,
+          {
+            scope: recallParsed.scope ?? env.MEMORY_SCOPE,
+            tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+            context: recallParsed.rules_context,
+            include_shadow: recallParsed.rules_include_shadow,
+            limit: recallParsed.rules_limit,
+          },
+          env.MEMORY_SCOPE,
+          env.MEMORY_TENANT_ID,
+        );
+        (base as any).rules = {
+          scope: rulesRes.scope,
+          considered: rulesRes.considered,
+          matched: rulesRes.matched,
+          skipped_invalid_then: rulesRes.skipped_invalid_then,
+          invalid_then_sample: rulesRes.invalid_then_sample,
+          applied: rulesRes.applied,
+        };
+      }
+
+      return base as any;
+    });
+  } finally {
+    gate.release();
+  }
   const ms = performance.now() - t0;
   req.log.info(
     {
@@ -500,6 +577,9 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
         embed_ms: embedMs,
         embed_cache_hit: embedCacheHit,
         embed_singleflight_join: embedSingleflightJoin,
+        embed_queue_wait_ms: embedQueueWaitMs,
+        embed_batch_size: embedBatchSize,
+        embed_batcher: recallTextEmbedBatcher ? recallTextEmbedBatcher.stats() : null,
         include_meta: !!recallParsed.include_meta,
         include_slots: !!recallParsed.include_slots,
         include_slots_preview: !!recallParsed.include_slots_preview,
@@ -549,7 +629,15 @@ app.post("/v1/memory/rules/evaluate", async (req, reply) => {
   const body = withIdentityFromRequest(req, req.body, principal, "rules_evaluate");
   await enforceRateLimit(req, reply, "recall"); // same protection class as recall
   await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
-  const out = await withTx(db, (client) => evaluateRules(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await withClient(db, async (client) => {
+      return await evaluateRules(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID);
+    });
+  } finally {
+    gate.release();
+  }
   return reply.code(200).send(out);
 });
 
@@ -560,7 +648,15 @@ app.post("/v1/memory/tools/select", async (req, reply) => {
   const body = withIdentityFromRequest(req, req.body, principal, "tools_select");
   await enforceRateLimit(req, reply, "recall"); // same protection class as recall
   await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
-  const out = await withTx(db, (client) => selectTools(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await withClient(db, async (client) => {
+      return await selectTools(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID);
+    });
+  } finally {
+    gate.release();
+  }
   return reply.code(200).send(out);
 });
 
@@ -618,6 +714,19 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function acquireInflightSlot(kind: "recall" | "write"): Promise<InflightGateToken> {
+  const gate = kind === "write" ? writeInflightGate : recallInflightGate;
+  try {
+    return await gate.acquire();
+  } catch (err) {
+    if (err instanceof InflightGateError) {
+      const code = kind === "write" ? "write_backpressure" : "recall_backpressure";
+      throw new HttpError(429, code, `server busy on ${kind}; retry later`, err.details);
+    }
+    throw err;
+  }
+}
+
 async function enforceRateLimit(req: any, reply: any, kind: "recall" | "debug_embeddings" | "write") {
   if (!env.RATE_LIMIT_ENABLED) return;
   const limiter = kind === "debug_embeddings" ? debugEmbedLimiter : kind === "write" ? writeLimiter : recallLimiter;
@@ -645,6 +754,51 @@ async function enforceRateLimit(req: any, reply: any, kind: "recall" | "debug_em
     `rate limited (${kind}); retry later`,
     { retry_after_ms: res.retry_after_ms, waited_ms: waitedMs },
   );
+}
+
+async function enforceRecallTextEmbedQuota(req: any, reply: any, tenantId: string) {
+  if (!embedder) return;
+  if (env.RATE_LIMIT_ENABLED && recallTextEmbedLimiter) {
+    const key = rateLimitKey(req, "recall_text_embed");
+    let waitedMs = 0;
+    let res = recallTextEmbedLimiter.check(key, 1);
+    if (!res.allowed && env.RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS > 0) {
+      waitedMs = Math.min(env.RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS, Math.max(1, res.retry_after_ms));
+      await sleep(waitedMs);
+      res = recallTextEmbedLimiter.check(key, 1);
+    }
+    if (!res.allowed) {
+      reply.header("retry-after", Math.ceil(res.retry_after_ms / 1000));
+      throw new HttpError(429, "rate_limited_recall_text_embed", "recall_text embedding quota exceeded; retry later", {
+        retry_after_ms: res.retry_after_ms,
+        waited_ms: waitedMs,
+      });
+    }
+  }
+
+  if (env.TENANT_QUOTA_ENABLED && tenantRecallTextEmbedLimiter) {
+    const key = `tenant:${tenantId}:recall_text_embed`;
+    let waitedMs = 0;
+    let res = tenantRecallTextEmbedLimiter.check(key, 1);
+    if (!res.allowed && env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS > 0) {
+      waitedMs = Math.min(env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS, Math.max(1, res.retry_after_ms));
+      await sleep(waitedMs);
+      res = tenantRecallTextEmbedLimiter.check(key, 1);
+    }
+    if (!res.allowed) {
+      reply.header("retry-after", Math.ceil(res.retry_after_ms / 1000));
+      throw new HttpError(
+        429,
+        "tenant_rate_limited_recall_text_embed",
+        "tenant recall_text embedding quota exceeded; retry later",
+        {
+          tenant_id: tenantId,
+          retry_after_ms: res.retry_after_ms,
+          waited_ms: waitedMs,
+        },
+      );
+    }
+  }
 }
 
 function requireMemoryPrincipal(req: any): AuthPrincipal | null {
@@ -783,37 +937,57 @@ async function enforceTenantQuota(req: any, reply: any, kind: "recall" | "debug_
 async function embedRecallTextQuery(
   provider: NonNullable<typeof embedder>,
   queryText: string,
-): Promise<{ vec: number[]; ms: number; cache_hit: boolean; singleflight_join: boolean }> {
+): Promise<{ vec: number[]; ms: number; cache_hit: boolean; singleflight_join: boolean; queue_wait_ms: number; batch_size: number }> {
   const cacheKey = `${provider.name}:${sha256Hex(queryText)}`;
   const cached = recallTextEmbedCache?.get(cacheKey);
   if (cached) {
-    return { vec: cached.slice(), ms: 0, cache_hit: true, singleflight_join: false };
+    return { vec: cached.slice(), ms: 0, cache_hit: true, singleflight_join: false, queue_wait_ms: 0, batch_size: 1 };
   }
 
   const joined = recallTextEmbedInflight.get(cacheKey);
   if (joined) {
     const t0 = performance.now();
-    const vec = await joined;
+    const out = await joined;
     const ms = performance.now() - t0;
-    return { vec: vec.slice(), ms, cache_hit: false, singleflight_join: true };
+    return {
+      vec: out.vector.slice(),
+      ms,
+      cache_hit: false,
+      singleflight_join: true,
+      queue_wait_ms: out.queue_wait_ms,
+      batch_size: out.batch_size,
+    };
   }
 
-  const inflight = (async () => {
+  const inflight = (async (): Promise<{ vector: number[]; queue_wait_ms: number; batch_size: number }> => {
+    if (recallTextEmbedBatcher) {
+      const batched = await recallTextEmbedBatcher.enqueue(cacheKey, queryText);
+      recallTextEmbedCache?.set(cacheKey, batched.vector);
+      return batched;
+    }
+
     const [vec] = await provider.embed([queryText]);
     if (!Array.isArray(vec) || vec.length !== 1536) {
       throw new Error(`invalid query embedding result: expected dim=1536, got ${Array.isArray(vec) ? vec.length : "non-array"}`);
     }
     recallTextEmbedCache?.set(cacheKey, vec);
-    return vec;
+    return { vector: vec, queue_wait_ms: 0, batch_size: 1 };
   })().finally(() => {
     recallTextEmbedInflight.delete(cacheKey);
   });
 
   recallTextEmbedInflight.set(cacheKey, inflight);
   const t0 = performance.now();
-  const vec = await inflight;
+  const out = await inflight;
   const ms = performance.now() - t0;
-  return { vec: vec.slice(), ms, cache_hit: false, singleflight_join: false };
+  return {
+    vec: out.vector.slice(),
+    ms,
+    cache_hit: false,
+    singleflight_join: false,
+    queue_wait_ms: out.queue_wait_ms,
+    batch_size: out.batch_size,
+  };
 }
 
 function mapRecallTextEmbeddingError(err: unknown): {
@@ -823,6 +997,19 @@ function mapRecallTextEmbeddingError(err: unknown): {
   retry_after_sec?: number;
   details?: Record<string, unknown>;
 } {
+  if (err instanceof EmbedQueryBatcherError) {
+    const isQueueFull = err.code === "queue_full";
+    return {
+      statusCode: isQueueFull ? 429 : 503,
+      code: isQueueFull ? "recall_text_embed_queue_full" : "recall_text_embed_queue_timeout",
+      message: isQueueFull
+        ? "recall_text embedding queue is saturated; retry later"
+        : "recall_text embedding queue timed out; retry later",
+      retry_after_sec: isQueueFull ? 1 : 2,
+      details: err.details,
+    };
+  }
+
   const msg = String((err as any)?.message ?? err ?? "");
   const msgLc = msg.toLowerCase();
   const isRateLimit =

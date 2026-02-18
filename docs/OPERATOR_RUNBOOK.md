@@ -71,6 +71,15 @@ set -a; source /Users/lucio/Desktop/Aionis/.env; set +a
 echo "MEMORY_RECALL_PROFILE=${MEMORY_RECALL_PROFILE:-strict_edges}"
 ```
 
+6. Throughput profile check/apply:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s env:throughput:prod
+```
+
+This updates only the managed throughput block in `.env` and keeps existing secrets unchanged.
+
 ## Weekly
 
 1. Long-horizon drift snapshot:
@@ -116,6 +125,7 @@ npm run e2e:phasec-tenant
 5. LongMemEval regression gate (strict_edges + quality_first, dual slice):
 
 ```bash
+npm run -s env:throughput:benchmark
 npm run -s bench:longmemeval:gate
 ```
 

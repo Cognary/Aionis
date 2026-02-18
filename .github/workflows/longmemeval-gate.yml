@@ -91,7 +91,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp .env.example .env
+          npm run -s env:throughput:benchmark
           {
             echo "APP_ENV=ci"
             echo "PORT=3001"

@@ -16,6 +16,8 @@ Only mark **go** when all P0/P1 items are closed and all checks below pass.
 
 1. Secrets and config
 - `.env` / runtime env must use production credentials and secret manager sources.
+- Apply throughput production profile baseline:
+  - `npm run -s env:throughput:prod`
 - `APP_ENV=prod`
 - `MEMORY_AUTH_MODE` is not `off` (`api_key`, `jwt`, or `api_key_or_jwt`).
 - `RATE_LIMIT_ENABLED=true`

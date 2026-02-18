@@ -35,6 +35,7 @@ Source of truth:
 
 ```bash
 cd /Users/lucio/Desktop/Aionis
+npm run -s env:throughput:benchmark
 npm run -s bench:longmemeval:gate
 ```
 
@@ -57,6 +58,7 @@ Artifacts:
 ## CI Workflow
 
 - Workflow file: `/Users/lucio/Desktop/Aionis/.github/workflows/longmemeval-gate.yml`
+- CI env setup uses `npm run -s env:throughput:benchmark` before stack startup.
 - Required GitHub Actions secrets:
   - `MINIMAX_API_KEY`
   - `MINIMAX_GROUP_ID`
