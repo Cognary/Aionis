@@ -50,6 +50,7 @@ This index is the entry point for project documentation.
 - [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)
 - [SDK Release Runbook](./SDK_RELEASE.md)
 - [Docker Release Runbook](./DOCKER_RELEASE.md)
+- [Production Go-Live Gate](./PROD_GO_LIVE_GATE.md)
 - [macOS Daemon (launchd)](./DAEMON_MAC.md)
 - [Two-Phase Migrations](./MIGRATIONS_TWO_PHASE.md)
 
