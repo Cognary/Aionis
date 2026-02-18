@@ -68,19 +68,24 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
 
 ### `POST /v1/memory/recall`
 
+Default recall knobs are profile-driven by `MEMORY_RECALL_PROFILE`:
+- `strict_edges` (default): `limit=24`, `hops=2`, `max_nodes=60`, `max_edges=80`, `ranked_limit=140`, `min_edge_weight=0.2`, `min_edge_confidence=0.2`
+- `quality_first`: `limit=30`, `hops=2`, `max_nodes=80`, `max_edges=100`, `ranked_limit=180`, `min_edge_weight=0.05`, `min_edge_confidence=0.05`
+- `legacy`: historical defaults (`30/2/50/100/100/0/0`)
+
 **Request**
 - `query_embedding: number[]` (required, dim=1536)
 - `tenant_id?: string`
 - `scope?: string`
 - `consumer_agent_id?: string` (optional; enables lane-based visibility and read-side audit)
 - `consumer_team_id?: string` (optional; used with team-private lane and team-scoped rules)
-- `limit?: number` (default 30, max 200)
-- `neighborhood_hops?: 1|2` (default 2)
-- `max_nodes?: number` (default 50, max 200)
-- `max_edges?: number` (default 100, **max 100 hard**)
-- `ranked_limit?: number` (default 100, max 500)
-- `min_edge_weight?: number` (default 0, max 1) stage-2 edge fetch filter
-- `min_edge_confidence?: number` (default 0, max 1) stage-2 edge fetch filter
+- `limit?: number` (default from recall profile, max 200)
+- `neighborhood_hops?: 1|2` (default from recall profile)
+- `max_nodes?: number` (default from recall profile, max 200)
+- `max_edges?: number` (default from recall profile, **max 100 hard**)
+- `ranked_limit?: number` (default from recall profile, max 500)
+- `min_edge_weight?: number` (default from recall profile, max 1) stage-2 edge fetch filter
+- `min_edge_confidence?: number` (default from recall profile, max 1) stage-2 edge fetch filter
 - `include_meta?: boolean` (default false)
 - `include_slots?: boolean` (default false)
 - `include_slots_preview?: boolean` (default false)

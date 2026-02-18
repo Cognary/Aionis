@@ -56,6 +56,8 @@ const EnvSchema = z.object({
     .transform((v) => v === "true"),
   RECALL_TEXT_EMBED_CACHE_MAX_KEYS: z.coerce.number().int().positive().max(200000).default(2000),
   RECALL_TEXT_EMBED_CACHE_TTL_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
+  // Server-side default recall tuning profile used when callers omit recall knobs.
+  MEMORY_RECALL_PROFILE: z.enum(["legacy", "strict_edges", "quality_first"]).default("strict_edges"),
   PII_REDACTION: z
     .string()
     .optional()

@@ -1,0 +1,24 @@
+[
+  {
+    "name": "strict_edges",
+    "recall_limit": 24,
+    "recall_hops": 2,
+    "recall_max_nodes": 60,
+    "recall_max_edges": 80,
+    "recall_ranked_limit": 140,
+    "recall_min_edge_weight": 0.2,
+    "recall_min_edge_confidence": 0.2,
+    "prompt_style": "extractive"
+  },
+  {
+    "name": "quality_first",
+    "recall_limit": 30,
+    "recall_hops": 2,
+    "recall_max_nodes": 80,
+    "recall_max_edges": 100,
+    "recall_ranked_limit": 180,
+    "recall_min_edge_weight": 0.05,
+    "recall_min_edge_confidence": 0.05,
+    "prompt_style": "extractive"
+  }
+]

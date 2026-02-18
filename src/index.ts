@@ -100,6 +100,57 @@ const recallTextEmbedCache =
 
 const recallTextEmbedInflight = new Map<string, Promise<number[]>>();
 
+type RecallProfileDefaults = {
+  limit: number;
+  neighborhood_hops: 1 | 2;
+  max_nodes: number;
+  max_edges: number;
+  ranked_limit: number;
+  min_edge_weight: number;
+  min_edge_confidence: number;
+};
+
+const RECALL_PROFILE_DEFAULTS: Record<"legacy" | "strict_edges" | "quality_first", RecallProfileDefaults> = {
+  legacy: {
+    limit: 30,
+    neighborhood_hops: 2,
+    max_nodes: 50,
+    max_edges: 100,
+    ranked_limit: 100,
+    min_edge_weight: 0,
+    min_edge_confidence: 0,
+  },
+  strict_edges: {
+    limit: 24,
+    neighborhood_hops: 2,
+    max_nodes: 60,
+    max_edges: 80,
+    ranked_limit: 140,
+    min_edge_weight: 0.2,
+    min_edge_confidence: 0.2,
+  },
+  quality_first: {
+    limit: 30,
+    neighborhood_hops: 2,
+    max_nodes: 80,
+    max_edges: 100,
+    ranked_limit: 180,
+    min_edge_weight: 0.05,
+    min_edge_confidence: 0.05,
+  },
+};
+
+const recallProfileDefaults = RECALL_PROFILE_DEFAULTS[env.MEMORY_RECALL_PROFILE];
+
+function withRecallProfileDefaults(body: unknown, defaults: RecallProfileDefaults) {
+  const out: Record<string, unknown> = body && typeof body === "object" ? { ...(body as Record<string, unknown>) } : {};
+  const entries = Object.entries(defaults) as Array<[keyof RecallProfileDefaults, number]>;
+  for (const [key, value] of entries) {
+    if (out[key] === undefined || out[key] === null) out[key] = value;
+  }
+  return out;
+}
+
 const app = Fastify({
   logger: true,
   bodyLimit: 5 * 1024 * 1024,
@@ -135,6 +186,8 @@ app.log.info(
     tenant_quota_enabled: env.TENANT_QUOTA_ENABLED,
     recall_text_embed_cache_enabled: !!recallTextEmbedCache,
     recall_text_embed_cache_ttl_ms: env.RECALL_TEXT_EMBED_CACHE_TTL_MS,
+    memory_recall_profile: env.MEMORY_RECALL_PROFILE,
+    memory_recall_profile_defaults: recallProfileDefaults,
     write_rate_limit_wait_ms: env.WRITE_RATE_LIMIT_MAX_WAIT_MS,
     tenant_write_rate_limit_wait_ms: env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS,
     shadow_dual_write_enabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
@@ -259,7 +312,8 @@ app.post("/v1/memory/recall", async (req, reply) => {
   const t0 = performance.now();
   const timings: Record<string, number> = {};
   const principal = requireMemoryPrincipal(req);
-  const body = withIdentityFromRequest(req, req.body, principal, "recall");
+  const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall");
+  const body = withRecallProfileDefaults(bodyRaw, recallProfileDefaults);
   const parsed = MemoryRecallRequest.parse(body);
   const wantDebugEmbeddings = parsed.return_debug && parsed.include_embeddings;
   const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
@@ -335,7 +389,8 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
   const t0 = performance.now();
   const timings: Record<string, number> = {};
   const principal = requireMemoryPrincipal(req);
-  const body = withIdentityFromRequest(req, req.body, principal, "recall_text");
+  const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall_text");
+  const body = withRecallProfileDefaults(bodyRaw, recallProfileDefaults);
   const parsed = MemoryRecallTextRequest.parse(body);
   const wantDebugEmbeddingsText = parsed.return_debug && parsed.include_embeddings;
   await enforceRateLimit(req, reply, "recall");

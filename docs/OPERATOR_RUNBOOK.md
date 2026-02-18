@@ -64,6 +64,13 @@ Expected (steady state):
 - `lane.legacy_unowned_private_detected=0`
 - `scope_stats.filtered_by_lane` should be stable (non-zero can be normal in multi-agent isolation)
 
+5. Recall default profile check:
+
+```bash
+set -a; source /Users/lucio/Desktop/Aionis/.env; set +a
+echo "MEMORY_RECALL_PROFILE=${MEMORY_RECALL_PROFILE:-strict_edges}"
+```
+
 ## Weekly
 
 1. Long-horizon drift snapshot:
@@ -104,6 +111,12 @@ npm run e2e:phase4-smoke
 
 ```bash
 npm run e2e:phasec-tenant
+```
+
+5. LongMemEval regression gate (strict_edges + quality_first, dual slice):
+
+```bash
+npm run -s bench:longmemeval:gate
 ```
 
 ## Suggested Thresholds

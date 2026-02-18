@@ -111,9 +111,9 @@ const ToolRecallTextArgs = z.object({
   query_text: z.string().min(1),
   consumer_agent_id: z.string().min(1).optional(),
   consumer_team_id: z.string().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(20).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
   neighborhood_hops: z.coerce.number().int().min(1).max(2).optional(),
-  max_nodes: z.coerce.number().int().min(1).max(100).optional(),
+  max_nodes: z.coerce.number().int().min(1).max(200).optional(),
   max_edges: z.coerce.number().int().min(0).max(100).optional(),
   min_edge_weight: z.coerce.number().min(0).max(1).optional(),
   min_edge_confidence: z.coerce.number().min(0).max(1).optional(),
@@ -166,12 +166,12 @@ const TOOLS: ToolDef[] = [
         query_text: { type: "string", description: "Required recall query." },
         consumer_agent_id: { type: "string", description: "Optional consumer agent id (lane visibility + recall audit)." },
         consumer_team_id: { type: "string", description: "Optional consumer team id." },
-        limit: { type: "integer", minimum: 1, maximum: 20, default: 20 },
+        limit: { type: "integer", minimum: 1, maximum: 200, default: 24 },
         neighborhood_hops: { type: "integer", minimum: 1, maximum: 2, default: 2 },
-        max_nodes: { type: "integer", minimum: 1, maximum: 100, default: 60 },
+        max_nodes: { type: "integer", minimum: 1, maximum: 200, default: 60 },
         max_edges: { type: "integer", minimum: 0, maximum: 100, default: 80 },
-        min_edge_weight: { type: "number", minimum: 0, maximum: 1, default: 0 },
-        min_edge_confidence: { type: "number", minimum: 0, maximum: 1, default: 0 },
+        min_edge_weight: { type: "number", minimum: 0, maximum: 1, default: 0.2 },
+        min_edge_confidence: { type: "number", minimum: 0, maximum: 1, default: 0.2 },
       },
       required: ["query_text"],
     },
@@ -251,12 +251,12 @@ async function toolRecallText(env: Env, rawArgs: unknown) {
   const a = parsed.data;
   const body: any = {
     query_text: a.query_text,
-    limit: a.limit ?? 20,
-    neighborhood_hops: a.neighborhood_hops ?? 2,
   };
   if (a.scope) body.scope = a.scope;
   if (a.consumer_agent_id) body.consumer_agent_id = a.consumer_agent_id;
   if (a.consumer_team_id) body.consumer_team_id = a.consumer_team_id;
+  if (typeof a.limit === "number") body.limit = a.limit;
+  if (typeof a.neighborhood_hops === "number") body.neighborhood_hops = a.neighborhood_hops;
   if (typeof a.max_nodes === "number") body.max_nodes = a.max_nodes;
   if (typeof a.max_edges === "number") body.max_edges = a.max_edges;
   if (typeof a.min_edge_weight === "number") body.min_edge_weight = a.min_edge_weight;

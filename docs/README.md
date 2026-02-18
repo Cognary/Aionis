@@ -20,6 +20,7 @@ This index is the entry point for project documentation.
 ## Performance
 
 - [Performance Baseline](./PERFORMANCE_BASELINE.md)
+- [LongMemEval Gate](./LONGMEMEVAL_GATE.md)
 - [Performance Report v1 Template](./PERFORMANCE_REPORT_V1_TEMPLATE.md)
 - [Partition Shadow Migration](./PARTITION_SHADOW_MIGRATION.md)
 

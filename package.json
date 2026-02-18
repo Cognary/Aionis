@@ -70,6 +70,8 @@
     "gtm:phase1:ci-gate": "bash scripts/gtm/phase1-ci-gate.sh",
     "gtm:phase2:gateb": "bash scripts/gtm/gate-b-check.sh",
     "gtm:phase3:gatec": "bash scripts/gtm/gate-c-check.sh",
+    "bench:longmemeval:matrix": "python3 scripts/bench/longmemeval_ab_matrix.py",
+    "bench:longmemeval:gate": "bash scripts/bench/longmemeval_ci_gate.sh",
     "regression:oneclick": "bash scripts/regression-oneclick.sh",
     "preflight:prod": "bash scripts/prod-preflight.sh",
     "job:compression-rollup": "tsx src/jobs/compression-rollup.ts",
