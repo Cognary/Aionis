@@ -58,6 +58,9 @@ jobs:
       AIONIS_BASE_URL: http://localhost:3001
       PORT: "3001"
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Validate required secrets
         run: |
           set -euo pipefail
@@ -69,9 +72,6 @@ jobs:
             echo "Missing required secret: MINIMAX_GROUP_ID" >&2
             exit 1
           fi
-
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -161,4 +161,11 @@ jobs:
 
       - name: Stop stack
         if: always()
-        run: docker compose down -v
+        shell: bash
+        run: |
+          set +e
+          if [[ -f docker-compose.yml ]]; then
+            docker compose down -v
+          else
+            echo "docker-compose.yml not found, skip compose down"
+          fi
