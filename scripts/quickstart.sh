@@ -45,9 +45,15 @@ if [[ "$ok" -ne 1 ]]; then
 fi
 
 echo "Running killer demo..."
-bash "$ROOT_DIR/examples/killer_demo.sh" --wait-seconds 45 --run-worker-once auto
+DEMO_SCOPE="quickstart_$(date +%s)"
+bash "$ROOT_DIR/examples/killer_demo.sh" \
+  --scope "$DEMO_SCOPE" \
+  --wait-seconds 45 \
+  --run-worker-once auto \
+  --require-success
 
 echo
 echo "Quickstart complete."
 echo "- API: http://localhost:${PORT}"
+echo "- Demo scope: ${DEMO_SCOPE}"
 echo "- Stop stack: make stack-down"

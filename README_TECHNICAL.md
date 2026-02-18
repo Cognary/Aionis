@@ -255,7 +255,7 @@ npm run docker:publish:ghcr:dry-run
 Publish (multi-arch):
 
 ```bash
-IMAGE_REPO=ghcr.io/<owner>/aionis-memory-graph \
+IMAGE_REPO=ghcr.io/<owner>/aionis \
 TAG=0.1.0 \
 PUBLISH_LATEST=true \
 npm run docker:publish:ghcr

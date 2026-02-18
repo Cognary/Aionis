@@ -54,7 +54,7 @@ if [[ -z "${IMAGE_REPO}" ]]; then
   if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
     IMAGE_REPO="ghcr.io/${GITHUB_REPOSITORY,,}"
   else
-    echo "IMAGE_REPO is required (example: ghcr.io/<owner>/aionis-memory-graph)." >&2
+    echo "IMAGE_REPO is required (example: ghcr.io/<owner>/aionis)." >&2
     exit 1
   fi
 fi

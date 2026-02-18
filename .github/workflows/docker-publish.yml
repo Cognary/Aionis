@@ -11,7 +11,7 @@ on:
         required: false
         type: string
       image_repo:
-        description: "GHCR image repo (default: ghcr.io/<owner>/aionis-memory-graph)"
+        description: "GHCR image repo (default: ghcr.io/<owner>/aionis)"
         required: false
         type: string
       platforms:
@@ -67,7 +67,7 @@ jobs:
           image_repo="${{ github.event.inputs.image_repo }}"
           if [[ -z "${image_repo}" ]]; then
             owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-            image_repo="ghcr.io/${owner_lc}/aionis-memory-graph"
+            image_repo="ghcr.io/${owner_lc}/aionis"
           fi
 
           echo "IMAGE_REPO=${image_repo}" >> "$GITHUB_ENV"

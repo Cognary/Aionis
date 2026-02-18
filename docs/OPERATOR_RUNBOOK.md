@@ -80,6 +80,14 @@ npm run job:consistency-check:scope -- --scope default --strict-warnings
 npm run job:consistency-check:cross-tenant -- --strict-warnings
 ```
 
+For large datasets where full scan runtime is too high, use fast mode (lower-bound counts) and batch by check index:
+
+```bash
+npm run job:consistency-check:scope:fast -- --scope default --strict-warnings
+npm run job:consistency-check:scope -- --scope default --batch-size 10 --batch-index 0 --strict-warnings
+npm run job:consistency-check:scope -- --scope default --batch-size 10 --batch-index 1 --strict-warnings
+```
+
 If `private_rule_without_owner` is non-zero:
 
 ```bash

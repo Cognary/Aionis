@@ -119,6 +119,8 @@ Options:
 - `--scope <scope>` (default: `MEMORY_SCOPE`)
 - `--sample <n>` (default: `20`, max `200`)
 - `--check-set <all|scope|cross_tenant>` (default: `all`)
+- `--mode <full|fast>` (default: `full`; `fast` returns lower-bound counts for speed)
+- `--batch-size <n>` + `--batch-index <i>` (run deterministic slices by check ordinal)
 - `--strict` (non-zero exit if any **errors**)
 - `--strict-warnings` (non-zero exit if any errors **or warnings**)
 
@@ -127,6 +129,8 @@ Large-tenant operation tip (split fast scope checks from global cross-tenant che
 ```bash
 npm run job:consistency-check:scope -- --scope default --strict-warnings
 npm run job:consistency-check:cross-tenant -- --strict-warnings
+npm run job:consistency-check:scope:fast -- --scope default --strict-warnings
+npm run job:consistency-check:scope -- --scope default --batch-size 10 --batch-index 0 --strict-warnings
 ```
 
 Cross-tenant integrity checks (Phase C) are included by default:

@@ -10,7 +10,7 @@ Last updated: `2026-02-18`
 
 This runbook covers publishing the Aionis API image to GHCR.
 
-- default image repo (script fallback): `ghcr.io/<owner>/aionis-memory-graph`
+- default image repo (script fallback): `ghcr.io/<owner>/aionis`
 - current production repo example: `ghcr.io/cognary/aionis`
 - source Dockerfile: `/Users/lucio/Desktop/Aionis/Dockerfile`
 - publish workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docker-publish.yml`
@@ -39,7 +39,7 @@ Publish multi-arch image:
 cd /Users/lucio/Desktop/Aionis
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
-IMAGE_REPO=ghcr.io/<owner>/aionis-memory-graph \
+IMAGE_REPO=ghcr.io/<owner>/aionis \
 TAG=v0.1.1 \
 PLATFORMS=linux/amd64,linux/arm64 \
 PUBLISH_LATEST=true \

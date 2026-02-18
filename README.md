@@ -28,7 +28,7 @@ cd /Users/lucio/Desktop/Aionis
 make quickstart
 ```
 
-This brings up DB + API + worker and runs a deterministic value demo.
+This brings up DB + API + worker and runs a deterministic value demo in an isolated scope.
 
 Optional:
 
@@ -71,7 +71,7 @@ Full contract:
 
 1. TypeScript SDK: [`@aionis/sdk`](https://www.npmjs.com/package/@aionis/sdk)
 2. Python SDK: [`aionis-sdk`](https://pypi.org/project/aionis-sdk/)
-3. Docker image: `ghcr.io/cognary/aionis-memory-graph:latest`
+3. Docker image: `ghcr.io/cognary/aionis:latest`
 
 Release docs:
 

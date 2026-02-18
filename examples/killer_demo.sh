@@ -25,6 +25,8 @@ PORT="${PORT:-3001}"
 SCOPE="${MEMORY_SCOPE:-default}"
 WAIT_SECONDS=40
 RUN_WORKER_ONCE="auto"
+REQUIRE_SUCCESS=false
+RESULT_FILE=""
 AUTH_MODE="${MEMORY_AUTH_MODE:-off}"
 API_KEY="${API_KEY:-${PERF_API_KEY:-}}"
 AUTH_BEARER="${AUTH_BEARER:-${PERF_AUTH_BEARER:-}}"
@@ -47,6 +49,14 @@ while [[ $# -gt 0 ]]; do
       RUN_WORKER_ONCE="${2:-auto}"
       shift 2
       ;;
+    --require-success)
+      REQUIRE_SUCCESS=true
+      shift
+      ;;
+    --result-file)
+      RESULT_FILE="${2:-}"
+      shift 2
+      ;;
     *)
       echo "Unknown arg: $1" >&2
       exit 1
@@ -57,6 +67,10 @@ done
 if ! [[ "$WAIT_SECONDS" =~ ^[0-9]+$ ]]; then
   echo "--wait-seconds must be an integer." >&2
   exit 1
+fi
+
+if [[ -n "${RESULT_FILE}" ]]; then
+  mkdir -p "$(dirname "${RESULT_FILE}")"
 fi
 
 infer_api_key() {
@@ -309,8 +323,24 @@ echo "$cross_session_summary"
 
 echo
 echo "== Value delta =="
-jq -n --argjson b "$baseline_summary" --argjson a "$after_summary" --argjson c "$cross_session_summary" \
-  '{recall_gain:{seed_delta:($a.seeds-$b.seeds), node_delta:($a.nodes-$b.nodes), edge_delta:($a.edges-$b.edges), context_char_delta:($a.context_chars-$b.context_chars), target_hit_delta:($a.target_hits-$b.target_hits)}, success:{memory_recall_improved:(($a.target_hits-$b.target_hits)>0), cross_session_recall_stable:($c.target_hits>0)}}'
+value_delta_json="$(
+  jq -n --argjson b "$baseline_summary" --argjson a "$after_summary" --argjson c "$cross_session_summary" \
+    '{recall_gain:{seed_delta:($a.seeds-$b.seeds), node_delta:($a.nodes-$b.nodes), edge_delta:($a.edges-$b.edges), context_char_delta:($a.context_chars-$b.context_chars), target_hit_delta:($a.target_hits-$b.target_hits)}, success:{memory_recall_improved:(($a.target_hits-$b.target_hits)>0), cross_session_recall_stable:($c.target_hits>0)}}'
+)"
+echo "$value_delta_json"
+
+if [[ -n "${RESULT_FILE}" ]]; then
+  printf '%s\n' "$value_delta_json" > "${RESULT_FILE}"
+fi
+
+if [[ "${REQUIRE_SUCCESS}" == "true" ]]; then
+  memory_ok="$(echo "$value_delta_json" | jq -r '.success.memory_recall_improved')"
+  cross_ok="$(echo "$value_delta_json" | jq -r '.success.cross_session_recall_stable')"
+  if [[ "${memory_ok}" != "true" || "${cross_ok}" != "true" ]]; then
+    echo "killer demo failed strict success criteria (memory_recall_improved=true and cross_session_recall_stable=true required)." >&2
+    exit 1
+  fi
+fi
 
 echo
 echo "Demo-specific matched nodes:"

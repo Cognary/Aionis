@@ -14,8 +14,14 @@ type CheckResult = {
   error?: string;
 };
 
+type CheckMode = "full" | "fast";
+
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
+let checkMode: CheckMode = "full";
+let checkBatchSize = 0;
+let checkBatchIndex = 0;
+let checkOrdinal = 0;
 
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);
@@ -32,6 +38,20 @@ function hasFlag(flag: string): boolean {
 function clampInt(v: number, min: number, max: number): number {
   if (!Number.isFinite(v)) return min;
   return Math.max(min, Math.min(max, Math.trunc(v)));
+}
+
+function appendNote(base: string | undefined, extra: string): string {
+  return base ? `${base} ${extra}` : extra;
+}
+
+function fastSampleSql(sampleSql: string): string {
+  const tempLimitToken = "__FAST_LIMIT__";
+  const withTempLimit = sampleSql.replace("__LIMIT__", tempLimitToken);
+  const withoutOrder = withTempLimit.replace(
+    /\s+ORDER\s+BY[\s\S]*?\s+LIMIT\s+__FAST_LIMIT__/i,
+    "\n        LIMIT __FAST_LIMIT__",
+  );
+  return withoutOrder.replace(tempLimitToken, "__LIMIT__");
 }
 
 async function hasColumn(scopeClient: pg.PoolClient, tableName: string, columnName: string): Promise<boolean> {
@@ -63,6 +83,31 @@ async function runCheck(
   opts?: { sampleWhenZero?: boolean },
 ): Promise<CheckResult> {
   try {
+    const ordinal = checkOrdinal;
+    checkOrdinal += 1;
+    if (checkBatchSize > 0 && Math.floor(ordinal / checkBatchSize) !== checkBatchIndex) {
+      return {
+        name,
+        severity,
+        count: 0,
+        sample: [],
+        note: appendNote(note, `Skipped by batch filter (--batch-size=${checkBatchSize} --batch-index=${checkBatchIndex}).`),
+      };
+    }
+
+    if (checkMode === "fast" && opts?.sampleWhenZero !== true) {
+      const cappedLimit = sampleLimit + 1;
+      const sr = await client.query(fastSampleSql(sampleSql).replace("__LIMIT__", String(cappedLimit)), sampleArgs);
+      const rows = sr.rows ?? [];
+      const truncated = rows.length > sampleLimit;
+      const sample = truncated ? rows.slice(0, sampleLimit) : rows;
+      const count = truncated ? sampleLimit + 1 : sample.length;
+      const modeNote = truncated
+        ? "Fast mode: count is a lower bound; additional violating rows may exist."
+        : "Fast mode: count reflects sampled violating rows only.";
+      return { name, severity, count, sample, note: appendNote(note, modeNote) };
+    }
+
     const cr = await client.query<{ n: string }>(countSql, countArgs);
     const count = Number(cr.rows[0]?.n ?? 0);
     const shouldSample = count > 0 || opts?.sampleWhenZero === true;
@@ -84,6 +129,23 @@ async function main() {
   const sampleLimit = clampInt(Number(argValue("--sample") ?? "20"), 1, 200);
   const strict = hasFlag("--strict");
   const strictWarnings = hasFlag("--strict-warnings");
+  const modeRaw = (argValue("--mode") ?? "full").toLowerCase();
+  if (modeRaw !== "full" && modeRaw !== "fast") {
+    throw new Error("invalid --mode (expected one of: full|fast)");
+  }
+  checkMode = modeRaw as CheckMode;
+  const batchSize = clampInt(Number(argValue("--batch-size") ?? "0"), 0, 500);
+  const batchIndexRaw = Number(argValue("--batch-index") ?? "0");
+  const batchIndex = clampInt(batchIndexRaw, 0, 50000);
+  if (!Number.isFinite(batchIndexRaw) || batchIndex !== Math.trunc(batchIndexRaw)) {
+    throw new Error("invalid --batch-index (expected non-negative integer)");
+  }
+  if (batchSize === 0 && hasFlag("--batch-index") && batchIndex > 0) {
+    throw new Error("--batch-index requires --batch-size > 0");
+  }
+  checkBatchSize = batchSize;
+  checkBatchIndex = batchIndex;
+  checkOrdinal = 0;
   const checkSetRaw = (argValue("--check-set") ?? "all").toLowerCase();
   if (checkSetRaw !== "all" && checkSetRaw !== "scope" && checkSetRaw !== "cross_tenant") {
     throw new Error("invalid --check-set (expected one of: all|scope|cross_tenant)");
@@ -1684,6 +1746,8 @@ async function main() {
         ok: true,
         scope,
         check_set: checkSet,
+        mode: checkMode,
+        batch: checkBatchSize > 0 ? { size: checkBatchSize, index: checkBatchIndex, checks_seen: checkOrdinal } : null,
         strict,
         strict_warnings: strictWarnings,
         summary: { errors, warnings, sample_limit: sampleLimit },

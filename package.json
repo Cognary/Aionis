@@ -41,6 +41,8 @@
     "job:consistency-check": "tsx src/jobs/consistency-check.ts",
     "job:consistency-check:scope": "tsx src/jobs/consistency-check.ts --check-set scope",
     "job:consistency-check:cross-tenant": "tsx src/jobs/consistency-check.ts --check-set cross_tenant",
+    "job:consistency-check:scope:fast": "tsx src/jobs/consistency-check.ts --check-set scope --mode fast",
+    "job:consistency-check:cross-tenant:fast": "tsx src/jobs/consistency-check.ts --check-set cross_tenant --mode fast",
     "job:embedding-model-backfill": "tsx src/jobs/embedding-model-backfill.ts",
     "job:private-rule-owner-backfill": "tsx src/jobs/private-rule-owner-backfill.ts",
     "job:private-lane-owner-backfill": "tsx src/jobs/private-lane-owner-backfill.ts",

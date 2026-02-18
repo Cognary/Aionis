@@ -61,7 +61,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgres://aionis:aionis@db:5432/aionis_memory
-    command: ["npm", "run", "job:outbox-worker"]
+    command: ["node", "dist/jobs/outbox-worker.js"]
     restart: unless-stopped
 
 volumes:
