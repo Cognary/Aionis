@@ -12,10 +12,13 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS memory_edges_scope_dst_weight_conf_idx
   ON memory_edges (scope, dst_id, weight DESC, confidence DESC);
 
 -- Keep v2/index surface aligned with legacy tables for partition cutover parity.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS memory_edges_v2_scope_src_weight_conf_idx
+-- NOTE:
+-- memory_*_v2 are partitioned parent tables; PostgreSQL does not allow
+-- CREATE INDEX CONCURRENTLY on partitioned parents.
+CREATE INDEX IF NOT EXISTS memory_edges_v2_scope_src_weight_conf_idx
   ON memory_edges_v2 (scope, src_id, weight DESC, confidence DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS memory_edges_v2_scope_dst_weight_conf_idx
+CREATE INDEX IF NOT EXISTS memory_edges_v2_scope_dst_weight_conf_idx
   ON memory_edges_v2 (scope, dst_id, weight DESC, confidence DESC);
 
 -- Stage-1 lane-owner guard with READY/hot+warm filter.
@@ -25,7 +28,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS memory_nodes_scope_lane_owner_tier_ready
     AND embedding_status = 'ready'
     AND tier IN ('hot', 'warm');
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS memory_nodes_v2_scope_lane_owner_tier_ready_idx
+CREATE INDEX IF NOT EXISTS memory_nodes_v2_scope_lane_owner_tier_ready_idx
   ON memory_nodes_v2 (scope, memory_lane, owner_agent_id, owner_team_id, tier)
   WHERE embedding IS NOT NULL
     AND embedding_status = 'ready'
