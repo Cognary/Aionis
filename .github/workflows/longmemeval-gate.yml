@@ -1,4 +1,4 @@
-name: LongMemEval Gate
+name: Auxiliary LongMemEval Regression
 
 on:
   workflow_dispatch:
@@ -25,17 +25,6 @@ on:
         type: string
   schedule:
     - cron: "0 5 * * 2"
-  push:
-    branches: ["main"]
-    paths:
-      - "src/config.ts"
-      - "src/index.ts"
-      - "src/memory/**"
-      - "src/mcp/**"
-      - "scripts/bench/**"
-      - ".github/workflows/longmemeval-gate.yml"
-      - "docker-compose.yml"
-      - "package.json"
 
 permissions:
   contents: read

@@ -1,6 +1,11 @@
 # LongMemEval Gate
 
-This runbook defines the production LongMemEval benchmark gate used for regression detection.
+This runbook defines the auxiliary LongMemEval benchmark gate used for non-blocking regression tracking.
+
+Status in release policy:
+- non-blocking
+- auxiliary evidence only
+- not part of the production core go-live gate
 
 ## Scope
 
@@ -59,6 +64,7 @@ Artifacts:
 
 - Workflow file: `/Users/lucio/Desktop/Aionis/.github/workflows/longmemeval-gate.yml`
 - CI env setup uses `npm run -s env:throughput:benchmark` before stack startup.
+- Trigger policy: `workflow_dispatch` + weekly schedule only (not on `main` push).
 - Required GitHub Actions secrets:
   - `MINIMAX_API_KEY`
   - `MINIMAX_GROUP_ID`

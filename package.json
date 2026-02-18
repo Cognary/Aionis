@@ -76,6 +76,7 @@
     "bench:longmemeval:matrix": "python3 scripts/bench/longmemeval_ab_matrix.py",
     "bench:longmemeval:gate": "bash scripts/bench/longmemeval_ci_gate.sh",
     "bench:locomo": "python3 scripts/bench/locomo_aionis_minimax.py",
+    "gate:core:prod": "bash scripts/core-production-gate.sh",
     "regression:oneclick": "bash scripts/regression-oneclick.sh",
     "preflight:prod": "bash scripts/prod-preflight.sh",
     "job:compression-rollup": "tsx src/jobs/compression-rollup.ts",

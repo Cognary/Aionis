@@ -1,0 +1,153 @@
+name: Core Production Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_perf:
+        description: "Run perf benchmark checks"
+        required: false
+        default: true
+        type: boolean
+      recall_p95_max_ms:
+        description: "Recall p95 threshold (ms)"
+        required: false
+        default: "1500"
+        type: string
+      write_p95_max_ms:
+        description: "Write p95 threshold (ms)"
+        required: false
+        default: "1000"
+        type: string
+      error_rate_max:
+        description: "Max case error rate (0~1)"
+        required: false
+        default: "0.05"
+        type: string
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "docs/**"
+      - "package.json"
+      - ".github/workflows/core-production-gate.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-production-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PORT: "3001"
+      BASE_URL: http://localhost:3001
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Prepare env
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          {
+            echo "APP_ENV=ci"
+            echo "PORT=3001"
+            echo "MEMORY_AUTH_MODE=off"
+            echo "EMBEDDING_PROVIDER=fake"
+            echo "RATE_LIMIT_BYPASS_LOOPBACK=false"
+            echo "MEMORY_RECALL_PROFILE=strict_edges"
+          } >> .env
+
+      - name: Start stack
+        run: docker compose up -d --build
+
+      - name: Wait API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for _ in {1..120}; do
+            if curl -fsS "http://localhost:3001/health" >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "${ok}" -ne 1 ]]; then
+            echo "API not healthy on localhost:3001" >&2
+            exit 1
+          fi
+
+      - name: Run core production gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_PERF_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_perf || 'true' }}"
+          RECALL_P95_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.recall_p95_max_ms || '1500' }}"
+          WRITE_P95_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.write_p95_max_ms || '1000' }}"
+          ERROR_RATE_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.error_rate_max || '0.05' }}"
+          npm run -s gate:core:prod -- \
+            --base-url "http://localhost:3001" \
+            --scope default \
+            --run-perf "${RUN_PERF_INPUT}" \
+            --recall-p95-max-ms "${RECALL_P95_INPUT}" \
+            --write-p95-max-ms "${WRITE_P95_INPUT}" \
+            --error-rate-max "${ERROR_RATE_INPUT}"
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary_file="$(find artifacts/core_gate -type f -name summary.json | sort | tail -n 1 || true)"
+          {
+            echo "## Core Production Gate"
+            echo
+            if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then
+              echo "summary: \`${summary_file}\`"
+              echo
+              jq '.' "${summary_file}"
+            else
+              echo "summary not found"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-production-gate-artifacts
+          path: artifacts/core_gate/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Stop stack
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -f docker-compose.yml ]]; then
+            docker compose down -v
+          else
+            echo "docker-compose.yml not found, skip compose down"
+          fi

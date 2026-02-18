@@ -122,12 +122,15 @@ npm run e2e:phase4-smoke
 npm run e2e:phasec-tenant
 ```
 
-5. LongMemEval regression gate (strict_edges + quality_first, dual slice):
+5. Auxiliary benchmark regression (non-blocking):
 
 ```bash
 npm run -s env:throughput:benchmark
 npm run -s bench:longmemeval:gate
+npm run -s bench:locomo -- --sample-limit 1 --qa-limit 20
 ```
+
+Do not use benchmark failures above as release blockers. Treat them as auxiliary drift signals.
 
 ## Suggested Thresholds
 
@@ -172,13 +175,16 @@ Before production deploy:
 
 ```bash
 cd /Users/lucio/Desktop/Aionis
-npm run build
-npm run test:contract
-npm run job:health-gate -- --strict-warnings --consistency-check-set scope
-npm run job:consistency-check:cross-tenant -- --strict-warnings
+npm run -s gate:core:prod -- \
+  --base-url "http://localhost:${PORT:-3001}" \
+  --scope default \
+  --run-perf true \
+  --recall-p95-max-ms 1200 \
+  --write-p95-max-ms 800 \
+  --error-rate-max 0.02
 ```
 
-Only deploy when all four pass.
+Only deploy when the core gate passes.
 
 ## Verification Stamp
 

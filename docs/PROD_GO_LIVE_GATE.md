@@ -10,7 +10,9 @@ This document is the release gate for deciding whether Aionis can go to producti
 
 ## Release Decision
 
-Only mark **go** when all P0/P1 items are closed and all checks below pass.
+Only mark **go** when all P0/P1 items are closed and all **production core gate** checks below pass.
+
+Auxiliary benchmarks (`LongMemEval` / `LoCoMo`) are non-blocking regression evidence and should not block release decisions.
 
 ## T-24h Checklist
 
@@ -74,13 +76,13 @@ Run this from repo root to fail-fast on hard blockers:
 
 ```bash
 cd /Users/lucio/Desktop/Aionis
-npm run -s build \
-&& npm run -s test:contract \
-&& npm run -s docs:check \
-&& npm run -s sdk:release-check \
-&& npm run -s sdk:py:release-check \
-&& npm run -s job:health-gate -- --strict-warnings --consistency-check-set scope \
-&& npm run -s job:consistency-check:cross-tenant -- --strict-warnings
+npm run -s gate:core:prod -- \
+  --base-url "http://localhost:${PORT:-3001}" \
+  --scope default \
+  --run-perf true \
+  --recall-p95-max-ms 1200 \
+  --write-p95-max-ms 800 \
+  --error-rate-max 0.02
 ```
 
 ## Publish Commands

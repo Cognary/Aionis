@@ -14,13 +14,14 @@ This index is the entry point for project documentation.
 - [Stability Roadmap](./STABILITY_ROADMAP.md)
 - [Long-Term Memory Roadmap](./LONG_TERM_MEMORY_ROADMAP.md)
 - [Operator Runbook](./OPERATOR_RUNBOOK.md)
+- [Production Core Gate](./PRODUCTION_CORE_GATE.md)
 - [E2E Regression Checklist](./E2E_REGRESSION.md)
 - [Prod Orchestration & Partition Plan](./PROD_ORCHESTRATION_PARTITION_PLAN.md)
 
 ## Performance
 
 - [Performance Baseline](./PERFORMANCE_BASELINE.md)
-- [LongMemEval Gate](./LONGMEMEVAL_GATE.md)
+- [LongMemEval Gate (Auxiliary)](./LONGMEMEVAL_GATE.md)
 - [Performance Report v1 Template](./PERFORMANCE_REPORT_V1_TEMPLATE.md)
 - [Partition Shadow Migration](./PARTITION_SHADOW_MIGRATION.md)
 
