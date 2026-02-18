@@ -4,6 +4,13 @@ All notable changes to `@aionis/sdk` will be documented in this file.
 
 The format is based on Keep a Changelog and this package follows SemVer.
 
+## [0.1.3] - 2026-02-18
+
+### Changed
+
+1. Aligned release version with production Docker rollout (`v0.1.3`) for consistent cross-channel distribution.
+2. No SDK API surface break; release includes packaging and distribution hardening updates from core platform integration.
+
 ## [0.1.0] - 2026-02-16
 
 ### Added
