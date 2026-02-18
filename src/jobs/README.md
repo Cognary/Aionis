@@ -203,6 +203,18 @@ Strict warnings mode:
 npm run job:health-gate -- --strict-warnings
 ```
 
+Scope-only consistency gate (recommended for fast deploy gating):
+
+```bash
+npm run job:health-gate -- --strict-warnings --consistency-check-set scope
+```
+
+Cross-tenant gate (run as a separate strict step):
+
+```bash
+npm run job:consistency-check:cross-tenant -- --strict-warnings
+```
+
 Exit codes:
 - `0`: gate passed
 - `2`: gate failed (consistency/quality thresholds)

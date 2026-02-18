@@ -296,6 +296,18 @@ set -a; source .env; set +a
 npm run job:consistency-check
 ```
 
+Scope-only fast path:
+
+```bash
+npm run job:consistency-check -- --check-set scope
+```
+
+Cross-tenant-only path:
+
+```bash
+npm run job:consistency-check -- --check-set cross_tenant
+```
+
 Fail CI (errors only):
 
 ```bash
@@ -395,7 +407,13 @@ npm run job:health-gate -- --skip-backfill
 Production-strict:
 
 ```bash
-npm run job:health-gate -- --strict-warnings
+npm run job:health-gate -- --strict-warnings --consistency-check-set scope
+```
+
+Separate cross-tenant strict gate:
+
+```bash
+npm run job:consistency-check -- --check-set cross_tenant --strict-warnings
 ```
 
 Exit code convention:
@@ -547,6 +565,7 @@ Check hard consistency:
 
 ```bash
 npm run job:consistency-check \
+  -- --check-set scope \
   | jq '.checks[] | select(.name=="private_rule_without_owner")'
 ```
 
@@ -577,6 +596,7 @@ Manual spot-check:
 
 ```bash
 npm run job:consistency-check \
+  -- --check-set cross_tenant \
   | jq '.checks[] | select(.name=="tenant_scope_key_malformed" or (.name|startswith("cross_tenant_")))'
 ```
 
@@ -586,7 +606,8 @@ Expected:
 
 ## Verification Stamp
 
-- Last reviewed: `2026-02-16`
+- Last reviewed: `2026-02-18`
 - Verification commands:
   - `npm run docs:check`
-  - `npm run job:health-gate -- --strict-warnings`
+  - `npm run job:health-gate -- --strict-warnings --consistency-check-set scope`
+  - `npm run job:consistency-check -- --check-set cross_tenant --strict-warnings`

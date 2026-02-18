@@ -1,12 +1,13 @@
 # Docker Release Runbook
 
-Last updated: `2026-02-17`
+Last updated: `2026-02-18`
 
 ## Scope
 
 This runbook covers publishing the Aionis API image to GHCR.
 
-- default image repo: `ghcr.io/<owner>/aionis-memory-graph`
+- default image repo (script fallback): `ghcr.io/<owner>/aionis-memory-graph`
+- current production repo example: `ghcr.io/cognary/aionis`
 - source Dockerfile: `/Users/lucio/Desktop/Aionis/Dockerfile`
 - publish workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docker-publish.yml`
 
@@ -35,7 +36,7 @@ cd /Users/lucio/Desktop/Aionis
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
 IMAGE_REPO=ghcr.io/<owner>/aionis-memory-graph \
-TAG=0.1.0 \
+TAG=v0.1.1 \
 PLATFORMS=linux/amd64,linux/arm64 \
 PUBLISH_LATEST=true \
 npm run docker:publish:ghcr
@@ -46,13 +47,13 @@ npm run docker:publish:ghcr
 Trigger automatically by tag:
 
 ```bash
-git tag docker-v0.1.0
-git push origin docker-v0.1.0
+git tag docker-v0.1.1
+git push origin docker-v0.1.1
 ```
 
 Or manual `workflow_dispatch` in `Docker Publish` with:
 
-1. `tag` (e.g. `0.1.0`)
+1. `tag` (e.g. `v0.1.1`)
 2. `image_repo` (optional override)
 3. `platforms` (default `linux/amd64,linux/arm64`)
 4. `publish_latest`
@@ -61,8 +62,8 @@ Or manual `workflow_dispatch` in `Docker Publish` with:
 ## Verification
 
 ```bash
-docker pull ghcr.io/<owner>/aionis-memory-graph:0.1.0
-docker run --rm -p 3001:3001 ghcr.io/<owner>/aionis-memory-graph:0.1.0
+docker pull ghcr.io/cognary/aionis:v0.1.1
+docker run --rm -p 3001:3001 ghcr.io/cognary/aionis:v0.1.1
 curl -fsS http://localhost:3001/health
 ```
 
@@ -70,4 +71,4 @@ curl -fsS http://localhost:3001/health
 
 1. Re-point deployment to previous known-good tag.
 2. Keep immutable bad tag for audit; do not overwrite.
-3. Publish fixed patch tag (e.g. `0.1.1`).
+3. Publish fixed patch tag (e.g. `v0.1.2`).

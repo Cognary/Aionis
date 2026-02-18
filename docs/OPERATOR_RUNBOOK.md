@@ -16,7 +16,13 @@ Note: health gate runs a pre-check `embedding_model` backfill by default to auto
 2. If you want warning-tight mode:
 
 ```bash
-npm run job:health-gate -- --strict-warnings
+npm run job:health-gate -- --strict-warnings --consistency-check-set scope
+```
+
+Run cross-tenant integrity as a separate gate (recommended at least daily, and always before schema/tenant releases):
+
+```bash
+npm run job:consistency-check:cross-tenant -- --strict-warnings
 ```
 
 3. Lane visibility quick check (rules evaluate):
@@ -66,7 +72,8 @@ npm run job:quality-eval -- --strict
 2. Integrity deep check:
 
 ```bash
-npm run job:consistency-check -- --strict-warnings
+npm run job:consistency-check:scope -- --scope default --strict-warnings
+npm run job:consistency-check:cross-tenant -- --strict-warnings
 ```
 
 If `private_rule_without_owner` is non-zero:
@@ -108,7 +115,8 @@ Use these as default SLO-style boundaries. Tune by scope once traffic stabilizes
 - If failure is `ready_ratio` related, inspect embedding backfill and outbox worker.
 
 2. If consistency errors appear:
-- Run `npm run job:consistency-check` and inspect the failing check names.
+- Run `npm run job:consistency-check:scope -- --scope default` and inspect the failing check names.
+- If tenant integrity may be involved, run `npm run job:consistency-check:cross-tenant`.
 - Verify migrations are up to date: `make db-migrate`.
 - For outbox-related failures, run `npm run job:outbox-worker -- --once` and then replay failed items if needed.
 
@@ -131,14 +139,16 @@ Before production deploy:
 cd /Users/lucio/Desktop/Aionis
 npm run build
 npm run test:contract
-npm run job:health-gate -- --strict-warnings
+npm run job:health-gate -- --strict-warnings --consistency-check-set scope
+npm run job:consistency-check:cross-tenant -- --strict-warnings
 ```
 
-Only deploy when all three pass.
+Only deploy when all four pass.
 
 ## Verification Stamp
 
-- Last reviewed: `2026-02-16`
+- Last reviewed: `2026-02-18`
 - Verification commands:
   - `npm run docs:check`
-  - `npm run job:health-gate -- --strict-warnings`
+  - `npm run job:health-gate -- --strict-warnings --consistency-check-set scope`
+  - `npm run job:consistency-check:cross-tenant -- --strict-warnings`
