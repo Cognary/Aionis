@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="{{ site.lang | default: 'en' }}">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if page.title %}{{ page.title }} | {{ site.title }}{% else %}{{ site.title }}{% endif %}</title>
+    <meta name="description" content="{{ page.description | default: site.description }}">
+    <link rel="stylesheet" href="{{ '/assets/css/docs.css' | relative_url }}">
+  </head>
+  <body>
+    <header class="docs-topbar">
+      <div class="docs-topbar-inner">
+        <a class="docs-brand" href="{{ '/' | relative_url }}">
+          <span class="docs-brand-dot"></span>
+          <span>Aionis Docs</span>
+        </a>
+        <div class="docs-search" aria-hidden="true">Search documentation</div>
+        <nav class="docs-top-links" aria-label="Top links">
+          <a href="{{ '/' | relative_url }}">Documentation</a>
+          <a href="https://github.com/Cognary/Aionis" target="_blank" rel="noreferrer">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <div class="docs-frame">
+      <aside class="docs-sidebar" aria-label="Sidebar navigation">
+        <div class="docs-sidebar-inner">
+          {% for section in site.docs_navigation %}
+            <section class="docs-nav-group">
+              <h2>{{ section.title }}</h2>
+              <ul>
+                {% for item in section.items %}
+                  {% assign active = false %}
+                  {% if page.url == item.url %}
+                    {% assign active = true %}
+                  {% endif %}
+                  {% if item.url == '/' and page.url == '/index.html' %}
+                    {% assign active = true %}
+                  {% endif %}
+                  <li>
+                    <a class="{% if active %}is-active{% endif %}" href="{{ item.url | relative_url }}">{{ item.label }}</a>
+                  </li>
+                {% endfor %}
+              </ul>
+            </section>
+          {% endfor %}
+        </div>
+      </aside>
+
+      <main class="docs-main">
+        <article class="docs-content">
+          {% if page.url != '/' %}
+            <p class="docs-kicker">Aionis documentation</p>
+          {% endif %}
+          {{ content }}
+        </article>
+      </main>
+    </div>
+  </body>
+</html>

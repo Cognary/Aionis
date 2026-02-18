@@ -5,6 +5,7 @@ url: https://cognary.github.io
 baseurl: /Aionis
 permalink: pretty
 markdown: kramdown
+lang: en
 kramdown:
   input: GFM
 plugins:
@@ -25,3 +26,44 @@ header_pages:
   - SDK.md
   - OPERATOR_RUNBOOK.md
   - DOCKER_RELEASE.md
+docs_navigation:
+  - title: Get started
+    items:
+      - label: Docs home
+        url: /
+      - label: 5-Minute Onboarding
+        url: /ONBOARDING_5MIN/
+      - label: Architecture
+        url: /ARCHITECTURE/
+      - label: API Contract
+        url: /API_CONTRACT/
+  - title: SDK
+    items:
+      - label: SDK Guide
+        url: /SDK/
+      - label: Compatibility Matrix
+        url: /SDK_COMPATIBILITY_MATRIX/
+      - label: SDK Release
+        url: /SDK_RELEASE/
+  - title: Operations
+    items:
+      - label: Operator Runbook
+        url: /OPERATOR_RUNBOOK/
+      - label: E2E Regression
+        url: /E2E_REGRESSION/
+      - label: Performance Baseline
+        url: /PERFORMANCE_BASELINE/
+      - label: Docker Release
+        url: /DOCKER_RELEASE/
+  - title: Integrations
+    items:
+      - label: OpenWork Integration
+        url: /OPENWORK_INTEGRATION/
+      - label: LangGraph Integration
+        url: /LANGGRAPH_INTEGRATION/
+  - title: Roadmaps
+    items:
+      - label: Stability Roadmap
+        url: /STABILITY_ROADMAP/
+      - label: Long-Term Memory Roadmap
+        url: /LONG_TERM_MEMORY_ROADMAP/

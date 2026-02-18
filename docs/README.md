@@ -77,8 +77,11 @@ Local preview (Docker-based Jekyll):
 
 ```bash
 cd /Users/lucio/Desktop/Aionis
-docker run --rm -it -p 4000:4000 -v "$PWD/docs:/srv/jekyll" jekyll/jekyll:pages jekyll serve --host 0.0.0.0
+docker run --rm -it --platform linux/amd64 -p 4000:4000 -v "$PWD/docs:/srv/jekyll" \
+  jekyll/jekyll:pages sh -lc 'gem install webrick -N && jekyll serve --host 0.0.0.0 --port 4000 --config _config.yml,_config.local.yml'
 ```
+
+Then open: `http://localhost:4000/`
 
 Verification stamp:
 - Last reviewed: `2026-02-18`
