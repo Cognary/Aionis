@@ -126,7 +126,7 @@ api_post_json() {
   code="$(
     curl -sS -o "${tmp}" -w "%{http_code}" "http://localhost:${PORT}${path}" \
       -H 'content-type: application/json' \
-      "${AUTH_ARGS[@]}" \
+      ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} \
       --data-binary "${payload}"
   )"
   if [[ "${code}" != "200" ]]; then
