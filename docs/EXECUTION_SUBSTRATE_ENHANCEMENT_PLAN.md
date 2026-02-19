@@ -107,6 +107,14 @@ DoD:
 1. Cross-agent violations are detectable and blockable.
 2. Governance metrics are included in weekly release evidence.
 
+Progress (`2026-02-19`):
+
+1. Extended `job:execution-loop-gate` with governance metrics:
+   - recall identity coverage
+   - private-lane owner coverage
+   - cross-tenant policy drift
+2. Added governance-oriented gate checks for drift and boundary coverage.
+
 ## Execution Commands (Phase A target)
 
 ```bash

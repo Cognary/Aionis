@@ -106,6 +106,7 @@ npm run job:quality-eval -- --strict
 ```bash
 npm run job:consistency-check:scope -- --scope default --strict-warnings
 npm run job:consistency-check:cross-tenant -- --strict-warnings
+npm run job:execution-loop-gate -- --scope default --strict-warnings
 ```
 
 For large datasets where full scan runtime is too high, use fast mode (lower-bound counts) and batch by check index:

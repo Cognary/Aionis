@@ -85,6 +85,11 @@ async function main() {
   const minActiveFeedbackCoverage = clampNum(Number(argValue("--min-active-feedback-coverage") ?? "0.6"), 0, 1);
   const maxStaleActiveRules = clampInt(Number(argValue("--max-stale-active-rules") ?? "5"), 0, 1_000_000);
   const minDecisionLinkCoverage = clampNum(Number(argValue("--min-decision-link-coverage") ?? "0.95"), 0, 1);
+  const minRecallIdentityCoverage = clampNum(Number(argValue("--min-recall-identity-coverage") ?? "0.8"), 0, 1);
+  const minPrivateOwnerCoverage = clampNum(Number(argValue("--min-private-owner-coverage") ?? "1"), 0, 1);
+  const crossTenantDriftMinFeedback = clampInt(Number(argValue("--cross-tenant-drift-min-feedback") ?? "5"), 0, 1_000_000);
+  const maxTenantNegativeRatioDrift = clampNum(Number(argValue("--max-tenant-negative-ratio-drift") ?? "0.3"), 0, 1);
+  const maxTenantActiveRuleCountDrift = clampInt(Number(argValue("--max-tenant-active-rule-count-drift") ?? "20"), 0, 1_000_000);
   const strict = hasFlag("--strict");
   const strictWarnings = hasFlag("--strict-warnings");
 
@@ -92,6 +97,21 @@ async function main() {
     const hasExecutionDecisions = await hasTable(client, "memory_execution_decisions");
     const hasFeedbackSource = await hasColumn(client, "memory_rule_feedback", "source");
     const hasFeedbackDecisionId = await hasColumn(client, "memory_rule_feedback", "decision_id");
+    const hasRecallAudit = await hasTable(client, "memory_recall_audit");
+    const hasRecallAuditConsumerAgent = hasRecallAudit && (await hasColumn(client, "memory_recall_audit", "consumer_agent_id"));
+    const hasRecallAuditConsumerTeam = hasRecallAudit && (await hasColumn(client, "memory_recall_audit", "consumer_team_id"));
+    const hasMemoryLane = await hasColumn(client, "memory_nodes", "memory_lane");
+    const hasOwnerAgentId = await hasColumn(client, "memory_nodes", "owner_agent_id");
+    const hasOwnerTeamId = await hasColumn(client, "memory_nodes", "owner_team_id");
+    const hasTenantScopedRowsRes = await client.query<{ ok: boolean }>(
+      `
+      SELECT (
+        EXISTS (SELECT 1 FROM memory_rule_defs WHERE scope LIKE 'tenant:%')
+        OR EXISTS (SELECT 1 FROM memory_rule_feedback WHERE scope LIKE 'tenant:%')
+      ) AS ok
+      `,
+    );
+    const hasTenantScopedRows = !!hasTenantScopedRowsRes.rows[0]?.ok;
 
     const feedbackRes = await client.query<{
       total: string;
@@ -166,6 +186,185 @@ async function main() {
       [scope, windowHours],
     );
 
+    const recallAuditRes =
+      hasRecallAudit && hasRecallAuditConsumerAgent && hasRecallAuditConsumerTeam
+        ? await client.query<{
+            total: string;
+            with_identity: string;
+            distinct_consumers: string;
+          }>(
+            `
+            SELECT
+              count(*)::text AS total,
+              count(*) FILTER (
+                WHERE nullif(trim(COALESCE(consumer_agent_id, '')), '') IS NOT NULL
+                   OR nullif(trim(COALESCE(consumer_team_id, '')), '') IS NOT NULL
+              )::text AS with_identity,
+              count(
+                DISTINCT CASE
+                  WHEN nullif(trim(COALESCE(consumer_agent_id, '')), '') IS NOT NULL
+                    THEN 'agent:' || trim(consumer_agent_id)
+                  WHEN nullif(trim(COALESCE(consumer_team_id, '')), '') IS NOT NULL
+                    THEN 'team:' || trim(consumer_team_id)
+                  ELSE NULL
+                END
+              )::text AS distinct_consumers
+            FROM memory_recall_audit
+            WHERE scope = $1
+              AND created_at >= now() - (($2::text || ' hours')::interval)
+            `,
+            [scope, windowHours],
+          )
+        : null;
+
+    const laneRes =
+      hasMemoryLane && hasOwnerAgentId && hasOwnerTeamId
+        ? await client.query<{
+            private_total: string;
+            private_with_owner: string;
+            shared_total: string;
+          }>(
+            `
+            SELECT
+              count(*) FILTER (WHERE memory_lane = 'private')::text AS private_total,
+              count(*) FILTER (
+                WHERE memory_lane = 'private'
+                  AND (
+                    nullif(trim(COALESCE(owner_agent_id, '')), '') IS NOT NULL
+                    OR nullif(trim(COALESCE(owner_team_id, '')), '') IS NOT NULL
+                  )
+              )::text AS private_with_owner,
+              count(*) FILTER (WHERE memory_lane = 'shared')::text AS shared_total
+            FROM memory_nodes
+            WHERE scope = $1
+            `,
+            [scope],
+          )
+        : null;
+
+    const tenantDriftSummaryRes =
+      hasTenantScopedRows
+        ? await client.query<{
+            tenant_count: string;
+            tenants_with_feedback_floor: string;
+            active_rules_max: string;
+            active_rules_min: string;
+            active_rules_drift: string;
+            negative_ratio_max: string;
+            negative_ratio_min: string;
+            negative_ratio_drift: string;
+          }>(
+            `
+            WITH rules AS (
+              SELECT
+                CASE
+                  WHEN scope LIKE 'tenant:%::scope:%'
+                    THEN split_part(split_part(scope, '::scope:', 1), 'tenant:', 2)
+                  ELSE $2
+                END AS tenant_id,
+                count(*) FILTER (WHERE state = 'active')::int AS active_rules
+              FROM memory_rule_defs
+              GROUP BY 1
+            ),
+            feedback AS (
+              SELECT
+                CASE
+                  WHEN scope LIKE 'tenant:%::scope:%'
+                    THEN split_part(split_part(scope, '::scope:', 1), 'tenant:', 2)
+                  ELSE $2
+                END AS tenant_id,
+                count(*)::int AS total_feedback,
+                count(*) FILTER (WHERE outcome = 'negative')::int AS negative_feedback
+              FROM memory_rule_feedback
+              WHERE created_at >= now() - (($1::text || ' hours')::interval)
+              GROUP BY 1
+            ),
+            joined AS (
+              SELECT
+                r.tenant_id,
+                r.active_rules,
+                COALESCE(f.total_feedback, 0)::int AS total_feedback,
+                COALESCE(f.negative_feedback, 0)::int AS negative_feedback,
+                CASE
+                  WHEN COALESCE(f.total_feedback, 0) > 0
+                    THEN COALESCE(f.negative_feedback, 0)::float / COALESCE(f.total_feedback, 0)::float
+                  ELSE 0::float
+                END AS negative_ratio
+              FROM rules r
+              LEFT JOIN feedback f ON f.tenant_id = r.tenant_id
+            )
+            SELECT
+              count(*)::text AS tenant_count,
+              count(*) FILTER (WHERE total_feedback >= $3)::text AS tenants_with_feedback_floor,
+              COALESCE(max(active_rules), 0)::text AS active_rules_max,
+              COALESCE(min(active_rules), 0)::text AS active_rules_min,
+              COALESCE(max(active_rules) - min(active_rules), 0)::text AS active_rules_drift,
+              COALESCE(max(negative_ratio) FILTER (WHERE total_feedback >= $3), 0)::text AS negative_ratio_max,
+              COALESCE(min(negative_ratio) FILTER (WHERE total_feedback >= $3), 0)::text AS negative_ratio_min,
+              COALESCE(
+                (max(negative_ratio) FILTER (WHERE total_feedback >= $3))
+                - (min(negative_ratio) FILTER (WHERE total_feedback >= $3)),
+                0
+              )::text AS negative_ratio_drift
+            FROM joined
+            `,
+            [windowHours, env.MEMORY_TENANT_ID, crossTenantDriftMinFeedback],
+          )
+        : null;
+
+    const tenantDriftTopRes =
+      hasTenantScopedRows
+        ? await client.query<{
+            tenant_id: string;
+            active_rules: number;
+            total_feedback: number;
+            negative_feedback: number;
+            negative_ratio: string;
+          }>(
+            `
+            WITH rules AS (
+              SELECT
+                CASE
+                  WHEN scope LIKE 'tenant:%::scope:%'
+                    THEN split_part(split_part(scope, '::scope:', 1), 'tenant:', 2)
+                  ELSE $2
+                END AS tenant_id,
+                count(*) FILTER (WHERE state = 'active')::int AS active_rules
+              FROM memory_rule_defs
+              GROUP BY 1
+            ),
+            feedback AS (
+              SELECT
+                CASE
+                  WHEN scope LIKE 'tenant:%::scope:%'
+                    THEN split_part(split_part(scope, '::scope:', 1), 'tenant:', 2)
+                  ELSE $2
+                END AS tenant_id,
+                count(*)::int AS total_feedback,
+                count(*) FILTER (WHERE outcome = 'negative')::int AS negative_feedback
+              FROM memory_rule_feedback
+              WHERE created_at >= now() - (($1::text || ' hours')::interval)
+              GROUP BY 1
+            )
+            SELECT
+              r.tenant_id,
+              r.active_rules,
+              COALESCE(f.total_feedback, 0)::int AS total_feedback,
+              COALESCE(f.negative_feedback, 0)::int AS negative_feedback,
+              CASE
+                WHEN COALESCE(f.total_feedback, 0) > 0
+                  THEN round((COALESCE(f.negative_feedback, 0)::numeric / COALESCE(f.total_feedback, 0)::numeric), 4)::text
+                ELSE '0'
+              END AS negative_ratio
+            FROM rules r
+            LEFT JOIN feedback f ON f.tenant_id = r.tenant_id
+            ORDER BY r.active_rules DESC, r.tenant_id ASC
+            LIMIT 20
+            `,
+            [windowHours, env.MEMORY_TENANT_ID],
+          )
+        : null;
+
     const f = feedbackRes.rows[0] ?? {
       total: "0",
       with_run_id: "0",
@@ -204,6 +403,28 @@ async function main() {
     const withDecisionId = Number(decisionRows?.with_decision_id ?? "0");
     const linkedDecisionId = Number(decisionRows?.linked_decision_id ?? "0");
     const decisionLinkCoverage = toolsFeedbackTotal > 0 ? linkedDecisionId / toolsFeedbackTotal : 1;
+
+    const recallRows = recallAuditRes?.rows[0];
+    const recallTotal = Number(recallRows?.total ?? "0");
+    const recallWithIdentity = Number(recallRows?.with_identity ?? "0");
+    const recallDistinctConsumers = Number(recallRows?.distinct_consumers ?? "0");
+    const recallIdentityCoverage = recallTotal > 0 ? recallWithIdentity / recallTotal : 1;
+
+    const laneRows = laneRes?.rows[0];
+    const privateTotal = Number(laneRows?.private_total ?? "0");
+    const privateWithOwner = Number(laneRows?.private_with_owner ?? "0");
+    const sharedTotal = Number(laneRows?.shared_total ?? "0");
+    const privateOwnerCoverage = privateTotal > 0 ? privateWithOwner / privateTotal : 1;
+
+    const driftRows = tenantDriftSummaryRes?.rows[0];
+    const tenantCount = Number(driftRows?.tenant_count ?? "0");
+    const tenantsWithFeedbackFloor = Number(driftRows?.tenants_with_feedback_floor ?? "0");
+    const tenantActiveRulesMax = Number(driftRows?.active_rules_max ?? "0");
+    const tenantActiveRulesMin = Number(driftRows?.active_rules_min ?? "0");
+    const tenantActiveRuleCountDrift = Number(driftRows?.active_rules_drift ?? "0");
+    const tenantNegativeRatioMax = Number(driftRows?.negative_ratio_max ?? "0");
+    const tenantNegativeRatioMin = Number(driftRows?.negative_ratio_min ?? "0");
+    const tenantNegativeRatioDrift = Number(driftRows?.negative_ratio_drift ?? "0");
 
     const checks: GateCheck[] = [
       {
@@ -265,6 +486,47 @@ async function main() {
         note: "tools_feedback rows should resolve to persisted decision records for replay/audit.",
       });
     }
+    if (recallAuditRes) {
+      checks.push({
+        name: "recall_identity_coverage_min",
+        severity: "warning",
+        pass: recallIdentityCoverage >= minRecallIdentityCoverage,
+        value: round(recallIdentityCoverage),
+        threshold: { op: ">=", value: minRecallIdentityCoverage },
+        note: "Recall requests should usually include consumer identity for lane-governance observability.",
+      });
+    }
+    if (laneRes) {
+      checks.push({
+        name: "private_owner_coverage_min",
+        severity: "warning",
+        pass: privateOwnerCoverage >= minPrivateOwnerCoverage,
+        value: round(privateOwnerCoverage),
+        threshold: { op: ">=", value: minPrivateOwnerCoverage },
+        note: "Private-lane nodes should carry explicit owner_agent_id/owner_team_id.",
+      });
+    }
+    if (tenantDriftSummaryRes) {
+      checks.push({
+        name: "tenant_active_rule_count_drift_max",
+        severity: "warning",
+        pass: tenantCount <= 1 || tenantActiveRuleCountDrift <= maxTenantActiveRuleCountDrift,
+        value: tenantActiveRuleCountDrift,
+        threshold: { op: "<=", value: maxTenantActiveRuleCountDrift },
+        note: "Large active-rule count spread across tenants may indicate governance drift.",
+      });
+      checks.push({
+        name: "tenant_negative_ratio_drift_max",
+        severity: "warning",
+        pass:
+          tenantCount <= 1 ||
+          tenantsWithFeedbackFloor < 2 ||
+          tenantNegativeRatioDrift <= maxTenantNegativeRatioDrift,
+        value: round(tenantNegativeRatioDrift),
+        threshold: { op: "<=", value: maxTenantNegativeRatioDrift },
+        note: "Cross-tenant negative-ratio drift is an early warning for policy mismatch.",
+      });
+    }
 
     const failedWarnings = checks.filter((c) => !c.pass && c.severity === "warning").map((c) => c.name);
     const failedErrors = checks.filter((c) => !c.pass && c.severity === "error").map((c) => c.name);
@@ -281,6 +543,11 @@ async function main() {
         min_active_feedback_coverage: minActiveFeedbackCoverage,
         max_stale_active_rules: maxStaleActiveRules,
         min_decision_link_coverage: minDecisionLinkCoverage,
+        min_recall_identity_coverage: minRecallIdentityCoverage,
+        min_private_owner_coverage: minPrivateOwnerCoverage,
+        cross_tenant_drift_min_feedback: crossTenantDriftMinFeedback,
+        max_tenant_negative_ratio_drift: maxTenantNegativeRatioDrift,
+        max_tenant_active_rule_count_drift: maxTenantActiveRuleCountDrift,
       },
       metrics: {
         feedback: {
@@ -313,6 +580,53 @@ async function main() {
               available: false,
               note: "Execution provenance schema missing; apply migration 0021_execution_decision_provenance.sql.",
             },
+        governance: {
+          recall_audit: recallAuditRes
+            ? {
+                total: recallTotal,
+                with_identity: recallWithIdentity,
+                distinct_consumers: recallDistinctConsumers,
+                identity_coverage: round(recallIdentityCoverage),
+              }
+            : {
+                available: false,
+                note: "Recall audit schema unavailable; apply migration 0013_multi_agent_fabric.sql.",
+              },
+          lane_boundary: laneRes
+            ? {
+                private_total: privateTotal,
+                private_with_owner: privateWithOwner,
+                private_owner_coverage: round(privateOwnerCoverage),
+                shared_total: sharedTotal,
+              }
+            : {
+                available: false,
+                note: "Lane ownership columns unavailable; apply migration 0013_multi_agent_fabric.sql.",
+              },
+          tenant_policy_drift: tenantDriftSummaryRes
+            ? {
+                tenant_count: tenantCount,
+                tenants_with_feedback_floor: tenantsWithFeedbackFloor,
+                feedback_floor: crossTenantDriftMinFeedback,
+                active_rules_max: tenantActiveRulesMax,
+                active_rules_min: tenantActiveRulesMin,
+                active_rule_count_drift: tenantActiveRuleCountDrift,
+                negative_ratio_max: round(tenantNegativeRatioMax),
+                negative_ratio_min: round(tenantNegativeRatioMin),
+                negative_ratio_drift: round(tenantNegativeRatioDrift),
+                sample: (tenantDriftTopRes?.rows ?? []).map((x) => ({
+                  tenant_id: x.tenant_id,
+                  active_rules: Number(x.active_rules ?? 0),
+                  total_feedback: Number(x.total_feedback ?? 0),
+                  negative_feedback: Number(x.negative_feedback ?? 0),
+                  negative_ratio: round(Number(x.negative_ratio ?? "0")),
+                })),
+              }
+            : {
+                available: false,
+                note: "No tenant-prefixed scopes found; cross-tenant drift checks skipped.",
+              },
+        },
       },
       checks,
       summary: {
