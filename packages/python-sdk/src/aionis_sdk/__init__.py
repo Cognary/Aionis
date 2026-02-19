@@ -1,3 +1,41 @@
 from .client import AionisApiError, AionisClient, AionisNetworkError
+from .types import (
+    AionisResponse,
+    DecisionLinkMode,
+    FeedbackOutcome,
+    MemoryEdgeInput,
+    MemoryLane,
+    MemoryNodeInput,
+    MemoryRecallInput,
+    MemoryRecallTextInput,
+    MemoryWriteInput,
+    RulesEvaluateInput,
+    Tier,
+    ToolsFeedbackInput,
+    ToolsFeedbackResponse,
+    ToolsSelectDecision,
+    ToolsSelectInput,
+    ToolsSelectResponse,
+)
 
-__all__ = ["AionisClient", "AionisApiError", "AionisNetworkError"]
+__all__ = [
+    "AionisApiError",
+    "AionisClient",
+    "AionisNetworkError",
+    "AionisResponse",
+    "DecisionLinkMode",
+    "FeedbackOutcome",
+    "MemoryEdgeInput",
+    "MemoryLane",
+    "MemoryNodeInput",
+    "MemoryRecallInput",
+    "MemoryRecallTextInput",
+    "MemoryWriteInput",
+    "RulesEvaluateInput",
+    "Tier",
+    "ToolsFeedbackInput",
+    "ToolsFeedbackResponse",
+    "ToolsSelectDecision",
+    "ToolsSelectInput",
+    "ToolsSelectResponse",
+]

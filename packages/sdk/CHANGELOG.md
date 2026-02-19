@@ -4,6 +4,14 @@ All notable changes to `@aionis/sdk` will be documented in this file.
 
 The format is based on Keep a Changelog and this package follows SemVer.
 
+## [0.1.4] - 2026-02-19
+
+### Changed
+
+1. `toolsSelect` input adds optional `run_id` and response adds typed `decision` payload.
+2. `toolsFeedback` input adds optional `decision_id` and response adds `decision_id`, `decision_link_mode`, `decision_policy_sha256`.
+3. Aligns SDK surface with execution provenance APIs and feedback-decision linkage.
+
 ## [0.1.3] - 2026-02-18
 
 ### Changed

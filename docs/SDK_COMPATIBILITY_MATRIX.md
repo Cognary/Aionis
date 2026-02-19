@@ -22,8 +22,8 @@ Last updated: `2026-02-19`
 
 | SDK | SDK version | API contract baseline | Core methods | Error model | Retry + request_id | Status |
 |---|---|---|---|---|---|---|
-| `@aionis/sdk` (TypeScript) | `0.1.3` (`0.1.x`) | `/Users/lucio/Desktop/Aionis/docs/API_CONTRACT.md` (2026-02-19) | `write/recall/recallText/rulesEvaluate/toolsSelect/toolsFeedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
-| `aionis-sdk` (Python) | `0.1.3` (`0.1.x`) | `/Users/lucio/Desktop/Aionis/docs/API_CONTRACT.md` (2026-02-19) | `write/recall/recall_text/rules_evaluate/tools_select/tools_feedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
+| `@aionis/sdk` (TypeScript) | `0.1.4` (`0.1.x`) | `/Users/lucio/Desktop/Aionis/docs/API_CONTRACT.md` (2026-02-19) | `write/recall/recallText/rulesEvaluate/toolsSelect/toolsFeedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
+| `aionis-sdk` (Python) | `0.1.4` (`0.1.x`) | `/Users/lucio/Desktop/Aionis/docs/API_CONTRACT.md` (2026-02-19) | `write/recall/recall_text/rules_evaluate/tools_select/tools_feedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
 
 ## Backward compatibility notes
 

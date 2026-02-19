@@ -5,8 +5,18 @@ import random
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, MutableMapping, Optional
+from typing import TYPE_CHECKING, Any, Dict, Mapping, MutableMapping, Optional
 from urllib import error, request
+
+if TYPE_CHECKING:
+    from .types import (
+        MemoryRecallInput,
+        MemoryRecallTextInput,
+        MemoryWriteInput,
+        RulesEvaluateInput,
+        ToolsFeedbackInput,
+        ToolsSelectInput,
+    )
 
 
 @dataclass
@@ -122,22 +132,22 @@ class AionisClient:
         self.api_key = api_key
         self.auth_bearer = auth_bearer
 
-    def write(self, payload: Mapping[str, Any], **request_options: Any) -> Dict[str, Any]:
+    def write(self, payload: "MemoryWriteInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/write", payload, request_options)
 
-    def recall(self, payload: Mapping[str, Any], **request_options: Any) -> Dict[str, Any]:
+    def recall(self, payload: "MemoryRecallInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/recall", payload, request_options)
 
-    def recall_text(self, payload: Mapping[str, Any], **request_options: Any) -> Dict[str, Any]:
+    def recall_text(self, payload: "MemoryRecallTextInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/recall_text", payload, request_options)
 
-    def rules_evaluate(self, payload: Mapping[str, Any], **request_options: Any) -> Dict[str, Any]:
+    def rules_evaluate(self, payload: "RulesEvaluateInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/rules/evaluate", payload, request_options)
 
-    def tools_select(self, payload: Mapping[str, Any], **request_options: Any) -> Dict[str, Any]:
+    def tools_select(self, payload: "ToolsSelectInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/tools/select", payload, request_options)
 
-    def tools_feedback(self, payload: Mapping[str, Any], **request_options: Any) -> Dict[str, Any]:
+    def tools_feedback(self, payload: "ToolsFeedbackInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/tools/feedback", payload, request_options)
 
     def _request(self, path: str, payload: Mapping[str, Any], request_options: Mapping[str, Any]) -> Dict[str, Any]:

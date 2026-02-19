@@ -4,6 +4,15 @@ All notable changes to `aionis-sdk` will be documented in this file.
 
 The format is based on Keep a Changelog and this package follows SemVer.
 
+## [0.1.4] - 2026-02-19
+
+### Changed
+
+1. Added exported `TypedDict` request/response types in `aionis_sdk.types` for API parity with TypeScript SDK.
+2. Added `tools_select` request support for `run_id` and response support for `decision` payload typing.
+3. Added `tools_feedback` request support for `decision_id` and response support for `decision_link_mode` / `decision_policy_sha256` typing.
+4. `AionisClient` method signatures now accept typed payloads (`MemoryWriteInput`, `MemoryRecallInput`, `ToolsSelectInput`, `ToolsFeedbackInput`).
+
 ## [0.1.3] - 2026-02-18
 
 ### Changed

@@ -35,6 +35,38 @@ out = client.write(
 print(out["status"], out["request_id"], out["data"]["commit_id"])
 ```
 
+## Typed payloads
+
+`0.1.4+` exports `TypedDict` API payloads from `aionis_sdk.types`:
+
+```python
+from aionis_sdk import AionisClient
+from aionis_sdk.types import ToolsFeedbackInput, ToolsSelectInput
+
+client = AionisClient(base_url="http://localhost:3001")
+
+select_payload: ToolsSelectInput = {
+    "scope": "default",
+    "run_id": "run_001",
+    "context": {"intent": "json", "provider": "minimax", "tool": {"name": "curl"}},
+    "candidates": ["curl", "bash"],
+    "strict": True,
+}
+select_out = client.tools_select(select_payload)
+decision_id = (select_out.get("data") or {}).get("decision", {}).get("decision_id")
+
+feedback_payload: ToolsFeedbackInput = {
+    "scope": "default",
+    "run_id": "run_001",
+    "decision_id": decision_id,
+    "outcome": "positive",
+    "context": {"intent": "json", "provider": "minimax", "tool": {"name": "curl"}},
+    "candidates": ["curl", "bash"],
+    "selected_tool": "curl",
+}
+client.tools_feedback(feedback_payload)
+```
+
 ## Auth Options
 
 1. `api_key`: sends `X-Api-Key`.
