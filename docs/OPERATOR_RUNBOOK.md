@@ -23,6 +23,12 @@ Note: health gate runs a pre-check `embedding_model` backfill by default to auto
 npm run job:health-gate -- --strict-warnings --consistency-check-set scope
 ```
 
+Execution-loop aware mode (recommended for policy-heavy deployments):
+
+```bash
+npm run job:health-gate -- --strict-warnings --consistency-check-set scope --run-execution-loop-gate
+```
+
 Run cross-tenant integrity as a separate gate (recommended at least daily, and always before schema/tenant releases):
 
 ```bash

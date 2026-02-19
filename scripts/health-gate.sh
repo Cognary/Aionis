@@ -25,6 +25,8 @@ PRIVATE_LANE_BACKFILL_LIMIT=5000
 PRIVATE_LANE_DEFAULT_OWNER_AGENT=""
 PRIVATE_LANE_DEFAULT_OWNER_TEAM=""
 PRIVATE_LANE_SHARED_FALLBACK=true
+RUN_EXECUTION_LOOP_GATE="${HEALTH_GATE_RUN_EXECUTION_LOOP_GATE:-false}"
+EXECUTION_LOOP_ARGS=()
 
 usage() {
   cat <<USAGE
@@ -49,6 +51,8 @@ Options:
   --private-lane-no-shared-fallback
                                Keep unresolved private rows as-is (default is move_shared fallback)
   --quality-arg <arg>          Extra arg forwarded to job:quality-eval (repeatable)
+  --run-execution-loop-gate    Run execution-loop gate (feedback/rule freshness checks)
+  --execution-loop-arg <arg>   Extra arg forwarded to job:execution-loop-gate (repeatable)
   -h, --help                   Show help
 
 Exit codes:
@@ -110,6 +114,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --quality-arg)
       QUALITY_ARGS+=("${2:-}")
+      shift 2
+      ;;
+    --run-execution-loop-gate)
+      RUN_EXECUTION_LOOP_GATE=true
+      shift
+      ;;
+    --execution-loop-arg)
+      EXECUTION_LOOP_ARGS+=("${2:-}")
       shift 2
       ;;
     -h|--help)
@@ -243,6 +255,34 @@ if [[ ${#QUALITY_ARGS[@]} -gt 0 ]]; then
 fi
 quality_json="$("${quality_cmd[@]}")"
 
+execution_loop_json='{"ok":true,"skipped":true}'
+execution_loop_ok=true
+if [[ "$RUN_EXECUTION_LOOP_GATE" == "true" ]]; then
+  execution_loop_cmd=(npm run -s job:execution-loop-gate -- --scope "$SCOPE")
+  if [[ "$STRICT_WARNINGS" == "true" ]]; then
+    execution_loop_cmd+=(--strict-warnings)
+  fi
+  if [[ ${#EXECUTION_LOOP_ARGS[@]} -gt 0 ]]; then
+    execution_loop_cmd+=("${EXECUTION_LOOP_ARGS[@]}")
+  fi
+
+  set +e
+  execution_loop_raw="$("${execution_loop_cmd[@]}" 2>&1)"
+  execution_loop_ec=$?
+  set -e
+
+  if echo "$execution_loop_raw" | jq -e . >/dev/null 2>&1; then
+    execution_loop_json="$execution_loop_raw"
+  else
+    execution_loop_ok=false
+    execution_loop_json="$(jq -n --arg error "$execution_loop_raw" --argjson exit_code "$execution_loop_ec" '{ok:false, error:"non_json_execution_loop_output", raw:$error, exit_code:$exit_code}')"
+  fi
+
+  if [[ $execution_loop_ec -ne 0 ]]; then
+    execution_loop_ok=false
+  fi
+fi
+
 consistency_errors="$(echo "$consistency_json" | jq -r '.summary.errors // 0')"
 consistency_warnings="$(echo "$consistency_json" | jq -r '.summary.warnings // 0')"
 quality_pass="$(echo "$quality_json" | jq -r '.summary.pass // false')"
@@ -263,6 +303,9 @@ fi
 if [[ "$quality_pass" != "true" ]]; then
   fail_reasons="$(echo "$fail_reasons" | jq '. + ["quality_eval_failed"]')"
 fi
+if [[ "$execution_loop_ok" != "true" ]]; then
+  fail_reasons="$(echo "$fail_reasons" | jq '. + ["execution_loop_gate_failed"]')"
+fi
 
 ok="true"
 if [[ "$(echo "$fail_reasons" | jq 'length')" != "0" ]]; then
@@ -281,6 +324,7 @@ jq -n \
   --argjson private_lane_backfill "$(echo "$private_lane_backfill_json" | jq '.')" \
   --argjson consistency "$(echo "$consistency_json" | jq '.')" \
   --argjson quality "$(echo "$quality_json" | jq '.')" \
+  --argjson execution_loop "$(echo "$execution_loop_json" | jq '.')" \
   --argjson ok "$([[ "$ok" == "true" ]] && echo true || echo false)" \
   '{
     ok: $ok,
@@ -302,7 +346,8 @@ jq -n \
       pass: $quality_pass,
       summary: ($quality.summary // {}),
       failed_checks: ($quality.failed_checks // [])
-    }
+    },
+    execution_loop: $execution_loop
   }'
 
 if [[ "$ok" != "true" ]]; then
