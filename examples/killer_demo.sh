@@ -118,6 +118,11 @@ case "${AUTH_MODE}" in
     ;;
 esac
 
+has_local_outbox_worker_once() {
+  command -v npm >/dev/null 2>&1 || return 1
+  [[ -x "${ROOT_DIR}/node_modules/.bin/tsx" ]]
+}
+
 api_post_json() {
   local path="$1"
   local payload="$2"
@@ -212,11 +217,15 @@ echo
 echo "== Write result =="
 echo "$write_json" | jq '{commit_id, nodes:(.nodes|length), edges:(.edges|length), embedding_backfill:(.embedding_backfill // null)}'
 
-if [[ "$RUN_WORKER_ONCE" == "true" ]] || { [[ "$RUN_WORKER_ONCE" == "auto" ]] && command -v npm >/dev/null 2>&1; }; then
-  echo
-  echo "Running outbox worker once (to accelerate embedding readiness)..."
-  npm run -s job:outbox-worker -- --once >/tmp/aionis_killer_worker.json || true
-  cat /tmp/aionis_killer_worker.json 2>/dev/null || true
+if [[ "$RUN_WORKER_ONCE" == "true" ]] || [[ "$RUN_WORKER_ONCE" == "auto" ]]; then
+  if has_local_outbox_worker_once; then
+    echo
+    echo "Running outbox worker once (to accelerate embedding readiness)..."
+    npm run -s job:outbox-worker -- --once >/tmp/aionis_killer_worker.json 2>&1 || true
+    cat /tmp/aionis_killer_worker.json 2>/dev/null || true
+  elif [[ "$RUN_WORKER_ONCE" == "true" ]]; then
+    echo "Skipping local outbox worker once: local tsx runtime not found (run npm ci to enable)." >&2
+  fi
 fi
 
 after_json=""
