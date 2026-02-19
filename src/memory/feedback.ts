@@ -89,8 +89,8 @@ export async function ruleFeedback(
   // Insert feedback row.
   await client.query(
     `INSERT INTO memory_rule_feedback
-      (id, scope, rule_node_id, run_id, outcome, note, commit_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      (id, scope, rule_node_id, run_id, outcome, note, source, decision_id, commit_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'rule_feedback', NULL, $7)`,
     [feedbackId, scope, parsed.rule_node_id, parsed.run_id ?? null, parsed.outcome, note ?? null, commit_id],
   );
 

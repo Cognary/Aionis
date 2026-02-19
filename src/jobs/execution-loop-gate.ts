@@ -1,4 +1,5 @@
 import "dotenv/config";
+import type pg from "pg";
 import { loadEnv } from "../config.js";
 import { closeDb, createDb, withTx } from "../db.js";
 
@@ -32,6 +33,37 @@ function round(v: number, d = 4): number {
   return Math.round(v * f) / f;
 }
 
+async function hasTable(client: pg.PoolClient, tableName: string): Promise<boolean> {
+  const r = await client.query<{ ok: boolean }>(
+    `
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = $1
+    ) AS ok
+    `,
+    [tableName],
+  );
+  return !!r.rows[0]?.ok;
+}
+
+async function hasColumn(client: pg.PoolClient, tableName: string, columnName: string): Promise<boolean> {
+  const r = await client.query<{ ok: boolean }>(
+    `
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = $1
+        AND column_name = $2
+    ) AS ok
+    `,
+    [tableName, columnName],
+  );
+  return !!r.rows[0]?.ok;
+}
+
 type CheckSeverity = "warning" | "error";
 
 type GateCheck = {
@@ -52,10 +84,15 @@ async function main() {
   const maxNegativeRatio = clampNum(Number(argValue("--max-negative-ratio") ?? "0.35"), 0, 1);
   const minActiveFeedbackCoverage = clampNum(Number(argValue("--min-active-feedback-coverage") ?? "0.6"), 0, 1);
   const maxStaleActiveRules = clampInt(Number(argValue("--max-stale-active-rules") ?? "5"), 0, 1_000_000);
+  const minDecisionLinkCoverage = clampNum(Number(argValue("--min-decision-link-coverage") ?? "0.95"), 0, 1);
   const strict = hasFlag("--strict");
   const strictWarnings = hasFlag("--strict-warnings");
 
   const out = await withTx(db, async (client) => {
+    const hasExecutionDecisions = await hasTable(client, "memory_execution_decisions");
+    const hasFeedbackSource = await hasColumn(client, "memory_rule_feedback", "source");
+    const hasFeedbackDecisionId = await hasColumn(client, "memory_rule_feedback", "decision_id");
+
     const feedbackRes = await client.query<{
       total: string;
       with_run_id: string;
@@ -78,6 +115,29 @@ async function main() {
       `,
       [scope, windowHours],
     );
+
+    const decisionRes =
+      hasExecutionDecisions && hasFeedbackSource && hasFeedbackDecisionId
+        ? await client.query<{
+            tools_feedback_total: string;
+            with_decision_id: string;
+            linked_decision_id: string;
+          }>(
+            `
+            SELECT
+              count(*) FILTER (WHERE f.source = 'tools_feedback')::text AS tools_feedback_total,
+              count(*) FILTER (WHERE f.source = 'tools_feedback' AND f.decision_id IS NOT NULL)::text AS with_decision_id,
+              count(*) FILTER (WHERE f.source = 'tools_feedback' AND f.decision_id IS NOT NULL AND d.id IS NOT NULL)::text AS linked_decision_id
+            FROM memory_rule_feedback f
+            LEFT JOIN memory_execution_decisions d
+              ON d.scope = f.scope
+             AND d.id = f.decision_id
+            WHERE f.scope = $1
+              AND f.created_at >= now() - (($2::text || ' hours')::interval)
+            `,
+            [scope, windowHours],
+          )
+        : null;
 
     const ruleRes = await client.query<{
       active_total: string;
@@ -139,6 +199,11 @@ async function main() {
     const negativeRatio = feedbackTotal > 0 ? negative / feedbackTotal : 0;
     const activeFeedbackCoverage = activeTotal > 0 ? activeWithRecentFeedback / activeTotal : 1;
     const staleActiveRules = Math.max(0, activeTotal - activeWithRecentFeedback);
+    const decisionRows = decisionRes?.rows[0];
+    const toolsFeedbackTotal = Number(decisionRows?.tools_feedback_total ?? "0");
+    const withDecisionId = Number(decisionRows?.with_decision_id ?? "0");
+    const linkedDecisionId = Number(decisionRows?.linked_decision_id ?? "0");
+    const decisionLinkCoverage = toolsFeedbackTotal > 0 ? linkedDecisionId / toolsFeedbackTotal : 1;
 
     const checks: GateCheck[] = [
       {
@@ -190,6 +255,16 @@ async function main() {
         note: "Too many active rules without recent feedback suggests drift.",
       },
     ];
+    if (decisionRes) {
+      checks.push({
+        name: "decision_link_coverage_min",
+        severity: "warning",
+        pass: decisionLinkCoverage >= minDecisionLinkCoverage,
+        value: round(decisionLinkCoverage),
+        threshold: { op: ">=", value: minDecisionLinkCoverage },
+        note: "tools_feedback rows should resolve to persisted decision records for replay/audit.",
+      });
+    }
 
     const failedWarnings = checks.filter((c) => !c.pass && c.severity === "warning").map((c) => c.name);
     const failedErrors = checks.filter((c) => !c.pass && c.severity === "error").map((c) => c.name);
@@ -205,6 +280,7 @@ async function main() {
         max_negative_ratio: maxNegativeRatio,
         min_active_feedback_coverage: minActiveFeedbackCoverage,
         max_stale_active_rules: maxStaleActiveRules,
+        min_decision_link_coverage: minDecisionLinkCoverage,
       },
       metrics: {
         feedback: {
@@ -226,6 +302,17 @@ async function main() {
           active_feedback_coverage: round(activeFeedbackCoverage),
           stale_active_rules: staleActiveRules,
         },
+        decision: decisionRes
+          ? {
+              tools_feedback_total: toolsFeedbackTotal,
+              with_decision_id: withDecisionId,
+              linked_decision_id: linkedDecisionId,
+              decision_link_coverage: round(decisionLinkCoverage),
+            }
+          : {
+              available: false,
+              note: "Execution provenance schema missing; apply migration 0021_execution_decision_provenance.sql.",
+            },
       },
       checks,
       summary: {

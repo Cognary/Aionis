@@ -224,6 +224,8 @@ export type RulesEvaluateInput = z.infer<typeof RulesEvaluateRequest>;
 export const ToolsSelectRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
+  // Optional execution run correlation id for provenance.
+  run_id: z.string().min(1).optional(),
   context: z.any(),
   // Tool names provided by the caller's execution environment.
   candidates: z.array(z.string().min(1)).min(1).max(200),
@@ -243,6 +245,8 @@ export const ToolsFeedbackRequest = z
     scope: z.string().min(1).optional(),
     actor: z.string().min(1).optional(),
     run_id: z.string().min(1).optional(),
+    // Optional direct link to the persisted tools/select decision record.
+    decision_id: UUID.optional(),
     // Feedback for the tool selection decision.
     outcome: z.enum(["positive", "negative", "neutral"]),
     // Same execution context used for tool selection.

@@ -16,6 +16,7 @@ The gate focuses on:
 2. `run_id` audit linkage coverage
 3. Active-rule freshness against recent feedback
 4. Negative outcome ratio drift
+5. Decision linkage coverage for `tools_feedback`
 
 ## Command
 
@@ -39,6 +40,7 @@ npm run -s job:execution-loop-gate -- --scope default --strict-warnings
 5. `--max-negative-ratio <ratio>`: upper bound for negative outcomes (default `0.35`)
 6. `--min-active-feedback-coverage <ratio>`: minimum active-rule feedback freshness ratio (default `0.6`)
 7. `--max-stale-active-rules <n>`: max active rules without recent feedback (default `5`)
+8. `--min-decision-link-coverage <ratio>`: minimum ratio of `tools_feedback` rows that resolve to persisted decisions (default `0.95`)
 
 ## Health Gate Integration
 
@@ -63,8 +65,9 @@ JSON contains:
 
 1. `metrics.feedback` (`total`, `distinct_runs`, `run_id_coverage`, outcome counts)
 2. `metrics.rules` (`active_total`, `active_with_recent_feedback`, `stale_active_rules`)
-3. `checks[]` with thresholds and pass/fail
-4. `summary.failed_warnings` / `summary.failed_errors`
+3. `metrics.decision` (`tools_feedback_total`, `linked_decision_id`, `decision_link_coverage`) when provenance schema is present
+4. `checks[]` with thresholds and pass/fail
+5. `summary.failed_warnings` / `summary.failed_errors`
 
 ## Operational Interpretation
 

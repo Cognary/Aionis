@@ -162,6 +162,7 @@ export type RulesEvaluateInput = {
 export type ToolsSelectInput = {
   tenant_id?: string;
   scope?: string;
+  run_id?: string;
   context: unknown;
   candidates: string[];
   include_shadow?: boolean;
@@ -174,6 +175,7 @@ export type ToolsFeedbackInput = {
   scope?: string;
   actor?: string;
   run_id?: string;
+  decision_id?: string;
   outcome: "positive" | "negative" | "neutral";
   context: unknown;
   candidates: string[];
@@ -242,6 +244,15 @@ export type ToolsSelectResponse = {
     [k: string]: unknown;
   };
   rules: Record<string, unknown>;
+  decision?: {
+    decision_id: string;
+    run_id: string | null;
+    selected_tool: string | null;
+    policy_sha256: string;
+    source_rule_ids: string[];
+    created_at: string | null;
+    [k: string]: unknown;
+  };
   [k: string]: unknown;
 };
 
@@ -253,5 +264,8 @@ export type ToolsFeedbackResponse = {
   rule_node_ids: string[];
   commit_id: string | null;
   commit_hash: string | null;
+  decision_id?: string;
+  decision_link_mode?: "provided" | "inferred" | "created_from_feedback";
+  decision_policy_sha256?: string;
   [k: string]: unknown;
 };

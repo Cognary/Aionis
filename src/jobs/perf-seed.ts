@@ -28,11 +28,27 @@ function clampInt(v: number, min: number, max: number): number {
 type ResetStats = {
   outbox: number;
   rule_feedback: number;
+  execution_decisions: number;
   rule_defs: number;
   edges: number;
   nodes: number;
   commits: number;
 };
+
+async function tableExists(table: string): Promise<boolean> {
+  const r = await db.pool.query<{ ok: boolean }>(
+    `
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = $1
+    ) AS ok
+    `,
+    [table],
+  );
+  return !!r.rows[0]?.ok;
+}
 
 async function listScopeBoundPartitions(table: string, scopeKey: string): Promise<string[]> {
   const r = await db.pool.query<{ fqname: string }>(
@@ -55,6 +71,7 @@ async function tryTruncateScopePartitions(
   table:
     | "memory_outbox"
     | "memory_rule_feedback"
+    | "memory_execution_decisions"
     | "memory_rule_defs"
     | "memory_edges"
     | "memory_nodes"
@@ -81,6 +98,7 @@ async function deleteScopeChunked(
   table:
     | "memory_outbox"
     | "memory_rule_feedback"
+    | "memory_execution_decisions"
     | "memory_rule_defs"
     | "memory_edges"
     | "memory_nodes"
@@ -130,6 +148,10 @@ async function resetScopeChunked(
   // FK-safe order: child tables first, then nodes/commits.
   const outbox = await deleteScopeChunked("memory_outbox", scopeKey, batchSize, log);
   const ruleFeedback = await deleteScopeChunked("memory_rule_feedback", scopeKey, batchSize, log);
+  let executionDecisions = 0;
+  if (await tableExists("memory_execution_decisions")) {
+    executionDecisions = await deleteScopeChunked("memory_execution_decisions", scopeKey, batchSize, log);
+  }
   const ruleDefs = await deleteScopeChunked("memory_rule_defs", scopeKey, batchSize, log);
   const edges = await deleteScopeChunked("memory_edges", scopeKey, batchSize, log);
   const nodes = await deleteScopeChunked("memory_nodes", scopeKey, batchSize, log);
@@ -137,6 +159,7 @@ async function resetScopeChunked(
   return {
     outbox,
     rule_feedback: ruleFeedback,
+    execution_decisions: executionDecisions,
     rule_defs: ruleDefs,
     edges,
     nodes,

@@ -16,6 +16,7 @@ type TableDef = {
 const LEGACY_TABLES: TableDef[] = [
   { table: "memory_outbox", order: 10 },
   { table: "memory_rule_feedback", order: 20 },
+  { table: "memory_execution_decisions", order: 25 },
   { table: "memory_rule_defs", order: 30 },
   { table: "memory_edges", order: 40 },
   { table: "memory_nodes", order: 50 },

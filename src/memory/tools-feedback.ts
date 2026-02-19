@@ -2,8 +2,15 @@ import { randomUUID } from "node:crypto";
 import stableStringify from "fast-json-stable-stringify";
 import type pg from "pg";
 import { sha256Hex } from "../util/crypto.js";
+import { badRequest } from "../util/http.js";
 import { normalizeText } from "../util/normalize.js";
 import { redactPII } from "../util/redaction.js";
+import {
+  hashExecutionContext,
+  hashPolicy,
+  normalizeToolCandidates,
+  uniqueRuleIds,
+} from "./execution-provenance.js";
 import { ToolsFeedbackRequest } from "./schemas.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
@@ -13,11 +20,183 @@ type FeedbackOptions = {
   piiRedaction: boolean;
 };
 
+type DecisionRow = {
+  id: string;
+  scope: string;
+  run_id: string | null;
+  selected_tool: string | null;
+  candidates_json: any;
+  context_sha256: string;
+  policy_sha256: string;
+  created_at: string;
+};
+
 function isToolTouched(paths: string[]): boolean {
   for (const p of paths) {
     if (p === "tool" || p.startsWith("tool.")) return true;
   }
   return false;
+}
+
+function normalizeToolName(v: string): string {
+  return String(v ?? "").trim();
+}
+
+async function findDecisionById(client: pg.PoolClient, scope: string, decisionId: string): Promise<DecisionRow | null> {
+  const r = await client.query<DecisionRow>(
+    `
+    SELECT
+      id::text,
+      scope,
+      run_id,
+      selected_tool,
+      candidates_json,
+      context_sha256,
+      policy_sha256,
+      created_at::text AS created_at
+    FROM memory_execution_decisions
+    WHERE scope = $1
+      AND id = $2
+    LIMIT 1
+    `,
+    [scope, decisionId],
+  );
+  return r.rows[0] ?? null;
+}
+
+async function inferDecision(
+  client: pg.PoolClient,
+  scope: string,
+  runId: string | null,
+  selectedTool: string,
+  candidatesJson: string,
+  contextSha256: string,
+): Promise<DecisionRow | null> {
+  if (runId) {
+    const byRun = await client.query<DecisionRow>(
+      `
+      SELECT
+        id::text,
+        scope,
+        run_id,
+        selected_tool,
+        candidates_json,
+        context_sha256,
+        policy_sha256,
+        created_at::text AS created_at
+      FROM memory_execution_decisions
+      WHERE scope = $1
+        AND decision_kind = 'tools_select'
+        AND run_id = $2
+        AND selected_tool = $3
+        AND candidates_json = $4::jsonb
+        AND context_sha256 = $5
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [scope, runId, selectedTool, candidatesJson, contextSha256],
+    );
+    if (byRun.rowCount) return byRun.rows[0];
+  }
+
+  const fallback = await client.query<DecisionRow>(
+    `
+    SELECT
+      id::text,
+      scope,
+      run_id,
+      selected_tool,
+      candidates_json,
+      context_sha256,
+      policy_sha256,
+      created_at::text AS created_at
+    FROM memory_execution_decisions
+    WHERE scope = $1
+      AND decision_kind = 'tools_select'
+      AND selected_tool = $2
+      AND candidates_json = $3::jsonb
+      AND context_sha256 = $4
+      AND created_at >= now() - interval '24 hours'
+      AND ($5::text IS NULL OR run_id IS NULL)
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [scope, selectedTool, candidatesJson, contextSha256, runId],
+  );
+  return fallback.rows[0] ?? null;
+}
+
+async function createDecisionFromFeedback(
+  client: pg.PoolClient,
+  scope: string,
+  runId: string | null,
+  selectedTool: string,
+  candidatesJson: string,
+  contextSha256: string,
+  policySha256: string,
+  sourceRuleIds: string[],
+): Promise<DecisionRow> {
+  const decisionId = randomUUID();
+  const r = await client.query<DecisionRow>(
+    `
+    INSERT INTO memory_execution_decisions
+      (id, scope, decision_kind, run_id, selected_tool, candidates_json, context_sha256, policy_sha256, source_rule_ids, metadata_json)
+    VALUES
+      ($1, $2, 'tools_select', $3, $4, $5::jsonb, $6, $7, $8::uuid[], $9::jsonb)
+    RETURNING
+      id::text,
+      scope,
+      run_id,
+      selected_tool,
+      candidates_json,
+      context_sha256,
+      policy_sha256,
+      created_at::text AS created_at
+    `,
+    [
+      decisionId,
+      scope,
+      runId,
+      selectedTool,
+      candidatesJson,
+      contextSha256,
+      policySha256,
+      sourceRuleIds,
+      JSON.stringify({ source: "feedback_derived" }),
+    ],
+  );
+  return r.rows[0];
+}
+
+function assertDecisionCompatible(
+  decision: DecisionRow,
+  parsed: { run_id?: string; selected_tool: string; decision_id?: string },
+  normalizedCandidates: string[],
+) {
+  const selectedTool = normalizeToolName(parsed.selected_tool);
+  if ((decision.selected_tool ?? "") !== selectedTool) {
+    badRequest("decision_selected_tool_mismatch", "decision_id does not match selected_tool", {
+      decision_id: parsed.decision_id,
+      decision_selected_tool: decision.selected_tool,
+      request_selected_tool: selectedTool,
+    });
+  }
+
+  const wantCandidates = stableStringify(normalizedCandidates);
+  const gotCandidates = stableStringify(Array.isArray(decision.candidates_json) ? decision.candidates_json : []);
+  if (wantCandidates !== gotCandidates) {
+    badRequest("decision_candidates_mismatch", "decision_id does not match candidates", {
+      decision_id: parsed.decision_id,
+    });
+  }
+
+  if (parsed.run_id && decision.run_id && parsed.run_id !== decision.run_id) {
+    badRequest("decision_run_id_mismatch", "decision_id run_id does not match feedback run_id", {
+      decision_id: parsed.decision_id,
+      decision_run_id: decision.run_id,
+      request_run_id: parsed.run_id,
+    });
+  }
 }
 
 export async function toolSelectionFeedback(
@@ -34,6 +213,8 @@ export async function toolSelectionFeedback(
   );
   const scope = tenancy.scope_key;
   const actor = parsed.actor ?? "system";
+  const normalizedCandidates = normalizeToolCandidates(parsed.candidates);
+  const selectedTool = normalizeToolName(parsed.selected_tool);
 
   const inputText = parsed.input_text ? normalizeText(parsed.input_text, opts.maxTextLen) : undefined;
   const redactedInput = opts.piiRedaction && inputText ? redactPII(inputText).text : inputText;
@@ -66,7 +247,7 @@ export async function toolSelectionFeedback(
     .filter((s) => (parsed.include_shadow ? true : s.state === "active"))
     .map((s) => s.rule_node_id);
 
-  const uniq = Array.from(new Set(targetRuleIds));
+  const uniq = uniqueRuleIds(targetRuleIds);
 
   if (uniq.length === 0) {
     return {
@@ -81,6 +262,56 @@ export async function toolSelectionFeedback(
     };
   }
 
+  const contextSha256 = hashExecutionContext(parsed.context);
+  const policySha256 = hashPolicy((rules.applied as any)?.policy ?? {});
+  const candidatesJson = JSON.stringify(normalizedCandidates);
+
+  let decision = parsed.decision_id ? await findDecisionById(client, scope, parsed.decision_id) : null;
+  let decision_link_mode: "provided" | "inferred" | "created_from_feedback" = "provided";
+
+  if (parsed.decision_id) {
+    if (!decision) {
+      badRequest("decision_not_found_in_scope", "decision_id was not found in this scope", {
+        decision_id: parsed.decision_id,
+        scope: tenancy.scope,
+        tenant_id: tenancy.tenant_id,
+      });
+    }
+  } else {
+    decision = await inferDecision(client, scope, parsed.run_id ?? null, selectedTool, candidatesJson, contextSha256);
+    if (decision) {
+      decision_link_mode = "inferred";
+    } else {
+      decision = await createDecisionFromFeedback(
+        client,
+        scope,
+        parsed.run_id ?? null,
+        selectedTool,
+        candidatesJson,
+        contextSha256,
+        policySha256,
+        uniq,
+      );
+      decision_link_mode = "created_from_feedback";
+    }
+  }
+
+  assertDecisionCompatible(decision!, parsed, normalizedCandidates);
+
+  if (parsed.run_id && !decision!.run_id) {
+    await client.query(
+      `
+      UPDATE memory_execution_decisions
+      SET run_id = $1
+      WHERE scope = $2
+        AND id = $3
+        AND run_id IS NULL
+      `,
+      [parsed.run_id, scope, decision!.id],
+    );
+    decision!.run_id = parsed.run_id;
+  }
+
   // Parent commit is optional for feedback events; use latest commit in scope as parent if present.
   const parentRes = await client.query<{ id: string; commit_hash: string }>(
     "SELECT id, commit_hash FROM memory_commits WHERE scope = $1 ORDER BY created_at DESC LIMIT 1",
@@ -92,10 +323,12 @@ export async function toolSelectionFeedback(
   const diff = {
     tool_feedback: [
       {
+        decision_id: decision!.id,
+        decision_link_mode,
         run_id: parsed.run_id ?? null,
         outcome: parsed.outcome,
-        selected_tool: parsed.selected_tool,
-        candidates: parsed.candidates,
+        selected_tool: selectedTool,
+        candidates: normalizedCandidates,
         rule_node_ids: uniq,
         target: parsed.target,
       },
@@ -113,15 +346,27 @@ export async function toolSelectionFeedback(
   );
   const commit_id = commitRes.rows[0].id;
 
+  if (decision_link_mode === "created_from_feedback") {
+    await client.query(
+      `
+      UPDATE memory_execution_decisions
+      SET commit_id = $1
+      WHERE scope = $2
+        AND id = $3
+      `,
+      [commit_id, scope, decision!.id],
+    );
+  }
+
   // Insert feedback rows (one per rule) to keep per-rule auditability.
   // Note: we intentionally attribute the same outcome to all matched rule sources for MVP simplicity.
   for (const rule_node_id of uniq) {
     const feedbackId = randomUUID();
     await client.query(
       `INSERT INTO memory_rule_feedback
-        (id, scope, rule_node_id, run_id, outcome, note, commit_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [feedbackId, scope, rule_node_id, parsed.run_id ?? null, parsed.outcome, note ?? null, commit_id],
+        (id, scope, rule_node_id, run_id, outcome, note, source, decision_id, commit_id)
+       VALUES ($1, $2, $3, $4, $5, $6, 'tools_feedback', $7, $8)`,
+      [feedbackId, scope, rule_node_id, parsed.run_id ?? null, parsed.outcome, note ?? null, decision!.id, commit_id],
     );
   }
 
@@ -146,5 +391,8 @@ export async function toolSelectionFeedback(
     rule_node_ids: uniq,
     commit_id,
     commit_hash: commitHash,
+    decision_id: decision!.id,
+    decision_link_mode,
+    decision_policy_sha256: decision!.policy_sha256,
   };
 }

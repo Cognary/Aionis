@@ -19,9 +19,11 @@ const client = new AionisClient({
 async function main() {
   const context = { intent: "json", provider: "minimax", tool: { name: "curl" } };
   const candidates = ["psql", "curl", "bash"];
+  const runId = `sdk_tools_fb_${Date.now()}`;
 
   const select = await client.toolsSelect({
     scope,
+    run_id: runId,
     context,
     candidates,
     strict: false,
@@ -30,11 +32,12 @@ async function main() {
   });
 
   const selectedTool = select.data.selection?.selected ?? select.data.selection?.ordered?.[0] ?? candidates[0];
-  const runId = `sdk_tools_fb_${Date.now()}`;
+  const decisionId = (select.data as any)?.decision?.decision_id as string | undefined;
 
   const feedback = await client.toolsFeedback({
     scope,
     run_id: runId,
+    ...(decisionId ? { decision_id: decisionId } : {}),
     outcome: "positive",
     context,
     candidates,

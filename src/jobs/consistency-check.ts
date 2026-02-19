@@ -70,6 +70,21 @@ async function hasColumn(scopeClient: pg.PoolClient, tableName: string, columnNa
   return !!r.rows[0]?.ok;
 }
 
+async function hasTable(scopeClient: pg.PoolClient, tableName: string): Promise<boolean> {
+  const r = await scopeClient.query<{ ok: boolean }>(
+    `
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = $1
+    ) AS ok
+    `,
+    [tableName],
+  );
+  return !!r.rows[0]?.ok;
+}
+
 async function runCheck(
   client: pg.PoolClient,
   name: string,
@@ -165,6 +180,9 @@ async function main() {
     const hasTargetAgentId = await hasColumn(client, "memory_rule_defs", "target_agent_id");
     const hasTargetTeamId = await hasColumn(client, "memory_rule_defs", "target_team_id");
     const hasFailedAt = await hasColumn(client, "memory_outbox", "failed_at");
+    const hasExecutionDecisions = await hasTable(client, "memory_execution_decisions");
+    const hasRuleFeedbackSource = await hasColumn(client, "memory_rule_feedback", "source");
+    const hasRuleFeedbackDecisionId = await hasColumn(client, "memory_rule_feedback", "decision_id");
     const hasTenantScopedRowsRes = await client.query<{ ok: boolean }>(
       `
       SELECT (
@@ -177,7 +195,19 @@ async function main() {
       ) AS ok
       `,
     );
-    const hasTenantScopedRows = !!hasTenantScopedRowsRes.rows[0]?.ok;
+    let hasTenantScopedRows = !!hasTenantScopedRowsRes.rows[0]?.ok;
+    if (!hasTenantScopedRows && hasExecutionDecisions) {
+      const extraTenantRowsRes = await client.query<{ ok: boolean }>(
+        `
+        SELECT EXISTS (
+          SELECT 1
+          FROM memory_execution_decisions
+          WHERE scope LIKE 'tenant:%'
+        ) AS ok
+        `,
+      );
+      hasTenantScopedRows = !!extraTenantRowsRes.rows[0]?.ok;
+    }
 
     // 1) Edge scope consistency (only meaningful if cross-scope edges are disallowed).
     if (includeScopeChecks) {
@@ -1594,6 +1624,147 @@ async function main() {
           [scope],
           sampleLimit,
           "Scoped rules must declare their target id to avoid silent non-match.",
+        ),
+      );
+    }
+
+    // 7c) Execution provenance linkage sanity.
+    if (hasExecutionDecisions && hasRuleFeedbackSource && hasRuleFeedbackDecisionId) {
+      out.push(
+        await runCheck(
+          client,
+          "tools_feedback_missing_decision_id",
+          "error",
+          `
+          SELECT count(*)::text AS n
+          FROM memory_rule_feedback
+          WHERE scope = $1
+            AND source = 'tools_feedback'
+            AND decision_id IS NULL
+          `,
+          [scope],
+          `
+          SELECT id, rule_node_id, run_id, outcome, created_at
+          FROM memory_rule_feedback
+          WHERE scope = $1
+            AND source = 'tools_feedback'
+            AND decision_id IS NULL
+          ORDER BY created_at DESC
+          LIMIT __LIMIT__
+          `,
+          [scope],
+          sampleLimit,
+          "tools_feedback rows should always carry a decision_id for execution provenance.",
+        ),
+      );
+
+      out.push(
+        await runCheck(
+          client,
+          "tools_feedback_decision_link_broken",
+          "error",
+          `
+          SELECT count(*)::text AS n
+          FROM memory_rule_feedback f
+          LEFT JOIN memory_execution_decisions d
+            ON d.scope = f.scope
+           AND d.id = f.decision_id
+          WHERE f.scope = $1
+            AND f.source = 'tools_feedback'
+            AND f.decision_id IS NOT NULL
+            AND d.id IS NULL
+          `,
+          [scope],
+          `
+          SELECT f.id, f.rule_node_id, f.decision_id, f.run_id, f.outcome, f.created_at
+          FROM memory_rule_feedback f
+          LEFT JOIN memory_execution_decisions d
+            ON d.scope = f.scope
+           AND d.id = f.decision_id
+          WHERE f.scope = $1
+            AND f.source = 'tools_feedback'
+            AND f.decision_id IS NOT NULL
+            AND d.id IS NULL
+          ORDER BY f.created_at DESC
+          LIMIT __LIMIT__
+          `,
+          [scope],
+          sampleLimit,
+          "Every tools_feedback decision_id should resolve to a decision record in the same scope.",
+        ),
+      );
+
+      out.push(
+        await runCheck(
+          client,
+          "tools_feedback_run_id_mismatch_with_decision",
+          "warning",
+          `
+          SELECT count(*)::text AS n
+          FROM memory_rule_feedback f
+          JOIN memory_execution_decisions d
+            ON d.scope = f.scope
+           AND d.id = f.decision_id
+          WHERE f.scope = $1
+            AND f.source = 'tools_feedback'
+            AND nullif(trim(COALESCE(f.run_id, '')), '') IS NOT NULL
+            AND nullif(trim(COALESCE(d.run_id, '')), '') IS NOT NULL
+            AND trim(f.run_id) <> trim(d.run_id)
+          `,
+          [scope],
+          `
+          SELECT f.id, f.rule_node_id, f.decision_id, f.run_id AS feedback_run_id, d.run_id AS decision_run_id, f.created_at
+          FROM memory_rule_feedback f
+          JOIN memory_execution_decisions d
+            ON d.scope = f.scope
+           AND d.id = f.decision_id
+          WHERE f.scope = $1
+            AND f.source = 'tools_feedback'
+            AND nullif(trim(COALESCE(f.run_id, '')), '') IS NOT NULL
+            AND nullif(trim(COALESCE(d.run_id, '')), '') IS NOT NULL
+            AND trim(f.run_id) <> trim(d.run_id)
+          ORDER BY f.created_at DESC
+          LIMIT __LIMIT__
+          `,
+          [scope],
+          sampleLimit,
+          "Run ids should stay aligned between tools_feedback and linked decision records.",
+        ),
+      );
+
+      out.push(
+        await runCheck(
+          client,
+          "tools_decision_missing_run_id",
+          "warning",
+          `
+          SELECT count(*)::text AS n
+          FROM memory_execution_decisions
+          WHERE scope = $1
+            AND decision_kind = 'tools_select'
+            AND nullif(trim(COALESCE(run_id, '')), '') IS NULL
+          `,
+          [scope],
+          `
+          SELECT id, selected_tool, created_at
+          FROM memory_execution_decisions
+          WHERE scope = $1
+            AND decision_kind = 'tools_select'
+            AND nullif(trim(COALESCE(run_id, '')), '') IS NULL
+          ORDER BY created_at DESC
+          LIMIT __LIMIT__
+          `,
+          [scope],
+          sampleLimit,
+          "Decisions without run_id reduce replayability across execution runs.",
+        ),
+      );
+    } else {
+      out.push(
+        zeroCheck(
+          "execution_provenance_schema_missing",
+          "warning",
+          "Missing execution provenance schema. Apply migration 0021_execution_decision_provenance.sql.",
         ),
       );
     }

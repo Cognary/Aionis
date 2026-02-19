@@ -60,6 +60,12 @@ DoD:
 1. Every feedback event can be linked to at least one decision record.
 2. Replay/audit can reconstruct selected-tool history per run.
 
+Progress (`2026-02-19`):
+
+1. Added persisted `memory_execution_decisions` records from `tools/select`.
+2. Added `decision_id` linkage path in `tools/feedback` (`provided` / `inferred` / `created_from_feedback`).
+3. Added consistency checks for feedback-decision linkage integrity.
+
 ## Phase C: Policy Adaptation Guardrails
 
 Goal:

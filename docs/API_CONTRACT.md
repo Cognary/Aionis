@@ -368,6 +368,7 @@ This endpoint is a convenience wrapper around rules evaluation + tool policy app
 - `candidates: string[]` (required, 1..200)
 - `tenant_id?: string`
 - `scope?: string`
+- `run_id?: string` (recommended; execution run correlation id)
 - `include_shadow?: boolean` (default false; if true, returns a non-enforcing `shadow_selection`)
 - `rules_limit?: number` (default 50, max 200)
 - `strict?: boolean` (default true)
@@ -378,6 +379,7 @@ This endpoint is a convenience wrapper around rules evaluation + tool policy app
 - `candidates: string[]` (deduped)
 - `selection: { candidates, allowed, denied, preferred, ordered, selected }`
 - `rules: { considered, matched, skipped_invalid_then, invalid_then_sample, agent_visibility_summary, applied, tool_conflicts_summary, shadow_selection?, shadow_tool_conflicts_summary? }`
+- `decision: { decision_id, run_id, selected_tool, policy_sha256, source_rule_ids, created_at }`
 
 Notes:
 - This endpoint **never returns embeddings**.
@@ -408,6 +410,7 @@ verification stats (`positive_count` / `negative_count`) for ordering and govern
 - `scope?: string`
 - `actor?: string`
 - `run_id?: string`
+- `decision_id?: string` (UUID; if omitted, server attempts inference and may create a feedback-derived decision record)
 - `target?: "tool"|"all"` (default `"tool"`)
 - `include_shadow?: boolean` (default false; if true, also attributes to matched SHADOW rule sources)
 - `rules_limit?: number` (default 50, max 200)
@@ -422,6 +425,9 @@ verification stats (`positive_count` / `negative_count`) for ordering and govern
 - `rule_node_ids: string[]`
 - `commit_id: string|null`
 - `commit_hash: string|null`
+- `decision_id: string`
+- `decision_link_mode: "provided"|"inferred"|"created_from_feedback"`
+- `decision_policy_sha256: string`
 
 ## Verification Stamp
 

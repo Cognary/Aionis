@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { MemoryRecallRequest } from "../memory/schemas.js";
+import { MemoryRecallRequest, ToolsFeedbackRequest, ToolsSelectRequest } from "../memory/schemas.js";
 import { HttpError } from "../util/http.js";
 import { memoryRecallParsed, type RecallAuth } from "../memory/recall.js";
 import { ruleMatchesContext } from "../memory/rule-engine.js";
@@ -67,6 +67,22 @@ async function run() {
   assert.throws(
     () => MemoryRecallRequest.parse({ query_embedding: [0], max_edges: 101 }),
     /less than or equal to 100/i,
+  );
+  assert.equal(
+    ToolsSelectRequest.parse({ context: { x: 1 }, candidates: ["curl"], run_id: "run_demo_1" }).run_id,
+    "run_demo_1",
+  );
+  assert.throws(
+    () =>
+      ToolsFeedbackRequest.parse({
+        context: { x: 1 },
+        candidates: ["curl"],
+        selected_tool: "curl",
+        outcome: "positive",
+        input_text: "x",
+        decision_id: "not-a-uuid",
+      }),
+    /Invalid uuid/i,
   );
 
   const seedEventId = "00000000-0000-0000-0000-000000000001";

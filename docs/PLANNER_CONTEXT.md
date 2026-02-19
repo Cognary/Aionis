@@ -70,6 +70,7 @@ normalized context in `rules_context`. The response will include a `rules.applie
 ## Tool Selector (Rules + Candidates)
 
 Use the same normalized context and pass a candidate tool list. The response includes `selection.selected` and `rules.applied.policy`.
+For provenance, pass `run_id` and persist returned `decision.decision_id`.
 
 ```bash
 /Users/lucio/Desktop/Aionis/examples/tools_select.sh psql curl bash | jq '{selected:.selection.selected, ordered:.selection.ordered, policy:.rules.applied.policy.tool}'
@@ -107,6 +108,7 @@ Minimal alerting guidance:
 ## Tool Feedback Loop
 
 After a run, send an explicit outcome to update rule verification stats. This is the mechanism that makes rule ordering improve over time.
+When available, pass `decision_id` from `/v1/memory/tools/select` for exact linkage.
 
 ```bash
 OUTCOME=positive RUN_ID=run_0001 /Users/lucio/Desktop/Aionis/examples/tools_feedback.sh psql curl bash | jq

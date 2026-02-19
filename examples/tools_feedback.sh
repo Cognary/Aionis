@@ -19,17 +19,18 @@ fi
 
 # First, ask the selector what it would choose (so feedback can carry the selected tool).
 sel_payload="$(
-  jq -c --argjson candidates "$CANDIDATES_JSON" '
-    { scope: (.scope // null), context: ., candidates: $candidates, include_shadow: false, rules_limit: 50, strict: true }
+  jq -c --argjson candidates "$CANDIDATES_JSON" --arg run_id "$RUN_ID" '
+    { scope: (.scope // null), run_id: $run_id, context: ., candidates: $candidates, include_shadow: false, rules_limit: 50, strict: true }
     | if .scope == null then del(.scope) else . end
   ' "$CTX_FILE"
 )"
 
 sel_json="$(curl -sS "localhost:${PORT}/v1/memory/tools/select" -H 'content-type: application/json' --data-binary "$sel_payload")"
 selected="$(echo "$sel_json" | jq -r '.selection.selected')"
+decision_id="$(echo "$sel_json" | jq -r '.decision.decision_id // empty')"
 
 fb_payload="$(
-  jq -c --argjson candidates "$CANDIDATES_JSON" --arg outcome "$OUTCOME" --arg selected "$selected" --arg run_id "$RUN_ID" '
+  jq -c --argjson candidates "$CANDIDATES_JSON" --arg outcome "$OUTCOME" --arg selected "$selected" --arg run_id "$RUN_ID" --arg decision_id "$decision_id" '
     {
       scope: (.scope // null),
       context: .,
@@ -37,11 +38,13 @@ fb_payload="$(
       selected_tool: $selected,
       outcome: $outcome,
       run_id: $run_id,
+      decision_id: (if ($decision_id | length) > 0 then $decision_id else null end),
       target: $ENV.TARGET,
       include_shadow: ($ENV.INCLUDE_SHADOW | ascii_downcase == "true"),
       rules_limit: 50,
       input_text: ("tool feedback: selected=" + $selected + " outcome=" + $outcome)
     }
+    | if .decision_id == null then del(.decision_id) else . end
     | if .scope == null then del(.scope) else . end
   ' "$CTX_FILE"
 )"
