@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { SectionLead } from "@/components/marketing/section-lead";
+import { siteConfig } from "@/lib/site";
 
 export default function PricingPage() {
+  const registries = siteConfig.registries;
+
   return (
     <section className="section">
       <div className="container">
         <p className="eyebrow">Pricing</p>
-        <h1>Choose your rollout track</h1>
+        <h1>Choose your rollout and operating model</h1>
         <p className="hero-copy">
           Start with Personal for fast shipping. Move to Enterprise when governance, identity boundaries, and production
           rollout rigor become mandatory.
@@ -21,6 +24,7 @@ export default function PricingPage() {
               <li>TypeScript and Python SDKs</li>
               <li>Docker image for quick self-host</li>
               <li>Docs-first implementation model</li>
+              <li>Fast iteration with direct builder control</li>
             </ul>
             <div className="hero-cta" style={{ marginTop: 16 }}>
               <Link className="btn btn-solid" href="/product/personal">
@@ -37,6 +41,7 @@ export default function PricingPage() {
               <li>Rule governance and conflict policy</li>
               <li>SLO baseline and release gate design</li>
               <li>Operational runbook and rollout support</li>
+              <li>Cross-team onboarding and architecture review</li>
             </ul>
             <div className="hero-cta" style={{ marginTop: 16 }}>
               <Link className="btn btn-ghost" href="/contact">
@@ -78,6 +83,50 @@ export default function PricingPage() {
               </tr>
             </tbody>
           </table>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Included technical baseline"
+            title="Same kernel, same core contract"
+            copy="Both tracks use the same API surface and published artifacts. Enterprise adds governance, rollout, and operating collaboration."
+          />
+          <div className="grid-cards">
+            <article className="card">
+              <h3>Core API and SDK</h3>
+              <ul className="list">
+                <li>APIs: `health`, `write`, `recall_text`</li>
+                <li>NPM: {registries.npmPackage}@{registries.npmVersion}</li>
+                <li>PyPI: {registries.pypiPackage}=={registries.pypiVersion}</li>
+              </ul>
+            </article>
+            <article className="card">
+              <h3>Operational baseline</h3>
+              <ul className="list">
+                <li>Docker image: {registries.dockerImage}:{registries.dockerTag}</li>
+                <li>Health gate and consistency-check scripts</li>
+                <li>Runbook-backed release process</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section">
+          <SectionLead
+            eyebrow="Commercial boundary"
+            title="How to decide when to switch tracks"
+            copy="Switch to Enterprise when your risk profile requires formal ownership, governance controls, and cross-team execution support."
+          />
+          <div className="grid-cards">
+            <article className="card">
+              <h3>Stay on Personal if</h3>
+              <p>You are optimizing for speed with one product team and lightweight operational risk.</p>
+            </article>
+            <article className="card">
+              <h3>Move to Enterprise if</h3>
+              <p>You need strict tenancy governance, release accountability, and coordinated production rollout.</p>
+            </article>
+          </div>
         </section>
       </div>
     </section>

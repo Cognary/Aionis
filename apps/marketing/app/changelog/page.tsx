@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SectionLead } from "@/components/marketing/section-lead";
-import { siteConfig } from "@/lib/site";
+import { resolveDocsUrl, siteConfig } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Aionis Changelog | Artifact release timeline",
@@ -65,6 +65,36 @@ export default function ChangelogPage() {
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
+            eyebrow="Release narrative standard"
+            title="How each release is communicated"
+            copy="Aionis uses one narrative structure for technical and business clarity: problem, principles, evidence, boundaries, and next step."
+          />
+          <div className="grid-cards-3">
+            <article className="card">
+              <h3>Problem</h3>
+              <p>What production issue is solved and why current behavior is insufficient.</p>
+            </article>
+            <article className="card">
+              <h3>Architecture principles</h3>
+              <p>How the change maps to Audit-first, Derived async, and Memory to Policy.</p>
+            </article>
+            <article className="card">
+              <h3>Evidence</h3>
+              <p>Which gates passed and where artifacts can be verified.</p>
+            </article>
+          </div>
+          <div className="hero-cta" style={{ marginTop: 16 }}>
+            <a className="btn btn-ghost" href={resolveDocsUrl("RELEASE_NARRATIVE_TEMPLATE.md")} target="_blank" rel="noreferrer">
+              Open release template
+            </a>
+            <a className="btn btn-ghost" href={resolveDocsUrl("NARRATIVE_CANON.md")} target="_blank" rel="noreferrer">
+              Open narrative canon
+            </a>
+          </div>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
             eyebrow="Stability progression"
             title="What changed in go-to-market hardening"
             copy="Recent work focused on release quality gates, runtime safety defaults, and integration readiness."
@@ -79,6 +109,20 @@ export default function ChangelogPage() {
               <p>SDKs and Docker image are published and verifiable through public registries.</p>
             </article>
           </div>
+        </section>
+
+        <section className="section">
+          <SectionLead
+            eyebrow="Verification commands"
+            title="Evidence commands used in release workflow"
+            copy="These checks are the minimum baseline for public artifact updates."
+          />
+          <pre className="code-block">{`npm run -s build
+npm run -s test:contract
+npm run -s docs:check
+npm run -s sdk:release-check
+npm run -s sdk:py:release-check
+npm run -s job:health-gate -- --strict-warnings`}</pre>
         </section>
       </div>
     </section>

@@ -35,6 +35,39 @@ export default function DocsPage() {
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
+            eyebrow="Narrative canon"
+            title="One public story across product and engineering"
+            copy="Aionis messaging and release notes follow one structure: Problem, Architecture Principles, Evidence, Boundaries, and Next Step."
+          />
+          <div className="grid-cards">
+            <article className="card">
+              <h3>Core framing</h3>
+              <ul className="list">
+                <li>Verifiable / Operable Memory Kernel</li>
+                <li>Audit-first, Derived async, Memory to Policy</li>
+                <li>Evidence-based release communication</li>
+              </ul>
+            </article>
+            <article className="card">
+              <h3>Reference docs</h3>
+              <ul className="list">
+                <li>
+                  <a href={docsHref("NARRATIVE_CANON.md")} target="_blank" rel="noreferrer">
+                    Narrative Canon
+                  </a>
+                </li>
+                <li>
+                  <a href={docsHref("RELEASE_NARRATIVE_TEMPLATE.md")} target="_blank" rel="noreferrer">
+                    Release Narrative Template
+                  </a>
+                </li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
             eyebrow="Guided path"
             title="Recommended journeys"
             copy="Use the shortest route for your immediate objective, then expand into domain references."

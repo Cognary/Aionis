@@ -4,8 +4,11 @@ import { FeatureGrid } from "@/components/marketing/feature-grid";
 import { Hero } from "@/components/marketing/hero";
 import { SectionLead } from "@/components/marketing/section-lead";
 import { StatStrip } from "@/components/marketing/stat-strip";
+import { siteConfig } from "@/lib/site";
 
 export default function HomePage() {
+  const registries = siteConfig.registries;
+
   return (
     <>
       <Hero />
@@ -72,22 +75,18 @@ make quickstart`}</pre>
       <section className="section">
         <div className="container">
           <SectionLead
-            eyebrow="How it works"
-            title="Memory pipeline designed for real workloads"
-            copy="Aionis separates source-of-record writes from derived artifacts, so write availability stays stable while embeddings, clustering, and policy feedback evolve asynchronously."
+            eyebrow="Problem"
+            title="Why memory systems fail in production"
+            copy="Most teams can demo retrieval, but struggle to keep memory auditable, available, and controllable under real traffic."
           />
-          <div className="grid-cards-3">
+          <div className="grid-cards">
             <article className="card">
-              <h3>1) Write</h3>
-              <p>Persist facts as nodes + edges with commit lineage and idempotency controls.</p>
+              <h3>Audit gaps</h3>
+              <p>Vector-only flows make it hard to trace what was written, when it changed, and why a recall result appeared.</p>
             </article>
             <article className="card">
-              <h3>2) Derive</h3>
-              <p>Outbox worker handles embedding backfill, topic derivation, and retries without blocking write API.</p>
-            </article>
-            <article className="card">
-              <h3>3) Recall</h3>
-              <p>Recall endpoint returns ranked subgraph and compact text context ready for prompt assembly.</p>
+              <h3>Operational coupling</h3>
+              <p>When embedding pipelines fail, write paths often degrade and break user-facing product behavior.</p>
             </article>
           </div>
         </div>
@@ -96,34 +95,82 @@ make quickstart`}</pre>
       <section className="section">
         <div className="container">
           <SectionLead
-            eyebrow="For technical buyers"
-            title="What makes Aionis practical"
-            copy="This is not just vector search. It is an operational memory kernel with APIs, SDKs, release artifacts, and health gates."
+            eyebrow="Architecture principles"
+            title="Three kernel pillars"
+            copy="Aionis standardizes memory around Audit-first source records, Derived async processing, and Memory to Policy execution."
+          />
+          <div className="grid-cards-3">
+            <article className="card">
+              <h3>Audit-first</h3>
+              <p>Persist facts as nodes, edges, and commits so every change is replayable and verifiable.</p>
+            </article>
+            <article className="card">
+              <h3>Derived async</h3>
+              <p>Outbox workers handle embedding backfill and derivation jobs without blocking write availability.</p>
+            </article>
+            <article className="card">
+              <h3>Memory -&gt; Policy</h3>
+              <p>Rules and feedback flows convert memory into actionable planner and tool-routing policy.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container">
+          <SectionLead
+            eyebrow="Evidence"
+            title="Signals you can verify now"
+            copy="Aionis release quality is backed by reproducible checks, public artifacts, and operator runbooks."
           />
           <div className="grid-cards">
             <article className="card">
-              <h3>Engineering confidence</h3>
+              <h3>Production checks</h3>
               <ul className="list">
-                <li>TypeScript + Python SDKs published</li>
-                <li>Docker image published to GHCR</li>
-                <li>Regression + consistency + health gate scripts</li>
+                <li>Contract smoke and docs checks</li>
+                <li>Health gate and consistency-check sets</li>
+                <li>Regression scripts for release validation</li>
               </ul>
             </article>
             <article className="card">
-              <h3>Integration flexibility</h3>
+              <h3>Published artifacts</h3>
               <ul className="list">
-                <li>OpenWork integration path</li>
-                <li>LangGraph adapter flow</li>
-                <li>MCP server mode for toolchains</li>
+                <li>{registries.npmPackage}@{registries.npmVersion}</li>
+                <li>{registries.pypiPackage}=={registries.pypiVersion}</li>
+                <li>{registries.dockerImage}:{registries.dockerTag}</li>
               </ul>
+            </article>
+          </div>
+          <pre className="code-block">{`npm run -s test:contract
+npm run -s docs:check
+npm run -s job:health-gate -- --strict-warnings
+npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container">
+          <SectionLead
+            eyebrow="Boundaries"
+            title="What Aionis is and is not"
+            copy="Aionis is memory infrastructure for agents. It is not an app orchestrator and it does not replace product-level evaluation design."
+          />
+          <div className="grid-cards">
+            <article className="card">
+              <h3>Kernel scope</h3>
+              <p>Use Aionis for durable memory writes, recall context, and policy execution surfaces.</p>
+            </article>
+            <article className="card">
+              <h3>Application scope</h3>
+              <p>Product teams still define prompts, business metrics, and user experience logic on top.</p>
             </article>
           </div>
         </div>
       </section>
 
       <CtaBand
-        title="Start with Personal, scale with Enterprise"
-        copy="Use the same memory kernel for both lanes. Keep product velocity while you harden policy, tenancy, and ops."
+        title="Build product value with technical confidence"
+        copy="Start fast on Personal, then scale governance and operations on Enterprise using the same kernel."
         primary={{ label: "Start Personal", href: "/product/personal" }}
         secondary={{ label: "See Enterprise", href: "/product/enterprise" }}
       />

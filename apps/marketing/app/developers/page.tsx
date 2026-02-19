@@ -1,13 +1,17 @@
-import { docsCatalog, docsLinks, resolveDocsUrl } from "@/lib/site";
+import { docsCatalog, docsLinks, resolveDocsUrl, siteConfig } from "@/lib/site";
 import { SectionLead } from "@/components/marketing/section-lead";
 
 export default function DevelopersPage() {
+  const registries = siteConfig.registries;
+
   return (
     <section className="section">
       <div className="container">
         <p className="eyebrow">Developers</p>
-        <h1>Build on Aionis with API-first primitives</h1>
-        <p className="hero-copy">Start with health, write, recall_text. Expand into rule evaluation and tool selection.</p>
+        <h1>API-first memory kernel for production agent stacks</h1>
+        <p className="hero-copy">
+          Start with `health`, `write`, and `recall_text`. Expand into rule evaluation, tool selection, and feedback-driven policy.
+        </p>
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
@@ -33,11 +37,14 @@ export default function DevelopersPage() {
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
-            eyebrow="Quick sample"
-            title="Write then recall in one flow"
-            copy="This is the smallest loop that proves product value in real agent calls."
+            eyebrow="SDK quickstart"
+            title="TypeScript and Python in one contract"
+            copy="Use either SDK with the same request model and response shape."
           />
-          <pre className="code-block">{`curl -sS http://localhost:3001/v1/memory/write \\
+          <pre className="code-block">{`npm i ${registries.npmPackage}@${registries.npmVersion}
+pip install ${registries.pypiPackage}==${registries.pypiVersion}
+
+curl -sS http://localhost:3001/v1/memory/write \\
   -H 'content-type: application/json' \\
   -d '{"input_text":"quickstart","nodes":[{"client_id":"evt_1","type":"event","text_summary":"hello"}]}'
 
@@ -48,9 +55,23 @@ curl -sS http://localhost:3001/v1/memory/recall_text \\
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
+            eyebrow="Production gates"
+            title="Minimum checks before release"
+            copy="Use these commands as a baseline engineering gate for shipping memory-backed features."
+          />
+          <pre className="code-block">{`npm run -s test:contract
+npm run -s docs:check
+npm run -s sdk:release-check
+npm run -s sdk:py:release-check
+npm run -s job:health-gate -- --strict-warnings
+npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
             eyebrow="SDK and docs"
-            title="Source-of-truth docs for implementation"
-            copy="Open the exact docs used by runtime scripts and release checks."
+            title="Source-of-truth references"
+            copy="Open the same docs used by runtime scripts and release pipelines."
           />
           <div className="grid-cards" style={{ marginTop: 16 }}>
             {docsLinks.map((item) => (
@@ -62,6 +83,32 @@ curl -sS http://localhost:3001/v1/memory/recall_text \\
                 </a>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Boundaries"
+            title="What this API surface does not cover"
+            copy="Aionis provides memory infrastructure primitives. Product orchestration and business-specific evaluation remain application responsibilities."
+          />
+          <div className="grid-cards">
+            <article className="card">
+              <h3>Inside scope</h3>
+              <ul className="list">
+                <li>Durable memory writes with commit lineage</li>
+                <li>Recall context retrieval for prompt composition</li>
+                <li>Rule and feedback primitives for policy execution</li>
+              </ul>
+            </article>
+            <article className="card">
+              <h3>Outside scope</h3>
+              <ul className="list">
+                <li>End-user app orchestration and workflow UX</li>
+                <li>Provider-specific prompt optimization strategy</li>
+                <li>Business metric definition for final product KPIs</li>
+              </ul>
+            </article>
           </div>
         </section>
 

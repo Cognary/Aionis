@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { SectionLead } from "@/components/marketing/section-lead";
-import { resolveDocsUrl } from "@/lib/site";
+import { resolveDocsUrl, siteConfig } from "@/lib/site";
 
 export default function PersonalProductPage() {
+  const registries = siteConfig.registries;
+
   return (
     <section className="section">
       <div className="container">
         <p className="eyebrow">Product / Personal</p>
-        <h1>Personal agent memory that ships fast</h1>
+        <h1>Personal memory track for fast product delivery</h1>
         <p className="hero-copy">
           The Personal lane is designed for individual builders and small teams that need durable memory now, without
           waiting for enterprise procurement cycles.
@@ -38,6 +40,32 @@ export default function PersonalProductPage() {
             </ul>
           </article>
         </div>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Technical baseline"
+            title="What is production-real in Personal"
+            copy="Personal is self-serve, but still uses the same auditable kernel primitives used in larger deployments."
+          />
+          <div className="grid-cards">
+            <article className="card">
+              <h3>Core contract</h3>
+              <ul className="list">
+                <li>`POST /v1/memory/write` source-of-record writes</li>
+                <li>`POST /v1/memory/recall_text` LLM-ready retrieval</li>
+                <li>Commit lineage for traceability and replay</li>
+              </ul>
+            </article>
+            <article className="card">
+              <h3>Published artifacts</h3>
+              <ul className="list">
+                <li>{registries.npmPackage}@{registries.npmVersion}</li>
+                <li>{registries.pypiPackage}=={registries.pypiVersion}</li>
+                <li>{registries.dockerImage}:{registries.dockerTag}</li>
+              </ul>
+            </article>
+          </div>
+        </section>
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
@@ -74,6 +102,17 @@ pip install aionis-sdk`}</pre>
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
+            eyebrow="Release evidence"
+            title="Checks to run before shipping to users"
+            copy="Even small teams should keep a lightweight, repeatable production gate."
+          />
+          <pre className="code-block">{`npm run -s test:contract
+npm run -s docs:check
+npm run -s job:health-gate -- --strict-warnings`}</pre>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
             eyebrow="FAQ"
             title="Common onboarding questions"
             copy="Short answers for the most frequent setup friction points."
@@ -95,6 +134,21 @@ pip install aionis-sdk`}</pre>
               <h3>Where is the full contract?</h3>
               <p>Use the API Contract and SDK docs for source-of-truth behavior.</p>
             </article>
+          </div>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Boundaries"
+            title="When Personal is not enough"
+            copy="If your rollout needs multi-team governance, strict tenancy policy, or formal reliability ownership, use Enterprise onboarding."
+          />
+          <div className="card">
+            <ul className="list">
+              <li>Multiple departments sharing one memory backbone</li>
+              <li>Regulated environments with strict audit and release controls</li>
+              <li>Formal SLO ownership across platform and application teams</li>
+            </ul>
           </div>
         </section>
 

@@ -34,22 +34,24 @@ export const navLinks = [
   { label: "Product", href: "/product/personal" },
   { label: "Enterprise", href: "/product/enterprise" },
   { label: "Developers", href: "/developers" },
+  { label: "Integrations", href: "/integrations" },
   { label: "Pricing", href: "/pricing" },
   { label: "Docs", href: "/docs" },
+  { label: "Security", href: "/security" },
 ];
 
 export const productHighlights = [
   {
-    title: "Graph Memory Core",
-    desc: "Write nodes and relations with commit lineage for auditable memory evolution.",
+    title: "Audit-First Source of Record",
+    desc: "Write nodes and relations with commit lineage for verifiable, replayable memory evolution.",
   },
   {
-    title: "Recall That Ships",
-    desc: "Return compact recall context text for prompt assembly, not just vector IDs.",
+    title: "Derived Async Processing",
+    desc: "Embeddings, clustering, and stats run asynchronously so write availability stays stable under failure.",
   },
   {
-    title: "Rule-Aware Tooling",
-    desc: "Apply active and shadow policies to planner/tool selection with feedback loops.",
+    title: "Memory -> Policy",
+    desc: "Rules and feedback turn memory into executable constraints for planner/tool selection.",
   },
   {
     title: "Production Guardrails",
@@ -60,7 +62,7 @@ export const productHighlights = [
 export const statHighlights = [
   { value: "3", label: "Core APIs", note: "health, write, recall_text" },
   { value: "2", label: "Published SDKs", note: "TypeScript + Python" },
-  { value: "1", label: "Unified memory kernel", note: "personal now, enterprise path ready" },
+  { value: "1", label: "Operable kernel", note: "audit + async derive + policy" },
   { value: "24/7", label: "Operator posture", note: "runbook + regression + health gate" },
 ];
 
@@ -70,6 +72,8 @@ export const docsLinks = [
   { label: "SDK Guide", path: "SDK.md" },
   { label: "Operator Runbook", path: "OPERATOR_RUNBOOK.md" },
   { label: "Performance Baseline", path: "PERFORMANCE_BASELINE.md" },
+  { label: "Narrative Canon", path: "NARRATIVE_CANON.md" },
+  { label: "Release Narrative Template", path: "RELEASE_NARRATIVE_TEMPLATE.md" },
 ];
 
 export const docsJourneys = [

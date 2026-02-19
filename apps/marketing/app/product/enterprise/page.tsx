@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SectionLead } from "@/components/marketing/section-lead";
+import { resolveDocsUrl } from "@/lib/site";
 
 export default function EnterpriseProductPage() {
   return (
@@ -62,6 +63,28 @@ export default function EnterpriseProductPage() {
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
+            eyebrow="Architecture commitments"
+            title="Enterprise implementation principles"
+            copy="Enterprise engagements keep the kernel model fixed: audit-first writes, async derivation pipelines, and memory-driven policy control."
+          />
+          <div className="grid-cards-3">
+            <article className="card">
+              <h3>Audit-first</h3>
+              <p>Change history is traceable through commits, scope constraints, and replayable write lineage.</p>
+            </article>
+            <article className="card">
+              <h3>Derived async</h3>
+              <p>Embedding and derivation jobs are isolated from critical write paths and managed with retry/dead-letter controls.</p>
+            </article>
+            <article className="card">
+              <h3>Memory -&gt; Policy</h3>
+              <p>Rules and feedback connect memory to planner and tool decisions with explicit governance states.</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
             eyebrow="Engagement model"
             title="Typical implementation phases"
             copy="A practical sequence for teams moving from evaluation to production."
@@ -84,6 +107,18 @@ export default function EnterpriseProductPage() {
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
+            eyebrow="Release governance"
+            title="Enterprise release evidence baseline"
+            copy="Production promotion requires hard evidence from contract, quality, and operational checks."
+          />
+          <pre className="code-block">{`npm run -s gate:core:prod
+npm run -s gtm:phase3:gatec
+npm run -s job:health-gate -- --strict-warnings
+npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
             eyebrow="Decision checklist"
             title="Signals you should engage enterprise onboarding"
             copy="When these conditions appear, consultation usually accelerates and de-risks rollout."
@@ -95,6 +130,30 @@ export default function EnterpriseProductPage() {
               <li>Formal reliability targets and release controls</li>
               <li>Complex integration with existing internal systems</li>
             </ul>
+          </div>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Reference docs"
+            title="Implementation and operation sources"
+            copy="Use these docs to anchor rollout design and gate criteria."
+          />
+          <div className="grid-cards">
+            <article className="card">
+              <h3>Operator runbook</h3>
+              <p>Deployment standards, operational controls, and incident handling practices.</p>
+              <a className="btn btn-ghost" href={resolveDocsUrl("OPERATOR_RUNBOOK.md")} target="_blank" rel="noreferrer">
+                Open runbook
+              </a>
+            </article>
+            <article className="card">
+              <h3>Production gate doc</h3>
+              <p>Core gate criteria and release acceptance structure for high-confidence rollouts.</p>
+              <a className="btn btn-ghost" href={resolveDocsUrl("PROD_GO_LIVE_GATE.md")} target="_blank" rel="noreferrer">
+                Open gate docs
+              </a>
+            </article>
           </div>
         </section>
 
