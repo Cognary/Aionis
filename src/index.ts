@@ -186,6 +186,21 @@ const RECALL_PROFILE_DEFAULTS: Record<"legacy" | "strict_edges" | "quality_first
 
 const recallProfileDefaults = RECALL_PROFILE_DEFAULTS[env.MEMORY_RECALL_PROFILE];
 
+// Basic CORS support for browser-based playground/developer UIs.
+// Configure with CORS_ALLOW_ORIGINS (comma-separated), default "*".
+const CORS_ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS ?? "*")
+  .split(",")
+  .map((x) => x.trim())
+  .filter(Boolean);
+const CORS_ALLOW_HEADERS = "content-type,x-api-key,x-tenant-id,authorization,x-request-id";
+const CORS_ALLOW_METHODS = "GET,POST,OPTIONS";
+
+function resolveCorsAllowOrigin(origin: string | null): string | null {
+  if (CORS_ALLOW_ORIGINS.includes("*")) return "*";
+  if (!origin) return null;
+  return CORS_ALLOW_ORIGINS.includes(origin) ? origin : null;
+}
+
 function withRecallProfileDefaults(body: unknown, defaults: RecallProfileDefaults) {
   const out: Record<string, unknown> = body && typeof body === "object" ? { ...(body as Record<string, unknown>) } : {};
   const entries = Object.entries(defaults) as Array<[keyof RecallProfileDefaults, number]>;
@@ -254,6 +269,22 @@ app.log.info(
 app.addHook("onRequest", async (req, reply) => {
   // Always expose the request id for correlation (client <-> server logs).
   reply.header("x-request-id", req.id);
+
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : null;
+  const allowOrigin = resolveCorsAllowOrigin(origin);
+  if (allowOrigin) {
+    reply.header("access-control-allow-origin", allowOrigin);
+    if (allowOrigin !== "*") reply.header("vary", "Origin");
+    reply.header("access-control-allow-methods", CORS_ALLOW_METHODS);
+    reply.header("access-control-allow-headers", CORS_ALLOW_HEADERS);
+    reply.header("access-control-expose-headers", "x-request-id");
+    reply.header("access-control-max-age", "600");
+  }
+
+  // Handle browser preflight directly.
+  if (req.method === "OPTIONS") {
+    return reply.code(204).send();
+  }
 });
 
 app.get("/health", async () => ({ ok: true }));
