@@ -32,6 +32,7 @@ export function resolveDocsUrl(path: string) {
 
 export const navLinks = [
   { label: "Product", href: "/product/personal" },
+  { label: "Model", href: "/open-core" },
   { label: "Enterprise", href: "/product/enterprise" },
   { label: "Developers", href: "/developers" },
   { label: "Integrations", href: "/integrations" },
@@ -73,6 +74,7 @@ export const docsLinks = [
   { label: "Operator Runbook", path: "OPERATOR_RUNBOOK.md" },
   { label: "Performance Baseline", path: "PERFORMANCE_BASELINE.md" },
   { label: "Narrative Canon", path: "NARRATIVE_CANON.md" },
+  { label: "Commercial Strategy", path: "COMMERCIAL_STRATEGY.md" },
   { label: "Release Narrative Template", path: "RELEASE_NARRATIVE_TEMPLATE.md" },
 ];
 

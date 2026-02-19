@@ -61,6 +61,11 @@ export default function DocsPage() {
                     Release Narrative Template
                   </a>
                 </li>
+                <li>
+                  <a href={docsHref("COMMERCIAL_STRATEGY.md")} target="_blank" rel="noreferrer">
+                    Commercial Strategy
+                  </a>
+                </li>
               </ul>
             </article>
           </div>

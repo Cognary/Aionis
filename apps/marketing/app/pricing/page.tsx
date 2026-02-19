@@ -127,6 +127,11 @@ export default function PricingPage() {
               <p>You need strict tenancy governance, release accountability, and coordinated production rollout.</p>
             </article>
           </div>
+          <div className="hero-cta" style={{ marginTop: 16 }}>
+            <Link className="btn btn-ghost" href="/open-core">
+              View open-core boundary model
+            </Link>
+          </div>
         </section>
       </div>
     </section>

@@ -17,6 +17,7 @@ Use this site as the canonical entry for onboarding, API contracts, SDK usage, o
 Narrative assets:
 
 - [Narrative Canon](./NARRATIVE_CANON.md)
+- [Commercial Strategy](./COMMERCIAL_STRATEGY.md)
 - [Release Narrative Template](./RELEASE_NARRATIVE_TEMPLATE.md)
 - [Technical Release Material](./RELEASE_MATERIAL_TECHNICAL.md)
 - [Product Release Material](./RELEASE_MATERIAL_PRODUCT.md)

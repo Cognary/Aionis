@@ -13,6 +13,7 @@ Aionis gives your agents durable memory with real APIs, operational guardrails, 
 Narrative docs:
 
 - [Narrative Canon](docs/NARRATIVE_CANON.md)
+- [Commercial Strategy](docs/COMMERCIAL_STRATEGY.md)
 - [Release Narrative Template](docs/RELEASE_NARRATIVE_TEMPLATE.md)
 - [Technical Release Material](docs/RELEASE_MATERIAL_TECHNICAL.md)
 - [Product Release Material](docs/RELEASE_MATERIAL_PRODUCT.md)
