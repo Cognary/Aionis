@@ -13,7 +13,7 @@ export const siteConfig = {
     pypiVersion: process.env.NEXT_PUBLIC_AIONIS_PYPI_VERSION ?? "0.1.0",
     pypiUrl: "https://pypi.org/project/aionis-sdk/",
     dockerImage: process.env.NEXT_PUBLIC_AIONIS_DOCKER_IMAGE ?? "ghcr.io/cognary/aionis",
-    dockerTag: process.env.NEXT_PUBLIC_AIONIS_DOCKER_TAG ?? "v0.1.1",
+    dockerTag: process.env.NEXT_PUBLIC_AIONIS_DOCKER_TAG ?? "v0.1.4",
     dockerUrl: process.env.NEXT_PUBLIC_AIONIS_DOCKER_URL ?? "https://github.com/orgs/cognary/packages/container/package/aionis",
   },
 };

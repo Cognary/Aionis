@@ -43,7 +43,7 @@ cd /Users/lucio/Desktop/Aionis
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
 IMAGE_REPO=ghcr.io/<owner>/aionis \
-TAG=v0.1.1 \
+TAG=v0.1.4 \
 PLATFORMS=linux/amd64,linux/arm64 \
 PUBLISH_LATEST=true \
 npm run docker:publish:ghcr
@@ -54,13 +54,13 @@ npm run docker:publish:ghcr
 Trigger automatically by tag:
 
 ```bash
-git tag docker-v0.1.1
-git push origin docker-v0.1.1
+git tag docker-v0.1.4
+git push origin docker-v0.1.4
 ```
 
 Or manual `workflow_dispatch` in `Docker Publish` with:
 
-1. `tag` (e.g. `v0.1.1`)
+1. `tag` (e.g. `v0.1.4`)
 2. `image_repo` (optional override)
 3. `platforms` (default `linux/amd64,linux/arm64`)
 4. `publish_latest`
@@ -75,8 +75,8 @@ Credential behavior in workflow:
 ## Verification
 
 ```bash
-docker pull ghcr.io/cognary/aionis:v0.1.1
-docker run --rm -p 3001:3001 ghcr.io/cognary/aionis:v0.1.1
+docker pull ghcr.io/cognary/aionis:v0.1.4
+docker run --rm -p 3001:3001 ghcr.io/cognary/aionis:v0.1.4
 curl -fsS http://localhost:3001/health
 ```
 
