@@ -50,6 +50,7 @@
     "job:private-rule-owner-backfill": "tsx src/jobs/private-rule-owner-backfill.ts",
     "job:private-lane-owner-backfill": "tsx src/jobs/private-lane-owner-backfill.ts",
     "job:rule-promotion-suggest": "tsx src/jobs/rule-promotion-suggest.ts",
+    "job:policy-adaptation-gate": "tsx src/jobs/policy-adaptation-gate.ts",
     "job:execution-loop-gate": "tsx src/jobs/execution-loop-gate.ts",
     "job:perf-seed": "tsx src/jobs/perf-seed.ts",
     "job:perf-benchmark": "tsx src/jobs/perf-benchmark.ts",

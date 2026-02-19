@@ -330,6 +330,49 @@ Options:
 - `--no-json` omit `if_json/then_json/exceptions_json` from output
 - `--strict` exit with code `2` if any suggestions are found
 
+## Policy Adaptation Gate (Offline, Phase C)
+
+Read-only gate that evaluates rule adaptation risk and emits:
+
+1. `shadow -> active` promotion suggestions with confidence + canary recommendation
+2. `active -> disabled` suggestions with confidence + rollback payload
+3. gate checks for urgent disable pressure
+
+This job never mutates rule state directly.
+
+```bash
+npm run job:policy-adaptation-gate -- --scope default
+```
+
+Strict warning mode:
+
+```bash
+npm run job:policy-adaptation-gate -- --scope default --strict-warnings
+```
+
+Key options:
+
+- `--window-hours <n>` (default: `168`)
+- `--limit <n>` (default: `200`, max `2000`)
+- Promote thresholds:
+  - `--min-promote-positives <n>` (default: `10`)
+  - `--min-promote-distinct-runs <n>` (default: `3`)
+  - `--max-promote-neg-ratio <f>` (default: `0.1`)
+  - `--min-promote-score <n>` (default: `min_promote_positives - 1`)
+  - `--min-promote-confidence <f>` (default: `0.55`)
+- Disable thresholds:
+  - `--min-disable-negatives <n>` (default: `5`)
+  - `--min-disable-neg-ratio <f>` (default: `0.6`)
+  - `--min-disable-confidence <f>` (default: `0.6`)
+  - `--stale-active-hours <n>` (default: `336`)
+- Canary / gate thresholds:
+  - `--canary-min-feedback <n>` (default: `20`)
+  - `--urgent-disable-confidence <f>` (default: `0.85`)
+  - `--max-urgent-disable-candidates <n>` (default: `0`, error check)
+  - `--max-canary-disable-candidates <n>` (default: `3`, warning check)
+- `--no-json` omit rule json payloads from suggestions
+- `--strict` / `--strict-warnings` gate exit behavior
+
 ## Phase-D Performance Jobs (Scale Validation)
 
 ### Synthetic Dataset Seed

@@ -30,6 +30,7 @@ This index is the entry point for project documentation.
 - [Planner Context Schema](./PLANNER_CONTEXT.md)
 - [Rule Lifecycle](./RULE_LIFECYCLE.md)
 - [Execution Loop Gate](./EXECUTION_LOOP_GATE.md)
+- [Policy Adaptation Gate](./POLICY_ADAPTATION_GATE.md)
 - [Execution Substrate Enhancement Plan](./EXECUTION_SUBSTRATE_ENHANCEMENT_PLAN.md)
 - [Three Gaps Priority Plan](./THREE_GAPS_PRIORITY_PLAN.md)
 - [Product / Scale / Cognition Priority Plan](./PRODUCT_SCALE_COGNITION_PRIORITY_PLAN.md)

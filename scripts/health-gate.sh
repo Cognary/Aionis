@@ -27,6 +27,8 @@ PRIVATE_LANE_DEFAULT_OWNER_TEAM=""
 PRIVATE_LANE_SHARED_FALLBACK=true
 RUN_EXECUTION_LOOP_GATE="${HEALTH_GATE_RUN_EXECUTION_LOOP_GATE:-false}"
 EXECUTION_LOOP_ARGS=()
+RUN_POLICY_ADAPTATION_GATE="${HEALTH_GATE_RUN_POLICY_ADAPTATION_GATE:-false}"
+POLICY_ADAPTATION_ARGS=()
 
 usage() {
   cat <<USAGE
@@ -53,6 +55,9 @@ Options:
   --quality-arg <arg>          Extra arg forwarded to job:quality-eval (repeatable)
   --run-execution-loop-gate    Run execution-loop gate (feedback/rule freshness checks)
   --execution-loop-arg <arg>   Extra arg forwarded to job:execution-loop-gate (repeatable)
+  --run-policy-adaptation-gate Run policy adaptation gate (promote/disable suggestions + risk checks)
+  --policy-adaptation-arg <arg>
+                               Extra arg forwarded to job:policy-adaptation-gate (repeatable)
   -h, --help                   Show help
 
 Exit codes:
@@ -122,6 +127,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --execution-loop-arg)
       EXECUTION_LOOP_ARGS+=("${2:-}")
+      shift 2
+      ;;
+    --run-policy-adaptation-gate)
+      RUN_POLICY_ADAPTATION_GATE=true
+      shift
+      ;;
+    --policy-adaptation-arg)
+      POLICY_ADAPTATION_ARGS+=("${2:-}")
       shift 2
       ;;
     -h|--help)
@@ -283,6 +296,34 @@ if [[ "$RUN_EXECUTION_LOOP_GATE" == "true" ]]; then
   fi
 fi
 
+policy_adaptation_json='{"ok":true,"skipped":true}'
+policy_adaptation_ok=true
+if [[ "$RUN_POLICY_ADAPTATION_GATE" == "true" ]]; then
+  policy_adaptation_cmd=(npm run -s job:policy-adaptation-gate -- --scope "$SCOPE")
+  if [[ "$STRICT_WARNINGS" == "true" ]]; then
+    policy_adaptation_cmd+=(--strict-warnings)
+  fi
+  if [[ ${#POLICY_ADAPTATION_ARGS[@]} -gt 0 ]]; then
+    policy_adaptation_cmd+=("${POLICY_ADAPTATION_ARGS[@]}")
+  fi
+
+  set +e
+  policy_adaptation_raw="$("${policy_adaptation_cmd[@]}" 2>&1)"
+  policy_adaptation_ec=$?
+  set -e
+
+  if echo "$policy_adaptation_raw" | jq -e . >/dev/null 2>&1; then
+    policy_adaptation_json="$policy_adaptation_raw"
+  else
+    policy_adaptation_ok=false
+    policy_adaptation_json="$(jq -n --arg error "$policy_adaptation_raw" --argjson exit_code "$policy_adaptation_ec" '{ok:false, error:"non_json_policy_adaptation_output", raw:$error, exit_code:$exit_code}')"
+  fi
+
+  if [[ $policy_adaptation_ec -ne 0 ]]; then
+    policy_adaptation_ok=false
+  fi
+fi
+
 consistency_errors="$(echo "$consistency_json" | jq -r '.summary.errors // 0')"
 consistency_warnings="$(echo "$consistency_json" | jq -r '.summary.warnings // 0')"
 quality_pass="$(echo "$quality_json" | jq -r '.summary.pass // false')"
@@ -306,6 +347,9 @@ fi
 if [[ "$execution_loop_ok" != "true" ]]; then
   fail_reasons="$(echo "$fail_reasons" | jq '. + ["execution_loop_gate_failed"]')"
 fi
+if [[ "$policy_adaptation_ok" != "true" ]]; then
+  fail_reasons="$(echo "$fail_reasons" | jq '. + ["policy_adaptation_gate_failed"]')"
+fi
 
 ok="true"
 if [[ "$(echo "$fail_reasons" | jq 'length')" != "0" ]]; then
@@ -325,6 +369,7 @@ jq -n \
   --argjson consistency "$(echo "$consistency_json" | jq '.')" \
   --argjson quality "$(echo "$quality_json" | jq '.')" \
   --argjson execution_loop "$(echo "$execution_loop_json" | jq '.')" \
+  --argjson policy_adaptation "$(echo "$policy_adaptation_json" | jq '.')" \
   --argjson ok "$([[ "$ok" == "true" ]] && echo true || echo false)" \
   '{
     ok: $ok,
@@ -347,7 +392,8 @@ jq -n \
       summary: ($quality.summary // {}),
       failed_checks: ($quality.failed_checks // [])
     },
-    execution_loop: $execution_loop
+    execution_loop: $execution_loop,
+    policy_adaptation: $policy_adaptation
   }'
 
 if [[ "$ok" != "true" ]]; then

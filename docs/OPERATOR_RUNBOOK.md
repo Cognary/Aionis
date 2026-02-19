@@ -29,6 +29,12 @@ Execution-loop aware mode (recommended for policy-heavy deployments):
 npm run job:health-gate -- --strict-warnings --consistency-check-set scope --run-execution-loop-gate
 ```
 
+Policy-adaptation aware mode (recommended before rule lifecycle changes):
+
+```bash
+npm run job:health-gate -- --strict-warnings --consistency-check-set scope --run-execution-loop-gate --run-policy-adaptation-gate
+```
+
 Run cross-tenant integrity as a separate gate (recommended at least daily, and always before schema/tenant releases):
 
 ```bash
@@ -150,6 +156,7 @@ Use these as default SLO-style boundaries. Tune by scope once traffic stabilizes
 - `consistency.summary.warnings == 0` (recommended for production gate)
 - `embedding_model_invalid_for_ready == 0` (no `unknown:*` model labels)
 - `tenant_scope_key_malformed == 0` and all `cross_tenant_* == 0`
+- `policy_adaptation.summary.urgent_disable_candidates == 0`
 
 ## Incident Playbook
 

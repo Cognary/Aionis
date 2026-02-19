@@ -83,6 +83,13 @@ DoD:
 1. Promotion decisions are reproducible from evidence data.
 2. Rollback path is one command with commit trace.
 
+Progress (`2026-02-19`):
+
+1. Added `job:policy-adaptation-gate` with objective promote/disable thresholds.
+2. Added confidence + risk scoring + canary recommendation in suggestion output.
+3. Added `apply` + `rollback` payloads for each suggestion.
+4. Integrated optional policy adaptation sub-gate into `scripts/health-gate.sh`.
+
 ## Phase D: Multi-Agent Execution Governance
 
 Goal:
