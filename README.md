@@ -72,6 +72,26 @@ make stack-up
 curl -fsS http://localhost:3001/health
 ```
 
+### C) Standalone (single container, local-first)
+
+`standalone` runs Postgres + migrations + API + worker in one container.
+It is ideal for local agent use, demos, and CI smoke; do not treat it as production HA.
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s docker:build:standalone
+npm run -s docker:run:standalone
+```
+
+Or run directly:
+
+```bash
+docker run --rm -it \
+  -p 3001:3001 \
+  -v aionis-standalone-data:/var/lib/postgresql/data \
+  aionis-standalone:local
+```
+
 ## Core API
 
 1. `GET /health`

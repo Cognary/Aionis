@@ -11,6 +11,4 @@ docs
 packages
 examples
 sql
-migrations
-scripts
 *.log

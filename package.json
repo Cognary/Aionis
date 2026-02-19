@@ -27,6 +27,8 @@
     "sdk:publish:dry-run": "npm publish ./packages/sdk --dry-run --access public --cache /tmp/aionis-npm-cache",
     "sdk:publish": "npm publish ./packages/sdk --access public --cache /tmp/aionis-npm-cache",
     "docker:build": "docker build -t aionis-memory-graph:local .",
+    "docker:build:standalone": "docker build -f Dockerfile.standalone -t aionis-standalone:local .",
+    "docker:run:standalone": "docker run --rm -it -p 3001:3001 -v aionis-standalone-data:/var/lib/postgresql/data aionis-standalone:local",
     "docker:publish:ghcr": "bash scripts/docker-publish-ghcr.sh",
     "docker:publish:ghcr:dry-run": "bash scripts/docker-publish-ghcr.sh --dry-run --no-login",
     "env:throughput:prod": "bash scripts/env/apply-throughput-profile.sh prod",

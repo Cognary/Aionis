@@ -1,0 +1,45 @@
+FROM node:20-bookworm-slim AS deps
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+FROM node:20-bookworm-slim AS build
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json tsconfig.json ./
+COPY src ./src
+RUN npm run build
+RUN npm prune --omit=dev
+
+FROM pgvector/pgvector:pg16 AS standalone
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV PGDATA=/var/lib/postgresql/data
+ENV POSTGRES_USER=aionis
+ENV POSTGRES_PASSWORD=aionis
+ENV POSTGRES_DB=aionis_memory
+
+COPY --from=build /usr/local/bin/node /usr/local/bin/node
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY package.json package-lock.json ./
+
+COPY migrations /migrations
+COPY scripts/docker-migrate.sh /docker-migrate.sh
+COPY scripts/docker-standalone-entrypoint.sh /docker-standalone-entrypoint.sh
+
+RUN chmod +x /docker-migrate.sh /docker-standalone-entrypoint.sh
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=10 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+ENTRYPOINT ["/docker-standalone-entrypoint.sh"]
