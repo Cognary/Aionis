@@ -123,19 +123,31 @@ If `private_rule_without_owner` is non-zero:
 npm run job:private-rule-owner-backfill -- --limit 5000
 ```
 
-3. Lifecycle smoke (API + jobs + feedback loop):
+3. Governance weekly snapshot (JSON + Markdown):
+
+```bash
+npm run -s job:governance-weekly-report -- --scope default --window-hours 168
+```
+
+For release gate:
+
+```bash
+npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --strict-warnings
+```
+
+4. Lifecycle smoke (API + jobs + feedback loop):
 
 ```bash
 npm run e2e:phase4-smoke
 ```
 
-4. Tenant isolation smoke (Phase C):
+5. Tenant isolation smoke (Phase C):
 
 ```bash
 npm run e2e:phasec-tenant
 ```
 
-5. Auxiliary benchmark regression (non-blocking):
+6. Auxiliary benchmark regression (non-blocking):
 
 ```bash
 npm run -s env:throughput:benchmark

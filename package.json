@@ -52,6 +52,7 @@
     "job:rule-promotion-suggest": "tsx src/jobs/rule-promotion-suggest.ts",
     "job:policy-adaptation-gate": "tsx src/jobs/policy-adaptation-gate.ts",
     "job:execution-loop-gate": "tsx src/jobs/execution-loop-gate.ts",
+    "job:governance-weekly-report": "tsx src/jobs/governance-weekly-report.ts",
     "job:perf-seed": "tsx src/jobs/perf-seed.ts",
     "job:perf-benchmark": "tsx src/jobs/perf-benchmark.ts",
     "job:perf-worker-benchmark": "tsx src/jobs/perf-worker-benchmark.ts",

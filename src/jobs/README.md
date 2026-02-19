@@ -213,6 +213,25 @@ Scope-only consistency gate (recommended for fast deploy gating):
 npm run job:health-gate -- --strict-warnings --consistency-check-set scope
 ```
 
+## Governance Weekly Report (Offline)
+
+Weekly governance evidence export for release review and cross-tenant drift tracking.
+
+```bash
+npm run job:governance-weekly-report -- --scope default --window-hours 168
+```
+
+Strict release gate:
+
+```bash
+npm run job:governance-weekly-report -- --scope default --window-hours 168 --strict-warnings
+```
+
+Artifacts:
+
+- `artifacts/governance/weekly/<report_week>_<run_id>/summary.json`
+- `artifacts/governance/weekly/<report_week>_<run_id>/WEEKLY_STATUS.md`
+
 Cross-tenant gate (run as a separate strict step):
 
 ```bash

@@ -114,6 +114,7 @@ Progress (`2026-02-19`):
    - private-lane owner coverage
    - cross-tenant policy drift
 2. Added governance-oriented gate checks for drift and boundary coverage.
+3. Added `job:governance-weekly-report` to export weekly governance evidence (`summary.json` + `WEEKLY_STATUS.md`) for release review.
 
 ## Execution Commands (Phase A target)
 
@@ -121,6 +122,7 @@ Progress (`2026-02-19`):
 cd /Users/lucio/Desktop/Aionis
 npm run -s job:execution-loop-gate -- --scope default
 npm run -s job:health-gate -- --run-execution-loop-gate --strict-warnings
+npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --strict-warnings
 ```
 
 ## Risks
