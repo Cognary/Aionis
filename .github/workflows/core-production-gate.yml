@@ -114,12 +114,24 @@ jobs:
             --write-p95-max-ms "${WRITE_P95_INPUT}" \
             --error-rate-max "${ERROR_RATE_INPUT}"
 
+      - name: Run governance weekly report gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out_dir="artifacts/governance/ci/${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          npm run -s job:governance-weekly-report -- \
+            --scope default \
+            --window-hours 168 \
+            --strict-warnings \
+            --out-dir "${out_dir}"
+
       - name: Publish summary
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           summary_file="$(find artifacts/core_gate -type f -name summary.json | sort | tail -n 1 || true)"
+          governance_summary_file="$(find artifacts/governance -type f -name summary.json | sort | tail -n 1 || true)"
           {
             echo "## Core Production Gate"
             echo
@@ -130,6 +142,16 @@ jobs:
             else
               echo "summary not found"
             fi
+            echo
+            echo "## Governance Weekly Report Gate"
+            echo
+            if [[ -n "${governance_summary_file}" && -f "${governance_summary_file}" ]]; then
+              echo "summary: \`${governance_summary_file}\`"
+              echo
+              jq '.' "${governance_summary_file}"
+            else
+              echo "summary not found"
+            fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload artifacts
@@ -137,7 +159,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: core-production-gate-artifacts
-          path: artifacts/core_gate/
+          path: |
+            artifacts/core_gate/
+            artifacts/governance/
           retention-days: 14
           if-no-files-found: warn
 

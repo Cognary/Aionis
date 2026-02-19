@@ -1,0 +1,147 @@
+name: Governance Weekly Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Memory scope for the report"
+        required: false
+        default: "default"
+        type: string
+      window_hours:
+        description: "Lookback window (hours)"
+        required: false
+        default: "168"
+        type: string
+      strict_warnings:
+        description: "Fail when warning checks fail"
+        required: false
+        default: true
+        type: boolean
+      upload_artifacts:
+        description: "Upload governance report artifacts"
+        required: false
+        default: true
+        type: boolean
+      artifact_retention_days:
+        description: "Artifact retention days"
+        required: false
+        default: "14"
+        type: string
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: governance-weekly-report-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  governance-weekly-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PORT: "3001"
+      SCOPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scope || 'default' }}
+      WINDOW_HOURS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.window_hours || '168' }}
+      STRICT_WARNINGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.strict_warnings || 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Prepare env
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          {
+            echo "APP_ENV=ci"
+            echo "PORT=3001"
+            echo "MEMORY_AUTH_MODE=off"
+            echo "EMBEDDING_PROVIDER=fake"
+            echo "RATE_LIMIT_BYPASS_LOOPBACK=false"
+            echo "MEMORY_RECALL_PROFILE=strict_edges"
+          } >> .env
+
+      - name: Start stack
+        run: docker compose up -d --build
+
+      - name: Wait API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for _ in {1..120}; do
+            if curl -fsS "http://localhost:3001/health" >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "${ok}" -ne 1 ]]; then
+            echo "API not healthy on localhost:3001" >&2
+            exit 1
+          fi
+
+      - name: Run governance weekly report
+        shell: bash
+        run: |
+          set -euo pipefail
+          out_dir="artifacts/governance/weekly_ci/${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          args=(--scope "${SCOPE}" --window-hours "${WINDOW_HOURS}" --out-dir "${out_dir}")
+          if [[ "${STRICT_WARNINGS}" == "true" ]]; then
+            args+=(--strict-warnings)
+          fi
+          npm run -s job:governance-weekly-report -- "${args[@]}"
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary_file="$(find artifacts/governance -type f -name summary.json | sort | tail -n 1 || true)"
+          weekly_md="$(find artifacts/governance -type f -name WEEKLY_STATUS.md | sort | tail -n 1 || true)"
+          {
+            echo "## Governance Weekly Report"
+            echo
+            if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then
+              echo "summary: \`${summary_file}\`"
+              echo
+              jq '.' "${summary_file}"
+            else
+              echo "summary not found"
+            fi
+            echo
+            echo "weekly markdown: \`${weekly_md:-not found}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload artifacts
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: governance-weekly-report-artifacts
+          path: artifacts/governance/
+          retention-days: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.event.inputs.artifact_retention_days || '14') }}
+          if-no-files-found: warn
+
+      - name: Stop stack
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -f docker-compose.yml ]]; then
+            docker compose down -v
+          else
+            echo "docker-compose.yml not found, skip compose down"
+          fi

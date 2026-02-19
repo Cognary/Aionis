@@ -87,6 +87,13 @@ Release hard gate:
 npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --strict-warnings
 ```
 
+GitHub Actions wiring:
+
+1. Weekly scheduled export:
+   `/Users/lucio/Desktop/Aionis/.github/workflows/governance-weekly-report.yml`
+2. Production release gate integration:
+   `/Users/lucio/Desktop/Aionis/.github/workflows/core-production-gate.yml`
+
 ## Verification Stamp
 
 1. Last reviewed: `2026-02-19`
