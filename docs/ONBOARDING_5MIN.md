@@ -4,7 +4,7 @@ title: "5-Minute Developer Onboarding"
 
 # 5-Minute Developer Onboarding
 
-Last updated: `2026-02-17`
+Last updated: `2026-02-19`
 
 This guide is for external developers who want to use Aionis quickly.
 
@@ -14,6 +14,7 @@ Unless you have a reason to change it, this guide uses:
 
 1. `PORT=3001`
 2. Local base URL: `http://localhost:3001`
+3. If `3001` is already in use, run with another port, e.g. `PORT=3011 make quickstart`
 
 ## Core Endpoints (Start Here)
 
@@ -166,6 +167,12 @@ Start full stack:
 ```bash
 make stack-up
 curl -fsS http://localhost:3001/health
+```
+
+If `make quickstart` or `make stack-up` reports `bind: address already in use` for `3001`, run:
+
+```bash
+PORT=3011 make quickstart
 ```
 
 `fake` provider behavior (important):

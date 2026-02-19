@@ -46,6 +46,7 @@ services:
     environment:
       # Override host-local DATABASE_URL for in-network access.
       DATABASE_URL: postgres://aionis:aionis@db:5432/aionis_memory
+      PORT: "${PORT:-3001}"
     ports:
       - "${PORT:-3001}:${PORT:-3001}"
     restart: unless-stopped

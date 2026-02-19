@@ -25,6 +25,54 @@ source .env
 set +a
 
 PORT="${PORT:-3001}"
+AUTO_PORT_ON_CONFLICT="${QUICKSTART_AUTO_PORT_ON_CONFLICT:-true}"
+
+is_port_in_use() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1
+    return $?
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    nc -z localhost "${port}" >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+find_next_free_port() {
+  local start_port="$1"
+  local candidate=$((start_port + 1))
+  local attempts=50
+  while (( attempts > 0 )); do
+    if ! is_port_in_use "${candidate}"; then
+      echo "${candidate}"
+      return 0
+    fi
+    candidate=$((candidate + 1))
+    attempts=$((attempts - 1))
+  done
+  return 1
+}
+
+if is_port_in_use "${PORT}"; then
+  if [[ "${AUTO_PORT_ON_CONFLICT}" == "true" ]]; then
+    NEXT_PORT="$(find_next_free_port "${PORT}" || true)"
+    if [[ -z "${NEXT_PORT}" ]]; then
+      echo "Port ${PORT} is in use and no free fallback port was found." >&2
+      echo "Set PORT manually, for example: PORT=3011 make quickstart" >&2
+      exit 1
+    fi
+    echo "Port ${PORT} is in use. Switching quickstart to PORT=${NEXT_PORT} for this run."
+    PORT="${NEXT_PORT}"
+  else
+    echo "Port ${PORT} is in use." >&2
+    echo "Stop the process on ${PORT} or run with a different port, e.g. PORT=3011 make quickstart" >&2
+    exit 1
+  fi
+fi
+
+export PORT
 
 echo "Starting stack (db + migrate + api + worker)..."
 docker compose up -d
@@ -47,6 +95,7 @@ fi
 echo "Running killer demo..."
 DEMO_SCOPE="quickstart_$(date +%s)"
 bash "$ROOT_DIR/examples/killer_demo.sh" \
+  --port "$PORT" \
   --scope "$DEMO_SCOPE" \
   --wait-seconds 45 \
   --run-worker-once auto \
