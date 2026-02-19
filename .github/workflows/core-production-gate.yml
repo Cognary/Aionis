@@ -69,10 +69,12 @@ jobs:
         run: |
           set -euo pipefail
           cp .env.example .env
+          npm run -s env:throughput:benchmark
           {
             echo "APP_ENV=ci"
             echo "PORT=3001"
             echo "MEMORY_AUTH_MODE=off"
+            echo "DATABASE_URL=postgres://aionis:aionis@127.0.0.1:5432/aionis_memory"
             echo "EMBEDDING_PROVIDER=fake"
             echo "RATE_LIMIT_BYPASS_LOOPBACK=false"
             echo "MEMORY_RECALL_PROFILE=strict_edges"
@@ -162,6 +164,29 @@ jobs:
           path: |
             artifacts/core_gate/
             artifacts/governance/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Capture diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p /tmp/core_gate_diag
+          find artifacts/core_gate -type f -maxdepth 3 2>/dev/null | sort > /tmp/core_gate_diag/files.txt || true
+          summary_file="$(find artifacts/core_gate -type f -name summary.json | sort | tail -n 1 || true)"
+          if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then
+            jq '{ok, fail_reasons, steps}' "${summary_file}" > /tmp/core_gate_diag/summary_excerpt.json || true
+          fi
+          docker compose ps > /tmp/core_gate_diag/compose_ps.txt || true
+          docker compose logs --no-color > /tmp/core_gate_diag/compose_logs.txt || true
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-production-gate-diagnostics
+          path: /tmp/core_gate_diag/
           retention-days: 14
           if-no-files-found: warn
 
