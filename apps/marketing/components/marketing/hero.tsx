@@ -5,11 +5,11 @@ export function Hero() {
   return (
     <section className="hero">
       <div className="container">
-        <p className="eyebrow">Aionis Memory Infrastructure</p>
-        <h1>Ship durable memory for AI agents.</h1>
+        <p className="eyebrow">Verifiable / Operable Memory Kernel</p>
+        <h1>Aionis is a Verifiable / Operable Memory Kernel for agents.</h1>
         <p className="hero-copy">
-          Move beyond demo memory. Aionis gives you graph recall, policy-aware tool routing, and production guardrails
-          in one system.
+          Built on Audit-first source-of-record commits, Derived async processing, and Memory -&gt; Policy execution for
+          production agent systems.
         </p>
         <div className="hero-cta">
           <Link className="btn btn-solid" href={siteConfig.ctaPrimary.href}>

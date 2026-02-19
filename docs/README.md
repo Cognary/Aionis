@@ -59,6 +59,11 @@ This index is the entry point for project documentation.
 ## Research / Narrative
 
 - [Aionis Memory Graph Paper (CN)](./AIONIS_MEMORY_GRAPH_PAPER_CN.md)
+- [Narrative Canon](./NARRATIVE_CANON.md)
+- [Release Narrative Template](./RELEASE_NARRATIVE_TEMPLATE.md)
+- [Technical Release Material](./RELEASE_MATERIAL_TECHNICAL.md)
+- [Product Release Material](./RELEASE_MATERIAL_PRODUCT.md)
+- [Business Release Material](./RELEASE_MATERIAL_BUSINESS.md)
 
 ## Maintenance
 

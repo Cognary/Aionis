@@ -1,8 +1,22 @@
 # Aionis
 
-**Production-first memory infrastructure for AI agents.**
+**Aionis is a Verifiable / Operable Memory Kernel for agents.**
 
 Aionis gives your agents durable memory with real APIs, operational guardrails, and fast integration paths.
+
+## Narrative Canon (Fixed)
+
+1. Main narrative: `Verifiable / Operable Memory Kernel`
+2. Pillars: `Audit-first`, `Derived async`, `Memory -> Policy`
+3. Release template: `Problem -> Architecture Principles -> Evidence -> Boundaries -> Next Step`
+
+Narrative docs:
+
+- [Narrative Canon](docs/NARRATIVE_CANON.md)
+- [Release Narrative Template](docs/RELEASE_NARRATIVE_TEMPLATE.md)
+- [Technical Release Material](docs/RELEASE_MATERIAL_TECHNICAL.md)
+- [Product Release Material](docs/RELEASE_MATERIAL_PRODUCT.md)
+- [Business Release Material](docs/RELEASE_MATERIAL_BUSINESS.md)
 
 ## Why Aionis
 

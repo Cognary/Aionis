@@ -4,7 +4,23 @@ title: "Aionis Documentation Home"
 
 # Aionis Documentation
 
+**Aionis is a Verifiable / Operable Memory Kernel for agents.**
+
 Use this site as the canonical entry for onboarding, API contracts, SDK usage, operations, and release runbooks.
+
+## Narrative Canon
+
+1. Main narrative: `Verifiable / Operable Memory Kernel`
+2. Pillars: `Audit-first`, `Derived async`, `Memory -> Policy`
+3. Release template: `Problem -> Architecture Principles -> Evidence -> Boundaries -> Next Step`
+
+Narrative assets:
+
+- [Narrative Canon](./NARRATIVE_CANON.md)
+- [Release Narrative Template](./RELEASE_NARRATIVE_TEMPLATE.md)
+- [Technical Release Material](./RELEASE_MATERIAL_TECHNICAL.md)
+- [Product Release Material](./RELEASE_MATERIAL_PRODUCT.md)
+- [Business Release Material](./RELEASE_MATERIAL_BUSINESS.md)
 
 ## Start Here
 

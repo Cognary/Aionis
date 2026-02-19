@@ -1,6 +1,6 @@
 export const siteConfig = {
   name: "Aionis",
-  tagline: "Memory infrastructure for AI agents.",
+  tagline: "Aionis is a Verifiable / Operable Memory Kernel for agents.",
   ctaPrimary: { label: "Start Personal", href: "/product/personal" },
   ctaSecondary: { label: "Talk to Enterprise", href: "/contact" },
   docsBase: process.env.NEXT_PUBLIC_DOCS_BASE ?? "https://cognary.github.io/Aionis",
