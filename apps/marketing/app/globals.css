@@ -405,6 +405,93 @@ form.list label {
   font-size: 14px;
 }
 
+.playground-config {
+  margin-top: 20px;
+}
+
+.playground-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.playground-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.playground-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.playground-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.playground-endpoint {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.playground-editor-label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.playground-editor {
+  min-height: 240px;
+  resize: vertical;
+  font-family: var(--font-mono, ui-monospace), SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.playground-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.playground-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.playground-badge.ok {
+  background: #e7fff8;
+  border-color: #b8f0df;
+  color: #0f766e;
+}
+
+.playground-badge.warn {
+  background: #fff8ec;
+  border-color: #f8ddb3;
+  color: #9a3412;
+}
+
+.playground-error {
+  margin-top: 10px;
+  color: #b42318;
+  font-size: 14px;
+}
+
 @media (max-width: 980px) {
   .nav {
     display: none;
@@ -414,7 +501,9 @@ form.list label {
   .grid-cards-3,
   .two-col,
   .footer-grid,
-  .stat-strip {
+  .stat-strip,
+  .playground-layout,
+  .playground-grid {
     grid-template-columns: 1fr;
   }
 

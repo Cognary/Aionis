@@ -10,6 +10,8 @@ need() {
 
 need npm
 need jq
+need curl
+need node
 
 if [[ -f .env ]]; then
   set -a
@@ -24,6 +26,13 @@ TENANT_ID="${TENANT_ID:-${MEMORY_TENANT_ID:-default}}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="${OUT_DIR:-${ROOT_DIR}/artifacts/core_gate/${RUN_ID}}"
 RUN_PERF="${RUN_PERF:-true}"
+CORE_GATE_REQUIRE_PARTITION_READY="${CORE_GATE_REQUIRE_PARTITION_READY:-false}"
+CORE_GATE_PARTITION_SCOPE="${CORE_GATE_PARTITION_SCOPE:-}"
+CORE_GATE_PARTITION_TENANT_ID="${CORE_GATE_PARTITION_TENANT_ID:-}"
+CORE_GATE_PARTITION_DUAL_WRITE_ENABLED="${CORE_GATE_PARTITION_DUAL_WRITE_ENABLED:-${MEMORY_SHADOW_DUAL_WRITE_ENABLED:-false}}"
+CORE_GATE_PARTITION_READ_SHADOW_CHECK="${CORE_GATE_PARTITION_READ_SHADOW_CHECK:-false}"
+CORE_GATE_PARTITION_READ_SHADOW_LIMIT="${CORE_GATE_PARTITION_READ_SHADOW_LIMIT:-20}"
+CORE_GATE_PARTITION_READ_SHADOW_MIN_OVERLAP="${CORE_GATE_PARTITION_READ_SHADOW_MIN_OVERLAP:-0.95}"
 
 RECALL_P95_MAX_MS="${RECALL_P95_MAX_MS:-1200}"
 WRITE_P95_MAX_MS="${WRITE_P95_MAX_MS:-800}"
@@ -54,6 +63,13 @@ while [[ $# -gt 0 ]]; do
     --perf-write-concurrency) PERF_WRITE_CONCURRENCY="${2:-}"; shift 2 ;;
     --perf-timeout-ms) PERF_TIMEOUT_MS="${2:-}"; shift 2 ;;
     --perf-pace-ms) PERF_PACE_MS="${2:-}"; shift 2 ;;
+    --require-partition-ready) CORE_GATE_REQUIRE_PARTITION_READY="${2:-}"; shift 2 ;;
+    --partition-scope) CORE_GATE_PARTITION_SCOPE="${2:-}"; shift 2 ;;
+    --partition-tenant-id) CORE_GATE_PARTITION_TENANT_ID="${2:-}"; shift 2 ;;
+    --partition-dual-write-enabled) CORE_GATE_PARTITION_DUAL_WRITE_ENABLED="${2:-}"; shift 2 ;;
+    --partition-read-shadow-check) CORE_GATE_PARTITION_READ_SHADOW_CHECK="${2:-}"; shift 2 ;;
+    --partition-read-shadow-limit) CORE_GATE_PARTITION_READ_SHADOW_LIMIT="${2:-}"; shift 2 ;;
+    --partition-read-shadow-min-overlap) CORE_GATE_PARTITION_READ_SHADOW_MIN_OVERLAP="${2:-}"; shift 2 ;;
     -h|--help)
       cat <<'USAGE'
 Usage: scripts/core-production-gate.sh [options]
@@ -80,6 +96,13 @@ Options:
   --perf-write-concurrency <n>       Write concurrency (default: 3)
   --perf-timeout-ms <n>              Request timeout (default: 20000)
   --perf-pace-ms <n>                 Pace ms between requests (default: 0)
+  --require-partition-ready <bool>   Run partition cutover readiness as blocking step (default: false)
+  --partition-scope <scope>          Scope for partition readiness (default: --scope)
+  --partition-tenant-id <tenant>     Tenant for partition readiness (default: --tenant-id)
+  --partition-dual-write-enabled <bool>   Expect MEMORY_SHADOW_DUAL_WRITE_ENABLED in readiness
+  --partition-read-shadow-check <bool>     Enable read shadow parity check in readiness
+  --partition-read-shadow-limit <n>        Read shadow sample limit (default: 20)
+  --partition-read-shadow-min-overlap <f>  Read shadow overlap threshold (default: 0.95)
 USAGE
       exit 0
       ;;
@@ -89,6 +112,13 @@ USAGE
       ;;
   esac
 done
+
+if [[ -z "${CORE_GATE_PARTITION_SCOPE}" ]]; then
+  CORE_GATE_PARTITION_SCOPE="${SCOPE}"
+fi
+if [[ -z "${CORE_GATE_PARTITION_TENANT_ID}" ]]; then
+  CORE_GATE_PARTITION_TENANT_ID="${TENANT_ID}"
+fi
 
 mkdir -p "${OUT_DIR}"
 
@@ -129,8 +159,77 @@ is_gt() {
   awk -v a="$1" -v b="$2" 'BEGIN { exit !(a>b) }'
 }
 
+probe_api_target() {
+  local probe_file="${OUT_DIR}/00_api_probe.json"
+  local health_code="000"
+  local recall_code="000"
+  health_code="$(curl -sS -o /dev/null -w "%{http_code}" "${BASE_URL}/health" || true)"
+  recall_code="$(
+    curl -sS -o /dev/null -w "%{http_code}" \
+      "${BASE_URL}/v1/memory/recall" \
+      -H "content-type: application/json" \
+      -d '{}' || true
+  )"
+  health_code="${health_code: -3}"
+  recall_code="${recall_code: -3}"
+  local ok=true
+  if [[ "${health_code}" == "000" || "${recall_code}" == "000" || "${recall_code}" == "404" ]]; then
+    ok=false
+  fi
+  jq -n \
+    --arg base_url "${BASE_URL}" \
+    --argjson ok "$([[ "${ok}" == "true" ]] && echo true || echo false)" \
+    --arg health_code "${health_code}" \
+    --arg recall_probe_code "${recall_code}" \
+    '{
+      ok: $ok,
+      base_url: $base_url,
+      health_code: ($health_code | tonumber? // $health_code),
+      recall_probe_code: ($recall_probe_code | tonumber? // $recall_probe_code)
+    }' > "${probe_file}"
+  if [[ "${ok}" != "true" ]]; then
+    echo "[core-gate] api probe failed: BASE_URL does not look like Aionis memory API (see ${probe_file})" >&2
+    cat "${probe_file}" >&2
+    exit 2
+  fi
+}
+
+probe_database_connectivity() {
+  local probe_file="${OUT_DIR}/00_db_probe.log"
+  if [[ -z "${DATABASE_URL:-}" ]]; then
+    echo "[core-gate] DATABASE_URL is empty; cannot run DB-backed gate checks" >&2
+    exit 2
+  fi
+  set +e
+  DATABASE_URL="${DATABASE_URL}" node -e '
+    const { Client } = require("pg");
+    (async () => {
+      const c = new Client({ connectionString: process.env.DATABASE_URL });
+      try {
+        await c.connect();
+        await c.query("select 1");
+      } finally {
+        await c.end().catch(() => {});
+      }
+    })().catch((err) => {
+      console.error(String(err?.message || err));
+      process.exit(1);
+    });
+  ' > "${probe_file}" 2>&1
+  local ec=$?
+  set -e
+  if [[ "${ec}" -ne 0 ]]; then
+    echo "[core-gate] database probe failed: DATABASE_URL is not reachable for gate checks (see ${probe_file})" >&2
+    sed -n "1,80p" "${probe_file}" >&2 || true
+    exit 2
+  fi
+}
+
 echo "[core-gate] out_dir=${OUT_DIR}"
 echo "[core-gate] base_url=${BASE_URL} scope=${SCOPE} tenant_id=${TENANT_ID} run_perf=${RUN_PERF}"
+echo "[core-gate] require_partition_ready=${CORE_GATE_REQUIRE_PARTITION_READY}"
+probe_api_target
+probe_database_connectivity
 
 run_step "build" "${OUT_DIR}/01_build.log" npm run -s build
 run_step "contract" "${OUT_DIR}/02_contract.log" npm run -s test:contract
@@ -143,6 +242,34 @@ run_step "health_gate_scope" "${OUT_DIR}/06_health_gate_scope.json" \
 
 run_step "consistency_cross_tenant" "${OUT_DIR}/07_consistency_cross_tenant.json" \
   npm run -s job:consistency-check:cross-tenant -- --strict-warnings
+
+partition_cutover_summary_path=""
+if [[ "${CORE_GATE_REQUIRE_PARTITION_READY}" == "true" ]]; then
+  run_step "partition_backfill_sync" "${OUT_DIR}/07b_partition_backfill_sync.json" \
+    npm run -s job:partition-backfill -- \
+      --scope "${CORE_GATE_PARTITION_SCOPE}" \
+      --tenant-id "${CORE_GATE_PARTITION_TENANT_ID}" \
+      --table all \
+      --batch-size 5000 \
+      --max-batches 0 \
+      --ensure-scope-partition
+
+  partition_cutover_dir="${OUT_DIR}/partition_cutover"
+  partition_cutover_summary_path="${partition_cutover_dir}/summary.json"
+  mkdir -p "${partition_cutover_dir}"
+  run_step "partition_cutover_readiness" "${partition_cutover_dir}/run.log" \
+    env \
+      RUN_ID="${RUN_ID}_partition" \
+      OUT_DIR="${partition_cutover_dir}" \
+      SCOPE="${CORE_GATE_PARTITION_SCOPE}" \
+      TENANT_ID="${CORE_GATE_PARTITION_TENANT_ID}" \
+      MEMORY_SHADOW_DUAL_WRITE_ENABLED="${CORE_GATE_PARTITION_DUAL_WRITE_ENABLED}" \
+      READ_SHADOW_CHECK="${CORE_GATE_PARTITION_READ_SHADOW_CHECK}" \
+      READ_SHADOW_LIMIT="${CORE_GATE_PARTITION_READ_SHADOW_LIMIT}" \
+      READ_SHADOW_MIN_OVERLAP="${CORE_GATE_PARTITION_READ_SHADOW_MIN_OVERLAP}" \
+      FAIL_ON_FAIL=true \
+      npm run -s job:partition-cutover-readiness
+fi
 
 perf_json_path=""
 recall_p95="0"
@@ -209,6 +336,14 @@ jq -n \
   --argjson write_p95 "${write_p95}" \
   --argjson max_error_rate "${max_error_rate}" \
   --argjson perf_slo_ok "$([[ "${perf_slo_ok}" == "true" ]] && echo true || echo false)" \
+  --argjson require_partition_ready "$([[ "${CORE_GATE_REQUIRE_PARTITION_READY}" == "true" ]] && echo true || echo false)" \
+  --arg partition_scope "${CORE_GATE_PARTITION_SCOPE}" \
+  --arg partition_tenant_id "${CORE_GATE_PARTITION_TENANT_ID}" \
+  --arg partition_dual_write_enabled "${CORE_GATE_PARTITION_DUAL_WRITE_ENABLED}" \
+  --arg partition_read_shadow_check "${CORE_GATE_PARTITION_READ_SHADOW_CHECK}" \
+  --arg partition_read_shadow_limit "${CORE_GATE_PARTITION_READ_SHADOW_LIMIT}" \
+  --arg partition_read_shadow_min_overlap "${CORE_GATE_PARTITION_READ_SHADOW_MIN_OVERLAP}" \
+  --arg partition_cutover_summary_path "${partition_cutover_summary_path}" \
   --argjson steps "${steps_json}" \
   --argjson fail_reasons "${fail_reasons}" \
   --argjson ok "$([[ "${ok}" == "true" ]] && echo true || echo false)" \
@@ -224,6 +359,16 @@ jq -n \
         "health_gate_scope(strict_warnings)",
         "consistency_cross_tenant(strict_warnings)"
       ],
+      partition_cutover_readiness: {
+        required: $require_partition_ready,
+        scope: $partition_scope,
+        tenant_id: $partition_tenant_id,
+        dual_write_enabled: ($partition_dual_write_enabled == "true"),
+        read_shadow_check: ($partition_read_shadow_check == "true"),
+        read_shadow_limit: ($partition_read_shadow_limit | tonumber),
+        read_shadow_min_overlap: ($partition_read_shadow_min_overlap | tonumber),
+        summary_json: (if ($partition_cutover_summary_path|length)>0 then $partition_cutover_summary_path else null end)
+      },
       availability_and_slo: {
         run_perf: $run_perf,
         thresholds: {

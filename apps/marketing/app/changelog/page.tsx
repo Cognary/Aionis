@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SectionLead } from "@/components/marketing/section-lead";
+import { analyticsEvents } from "@/lib/analytics";
 import { resolveDocsUrl, siteConfig } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -15,7 +16,29 @@ export default function ChangelogPage() {
       <div className="container">
         <p className="eyebrow">Changelog</p>
         <h1>Public release timeline</h1>
-        <p className="hero-copy">Major artifact milestones for SDKs, Docker image, and release quality gates.</p>
+        <p className="hero-copy">Major artifact milestones for OSS, Cloud readiness, SDKs, Docker image, and release-quality gates.</p>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Track progression"
+            title="How changelog milestones map to product tracks"
+            copy="OSS milestones show kernel progress. Cloud milestones show governance and reliability maturity. Platform milestones show execution-memory evolution."
+          />
+          <div className="grid-cards-3">
+            <article className="card">
+              <h3>OSS milestones</h3>
+              <p>Core API, commit-chain, graph memory, and baseline rules.</p>
+            </article>
+            <article className="card">
+              <h3>Cloud milestones</h3>
+              <p>Gate maturity, SLO evidence, and managed-operations readiness.</p>
+            </article>
+            <article className="card">
+              <h3>Platform milestones</h3>
+              <p>Execution loop gates and policy-governed memory controls.</p>
+            </article>
+          </div>
+        </section>
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
@@ -84,10 +107,22 @@ export default function ChangelogPage() {
             </article>
           </div>
           <div className="hero-cta" style={{ marginTop: 16 }}>
-            <a className="btn btn-ghost" href={resolveDocsUrl("RELEASE_NARRATIVE_TEMPLATE.md")} target="_blank" rel="noreferrer">
+            <a
+              className="btn btn-ghost"
+              href={resolveDocsUrl("RELEASE_NARRATIVE_TEMPLATE.md")}
+              target="_blank"
+              rel="noreferrer"
+              data-analytics-event={analyticsEvents.DOCS_OPEN_CLICK}
+            >
               Open release template
             </a>
-            <a className="btn btn-ghost" href={resolveDocsUrl("NARRATIVE_CANON.md")} target="_blank" rel="noreferrer">
+            <a
+              className="btn btn-ghost"
+              href={resolveDocsUrl("NARRATIVE_CANON.md")}
+              target="_blank"
+              rel="noreferrer"
+              data-analytics-event={analyticsEvents.DOCS_OPEN_CLICK}
+            >
               Open narrative canon
             </a>
           </div>

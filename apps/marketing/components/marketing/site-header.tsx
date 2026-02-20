@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { analyticsEvents } from "@/lib/analytics";
 import { navLinks, siteConfig } from "@/lib/site";
 
 export function SiteHeader() {
@@ -17,10 +18,18 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="header-cta">
-          <Link className="btn btn-ghost" href={siteConfig.ctaSecondary.href}>
+          <Link
+            className="btn btn-ghost"
+            href={siteConfig.ctaSecondary.href}
+            data-analytics-event={analyticsEvents.CTA_TALK_TO_SALES_CLICK}
+          >
             {siteConfig.ctaSecondary.label}
           </Link>
-          <Link className="btn btn-solid" href={siteConfig.ctaPrimary.href}>
+          <Link
+            className="btn btn-solid"
+            href={siteConfig.ctaPrimary.href}
+            data-analytics-event={analyticsEvents.CTA_START_OSS_CLICK}
+          >
             {siteConfig.ctaPrimary.label}
           </Link>
         </div>

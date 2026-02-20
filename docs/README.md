@@ -17,6 +17,7 @@ This index is the entry point for project documentation.
 - [Production Core Gate](./PRODUCTION_CORE_GATE.md)
 - [E2E Regression Checklist](./E2E_REGRESSION.md)
 - [Prod Orchestration & Partition Plan](./PROD_ORCHESTRATION_PARTITION_PLAN.md)
+- [Ultra-Scale Routing Matrix](./ULTRA_SCALE_ROUTING_MATRIX.md)
 
 ## Performance
 
@@ -51,6 +52,7 @@ This index is the entry point for project documentation.
 - [GTM Phase 1 Execution Board](./GTM_PHASE1_EXECUTION_BOARD.md)
 - [GTM Phase 2 Execution Board](./GTM_PHASE2_EXECUTION_BOARD.md)
 - [GTM Phase 3 Execution Board](./GTM_PHASE3_EXECUTION_BOARD.md)
+- [External Release Product Plan (Open Core + Hosted + Kernel Control)](./EXTERNAL_RELEASE_PRODUCT_PLAN.md)
 - [GTM Weekly Status Template](./GTM_WEEKLY_STATUS_TEMPLATE.md)
 - [SDK (TypeScript, P1 MVP)](./SDK.md)
 - [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)

@@ -73,3 +73,116 @@ Owner: release hardening
 ## Release Decision Gate
 
 Only release when all checklist items pass and no P0/P1 items remain open.
+
+---
+
+# Aionis Scale + SLA Debt Closure Plan (2026-02-20)
+
+Owner: core runtime + ops governance  
+Status: in progress
+
+## Goal
+
+Close the two production debts end-to-end:
+1. Postgres single-cluster pressure at ultra-scale.
+2. Recall quality/latency tradeoff lacking explicit SLA policy and adaptive control.
+
+## Workstream 1: Partition Cutover Closure (Postgres pressure mitigation)
+
+### Scope
+- Complete `*_v2` partition cutover readiness as a hard production gate.
+- Enforce partition-first purge/reset path in production operations.
+
+### Deliverables
+- Add optional blocking step in `core-production-gate` for `job:partition-cutover-readiness`.
+- Keep `scope-purge` partition-first and fail when delete fallback appears in gated runs.
+- Produce cutover evidence artifact per run.
+
+### Acceptance
+- Core gate can run with `CORE_GATE_REQUIRE_PARTITION_READY=true` and pass.
+- No delete fallback in production perf/gate runs (`fail_on_delete`).
+
+## Workstream 2: Recall SLA Policy (tenant/endpoint profile layering)
+
+### Scope
+- Move from one global profile default to layered profile selection:
+  - global default
+  - endpoint override
+  - tenant default
+  - tenant + endpoint override
+
+### Deliverables
+- New policy env JSON config + runtime resolver.
+- Request logs include selected profile and source.
+
+### Acceptance
+- `recall` and `recall_text` can select different defaults by tenant/SLA class.
+- Invalid policy config fails fast at startup.
+
+## Workstream 3: Adaptive Degrade (latency safety valve)
+
+### Scope
+- When recall queue wait crosses threshold, auto-switch to a cheaper profile if caller did not pin recall knobs.
+
+### Deliverables
+- Configurable adaptive switch by wait threshold.
+- Log mark when adaptive downgrade is applied.
+
+### Acceptance
+- Under queue pressure, non-pinned requests downgrade deterministically.
+- Pinned requests remain unchanged.
+
+## Workstream 4: Production Gate Standardization
+
+### Scope
+- Keep LoCoMo/LongMemEval as auxiliary.
+- Promote production SLO/integrity checks as hard release gate.
+
+### Deliverables
+- Core gate exposes partition-readiness toggle and keeps SLO checks explicit in summary.
+- Runbook and env sample align with gate inputs.
+
+### Acceptance
+- Release decision can be made from `core_gate/summary.json` only.
+
+## Workstream 5: Ultra-scale Evolution Path (next phase)
+
+### Scope
+- Define threshold-based routing from single cluster -> read-replica -> tenant shard.
+
+### Deliverables
+- Decision matrix in docs (tenant cardinality, write QPS, recall p95, storage growth).
+- Migration runbook for shard onboarding (non-disruptive).
+
+### Acceptance
+- A clear trigger policy exists for when to leave single-cluster Postgres.
+
+## Execution Sequence (Now)
+
+1. Add profile layering + adaptive degrade in runtime.
+2. Add partition readiness hook to core gate.
+3. Align `.env.example` + API contract doc with new policy knobs.
+4. Run build + core checks; fix regressions.
+5. Commit and push.
+
+## Progress Update (2026-02-20)
+
+- [x] Step 1 complete:
+  - runtime supports layered profile resolution (`global/endpoint/tenant/tenant+endpoint`)
+  - runtime supports adaptive downgrade under queue pressure for non-pinned recall requests
+- [x] Step 2 complete:
+  - `core-production-gate` supports blocking partition readiness step (`--require-partition-ready true`)
+- [x] Step 3 complete:
+  - `.env.example`, `docs/API_CONTRACT.md`, `docs/OPERATOR_RUNBOOK.md`, `README.md` updated
+- [x] Step 4 (baseline) complete:
+  - `npm run -s build`
+  - `npm run -s test:contract`
+  - `npm run -s docs:check`
+- [ ] Step 5 pending:
+  - commit + push
+  - run partition-cutover readiness in target prod-like env and attach artifact proof
+  - draft shard routing decision matrix (trigger thresholds)
+
+### Added in this round
+
+- `docs/ULTRA_SCALE_ROUTING_MATRIX.md` created with tiered trigger thresholds (`single cluster -> replica -> shard`).

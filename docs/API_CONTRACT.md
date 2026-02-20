@@ -68,7 +68,17 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
 
 ### `POST /v1/memory/recall`
 
-Default recall knobs are profile-driven by `MEMORY_RECALL_PROFILE`:
+Default recall knobs are profile-driven:
+- base default: `MEMORY_RECALL_PROFILE`
+- optional layered overrides: `MEMORY_RECALL_PROFILE_POLICY_JSON`
+  - priority: `tenant_endpoint` > `tenant_default` > `endpoint` > global default
+- optional adaptive downgrade on queue pressure:
+  - `MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED=true`
+  - `MEMORY_RECALL_ADAPTIVE_WAIT_MS=<threshold>`
+  - `MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE=<profile>`
+  - adaptive downgrade only applies when request did **not** explicitly pin recall knobs
+
+Profiles:
 - `strict_edges` (default): `limit=24`, `hops=2`, `max_nodes=60`, `max_edges=80`, `ranked_limit=140`, `min_edge_weight=0.2`, `min_edge_confidence=0.2`
 - `quality_first`: `limit=30`, `hops=2`, `max_nodes=80`, `max_edges=100`, `ranked_limit=180`, `min_edge_weight=0.05`, `min_edge_confidence=0.05`
 - `legacy`: historical defaults (`30/2/50/100/100/0/0`)

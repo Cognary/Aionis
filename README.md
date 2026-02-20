@@ -133,7 +133,8 @@ Use these before public traffic:
 2. `MEMORY_AUTH_MODE=api_key` (or `jwt`)
 3. `RATE_LIMIT_BYPASS_LOOPBACK=false`
 4. real embedding provider (`minimax` or `openai`)
-5. set `MEMORY_RECALL_PROFILE=strict_edges` (use `quality_first` for low-latency profile)
+5. set recall policy (`MEMORY_RECALL_PROFILE=strict_edges`) and optionally layer by tenant/endpoint via `MEMORY_RECALL_PROFILE_POLICY_JSON`
+6. enable adaptive queue-pressure downgrade if needed (`MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED=true`)
 
 Operator docs:
 

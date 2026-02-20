@@ -13,13 +13,16 @@ export function SiteFooter() {
           <p className="footer-title">Product</p>
           <ul>
             <li>
-              <Link href="/product/personal">Personal</Link>
+              <Link href="/product/personal">OSS</Link>
             </li>
             <li>
-              <Link href="/product/enterprise">Enterprise</Link>
+              <Link href="/product/enterprise">Cloud</Link>
             </li>
             <li>
               <Link href="/pricing">Pricing</Link>
+            </li>
+            <li>
+              <Link href="/playground">Playground</Link>
             </li>
           </ul>
         </div>

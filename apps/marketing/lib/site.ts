@@ -1,8 +1,8 @@
 export const siteConfig = {
   name: "Aionis",
   tagline: "Aionis is a Verifiable / Operable Memory Kernel for agents.",
-  ctaPrimary: { label: "Start Personal", href: "/product/personal" },
-  ctaSecondary: { label: "Talk to Enterprise", href: "/contact" },
+  ctaPrimary: { label: "Start OSS", href: "/product/personal" },
+  ctaSecondary: { label: "Talk to Sales", href: "/contact" },
   docsBase: process.env.NEXT_PUBLIC_DOCS_BASE ?? "https://cognary.github.io/Aionis",
   repoUrl: "https://github.com/Cognary/Aionis",
   registries: {
@@ -31,10 +31,11 @@ export function resolveDocsUrl(path: string) {
 }
 
 export const navLinks = [
-  { label: "Product", href: "/product/personal" },
+  { label: "OSS", href: "/product/personal" },
   { label: "Model", href: "/open-core" },
-  { label: "Enterprise", href: "/product/enterprise" },
+  { label: "Cloud", href: "/product/enterprise" },
   { label: "Developers", href: "/developers" },
+  { label: "Playground", href: "/playground" },
   { label: "Integrations", href: "/integrations" },
   { label: "Pricing", href: "/pricing" },
   { label: "Docs", href: "/docs" },

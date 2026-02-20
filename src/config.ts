@@ -86,6 +86,17 @@ const EnvSchema = z.object({
   API_WRITE_QUEUE_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(2_000),
   // Server-side default recall tuning profile used when callers omit recall knobs.
   MEMORY_RECALL_PROFILE: z.enum(["legacy", "strict_edges", "quality_first"]).default("strict_edges"),
+  // Layered recall profile policy (global -> endpoint -> tenant -> tenant+endpoint), JSON object.
+  MEMORY_RECALL_PROFILE_POLICY_JSON: z.string().default("{}"),
+  // Adaptive profile downgrade on recall queue pressure.
+  MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  MEMORY_RECALL_ADAPTIVE_WAIT_MS: z.coerce.number().int().min(1).max(60_000).default(200),
+  MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: z.enum(["legacy", "strict_edges", "quality_first"]).default("strict_edges"),
   PII_REDACTION: z
     .string()
     .optional()
@@ -204,6 +215,64 @@ export function loadEnv(): Env {
   }
   if (parsed.data.MEMORY_SHADOW_DUAL_WRITE_STRICT && !parsed.data.MEMORY_SHADOW_DUAL_WRITE_ENABLED) {
     throw new Error("MEMORY_SHADOW_DUAL_WRITE_STRICT=true requires MEMORY_SHADOW_DUAL_WRITE_ENABLED=true");
+  }
+  {
+    let policy: unknown;
+    try {
+      const raw = parsed.data.MEMORY_RECALL_PROFILE_POLICY_JSON.trim();
+      policy = raw.length === 0 ? {} : JSON.parse(raw);
+    } catch {
+      throw new Error("MEMORY_RECALL_PROFILE_POLICY_JSON must be valid JSON object");
+    }
+    if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
+      throw new Error("MEMORY_RECALL_PROFILE_POLICY_JSON must be a JSON object");
+    }
+    const allowedProfiles = new Set(["legacy", "strict_edges", "quality_first"]);
+    const validateProfile = (value: unknown, path: string) => {
+      if (typeof value !== "string" || !allowedProfiles.has(value)) {
+        throw new Error(`${path} must be one of: legacy|strict_edges|quality_first`);
+      }
+    };
+    const asRecord = policy as Record<string, unknown>;
+    if (asRecord.endpoint !== undefined) {
+      if (!asRecord.endpoint || typeof asRecord.endpoint !== "object" || Array.isArray(asRecord.endpoint)) {
+        throw new Error("MEMORY_RECALL_PROFILE_POLICY_JSON.endpoint must be an object");
+      }
+      for (const [k, v] of Object.entries(asRecord.endpoint as Record<string, unknown>)) {
+        if (k !== "recall" && k !== "recall_text") {
+          throw new Error(`MEMORY_RECALL_PROFILE_POLICY_JSON.endpoint.${k} is not supported (use recall|recall_text)`);
+        }
+        validateProfile(v, `MEMORY_RECALL_PROFILE_POLICY_JSON.endpoint.${k}`);
+      }
+    }
+    if (asRecord.tenant_default !== undefined) {
+      if (!asRecord.tenant_default || typeof asRecord.tenant_default !== "object" || Array.isArray(asRecord.tenant_default)) {
+        throw new Error("MEMORY_RECALL_PROFILE_POLICY_JSON.tenant_default must be an object");
+      }
+      for (const [k, v] of Object.entries(asRecord.tenant_default as Record<string, unknown>)) {
+        if (k.trim().length === 0) throw new Error("MEMORY_RECALL_PROFILE_POLICY_JSON.tenant_default key must be non-empty");
+        validateProfile(v, `MEMORY_RECALL_PROFILE_POLICY_JSON.tenant_default.${k}`);
+      }
+    }
+    if (asRecord.tenant_endpoint !== undefined) {
+      if (!asRecord.tenant_endpoint || typeof asRecord.tenant_endpoint !== "object" || Array.isArray(asRecord.tenant_endpoint)) {
+        throw new Error("MEMORY_RECALL_PROFILE_POLICY_JSON.tenant_endpoint must be an object");
+      }
+      for (const [tenant, endpointMap] of Object.entries(asRecord.tenant_endpoint as Record<string, unknown>)) {
+        if (tenant.trim().length === 0) throw new Error("MEMORY_RECALL_PROFILE_POLICY_JSON.tenant_endpoint key must be non-empty");
+        if (!endpointMap || typeof endpointMap !== "object" || Array.isArray(endpointMap)) {
+          throw new Error(`MEMORY_RECALL_PROFILE_POLICY_JSON.tenant_endpoint.${tenant} must be an object`);
+        }
+        for (const [endpoint, profile] of Object.entries(endpointMap as Record<string, unknown>)) {
+          if (endpoint !== "recall" && endpoint !== "recall_text") {
+            throw new Error(
+              `MEMORY_RECALL_PROFILE_POLICY_JSON.tenant_endpoint.${tenant}.${endpoint} is not supported (use recall|recall_text)`,
+            );
+          }
+          validateProfile(profile, `MEMORY_RECALL_PROFILE_POLICY_JSON.tenant_endpoint.${tenant}.${endpoint}`);
+        }
+      }
+    }
   }
   if (parsed.data.APP_ENV === "prod") {
     if (parsed.data.MEMORY_AUTH_MODE === "off") {

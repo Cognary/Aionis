@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SectionLead } from "@/components/marketing/section-lead";
+import { analyticsEvents } from "@/lib/analytics";
 import { resolveDocsUrl, siteConfig } from "@/lib/site";
 
 export default function PersonalProductPage() {
@@ -8,15 +9,15 @@ export default function PersonalProductPage() {
   return (
     <section className="section">
       <div className="container">
-        <p className="eyebrow">Product / Personal</p>
-        <h1>Personal memory track for fast product delivery</h1>
+        <p className="eyebrow">Product / OSS</p>
+        <h1>OSS memory kernel track for fast product delivery</h1>
         <p className="hero-copy">
-          The Personal lane is designed for individual builders and small teams that need durable memory now, without
-          waiting for enterprise procurement cycles.
+          The OSS lane is designed for individual builders and small teams that need durable memory now, without waiting
+          for procurement cycles.
         </p>
 
         <div className="chip-row">
-          <span className="chip">Public now</span>
+          <span className="chip">Open source</span>
           <span className="chip">SDK + Docker ready</span>
           <span className="chip">3-minute quickstart</span>
         </div>
@@ -44,8 +45,8 @@ export default function PersonalProductPage() {
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
             eyebrow="Technical baseline"
-            title="What is production-real in Personal"
-            copy="Personal is self-serve, but still uses the same auditable kernel primitives used in larger deployments."
+            title="What is production-real in OSS"
+            copy="OSS is self-serve, but still uses the same auditable kernel primitives used in Cloud and Enterprise deployments."
           />
           <div className="grid-cards">
             <article className="card">
@@ -82,7 +83,7 @@ pip install aionis-sdk`}</pre>
           <SectionLead
             eyebrow="What to expect"
             title="Practical outcomes in the first week"
-            copy="Personal lane is optimized for speed. You should be able to verify value quickly with reproducible smoke steps."
+            copy="OSS lane is optimized for speed. You should be able to verify value quickly with reproducible smoke steps."
           />
           <div className="grid-cards-3">
             <article className="card">
@@ -119,16 +120,16 @@ npm run -s job:health-gate -- --strict-warnings`}</pre>
           />
           <div className="grid-cards">
             <article className="card">
-              <h3>Can I start without enterprise setup?</h3>
-              <p>Yes. Personal lane is public and self-serve.</p>
+              <h3>Can I start without Cloud setup?</h3>
+              <p>Yes. OSS lane is open and self-serve.</p>
             </article>
             <article className="card">
               <h3>Do I need real embedding provider on day one?</h3>
               <p>No. You can start with fake provider for plumbing validation, then switch to real embeddings.</p>
             </article>
             <article className="card">
-              <h3>Can I later move to enterprise?</h3>
-              <p>Yes. Same memory kernel, with governance and rollout hardening added in enterprise path.</p>
+              <h3>Can I later move to Cloud?</h3>
+              <p>Yes. Same memory kernel, with governance and rollout hardening added in Cloud and Enterprise paths.</p>
             </article>
             <article className="card">
               <h3>Where is the full contract?</h3>
@@ -140,8 +141,8 @@ npm run -s job:health-gate -- --strict-warnings`}</pre>
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
             eyebrow="Boundaries"
-            title="When Personal is not enough"
-            copy="If your rollout needs multi-team governance, strict tenancy policy, or formal reliability ownership, use Enterprise onboarding."
+            title="When OSS is not enough"
+            copy="If your rollout needs multi-team governance, strict tenancy policy, or formal reliability ownership, use Cloud onboarding."
           />
           <div className="card">
             <ul className="list">
@@ -152,20 +153,39 @@ npm run -s job:health-gate -- --strict-warnings`}</pre>
           </div>
         </section>
 
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Upgrade path"
+            title="OSS -> Cloud -> Platform"
+            copy="The recommended path is OSS for fast adoption, Cloud for managed operations, and Platform for execution-memory design-partner scenarios."
+          />
+          <div className="grid-cards">
+            <article className="card">
+              <h3>Cloud trigger</h3>
+              <p>Adopt Cloud when governance depth and operating ownership exceed what one team can safely run.</p>
+            </article>
+            <article className="card">
+              <h3>Platform trigger</h3>
+              <p>Adopt Platform when you need policy-governed execution history and multi-agent memory governance.</p>
+            </article>
+          </div>
+        </section>
+
         <div className="hero-cta" style={{ marginTop: 26 }}>
           <a
             className="btn btn-solid"
             href={resolveDocsUrl("ONBOARDING_5MIN.md")}
             target="_blank"
             rel="noreferrer"
+            data-analytics-event={analyticsEvents.QUICKSTART_COMPLETE}
           >
             Open 5-minute onboarding
           </a>
           <Link className="btn btn-ghost" href="/developers">
             Developer docs
           </Link>
-          <Link className="btn btn-ghost" href="/pricing">
-            Compare plans
+          <Link className="btn btn-ghost" href="/pricing" data-analytics-event={analyticsEvents.OSS_TO_CLOUD_INTENT}>
+            Compare OSS vs Cloud
           </Link>
         </div>
       </div>

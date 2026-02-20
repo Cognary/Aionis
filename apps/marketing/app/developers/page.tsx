@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { docsCatalog, docsLinks, resolveDocsUrl, siteConfig } from "@/lib/site";
 import { SectionLead } from "@/components/marketing/section-lead";
+import { analyticsEvents } from "@/lib/analytics";
 
 export default function DevelopersPage() {
   const registries = siteConfig.registries;
@@ -12,6 +14,42 @@ export default function DevelopersPage() {
         <p className="hero-copy">
           Start with `health`, `write`, and `recall_text`. Expand into rule evaluation, tool selection, and feedback-driven policy.
         </p>
+        <div className="hero-cta">
+          <Link className="btn btn-solid" href="/playground" data-analytics-event={analyticsEvents.CTA_OPEN_PLAYGROUND_CLICK}>
+            Open Playground
+          </Link>
+          <a
+            className="btn btn-ghost"
+            href={resolveDocsUrl("API_CONTRACT.md")}
+            target="_blank"
+            rel="noreferrer"
+            data-analytics-event={analyticsEvents.DOCS_OPEN_CLICK}
+          >
+            Open API Contract
+          </a>
+        </div>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Track alignment"
+            title="One API across OSS, Cloud, and Platform"
+            copy="Developers integrate once on OSS and keep the same contract when teams move to Cloud and Platform tracks."
+          />
+          <div className="grid-cards-3">
+            <article className="card">
+              <h3>OSS</h3>
+              <p>Fast self-serve integration and local validation.</p>
+            </article>
+            <article className="card">
+              <h3>Cloud</h3>
+              <p>Managed operations with governance and reliability controls.</p>
+            </article>
+            <article className="card">
+              <h3>Platform</h3>
+              <p>Execution-memory capabilities for policy-governed agent systems.</p>
+            </article>
+          </div>
+        </section>
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
@@ -78,7 +116,13 @@ npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
               <article key={item.path} className="card" id={item.path.replace(/\./g, "-")}>
                 <h3>{item.label}</h3>
                 <p>Open the source-of-truth document in the repository docs.</p>
-                <a className="btn btn-ghost" href={resolveDocsUrl(item.path)} target="_blank" rel="noreferrer">
+                <a
+                  className="btn btn-ghost"
+                  href={resolveDocsUrl(item.path)}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-analytics-event={analyticsEvents.DOCS_OPEN_CLICK}
+                >
                   Open doc
                 </a>
               </article>

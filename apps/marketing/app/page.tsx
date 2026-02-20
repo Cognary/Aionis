@@ -4,6 +4,7 @@ import { FeatureGrid } from "@/components/marketing/feature-grid";
 import { Hero } from "@/components/marketing/hero";
 import { SectionLead } from "@/components/marketing/section-lead";
 import { StatStrip } from "@/components/marketing/stat-strip";
+import { analyticsEvents } from "@/lib/analytics";
 import { siteConfig } from "@/lib/site";
 
 export default function HomePage() {
@@ -21,7 +22,7 @@ export default function HomePage() {
             <SectionLead
               eyebrow="3-minute path"
               title="From zero to first recall in minutes"
-              copy="Use the Personal path to run write -> recall_text without custom orchestration. Keep your focus on agent value, not memory plumbing."
+              copy="Use the OSS path to run write -> recall_text without custom orchestration. Keep your focus on agent value, not memory plumbing."
             />
             <div className="chip-row">
               <span className="chip">Single command startup</span>
@@ -31,13 +32,18 @@ export default function HomePage() {
             <pre className="code-block">{`git clone https://github.com/Cognary/Aionis
 cd Aionis
 make quickstart`}</pre>
+            <div className="hero-cta" style={{ marginTop: 14 }}>
+              <Link className="btn btn-ghost" href="/playground" data-analytics-event={analyticsEvents.CTA_OPEN_PLAYGROUND_CLICK}>
+                Open Playground
+              </Link>
+            </div>
           </div>
 
           <div className="card">
             <SectionLead
               eyebrow="Open deployment model"
-              title="Public Personal lane + consultative Enterprise lane"
-              copy="Personal is open now for immediate shipping. Enterprise focuses on stricter governance, rollout controls, and organizational adoption."
+              title="Public OSS lane + managed Cloud lane"
+              copy="OSS is open now for immediate shipping. Cloud focuses on governance depth, rollout controls, and organizational adoption."
             />
             <table className="compare-table">
               <thead>
@@ -49,23 +55,23 @@ make quickstart`}</pre>
               </thead>
               <tbody>
                 <tr>
-                  <td>Personal</td>
+                  <td>OSS</td>
                   <td>Self-serve</td>
                   <td>Fast time-to-value</td>
                 </tr>
                 <tr>
-                  <td>Enterprise</td>
-                  <td>Consultation</td>
+                  <td>Cloud</td>
+                  <td>Sales-led</td>
                   <td>Production governance</td>
                 </tr>
               </tbody>
             </table>
             <div className="hero-cta" style={{ marginTop: 18 }}>
-              <Link className="btn btn-solid" href="/product/personal">
-                Start Personal
+              <Link className="btn btn-solid" href="/product/personal" data-analytics-event={analyticsEvents.CTA_START_OSS_CLICK}>
+                Start OSS
               </Link>
-              <Link className="btn btn-ghost" href="/contact">
-                Contact enterprise team
+              <Link className="btn btn-ghost" href="/contact" data-analytics-event={analyticsEvents.CTA_TALK_TO_SALES_CLICK}>
+                Talk to Sales
               </Link>
             </div>
           </div>
@@ -111,6 +117,30 @@ make quickstart`}</pre>
             <article className="card">
               <h3>Memory -&gt; Policy</h3>
               <p>Rules and feedback flows convert memory into actionable planner and tool-routing policy.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container">
+          <SectionLead
+            eyebrow="Operating model"
+            title="Three-layer release motion"
+            copy="Aionis ships one consistent model: OSS for kernel standards, Cloud for revenue and governance depth, and Platform for execution-memory control."
+          />
+          <div className="grid-cards-3">
+            <article className="card">
+              <h3>Layer 1: OSS Kernel</h3>
+              <p>Open commit-chain, graph memory, recall, and baseline rules to drive adoption and standards.</p>
+            </article>
+            <article className="card">
+              <h3>Layer 2: Cloud</h3>
+              <p>Managed tenancy, reliability, governance, and compliance controls for production teams.</p>
+            </article>
+            <article className="card">
+              <h3>Layer 3: Platform</h3>
+              <p>Execution-memory substrate for policy-governed multi-agent operations and verifiable execution history.</p>
             </article>
           </div>
         </div>
@@ -170,9 +200,9 @@ npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
 
       <CtaBand
         title="Build product value with technical confidence"
-        copy="Start fast on Personal, then scale governance and operations on Enterprise using the same kernel."
-        primary={{ label: "Start Personal", href: "/product/personal" }}
-        secondary={{ label: "See Enterprise", href: "/product/enterprise" }}
+        copy="Start fast on OSS, scale to Cloud with the same kernel, then extend toward Platform capabilities."
+        primary={{ label: "Start OSS", href: "/product/personal", event: analyticsEvents.CTA_START_OSS_CLICK }}
+        secondary={{ label: "See Cloud", href: "/product/enterprise", event: analyticsEvents.CTA_START_CLOUD_CLICK }}
       />
     </>
   );

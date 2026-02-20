@@ -1,20 +1,21 @@
 import Link from "next/link";
 import { SectionLead } from "@/components/marketing/section-lead";
+import { analyticsEvents } from "@/lib/analytics";
 import { resolveDocsUrl } from "@/lib/site";
 
 export default function EnterpriseProductPage() {
   return (
     <section className="section">
       <div className="container">
-        <p className="eyebrow">Product / Enterprise</p>
-        <h1>Enterprise memory architecture for production AI systems</h1>
+        <p className="eyebrow">Product / Cloud</p>
+        <h1>Cloud and Enterprise memory architecture for production AI systems</h1>
         <p className="hero-copy">
-          Enterprise onboarding focuses on governance, tenancy strategy, and operational reliability for teams running
+          Cloud onboarding focuses on governance, tenancy strategy, and operational reliability for teams running
           memory-backed agents at organizational scale.
         </p>
 
         <div className="chip-row">
-          <span className="chip">Consultative onboarding</span>
+          <span className="chip">Managed rollout</span>
           <span className="chip">Governance-first rollout</span>
           <span className="chip">SLO and quality gates</span>
         </div>
@@ -22,7 +23,7 @@ export default function EnterpriseProductPage() {
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
             eyebrow="Capability focus"
-            title="What enterprise onboarding optimizes"
+            title="What Cloud onboarding optimizes"
             copy="The goal is stable, auditable operation under real organizational constraints."
           />
           <div className="grid-cards">
@@ -64,8 +65,8 @@ export default function EnterpriseProductPage() {
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
             eyebrow="Architecture commitments"
-            title="Enterprise implementation principles"
-            copy="Enterprise engagements keep the kernel model fixed: audit-first writes, async derivation pipelines, and memory-driven policy control."
+            title="Cloud and Enterprise implementation principles"
+            copy="Cloud and Enterprise engagements keep the kernel model fixed: audit-first writes, async derivation pipelines, and memory-driven policy control."
           />
           <div className="grid-cards-3">
             <article className="card">
@@ -108,7 +109,7 @@ export default function EnterpriseProductPage() {
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
             eyebrow="Release governance"
-            title="Enterprise release evidence baseline"
+            title="Cloud release evidence baseline"
             copy="Production promotion requires hard evidence from contract, quality, and operational checks."
           />
           <pre className="code-block">{`npm run -s gate:core:prod
@@ -120,7 +121,7 @@ npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
             eyebrow="Decision checklist"
-            title="Signals you should engage enterprise onboarding"
+            title="Signals you should engage Cloud onboarding"
             copy="When these conditions appear, consultation usually accelerates and de-risks rollout."
           />
           <div className="card">
@@ -130,6 +131,24 @@ npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
               <li>Formal reliability targets and release controls</li>
               <li>Complex integration with existing internal systems</li>
             </ul>
+          </div>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Platform extension"
+            title="Execution Memory Platform track"
+            copy="For teams beyond managed memory operations, Aionis offers a design-partner path toward execution-memory control."
+          />
+          <div className="grid-cards">
+            <article className="card">
+              <h3>What it adds</h3>
+              <p>Memory -&gt; Planner -&gt; Execution lineage, policy memory, and verifiable execution history.</p>
+            </article>
+            <article className="card">
+              <h3>Who should join</h3>
+              <p>Organizations building multi-agent systems with strict governance and audit requirements.</p>
+            </article>
           </div>
         </section>
 
@@ -158,13 +177,13 @@ npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
         </section>
 
         <div className="hero-cta" style={{ marginTop: 26 }}>
-          <Link className="btn btn-solid" href="/contact">
-            Talk to Enterprise
+          <Link className="btn btn-solid" href="/contact" data-analytics-event={analyticsEvents.CTA_TALK_TO_SALES_CLICK}>
+            Talk to Sales
           </Link>
           <Link className="btn btn-ghost" href="/security">
             Security and operations
           </Link>
-          <Link className="btn btn-ghost" href="/pricing">
+          <Link className="btn btn-ghost" href="/pricing" data-analytics-event={analyticsEvents.CTA_START_CLOUD_CLICK}>
             Compare tracks
           </Link>
         </div>

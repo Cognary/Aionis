@@ -154,7 +154,10 @@ type RecallProfileDefaults = {
   min_edge_confidence: number;
 };
 
-const RECALL_PROFILE_DEFAULTS: Record<"legacy" | "strict_edges" | "quality_first", RecallProfileDefaults> = {
+type RecallProfileName = "legacy" | "strict_edges" | "quality_first";
+type RecallEndpoint = "recall" | "recall_text";
+
+const RECALL_PROFILE_DEFAULTS: Record<RecallProfileName, RecallProfileDefaults> = {
   legacy: {
     limit: 30,
     neighborhood_hops: 2,
@@ -184,7 +187,27 @@ const RECALL_PROFILE_DEFAULTS: Record<"legacy" | "strict_edges" | "quality_first
   },
 };
 
-const recallProfileDefaults = RECALL_PROFILE_DEFAULTS[env.MEMORY_RECALL_PROFILE];
+type RecallProfilePolicy = {
+  endpoint: Partial<Record<RecallEndpoint, RecallProfileName>>;
+  tenant_default: Record<string, RecallProfileName>;
+  tenant_endpoint: Record<string, Partial<Record<RecallEndpoint, RecallProfileName>>>;
+};
+
+type RecallProfileResolution = {
+  profile: RecallProfileName;
+  defaults: RecallProfileDefaults;
+  source: "global_default" | "endpoint_override" | "tenant_default" | "tenant_endpoint_override";
+};
+
+type RecallAdaptiveResolution = {
+  profile: RecallProfileName;
+  defaults: RecallProfileDefaults;
+  applied: boolean;
+  reason: "disabled" | "explicit_knobs" | "wait_below_threshold" | "already_target_profile" | "queue_pressure";
+};
+
+const globalRecallProfileDefaults = RECALL_PROFILE_DEFAULTS[env.MEMORY_RECALL_PROFILE];
+const recallProfilePolicy = parseRecallProfilePolicy(env.MEMORY_RECALL_PROFILE_POLICY_JSON);
 
 // Basic CORS support for browser-based playground/developer UIs.
 // Configure with CORS_ALLOW_ORIGINS (comma-separated), default "*".
@@ -208,6 +231,121 @@ function withRecallProfileDefaults(body: unknown, defaults: RecallProfileDefault
     if (out[key] === undefined || out[key] === null) out[key] = value;
   }
   return out;
+}
+
+function parseRecallProfilePolicy(raw: string): RecallProfilePolicy {
+  const out: RecallProfilePolicy = {
+    endpoint: {},
+    tenant_default: {},
+    tenant_endpoint: {},
+  };
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed === "{}") return out;
+
+  const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+
+  const endpoint = parsed.endpoint;
+  if (endpoint && typeof endpoint === "object" && !Array.isArray(endpoint)) {
+    for (const [k, v] of Object.entries(endpoint)) {
+      if ((k === "recall" || k === "recall_text") && typeof v === "string") {
+        out.endpoint[k] = v as RecallProfileName;
+      }
+    }
+  }
+
+  const tenantDefault = parsed.tenant_default;
+  if (tenantDefault && typeof tenantDefault === "object" && !Array.isArray(tenantDefault)) {
+    for (const [k, v] of Object.entries(tenantDefault)) {
+      if (typeof v === "string" && k.trim().length > 0) {
+        out.tenant_default[k.trim()] = v as RecallProfileName;
+      }
+    }
+  }
+
+  const tenantEndpoint = parsed.tenant_endpoint;
+  if (tenantEndpoint && typeof tenantEndpoint === "object" && !Array.isArray(tenantEndpoint)) {
+    for (const [tenant, value] of Object.entries(tenantEndpoint)) {
+      if (!value || typeof value !== "object" || Array.isArray(value) || tenant.trim().length === 0) continue;
+      const map: Partial<Record<RecallEndpoint, RecallProfileName>> = {};
+      for (const [k, v] of Object.entries(value)) {
+        if ((k === "recall" || k === "recall_text") && typeof v === "string") {
+          map[k] = v as RecallProfileName;
+        }
+      }
+      if (Object.keys(map).length > 0) out.tenant_endpoint[tenant.trim()] = map;
+    }
+  }
+
+  return out;
+}
+
+function resolveRecallProfile(endpoint: RecallEndpoint, tenantId: string | null | undefined): RecallProfileResolution {
+  const tenant = (tenantId ?? "").trim();
+  const tenantEndpoint = tenant ? recallProfilePolicy.tenant_endpoint[tenant]?.[endpoint] : undefined;
+  if (tenantEndpoint) {
+    return {
+      profile: tenantEndpoint,
+      defaults: RECALL_PROFILE_DEFAULTS[tenantEndpoint],
+      source: "tenant_endpoint_override",
+    };
+  }
+  const tenantDefault = tenant ? recallProfilePolicy.tenant_default[tenant] : undefined;
+  if (tenantDefault) {
+    return {
+      profile: tenantDefault,
+      defaults: RECALL_PROFILE_DEFAULTS[tenantDefault],
+      source: "tenant_default",
+    };
+  }
+  const endpointDefault = recallProfilePolicy.endpoint[endpoint];
+  if (endpointDefault) {
+    return {
+      profile: endpointDefault,
+      defaults: RECALL_PROFILE_DEFAULTS[endpointDefault],
+      source: "endpoint_override",
+    };
+  }
+  return {
+    profile: env.MEMORY_RECALL_PROFILE,
+    defaults: globalRecallProfileDefaults,
+    source: "global_default",
+  };
+}
+
+const RECALL_KNOB_KEYS: Array<keyof RecallProfileDefaults> = [
+  "limit",
+  "neighborhood_hops",
+  "max_nodes",
+  "max_edges",
+  "ranked_limit",
+  "min_edge_weight",
+  "min_edge_confidence",
+];
+
+function hasExplicitRecallKnobs(body: unknown): boolean {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const obj = body as Record<string, unknown>;
+  for (const key of RECALL_KNOB_KEYS) {
+    if (obj[key] !== undefined && obj[key] !== null) return true;
+  }
+  return false;
+}
+
+function resolveAdaptiveRecallProfile(baseProfile: RecallProfileName, gateWaitMs: number, hasExplicitKnobs: boolean): RecallAdaptiveResolution {
+  if (!env.MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED) {
+    return { profile: baseProfile, defaults: RECALL_PROFILE_DEFAULTS[baseProfile], applied: false, reason: "disabled" };
+  }
+  if (hasExplicitKnobs) {
+    return { profile: baseProfile, defaults: RECALL_PROFILE_DEFAULTS[baseProfile], applied: false, reason: "explicit_knobs" };
+  }
+  if (gateWaitMs < env.MEMORY_RECALL_ADAPTIVE_WAIT_MS) {
+    return { profile: baseProfile, defaults: RECALL_PROFILE_DEFAULTS[baseProfile], applied: false, reason: "wait_below_threshold" };
+  }
+  const target = env.MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE;
+  if (target === baseProfile) {
+    return { profile: baseProfile, defaults: RECALL_PROFILE_DEFAULTS[baseProfile], applied: false, reason: "already_target_profile" };
+  }
+  return { profile: target, defaults: RECALL_PROFILE_DEFAULTS[target], applied: true, reason: "queue_pressure" };
 }
 
 const app = Fastify({
@@ -246,7 +384,11 @@ app.log.info(
     recall_text_embed_cache_enabled: !!recallTextEmbedCache,
     recall_text_embed_cache_ttl_ms: env.RECALL_TEXT_EMBED_CACHE_TTL_MS,
     memory_recall_profile: env.MEMORY_RECALL_PROFILE,
-    memory_recall_profile_defaults: recallProfileDefaults,
+    memory_recall_profile_defaults: globalRecallProfileDefaults,
+    memory_recall_profile_policy: recallProfilePolicy,
+    memory_recall_adaptive_downgrade_enabled: env.MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED,
+    memory_recall_adaptive_wait_ms: env.MEMORY_RECALL_ADAPTIVE_WAIT_MS,
+    memory_recall_adaptive_target_profile: env.MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE,
     write_rate_limit_wait_ms: env.WRITE_RATE_LIMIT_MAX_WAIT_MS,
     tenant_write_rate_limit_wait_ms: env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS,
     recall_text_embed_rate_limit_rps: env.RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
@@ -404,15 +546,21 @@ app.post("/v1/memory/recall", async (req, reply) => {
   const timings: Record<string, number> = {};
   const principal = requireMemoryPrincipal(req);
   const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall");
-  const body = withRecallProfileDefaults(bodyRaw, recallProfileDefaults);
-  const parsed = MemoryRecallRequest.parse(body);
+  const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
+  const baseProfile = resolveRecallProfile("recall", tenantFromBody(bodyRaw));
+  const body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
+  let parsed = MemoryRecallRequest.parse(body);
   const wantDebugEmbeddings = parsed.return_debug && parsed.include_embeddings;
-  const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
   await enforceRateLimit(req, reply, "recall");
   await enforceTenantQuota(req, reply, "recall", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
   if (wantDebugEmbeddings) await enforceRateLimit(req, reply, "debug_embeddings");
   if (wantDebugEmbeddings) await enforceTenantQuota(req, reply, "debug_embeddings", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
   const gate = await acquireInflightSlot("recall");
+  const adaptiveProfile = resolveAdaptiveRecallProfile(baseProfile.profile, gate.wait_ms, explicitRecallKnobs);
+  if (adaptiveProfile.applied) {
+    parsed = MemoryRecallRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
+  }
+  const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
   let out: any;
   try {
     out = await withClient(db, async (client) => {
@@ -468,6 +616,11 @@ app.post("/v1/memory/recall", async (req, reply) => {
         edges: out.subgraph.edges.length,
         neighborhood_counts: (out as any).debug?.neighborhood_counts ?? null,
         rules: (out as any).rules ? { considered: (out as any).rules.considered, matched: (out as any).rules.matched } : null,
+        profile: adaptiveProfile.profile,
+        profile_source: baseProfile.source,
+        adaptive_profile_applied: adaptiveProfile.applied,
+        adaptive_profile_reason: adaptiveProfile.reason,
+        inflight_wait_ms: gate.wait_ms,
         ms,
         timings_ms: timings,
       },
@@ -486,8 +639,10 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
   const timings: Record<string, number> = {};
   const principal = requireMemoryPrincipal(req);
   const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall_text");
-  const body = withRecallProfileDefaults(bodyRaw, recallProfileDefaults);
-  const parsed = MemoryRecallTextRequest.parse(body);
+  const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
+  const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
+  const body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
+  let parsed = MemoryRecallTextRequest.parse(body);
   const wantDebugEmbeddingsText = parsed.return_debug && parsed.include_embeddings;
   await enforceRateLimit(req, reply, "recall");
   await enforceTenantQuota(req, reply, "recall", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
@@ -506,6 +661,10 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
   let embedBatchSize = 1;
   let recallParsed: any;
   const gate = await acquireInflightSlot("recall");
+  const adaptiveProfile = resolveAdaptiveRecallProfile(baseProfile.profile, gate.wait_ms, explicitRecallKnobs);
+  if (adaptiveProfile.applied) {
+    parsed = MemoryRecallTextRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
+  }
   let out: any;
   try {
     try {
@@ -621,6 +780,11 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
         edges: out.subgraph.edges.length,
         neighborhood_counts: (out as any).debug?.neighborhood_counts ?? null,
         rules: (out as any).rules ? { considered: (out as any).rules.considered, matched: (out as any).rules.matched } : null,
+        profile: adaptiveProfile.profile,
+        profile_source: baseProfile.source,
+        adaptive_profile_applied: adaptiveProfile.applied,
+        adaptive_profile_reason: adaptiveProfile.reason,
+        inflight_wait_ms: gate.wait_ms,
         ms,
         timings_ms: timings,
       },

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { docsCatalog, docsJourneys, docsLinks, docsOperations, docsRoleTracks, resolveDocsUrl, siteConfig } from "@/lib/site";
 import { SectionLead } from "@/components/marketing/section-lead";
+import { analyticsEvents } from "@/lib/analytics";
 
 export const metadata: Metadata = {
   title: "Aionis Docs | Production-ready documentation gateway",
@@ -22,16 +23,50 @@ export default function DocsPage() {
           This page is the canonical docs gateway for onboarding, API integration, quality gates, and release operations.
         </p>
         <div className="hero-cta">
-          <a className="btn btn-solid" href={docsHref("README.md")} target="_blank" rel="noreferrer">
+          <a
+            className="btn btn-solid"
+            href={docsHref("README.md")}
+            target="_blank"
+            rel="noreferrer"
+            data-analytics-event={analyticsEvents.DOCS_OPEN_CLICK}
+          >
             Open Docs Index
           </a>
-          <a className="btn btn-ghost" href={docsHref("ONBOARDING_5MIN.md")} target="_blank" rel="noreferrer">
+          <a
+            className="btn btn-ghost"
+            href={docsHref("ONBOARDING_5MIN.md")}
+            target="_blank"
+            rel="noreferrer"
+            data-analytics-event={analyticsEvents.QUICKSTART_COMPLETE}
+          >
             Start 5-Min Onboarding
           </a>
-          <Link className="btn btn-ghost" href="/changelog">
+          <Link className="btn btn-ghost" href="/changelog" data-analytics-event={analyticsEvents.CHANGELOG_OPEN_CLICK}>
             View Changelog
           </Link>
         </div>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Track model"
+            title="Docs map to OSS, Cloud, and Platform tracks"
+            copy="Use OSS docs for self-serve integration, Cloud docs for governance and operations, and Platform docs for execution-memory evolution."
+          />
+          <div className="grid-cards-3">
+            <article className="card">
+              <h3>OSS docs</h3>
+              <p>Onboarding, API contract, and SDK quickstart.</p>
+            </article>
+            <article className="card">
+              <h3>Cloud docs</h3>
+              <p>Security baseline, gates, runbooks, and rollout checklists.</p>
+            </article>
+            <article className="card">
+              <h3>Platform docs</h3>
+              <p>Execution substrate plans and governance progression.</p>
+            </article>
+          </div>
+        </section>
 
         <section className="section" style={{ paddingBottom: 0 }}>
           <SectionLead
@@ -88,7 +123,13 @@ export default function DocsPage() {
                   ))}
                 </ul>
                 <div className="chip-row">
-                  <a className="btn btn-solid" href={docsHref(journey.primaryDoc.path)} target="_blank" rel="noreferrer">
+                  <a
+                    className="btn btn-solid"
+                    href={docsHref(journey.primaryDoc.path)}
+                    target="_blank"
+                    rel="noreferrer"
+                    data-analytics-event={analyticsEvents.DOCS_OPEN_CLICK}
+                  >
                     {journey.primaryDoc.label}
                   </a>
                 </div>
@@ -108,7 +149,13 @@ export default function DocsPage() {
               <article key={item.path} className="card" id={item.path.replace(/\./g, "-")}>
                 <h3>{item.label}</h3>
                 <p>Open the source document in the repository docs tree.</p>
-                <a className="btn btn-solid" href={docsHref(item.path)} target="_blank" rel="noreferrer">
+                <a
+                  className="btn btn-solid"
+                  href={docsHref(item.path)}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-analytics-event={analyticsEvents.DOCS_OPEN_CLICK}
+                >
                   Read doc
                 </a>
               </article>

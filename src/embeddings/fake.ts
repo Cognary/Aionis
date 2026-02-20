@@ -22,10 +22,10 @@ export function fakeEmbed(text: string, dim = DIM): number[] {
 }
 
 export const FakeEmbeddingProvider: EmbeddingProvider = {
-  name: "fake",
+  // Keep provider:model format consistent with production providers so health-gate rules stay uniform.
+  name: "fake:deterministic",
   dim: DIM,
   async embed(texts: string[]): Promise<number[][]> {
     return texts.map((t) => fakeEmbed(t, DIM));
   },
 };
-

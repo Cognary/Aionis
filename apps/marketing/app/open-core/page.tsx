@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SectionLead } from "@/components/marketing/section-lead";
+import { analyticsEvents } from "@/lib/analytics";
 import { resolveDocsUrl, siteConfig } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -39,7 +40,7 @@ export default function OpenCorePage() {
               </ul>
             </article>
             <article className="card">
-              <h3>Layer 2: Hosted Aionis</h3>
+              <h3>Layer 2: Hosted Cloud</h3>
               <ul className="list">
                 <li>Multi-tenant isolation and enterprise identity</li>
                 <li>HA/SLO operations and managed reliability</li>
@@ -69,8 +70,8 @@ export default function OpenCorePage() {
             <thead>
               <tr>
                 <th>Capability</th>
-                <th>Open kernel</th>
-                <th>Hosted</th>
+                <th>OSS</th>
+                <th>Cloud</th>
               </tr>
             </thead>
             <tbody>
@@ -106,6 +107,14 @@ export default function OpenCorePage() {
               </tr>
             </tbody>
           </table>
+          <div className="hero-cta" style={{ marginTop: 16 }}>
+            <a className="btn btn-solid" href={resolveDocsUrl("EXTERNAL_RELEASE_PRODUCT_PLAN.md")} target="_blank" rel="noreferrer">
+              Open boundary matrix
+            </a>
+            <a className="btn btn-ghost" href={resolveDocsUrl("COMMERCIAL_STRATEGY.md")} target="_blank" rel="noreferrer">
+              Open strategy source
+            </a>
+          </div>
         </section>
 
         <section className="section" style={{ paddingBottom: 0 }}>
@@ -162,8 +171,8 @@ npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
             <a className="btn btn-solid" href={resolveDocsUrl("COMMERCIAL_STRATEGY.md")} target="_blank" rel="noreferrer">
               Open commercial strategy doc
             </a>
-            <Link className="btn btn-ghost" href="/pricing">
-              Compare Personal vs Enterprise
+            <Link className="btn btn-ghost" href="/pricing" data-analytics-event={analyticsEvents.OSS_TO_CLOUD_INTENT}>
+              Compare OSS vs Cloud packages
             </Link>
           </div>
         </section>

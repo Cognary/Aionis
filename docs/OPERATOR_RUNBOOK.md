@@ -81,6 +81,10 @@ Expected (steady state):
 ```bash
 set -a; source /Users/lucio/Desktop/Aionis/.env; set +a
 echo "MEMORY_RECALL_PROFILE=${MEMORY_RECALL_PROFILE:-strict_edges}"
+echo "MEMORY_RECALL_PROFILE_POLICY_JSON=${MEMORY_RECALL_PROFILE_POLICY_JSON:-{}}"
+echo "MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED=${MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED:-true}"
+echo "MEMORY_RECALL_ADAPTIVE_WAIT_MS=${MEMORY_RECALL_ADAPTIVE_WAIT_MS:-200}"
+echo "MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE=${MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE:-strict_edges}"
 ```
 
 6. Throughput profile check/apply:
@@ -204,6 +208,9 @@ cd /Users/lucio/Desktop/Aionis
 npm run -s gate:core:prod -- \
   --base-url "http://localhost:${PORT:-3001}" \
   --scope default \
+  --require-partition-ready true \
+  --partition-dual-write-enabled true \
+  --partition-read-shadow-check true \
   --run-perf true \
   --recall-p95-max-ms 1200 \
   --write-p95-max-ms 800 \
@@ -211,6 +218,7 @@ npm run -s gate:core:prod -- \
 ```
 
 Only deploy when the core gate passes.
+If you are pre-cutover or running rehearsal only, set `--require-partition-ready false`.
 
 ## Verification Stamp
 

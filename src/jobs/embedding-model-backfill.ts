@@ -57,6 +57,7 @@ async function run() {
           embedding_model IS NULL
           OR btrim(embedding_model) = ''
           OR lower(btrim(embedding_model)) LIKE 'unknown:%'
+          OR lower(btrim(embedding_model)) = 'fake'
         )
       `,
       [scope],
@@ -79,6 +80,7 @@ async function run() {
             embedding_model IS NULL
             OR btrim(embedding_model) = ''
             OR lower(btrim(embedding_model)) LIKE 'unknown:%'
+            OR lower(btrim(embedding_model)) = 'fake'
           )
         ORDER BY updated_at DESC
         LIMIT $3
