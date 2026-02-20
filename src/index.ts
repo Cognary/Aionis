@@ -38,6 +38,23 @@ const authResolver = createAuthResolver({
   jwtClockSkewSec: env.MEMORY_JWT_CLOCK_SKEW_SEC,
 });
 
+function databaseTargetHash(databaseUrl: string): string | null {
+  try {
+    const u = new URL(databaseUrl);
+    const protocol = u.protocol.toLowerCase();
+    const rawHost = u.hostname.toLowerCase();
+    const host = rawHost === "localhost" || rawHost === "127.0.0.1" || rawHost === "::1" ? "loopback" : rawHost;
+    const port = u.port || (protocol === "postgres:" || protocol === "postgresql:" ? "5432" : "");
+    const dbName = (u.pathname || "/").replace(/^\/+/, "");
+    if (!host || !port || !dbName) return null;
+    return sha256Hex(`${host}:${port}/${dbName}`);
+  } catch {
+    return null;
+  }
+}
+
+const healthDatabaseTargetHash = databaseTargetHash(env.DATABASE_URL);
+
 const recallLimiter = env.RATE_LIMIT_ENABLED
   ? new TokenBucketLimiter({
       rate_per_sec: env.RECALL_RATE_LIMIT_RPS,
@@ -429,7 +446,7 @@ app.addHook("onRequest", async (req, reply) => {
   }
 });
 
-app.get("/health", async () => ({ ok: true }));
+app.get("/health", async () => ({ ok: true, database_target_hash: healthDatabaseTargetHash }));
 
 app.post("/v1/memory/write", async (req, reply) => {
   const t0 = performance.now();

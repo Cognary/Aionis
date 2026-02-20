@@ -165,10 +165,10 @@ Do not use benchmark failures above as release blockers. Treat them as auxiliary
 
 Use these as default SLO-style boundaries. Tune by scope once traffic stabilizes.
 
-- `quality.summary.ready_ratio >= 0.80`
-- `quality.summary.alias_rate <= 0.30`
-- `quality.summary.archive_ratio <= 0.95`
-- `quality.summary.fresh_30d_ratio >= 0.20`
+- `quality.metrics.embedding_ready_ratio >= 0.80`
+- `quality.metrics.alias_rate <= 0.30`
+- `quality.metrics.archive_ratio <= 0.95`
+- `quality.metrics.fresh_30d_ratio >= 0.20`
 - `consistency.summary.errors == 0` (always)
 - `consistency.summary.warnings == 0` (recommended for production gate)
 - `embedding_model_invalid_for_ready == 0` (no `unknown:*` model labels)
@@ -178,7 +178,7 @@ Use these as default SLO-style boundaries. Tune by scope once traffic stabilizes
 ## Incident Playbook
 
 1. If `quality_eval_failed`:
-- Run `npm run job:quality-eval` and inspect `failed_checks`.
+- Run `npm run job:quality-eval` and inspect `summary.failed` (or `failed_checks` in `job:health-gate` output).
 - Run `npm run job:salience-decay` and re-check.
 - If failure is `ready_ratio` related, inspect embedding backfill and outbox worker.
 

@@ -26,6 +26,7 @@ TENANT_ID="${TENANT_ID:-${MEMORY_TENANT_ID:-default}}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="${OUT_DIR:-${ROOT_DIR}/artifacts/core_gate/${RUN_ID}}"
 RUN_PERF="${RUN_PERF:-true}"
+CORE_GATE_DB_RUNNER="${CORE_GATE_DB_RUNNER:-local}"
 CORE_GATE_REQUIRE_PARTITION_READY="${CORE_GATE_REQUIRE_PARTITION_READY:-false}"
 CORE_GATE_PARTITION_SCOPE="${CORE_GATE_PARTITION_SCOPE:-}"
 CORE_GATE_PARTITION_TENANT_ID="${CORE_GATE_PARTITION_TENANT_ID:-}"
@@ -53,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     --tenant-id) TENANT_ID="${2:-}"; shift 2 ;;
     --out-dir) OUT_DIR="${2:-}"; shift 2 ;;
     --run-perf) RUN_PERF="${2:-}"; shift 2 ;;
+    --db-runner) CORE_GATE_DB_RUNNER="${2:-}"; shift 2 ;;
     --recall-p95-max-ms) RECALL_P95_MAX_MS="${2:-}"; shift 2 ;;
     --write-p95-max-ms) WRITE_P95_MAX_MS="${2:-}"; shift 2 ;;
     --error-rate-max) ERROR_RATE_MAX="${2:-}"; shift 2 ;;
@@ -86,6 +88,7 @@ Options:
   --tenant-id <tenant>               Tenant id (default: MEMORY_TENANT_ID or default)
   --out-dir <dir>                    Artifact output directory
   --run-perf <true|false>            Run perf benchmark checks (default: true)
+  --db-runner <local|auto>            Runner for DB-backed gate jobs (default: local; auto aliases to local)
   --recall-p95-max-ms <n>            Recall p95 SLO threshold (default: 1200)
   --write-p95-max-ms <n>             Write p95 SLO threshold (default: 800)
   --error-rate-max <0..1>            Max per-case error rate (default: 0.02)
@@ -113,6 +116,21 @@ USAGE
   esac
 done
 
+resolve_db_runner() {
+  case "${CORE_GATE_DB_RUNNER}" in
+    local|auto)
+      echo "local"
+      return 0
+      ;;
+    *)
+      echo "invalid --db-runner: ${CORE_GATE_DB_RUNNER} (expected local|auto)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+DB_RUNNER="$(resolve_db_runner)"
+
 if [[ -z "${CORE_GATE_PARTITION_SCOPE}" ]]; then
   CORE_GATE_PARTITION_SCOPE="${SCOPE}"
 fi
@@ -124,6 +142,8 @@ mkdir -p "${OUT_DIR}"
 
 steps_json='[]'
 fail_reasons='[]'
+API_DATABASE_TARGET_HASH=""
+DB_TARGET_HASH_MATCH="null"
 
 run_step() {
   local name="$1"
@@ -159,11 +179,17 @@ is_gt() {
   awk -v a="$1" -v b="$2" 'BEGIN { exit !(a>b) }'
 }
 
+run_db_command() {
+  "$@"
+}
+
 probe_api_target() {
   local probe_file="${OUT_DIR}/00_api_probe.json"
+  local health_body_file="${OUT_DIR}/00_health_probe_body.json"
   local health_code="000"
   local recall_code="000"
-  health_code="$(curl -sS -o /dev/null -w "%{http_code}" "${BASE_URL}/health" || true)"
+  local health_json_valid=false
+  health_code="$(curl -sS -o "${health_body_file}" -w "%{http_code}" "${BASE_URL}/health" || true)"
   recall_code="$(
     curl -sS -o /dev/null -w "%{http_code}" \
       "${BASE_URL}/v1/memory/recall" \
@@ -172,6 +198,10 @@ probe_api_target() {
   )"
   health_code="${health_code: -3}"
   recall_code="${recall_code: -3}"
+  if [[ -s "${health_body_file}" ]] && jq -e . >/dev/null 2>&1 < "${health_body_file}"; then
+    health_json_valid=true
+    API_DATABASE_TARGET_HASH="$(jq -r '.database_target_hash // empty' "${health_body_file}")"
+  fi
   local ok=true
   if [[ "${health_code}" == "000" || "${recall_code}" == "000" || "${recall_code}" == "404" ]]; then
     ok=false
@@ -181,11 +211,15 @@ probe_api_target() {
     --argjson ok "$([[ "${ok}" == "true" ]] && echo true || echo false)" \
     --arg health_code "${health_code}" \
     --arg recall_probe_code "${recall_code}" \
+    --arg database_target_hash "${API_DATABASE_TARGET_HASH}" \
+    --argjson health_json_valid "$([[ "${health_json_valid}" == "true" ]] && echo true || echo false)" \
     '{
       ok: $ok,
       base_url: $base_url,
       health_code: ($health_code | tonumber? // $health_code),
-      recall_probe_code: ($recall_probe_code | tonumber? // $recall_probe_code)
+      recall_probe_code: ($recall_probe_code | tonumber? // $recall_probe_code),
+      health_json_valid: $health_json_valid,
+      database_target_hash: (if ($database_target_hash|length)>0 then $database_target_hash else null end)
     }' > "${probe_file}"
   if [[ "${ok}" != "true" ]]; then
     echo "[core-gate] api probe failed: BASE_URL does not look like Aionis memory API (see ${probe_file})" >&2
@@ -196,7 +230,7 @@ probe_api_target() {
 
 probe_database_connectivity() {
   local probe_file="${OUT_DIR}/00_db_probe.log"
-  if [[ -z "${DATABASE_URL:-}" ]]; then
+  if [[ "${DB_RUNNER}" == "local" && -z "${DATABASE_URL:-}" ]]; then
     echo "[core-gate] DATABASE_URL is empty; cannot run DB-backed gate checks" >&2
     exit 2
   fi
@@ -223,11 +257,50 @@ probe_database_connectivity() {
     sed -n "1,80p" "${probe_file}" >&2 || true
     exit 2
   fi
+
+  local local_db_target_hash=""
+  local_db_target_hash="$(
+    DATABASE_URL="${DATABASE_URL}" node -e '
+      const { createHash } = require("node:crypto");
+      const raw = process.env.DATABASE_URL || "";
+      try {
+        const u = new URL(raw);
+        const rawHost = (u.hostname || "").toLowerCase();
+        const host = rawHost === "localhost" || rawHost === "127.0.0.1" || rawHost === "::1" ? "loopback" : rawHost;
+        const protocol = (u.protocol || "").toLowerCase();
+        const port = u.port || ((protocol === "postgresql:" || protocol === "postgres:") ? "5432" : "");
+        const db = (u.pathname || "/").replace(/^\/+/, "");
+        if (!host || !port || !db) process.exit(1);
+        const normalized = `${host}:${port}/${db}`;
+        process.stdout.write(createHash("sha256").update(normalized).digest("hex"));
+      } catch {
+        process.exit(1);
+      }
+    ' 2>/dev/null || true
+  )"
+
+  {
+    echo "db_runner=${DB_RUNNER}"
+    echo "local_db_target_hash=${local_db_target_hash:-unknown}"
+    echo "api_db_target_hash=${API_DATABASE_TARGET_HASH:-unknown}"
+  } >> "${probe_file}"
+
+  if [[ -n "${local_db_target_hash}" && -n "${API_DATABASE_TARGET_HASH}" ]]; then
+    if [[ "${local_db_target_hash}" == "${API_DATABASE_TARGET_HASH}" ]]; then
+      DB_TARGET_HASH_MATCH="true"
+    else
+      DB_TARGET_HASH_MATCH="false"
+      echo "[core-gate] database target mismatch: BASE_URL points to a different DB target than local DATABASE_URL (see ${probe_file})" >&2
+      echo "[core-gate] set DATABASE_URL to the same DB instance used by ${BASE_URL} and rerun." >&2
+      exit 2
+    fi
+  fi
 }
 
 echo "[core-gate] out_dir=${OUT_DIR}"
 echo "[core-gate] base_url=${BASE_URL} scope=${SCOPE} tenant_id=${TENANT_ID} run_perf=${RUN_PERF}"
 echo "[core-gate] require_partition_ready=${CORE_GATE_REQUIRE_PARTITION_READY}"
+echo "[core-gate] db_runner=${DB_RUNNER}"
 probe_api_target
 probe_database_connectivity
 
@@ -238,15 +311,15 @@ run_step "sdk_release_check" "${OUT_DIR}/04_sdk_release_check.log" npm run -s sd
 run_step "sdk_python_release_check" "${OUT_DIR}/05_sdk_python_release_check.log" npm run -s sdk:py:release-check
 
 run_step "health_gate_scope" "${OUT_DIR}/06_health_gate_scope.json" \
-  npm run -s job:health-gate -- --scope "${SCOPE}" --strict-warnings --consistency-check-set scope
+  run_db_command npm run -s job:health-gate -- --scope "${SCOPE}" --strict-warnings --consistency-check-set scope
 
 run_step "consistency_cross_tenant" "${OUT_DIR}/07_consistency_cross_tenant.json" \
-  npm run -s job:consistency-check:cross-tenant -- --strict-warnings
+  run_db_command npm run -s job:consistency-check:cross-tenant -- --strict-warnings
 
 partition_cutover_summary_path=""
 if [[ "${CORE_GATE_REQUIRE_PARTITION_READY}" == "true" ]]; then
   run_step "partition_backfill_sync" "${OUT_DIR}/07b_partition_backfill_sync.json" \
-    npm run -s job:partition-backfill -- \
+    run_db_command npm run -s job:partition-backfill -- \
       --scope "${CORE_GATE_PARTITION_SCOPE}" \
       --tenant-id "${CORE_GATE_PARTITION_TENANT_ID}" \
       --table all \
@@ -328,6 +401,8 @@ jq -n \
   --arg base_url "${BASE_URL}" \
   --arg scope "${SCOPE}" \
   --arg tenant_id "${TENANT_ID}" \
+  --arg db_runner "${DB_RUNNER}" \
+  --arg db_target_hash_match "${DB_TARGET_HASH_MATCH}" \
   --argjson run_perf "$([[ "${RUN_PERF}" == "true" ]] && echo true || echo false)" \
   --argjson recall_p95_max_ms "${RECALL_P95_MAX_MS}" \
   --argjson write_p95_max_ms "${WRITE_P95_MAX_MS}" \
@@ -353,7 +428,18 @@ jq -n \
     run_id: $run_id,
     timestamp_utc: $timestamp_utc,
     gate_class: "production_core",
-    target: { base_url: $base_url, scope: $scope, tenant_id: $tenant_id },
+    target: {
+      base_url: $base_url,
+      scope: $scope,
+      tenant_id: $tenant_id,
+      db_runner: $db_runner,
+      db_target_hash_match: (
+        if $db_target_hash_match == "true" then true
+        elif $db_target_hash_match == "false" then false
+        else null
+        end
+      )
+    },
     blocking_metrics: {
       integrity: [
         "health_gate_scope(strict_warnings)",

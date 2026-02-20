@@ -390,7 +390,7 @@ jq -n \
     quality: {
       pass: $quality_pass,
       summary: ($quality.summary // {}),
-      failed_checks: ($quality.failed_checks // [])
+      failed_checks: ($quality.failed_checks // $quality.summary.failed // [])
     },
     execution_loop: $execution_loop,
     policy_adaptation: $policy_adaptation

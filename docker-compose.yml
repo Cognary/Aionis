@@ -63,6 +63,11 @@ services:
     environment:
       DATABASE_URL: postgres://aionis:aionis@db:5432/aionis_memory
     command: ["node", "dist/jobs/outbox-worker.js"]
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'process.exit(0)'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
 volumes:

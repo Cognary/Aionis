@@ -23,12 +23,19 @@ Auxiliary only (non-blocking):
 cd /Users/lucio/Desktop/Aionis
 npm run -s gate:core:prod -- \
   --base-url "http://localhost:${PORT:-3001}" \
+  --db-runner local \
   --scope default \
   --run-perf true \
   --recall-p95-max-ms 1200 \
   --write-p95-max-ms 800 \
   --error-rate-max 0.02
 ```
+
+`--db-runner` notes:
+- `local` (default): run DB-backed checks on local host using local `DATABASE_URL`.
+- `auto`: currently aliases to `local` for compatibility.
+
+The gate now compares API `/health.database_target_hash` and local `DATABASE_URL` target hash. If they differ, gate fails fast to prevent false green on the wrong database.
 
 Artifacts:
 - `artifacts/core_gate/<run_id>/summary.json`
