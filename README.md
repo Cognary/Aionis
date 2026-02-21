@@ -139,9 +139,17 @@ Use these before public traffic:
 Operator docs:
 
 - [Operator Runbook](docs/OPERATOR_RUNBOOK.md)
+- [Hostedization Execution Plan](docs/HOSTEDIZATION_PLAN.md)
 - [E2E Regression](docs/E2E_REGRESSION.md)
 - [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
 - [LongMemEval Gate](docs/LONGMEMEVAL_GATE.md)
+
+Hosted preflight:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s preflight:hosted -- --run-gates
+```
 
 ## Documentation Hub
 

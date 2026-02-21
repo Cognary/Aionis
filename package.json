@@ -84,6 +84,7 @@
     "gate:core:prod": "bash scripts/core-production-gate.sh",
     "regression:oneclick": "bash scripts/regression-oneclick.sh",
     "preflight:prod": "bash scripts/prod-preflight.sh",
+    "preflight:hosted": "bash scripts/hosted/preflight-hosted.sh",
     "job:compression-rollup": "tsx src/jobs/compression-rollup.ts",
     "job:consolidation-candidates": "tsx src/jobs/consolidation-candidates.ts",
     "job:consolidation-apply": "tsx src/jobs/consolidation-apply.ts",

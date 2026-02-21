@@ -53,6 +53,7 @@ This index is the entry point for project documentation.
 - [GTM Phase 2 Execution Board](./GTM_PHASE2_EXECUTION_BOARD.md)
 - [GTM Phase 3 Execution Board](./GTM_PHASE3_EXECUTION_BOARD.md)
 - [External Release Product Plan (Open Core + Hosted + Kernel Control)](./EXTERNAL_RELEASE_PRODUCT_PLAN.md)
+- [Hostedization Execution Plan](./HOSTEDIZATION_PLAN.md)
 - [GTM Weekly Status Template](./GTM_WEEKLY_STATUS_TEMPLATE.md)
 - [SDK (TypeScript, P1 MVP)](./SDK.md)
 - [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)
@@ -79,6 +80,13 @@ This index is the entry point for project documentation.
 ```bash
 cd /Users/lucio/Desktop/Aionis
 npm run docs:check
+```
+
+- Run hosted preflight:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s preflight:hosted -- --run-gates
 ```
 
 ## Docs Website (GitHub Pages)
