@@ -21,6 +21,7 @@ import {
   listControlAlertRoutes,
   listControlAuditEvents,
   listControlIncidentPublishJobs,
+  replayControlIncidentPublishJobs,
   listStaleControlApiKeys,
   listControlTenants,
   recordMemoryRequestTelemetry,
@@ -648,6 +649,15 @@ const ControlIncidentPublishJobSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+const ControlIncidentPublishReplaySchema = z.object({
+  tenant_id: z.string().min(1).max(128).optional(),
+  statuses: z.array(z.enum(["failed", "dead_letter"])).max(8).optional(),
+  ids: z.array(z.string().uuid()).max(500).optional(),
+  limit: z.number().int().min(1).max(500).optional(),
+  reset_attempts: z.boolean().optional(),
+  reason: z.string().min(1).max(256).optional(),
+});
+
 app.post("/v1/admin/control/tenants", async (req, reply) => {
   requireAdminToken(req);
   const body = ControlTenantSchema.parse(req.body ?? {});
@@ -861,6 +871,28 @@ app.get("/v1/admin/control/incident-publish/jobs", async (req, reply) => {
     offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
   });
   return reply.code(200).send({ ok: true, jobs });
+});
+
+app.post("/v1/admin/control/incident-publish/jobs/replay", async (req, reply) => {
+  requireAdminToken(req);
+  const body = ControlIncidentPublishReplaySchema.parse(req.body ?? {});
+  const jobs = await replayControlIncidentPublishJobs(db, body);
+  const tenantId = body.tenant_id ?? (jobs[0]?.tenant_id ? String(jobs[0].tenant_id) : null);
+  await emitControlAudit(req, {
+    action: "incident_publish.replay",
+    resource_type: "incident_publish_job_batch",
+    resource_id: `${tenantId ?? "all"}:${new Date().toISOString()}`,
+    tenant_id: tenantId,
+    details: {
+      replayed_count: jobs.length,
+      statuses: body.statuses ?? ["dead_letter", "failed"],
+      limit: body.limit ?? 100,
+      reset_attempts: body.reset_attempts ?? true,
+      reason: body.reason ?? "manual_replay",
+      sample_job_ids: jobs.slice(0, 20).map((x: any) => String(x.id)),
+    },
+  });
+  return reply.code(200).send({ ok: true, replayed_count: jobs.length, jobs });
 });
 
 app.put("/v1/admin/control/tenant-quotas/:tenant_id", async (req, reply) => {

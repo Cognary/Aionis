@@ -200,6 +200,14 @@ Required before hosted production rollout:
      - GCS: `generation` + `metageneration`
      - Azure Blob: `etag` + `version_id` (if available)
 
+## Current Batch (In Progress)
+
+1. Incident publish dead-letter replay operations for hosted operators. (Completed)
+   - endpoint: `POST /v1/admin/control/incident-publish/jobs/replay`
+   - job: `npm run -s job:hosted-incident-publish-replay`
+2. Replay workflow hardening (filter/limit defaults + bounded audit evidence). (Pending)
+3. Hosted release evidence dashboard roll-up for replay outcomes. (Pending)
+
 ## Operating Rules
 
 1. Perf and stress tests must use isolated scope and tenant.

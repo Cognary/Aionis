@@ -217,6 +217,27 @@ Request:
 
 `GET /v1/admin/control/incident-publish/jobs?tenant_id=tenant_acme&status=failed&limit=100&offset=0`
 
+3. Replay failed/dead-letter jobs
+
+`POST /v1/admin/control/incident-publish/jobs/replay`
+
+Request:
+
+```json
+{
+  "tenant_id": "tenant_acme",
+  "statuses": ["dead_letter", "failed"],
+  "limit": 100,
+  "reset_attempts": true,
+  "reason": "storage_outage_recovered"
+}
+```
+
+Optional:
+
+- `ids`: replay only specific job ids (UUID array, max 500)
+- `statuses`: defaults to `["dead_letter", "failed"]`
+
 Operational note:
 
 - Sync publish path (`incident:bundle:hosted --publish-target ...`) stores provider attestation at:

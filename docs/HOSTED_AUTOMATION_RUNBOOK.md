@@ -100,6 +100,17 @@ cd /Users/lucio/Desktop/Aionis
 npm run -s job:hosted-incident-publish-worker -- --max-jobs 50 --strict
 ```
 
+Replay failed/dead-letter publish jobs after provider recovery:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s job:hosted-incident-publish-replay -- \
+  --tenant-id tenant_acme \
+  --statuses dead_letter,failed \
+  --limit 100 \
+  --reason provider_recovered
+```
+
 Default bundle steps:
 
 1. `gate:core:prod` (`run-perf=false`)

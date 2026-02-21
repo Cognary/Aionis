@@ -61,6 +61,9 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 10. Incident publish queue health:
 - `GET /v1/admin/control/incident-publish/jobs?status=failed`
 - worker drill: `npm run -s job:hosted-incident-publish-worker -- --max-jobs 20 --strict`
+11. Dead-letter replay drill:
+- `POST /v1/admin/control/incident-publish/jobs/replay` (scoped to tenant, bounded `limit`)
+- CLI fallback: `npm run -s job:hosted-incident-publish-replay -- --tenant-id <tenant> --statuses dead_letter,failed --limit 50`
 
 ## 4. Incident Triage
 

@@ -115,6 +115,15 @@ export type ControlIncidentPublishJobInput = {
   metadata?: Record<string, unknown>;
 };
 
+export type ControlIncidentPublishReplayInput = {
+  tenant_id?: string;
+  statuses?: Array<"failed" | "dead_letter">;
+  ids?: string[];
+  limit?: number;
+  reset_attempts?: boolean;
+  reason?: string;
+};
+
 export type MemoryRequestTelemetryInput = {
   tenant_id: string;
   scope: string;
@@ -950,6 +959,69 @@ export async function listControlIncidentPublishJobs(
         LIMIT $${args.length - 1} OFFSET $${args.length}
         `,
         args,
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function replayControlIncidentPublishJobs(db: Db, input: ControlIncidentPublishReplayInput = {}) {
+  const tenantId = trimOrNull(input.tenant_id);
+  const statusSet = new Set<string>();
+  for (const raw of input.statuses ?? []) {
+    const s = trimOrNull(raw);
+    if (s === "failed" || s === "dead_letter") statusSet.add(s);
+  }
+  const statuses = statusSet.size > 0 ? Array.from(statusSet) : ["dead_letter", "failed"];
+  const ids = (input.ids ?? [])
+    .map((x) => trimOrNull(x))
+    .filter((x): x is string => !!x)
+    .slice(0, 500);
+  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(500, Math.trunc(input.limit!))) : 100;
+  const resetAttempts = input.reset_attempts ?? true;
+  const reason = trimOrNull(input.reason) ?? "manual_replay";
+
+  try {
+    return await withTx(db, async (client) => {
+      const q = await client.query(
+        `
+        WITH candidates AS (
+          SELECT id
+          FROM control_incident_publish_jobs
+          WHERE ($1::text IS NULL OR tenant_id = $1::text)
+            AND status = ANY($2::text[])
+            AND ($3::text[] IS NULL OR id::text = ANY($3::text[]))
+          ORDER BY created_at ASC
+          LIMIT $4
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE control_incident_publish_jobs j
+        SET
+          status = 'pending',
+          attempts = CASE
+            WHEN $5::boolean THEN 0
+            ELSE LEAST(j.attempts, GREATEST(j.max_attempts - 1, 0))
+          END,
+          next_attempt_at = now(),
+          locked_at = NULL,
+          locked_by = NULL,
+          last_error = NULL,
+          last_response = '{}'::jsonb,
+          metadata = COALESCE(j.metadata, '{}'::jsonb) || jsonb_build_object(
+            'replayed_at', now(),
+            'replay_reason', $6::text
+          )
+        FROM candidates
+        WHERE j.id = candidates.id
+        RETURNING
+          j.id, j.tenant_id, j.run_id, j.source_dir, j.target, j.status, j.attempts, j.max_attempts,
+          j.next_attempt_at, j.locked_at, j.locked_by, j.published_uri, j.last_error, j.last_response, j.metadata,
+          j.created_at, j.updated_at
+        `,
+        [tenantId, statuses, ids.length > 0 ? ids : null, limit, resetAttempts, reason],
       );
       return q.rows;
     });
