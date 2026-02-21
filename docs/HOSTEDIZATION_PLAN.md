@@ -156,11 +156,23 @@ Required before hosted production rollout:
    - command: `npm run -s incident:bundle:hosted -- --publish-target <uri>`
    - artifacts: `evidence_index.json` + optional `evidence_index.sig.json`
 
-## Upcoming Batch
+## Upcoming Batch (In Progress)
 
-1. Tenant-level alert routing hooks (PagerDuty/Slack/webhook fan-out by policy).
-2. Dashboard API cursors for high-cardinality tenants (cursor token + snapshot consistency).
-3. Hosted incident publisher plugins (S3/GCS/Azure adapters + checksum verification job).
+1. Tenant-level alert routing hooks (PagerDuty/Slack/webhook fan-out by policy). (Completed)
+   - migration: `migrations/0026_control_alert_routing.sql`
+   - endpoints:
+     - `POST /v1/admin/control/alerts/routes`
+     - `GET /v1/admin/control/alerts/routes`
+     - `POST /v1/admin/control/alerts/routes/:id/status`
+     - `GET /v1/admin/control/alerts/deliveries`
+   - job: `npm run -s job:hosted-alert-dispatch`
+2. Dashboard API cursors for high-cardinality tenants (cursor token + snapshot consistency). (Completed)
+   - endpoints:
+     - `GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries?cursor=...`
+     - `GET /v1/admin/control/dashboard/tenant/:tenant_id/key-usage?cursor=...`
+3. Hosted incident publisher plugins (S3/GCS/Azure adapters + checksum verification job). (In Progress)
+   - completed: checksum verification job `npm run -s job:hosted-incident-verify`
+   - pending: GCS/Azure publish adapters
 
 ## Operating Rules
 

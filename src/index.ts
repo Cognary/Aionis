@@ -6,6 +6,7 @@ import { ZodError, z } from "zod";
 import { loadEnv } from "./config.js";
 import { createDb, withClient, withTx } from "./db.js";
 import {
+  createControlAlertRoute,
   createApiKeyPrincipalResolver,
   createControlApiKey,
   createTenantQuotaResolver,
@@ -15,6 +16,8 @@ import {
   getTenantDashboardSummary,
   getTenantRequestTimeseries,
   listControlApiKeys,
+  listControlAlertDeliveries,
+  listControlAlertRoutes,
   listControlAuditEvents,
   listStaleControlApiKeys,
   listControlTenants,
@@ -22,6 +25,7 @@ import {
   recordControlAuditEvent,
   rotateControlApiKey,
   revokeControlApiKey,
+  updateControlAlertRouteStatus,
   upsertControlProject,
   upsertControlTenant,
   upsertTenantQuotaProfile,
@@ -267,6 +271,50 @@ function parseTelemetryEndpoint(v: unknown): "write" | "recall" | "recall_text" 
   if (typeof v !== "string") return undefined;
   if (v === "write" || v === "recall" || v === "recall_text") return v;
   return undefined;
+}
+
+type DashboardCursor = {
+  v: 1;
+  kind: "timeseries" | "key_usage";
+  tenant_id: string;
+  endpoint?: "write" | "recall" | "recall_text" | null;
+  window_hours: number;
+  baseline_hours?: number;
+  limit: number;
+  offset: number;
+  anchor_utc: string;
+};
+
+function encodeDashboardCursor(cursor: DashboardCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeDashboardCursor(raw: string): DashboardCursor {
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as DashboardCursor;
+    if (!parsed || parsed.v !== 1 || !parsed.kind || !parsed.tenant_id || !parsed.anchor_utc) {
+      throw new Error("malformed cursor");
+    }
+    if (!Number.isFinite(parsed.window_hours) || !Number.isFinite(parsed.limit) || !Number.isFinite(parsed.offset)) {
+      throw new Error("malformed cursor numeric fields");
+    }
+    const d = new Date(parsed.anchor_utc);
+    if (!Number.isFinite(d.getTime())) throw new Error("invalid cursor anchor");
+    return {
+      ...parsed,
+      anchor_utc: d.toISOString(),
+    };
+  } catch {
+    throw new HttpError(400, "invalid_request", "invalid cursor");
+  }
+}
+
+function parseCursor(raw: unknown, kind: DashboardCursor["kind"], tenantId: string): DashboardCursor | null {
+  if (typeof raw !== "string" || raw.trim().length === 0) return null;
+  const cursor = decodeDashboardCursor(raw.trim());
+  if (cursor.kind !== kind) throw new HttpError(400, "invalid_request", `cursor kind mismatch: expected ${kind}`);
+  if (cursor.tenant_id !== tenantId) throw new HttpError(400, "invalid_request", "cursor tenant mismatch");
+  return cursor;
 }
 
 function resolveRequestScopeForTelemetry(req: any): string {
@@ -573,6 +621,22 @@ const ControlTenantQuotaSchema = z.object({
   recall_text_embed_max_wait_ms: z.number().int().min(0),
 });
 
+const ControlAlertRouteSchema = z.object({
+  tenant_id: z.string().min(1).max(128),
+  channel: z.enum(["webhook", "slack_webhook", "pagerduty_events"]),
+  label: z.string().max(256).optional().nullable(),
+  events: z.array(z.string().min(1).max(128)).max(64).optional(),
+  status: z.enum(["active", "disabled"]).optional(),
+  target: z.string().max(2048).optional().nullable(),
+  secret: z.string().max(2048).optional().nullable(),
+  headers: z.record(z.string().max(2048)).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+const ControlAlertRouteStatusSchema = z.object({
+  status: z.enum(["active", "disabled"]),
+});
+
 app.post("/v1/admin/control/tenants", async (req, reply) => {
   requireAdminToken(req);
   const body = ControlTenantSchema.parse(req.body ?? {});
@@ -684,6 +748,71 @@ app.post("/v1/admin/control/api-keys/:id/rotate", async (req, reply) => {
   return reply.code(200).send({ ok: true, key: out });
 });
 
+app.post("/v1/admin/control/alerts/routes", async (req, reply) => {
+  requireAdminToken(req);
+  const body = ControlAlertRouteSchema.parse(req.body ?? {});
+  const out = await createControlAlertRoute(db, body);
+  await emitControlAudit(req, {
+    action: "alert_route.create",
+    resource_type: "alert_route",
+    resource_id: String(out.id),
+    tenant_id: String(out.tenant_id),
+    details: {
+      channel: out.channel,
+      status: out.status,
+      events: out.events,
+      label: out.label ?? null,
+    },
+  });
+  return reply.code(200).send({ ok: true, route: out });
+});
+
+app.get("/v1/admin/control/alerts/routes", async (req, reply) => {
+  requireAdminToken(req);
+  const q = req.query as Record<string, unknown> | undefined;
+  const rows = await listControlAlertRoutes(db, {
+    tenant_id: typeof q?.tenant_id === "string" ? q.tenant_id : undefined,
+    channel:
+      q?.channel === "webhook" || q?.channel === "slack_webhook" || q?.channel === "pagerduty_events"
+        ? q.channel
+        : undefined,
+    status: q?.status === "active" || q?.status === "disabled" ? q.status : undefined,
+    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
+    offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
+  });
+  return reply.code(200).send({ ok: true, routes: rows });
+});
+
+app.post("/v1/admin/control/alerts/routes/:id/status", async (req, reply) => {
+  requireAdminToken(req);
+  const id = String((req.params as any)?.id ?? "").trim();
+  if (!id) throw new HttpError(400, "invalid_request", "id is required");
+  const body = ControlAlertRouteStatusSchema.parse(req.body ?? {});
+  const out = await updateControlAlertRouteStatus(db, id, body.status);
+  if (!out) return reply.code(404).send({ error: "not_found", message: "alert route not found" });
+  await emitControlAudit(req, {
+    action: "alert_route.status",
+    resource_type: "alert_route",
+    resource_id: String(out.id),
+    tenant_id: String(out.tenant_id),
+    details: { status: out.status },
+  });
+  return reply.code(200).send({ ok: true, route: out });
+});
+
+app.get("/v1/admin/control/alerts/deliveries", async (req, reply) => {
+  requireAdminToken(req);
+  const q = req.query as Record<string, unknown> | undefined;
+  const deliveries = await listControlAlertDeliveries(db, {
+    tenant_id: typeof q?.tenant_id === "string" ? q.tenant_id : undefined,
+    event_type: typeof q?.event_type === "string" ? q.event_type : undefined,
+    status: q?.status === "sent" || q?.status === "failed" || q?.status === "skipped" ? q.status : undefined,
+    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
+    offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
+  });
+  return reply.code(200).send({ ok: true, deliveries });
+});
+
 app.put("/v1/admin/control/tenant-quotas/:tenant_id", async (req, reply) => {
   requireAdminToken(req);
   const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
@@ -756,21 +885,41 @@ app.get("/v1/admin/control/dashboard/tenant/:tenant_id/timeseries", async (req, 
   const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
   if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
   const q = req.query as Record<string, unknown> | undefined;
+  const cursor = parseCursor(q?.cursor, "timeseries", tenantId);
   const endpointRaw = typeof q?.endpoint === "string" ? q.endpoint : undefined;
-  const endpoint = parseTelemetryEndpoint(endpointRaw);
-  if (endpointRaw && !endpoint) {
+  const endpoint = parseTelemetryEndpoint(endpointRaw ?? cursor?.endpoint ?? undefined);
+  if (endpointRaw && !endpoint && endpointRaw.trim().length > 0) {
     throw new HttpError(400, "invalid_request", "endpoint must be one of: write|recall|recall_text");
   }
+  const windowHours = typeof q?.window_hours === "string" ? Number(q.window_hours) : cursor?.window_hours;
+  const limit = typeof q?.limit === "string" ? Number(q.limit) : cursor?.limit;
+  const offset = typeof q?.offset === "string" ? Number(q.offset) : cursor?.offset;
+  const anchorUtc = cursor?.anchor_utc ?? new Date().toISOString();
   const out = await getTenantRequestTimeseries(db, {
     tenant_id: tenantId,
-    window_hours: typeof q?.window_hours === "string" ? Number(q.window_hours) : undefined,
+    window_hours: windowHours,
     endpoint,
-    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
-    offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
+    limit,
+    offset,
     retention_hours: env.CONTROL_TELEMETRY_RETENTION_HOURS,
+    anchor_utc: anchorUtc,
     bucket: "hour",
   });
-  return reply.code(200).send(out);
+  const page = (out as any)?.page ?? null;
+  const nextCursor =
+    out && (out as any).ok && page?.has_more
+      ? encodeDashboardCursor({
+          v: 1,
+          kind: "timeseries",
+          tenant_id: tenantId,
+          endpoint: endpoint ?? null,
+          window_hours: Number((out as any).window_hours ?? windowHours ?? 0),
+          limit: Number(page.limit ?? limit ?? 0),
+          offset: Number(page.offset ?? offset ?? 0) + Number(page.limit ?? limit ?? 0),
+          anchor_utc: String((out as any)?.snapshot?.anchor_utc ?? anchorUtc),
+        })
+      : null;
+  return reply.code(200).send({ ...out, cursor: { next: nextCursor } });
 });
 
 app.get("/v1/admin/control/dashboard/tenant/:tenant_id/key-usage", async (req, reply) => {
@@ -778,23 +927,47 @@ app.get("/v1/admin/control/dashboard/tenant/:tenant_id/key-usage", async (req, r
   const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
   if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
   const q = req.query as Record<string, unknown> | undefined;
+  const cursor = parseCursor(q?.cursor, "key_usage", tenantId);
   const endpointRaw = typeof q?.endpoint === "string" ? q.endpoint : undefined;
-  const endpoint = parseTelemetryEndpoint(endpointRaw);
-  if (endpointRaw && !endpoint) {
+  const endpoint = parseTelemetryEndpoint(endpointRaw ?? cursor?.endpoint ?? undefined);
+  if (endpointRaw && !endpoint && endpointRaw.trim().length > 0) {
     throw new HttpError(400, "invalid_request", "endpoint must be one of: write|recall|recall_text");
   }
+  const windowHours = typeof q?.window_hours === "string" ? Number(q.window_hours) : cursor?.window_hours;
+  const baselineHours = typeof q?.baseline_hours === "string" ? Number(q.baseline_hours) : cursor?.baseline_hours;
+  const minRequests = typeof q?.min_requests === "string" ? Number(q.min_requests) : undefined;
+  const zscoreThreshold = typeof q?.zscore_threshold === "string" ? Number(q.zscore_threshold) : undefined;
+  const limit = typeof q?.limit === "string" ? Number(q.limit) : cursor?.limit;
+  const offset = typeof q?.offset === "string" ? Number(q.offset) : cursor?.offset;
+  const anchorUtc = cursor?.anchor_utc ?? new Date().toISOString();
   const out = await getTenantApiKeyUsageReport(db, {
     tenant_id: tenantId,
-    window_hours: typeof q?.window_hours === "string" ? Number(q.window_hours) : undefined,
-    baseline_hours: typeof q?.baseline_hours === "string" ? Number(q.baseline_hours) : undefined,
-    min_requests: typeof q?.min_requests === "string" ? Number(q.min_requests) : undefined,
-    zscore_threshold: typeof q?.zscore_threshold === "string" ? Number(q.zscore_threshold) : undefined,
+    window_hours: windowHours,
+    baseline_hours: baselineHours,
+    min_requests: minRequests,
+    zscore_threshold: zscoreThreshold,
     endpoint,
-    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
-    offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
+    limit,
+    offset,
     retention_hours: env.CONTROL_TELEMETRY_RETENTION_HOURS,
+    anchor_utc: anchorUtc,
   });
-  return reply.code(200).send(out);
+  const page = (out as any)?.page ?? null;
+  const nextCursor =
+    out && (out as any).ok && page?.has_more
+      ? encodeDashboardCursor({
+          v: 1,
+          kind: "key_usage",
+          tenant_id: tenantId,
+          endpoint: endpoint ?? null,
+          window_hours: Number((out as any)?.retention?.applied_window_hours ?? windowHours ?? 0),
+          baseline_hours: Number((out as any)?.retention?.applied_baseline_hours ?? baselineHours ?? 0),
+          limit: Number(page.limit ?? limit ?? 0),
+          offset: Number(page.offset ?? offset ?? 0) + Number(page.limit ?? limit ?? 0),
+          anchor_utc: String((out as any)?.snapshot?.anchor_utc ?? anchorUtc),
+        })
+      : null;
+  return reply.code(200).send({ ...out, cursor: { next: nextCursor } });
 });
 
 app.post("/v1/memory/write", async (req, reply) => {

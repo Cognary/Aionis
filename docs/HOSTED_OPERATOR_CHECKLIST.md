@@ -34,6 +34,7 @@ npm run -s gate:core:prod -- --base-url "http://localhost:${PORT:-3001}" --scope
 3. Create API key(s) and distribute once.
 4. Set tenant quota profile (or confirm default policy).
 5. Validate key auth via `/health` + smoke write/recall.
+6. Configure tenant alert routes (`/v1/admin/control/alerts/routes`).
 
 ## 3. Weekly Operations
 
@@ -55,6 +56,8 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 - `npm run -s job:hosted-key-usage-anomaly -- --strict`
 8. Telemetry retention cleanup:
 - `npm run -s job:hosted-telemetry-retention -- --strict`
+9. Alert routing rehearsal:
+- `npm run -s job:hosted-alert-dispatch -- --tenant-id <tenant> --dry-run`
 
 ## 4. Incident Triage
 
@@ -70,6 +73,7 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 - replay/dead-letter evidence
 - control audit events filtered by `tenant_id` and `request_id`
 - tenant dashboard snapshot (`GET /v1/admin/control/dashboard/tenant/:tenant_id`)
+- alert delivery history (`GET /v1/admin/control/alerts/deliveries?tenant_id=<tenant>`)
 
 3. Immediate mitigations:
 - revoke compromised key

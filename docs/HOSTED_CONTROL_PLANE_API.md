@@ -21,6 +21,8 @@ If `ADMIN_TOKEN` is not configured, control-plane APIs return non-success.
 - `/v1/admin/control/tenants`
 - `/v1/admin/control/projects`
 - `/v1/admin/control/api-keys`
+- `/v1/admin/control/alerts/routes`
+- `/v1/admin/control/alerts/deliveries`
 - `/v1/admin/control/tenant-quotas`
 - `/v1/admin/control/audit-events`
 - `/v1/admin/control/dashboard/tenant/:tenant_id`
@@ -113,6 +115,53 @@ Optional request:
 
 Response returns new plaintext `api_key` once and marks old key as revoked.
 
+## Alert Routing
+
+1. Create alert route
+
+`POST /v1/admin/control/alerts/routes`
+
+Request:
+
+```json
+{
+  "tenant_id": "tenant_acme",
+  "channel": "webhook",
+  "label": "ops-webhook",
+  "events": ["key_rotation_sla_failed", "key_usage_anomaly"],
+  "target": "https://ops.example.com/aionis-alerts",
+  "secret": "hmac_shared_secret",
+  "headers": { "x-env": "prod" },
+  "metadata": { "owner": "platform" }
+}
+```
+
+Supported `channel` values:
+
+- `webhook`: generic JSON webhook
+- `slack_webhook`: Slack incoming webhook target
+- `pagerduty_events`: PagerDuty Events v2 (`secret` used as routing key)
+
+2. List alert routes
+
+`GET /v1/admin/control/alerts/routes?tenant_id=tenant_acme&status=active&limit=100&offset=0`
+
+3. Update route status
+
+`POST /v1/admin/control/alerts/routes/:id/status`
+
+Request:
+
+```json
+{
+  "status": "disabled"
+}
+```
+
+4. List alert deliveries
+
+`GET /v1/admin/control/alerts/deliveries?tenant_id=tenant_acme&event_type=key_usage_anomaly&status=failed&limit=200`
+
 ## Tenant Quota Profile
 
 1. Upsert quota profile
@@ -190,11 +239,13 @@ Query options:
 - `window_hours`: requested lookback window
 - `endpoint`: optional filter (`write|recall|recall_text`)
 - `limit` + `offset`: series pagination for dashboard chart pulls
+- `cursor`: opaque cursor for high-cardinality pagination (preferred over manual offset)
 
 Timeseries API is retention-aware:
 
 - window is capped by `CONTROL_TELEMETRY_RETENTION_HOURS`
 - response includes retention metadata + page metadata
+- cursor mode pins an `anchor_utc` snapshot to keep paging results stable
 
 Tenant key usage/anomaly:
 
@@ -205,6 +256,7 @@ Returns key-prefix level counters and anomaly signals:
 - request spike (`recent / expected >= 2`)
 - latency regression (`zscore >= threshold`)
 - error budget regression (`server_error + throttled` growth)
+- supports `cursor` pagination with snapshot anchor consistency
 
 Note:
 

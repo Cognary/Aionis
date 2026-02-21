@@ -12,7 +12,9 @@ This runbook covers hosted automation for:
 2. tenant latency/error-budget timeseries export,
 3. incident evidence bundle export + publish,
 4. key-prefix usage anomaly checks,
-5. request telemetry retention cleanup.
+5. request telemetry retention cleanup,
+6. tenant alert dispatch routing,
+7. incident evidence checksum/signature verify.
 
 ## 1) Key Rotation SLA Check
 
@@ -61,6 +63,7 @@ npm run -s incident:bundle:hosted -- \
   --scope default \
   --tenant-id tenant_acme \
   --window-hours 168 \
+  --dispatch-alerts \
   --publish-target "s3://my-bucket/aionis/incident-bundles"
 ```
 
@@ -71,9 +74,11 @@ Default bundle steps:
 3. key rotation SLA check
 4. tenant timeseries export
 5. key-prefix usage anomaly check
-6. audit/dashboard snapshot from admin APIs
-7. evidence index generation (+ optional HMAC signature)
-8. optional publish to object storage/local target
+6. optional tenant alert dispatch (`--dispatch-alerts`, default dry-run)
+7. audit/dashboard snapshot from admin APIs
+8. evidence index generation (+ optional HMAC signature)
+9. evidence checksum/signature verification
+10. optional publish to object storage/local target
 
 Output directory:
 
@@ -110,6 +115,39 @@ npm run -s job:hosted-telemetry-retention -- \
   --out artifacts/hosted/telemetry_retention/summary.json
 ```
 
+## 6) Tenant Alert Dispatch
+
+Dry-run dispatch (recommended for rehearsal):
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s job:hosted-alert-dispatch -- \
+  --tenant-id tenant_acme \
+  --dry-run \
+  --out artifacts/hosted/alert_dispatch/tenant_acme.json
+```
+
+Live dispatch:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s job:hosted-alert-dispatch -- \
+  --tenant-id tenant_acme \
+  --strict \
+  --out artifacts/hosted/alert_dispatch/tenant_acme_live.json
+```
+
+## 7) Incident Evidence Verify
+
+Command:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s job:hosted-incident-verify -- \
+  --bundle-dir artifacts/hosted_incident_bundle/<run_id> \
+  --strict
+```
+
 ## Admin API Endpoints for Dashboard/Ops
 
 1. `GET /v1/admin/control/api-keys/stale`
@@ -117,6 +155,8 @@ npm run -s job:hosted-telemetry-retention -- \
 3. `GET /v1/admin/control/dashboard/tenant/:tenant_id`
 4. `GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries`
 5. `GET /v1/admin/control/dashboard/tenant/:tenant_id/key-usage`
+6. `GET /v1/admin/control/alerts/routes`
+7. `GET /v1/admin/control/alerts/deliveries`
 
 ## Verification Stamp
 

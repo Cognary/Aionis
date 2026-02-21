@@ -31,6 +31,8 @@ RUN_GOVERNANCE=true
 RUN_KEY_SLA=true
 RUN_TIMESERIES=true
 RUN_KEY_USAGE=true
+RUN_ALERT_DISPATCH=false
+ALERT_DISPATCH_DRY_RUN=true
 RUN_AUDIT_SNAPSHOT=true
 STRICT=true
 PUBLISH_TARGET="${PUBLISH_TARGET:-}"
@@ -52,6 +54,8 @@ Options:
   --skip-key-sla                 Do not run hosted key rotation SLA check
   --skip-timeseries              Do not run tenant timeseries export job
   --skip-key-usage               Do not run key-prefix usage anomaly check
+  --dispatch-alerts              Run hosted alert dispatch step
+  --alert-dispatch-live          Dispatch alerts in live mode (default dispatch mode is dry-run)
   --skip-audit-snapshot          Do not fetch audit/dashboard snapshots via admin API
   --publish-target <uri>         Publish bundle to s3://... or local path/file://...
   --signing-key <secret>         HMAC key for evidence index signing (or INCIDENT_BUNDLE_SIGNING_KEY)
@@ -76,6 +80,8 @@ while [[ $# -gt 0 ]]; do
     --skip-key-sla) RUN_KEY_SLA=false; shift ;;
     --skip-timeseries) RUN_TIMESERIES=false; shift ;;
     --skip-key-usage) RUN_KEY_USAGE=false; shift ;;
+    --dispatch-alerts) RUN_ALERT_DISPATCH=true; shift ;;
+    --alert-dispatch-live) ALERT_DISPATCH_DRY_RUN=false; shift ;;
     --skip-audit-snapshot) RUN_AUDIT_SNAPSHOT=false; shift ;;
     --publish-target) PUBLISH_TARGET="${2:-}"; shift 2 ;;
     --signing-key) SIGNING_KEY="${2:-}"; shift 2 ;;
@@ -249,8 +255,21 @@ else
   append_step "key_usage_anomaly" "true" "${OUT_DIR}/05_key_usage_anomaly.log" "skipped"
 fi
 
+if [[ "${RUN_ALERT_DISPATCH}" == "true" ]]; then
+  alert_log="${OUT_DIR}/06_alert_dispatch.log"
+  if [[ "${ALERT_DISPATCH_DRY_RUN}" == "true" ]]; then
+    run_step_cmd "alert_dispatch" "${alert_log}" \
+      npm run -s job:hosted-alert-dispatch -- --tenant-id "${TENANT_ID}" --dry-run --out "${OUT_DIR}/alert_dispatch.json"
+  else
+    run_step_cmd "alert_dispatch" "${alert_log}" \
+      npm run -s job:hosted-alert-dispatch -- --tenant-id "${TENANT_ID}" --strict --out "${OUT_DIR}/alert_dispatch.json"
+  fi
+else
+  append_step "alert_dispatch" "true" "${OUT_DIR}/06_alert_dispatch.log" "skipped"
+fi
+
 if [[ "${RUN_AUDIT_SNAPSHOT}" == "true" ]]; then
-  audit_log="${OUT_DIR}/06_audit_snapshot.log"
+  audit_log="${OUT_DIR}/07_audit_snapshot.log"
   set +e
   {
     if [[ -z "${ADMIN_TOKEN:-}" ]]; then
@@ -276,10 +295,10 @@ if [[ "${RUN_AUDIT_SNAPSHOT}" == "true" ]]; then
     append_step "audit_snapshot" "false" "${audit_log}" "exit_code=${ec}"
   fi
 else
-  append_step "audit_snapshot" "true" "${OUT_DIR}/06_audit_snapshot.log" "skipped"
+  append_step "audit_snapshot" "true" "${OUT_DIR}/07_audit_snapshot.log" "skipped"
 fi
 
-evidence_log="${OUT_DIR}/07_evidence_index.log"
+evidence_log="${OUT_DIR}/08_evidence_index.log"
 set +e
 {
   build_evidence_index
@@ -292,7 +311,16 @@ else
   append_step "evidence_index" "false" "${evidence_log}" "exit_code=${ec}"
 fi
 
-publish_log="${OUT_DIR}/08_publish_bundle.log"
+verify_log="${OUT_DIR}/09_evidence_verify.log"
+if [[ -n "${SIGNING_KEY}" ]]; then
+  run_step_cmd "evidence_verify" "${verify_log}" \
+    npm run -s job:hosted-incident-verify -- --bundle-dir "${OUT_DIR}" --strict --signing-key "${SIGNING_KEY}"
+else
+  run_step_cmd "evidence_verify" "${verify_log}" \
+    npm run -s job:hosted-incident-verify -- --bundle-dir "${OUT_DIR}" --strict
+fi
+
+publish_log="${OUT_DIR}/10_publish_bundle.log"
 if [[ -n "${PUBLISH_TARGET}" ]]; then
   set +e
   {

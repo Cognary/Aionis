@@ -69,6 +69,8 @@
     "job:hosted-tenant-timeseries-export": "tsx src/jobs/hosted-tenant-timeseries-export.ts",
     "job:hosted-key-usage-anomaly": "tsx src/jobs/hosted-key-usage-anomaly.ts",
     "job:hosted-telemetry-retention": "tsx src/jobs/hosted-telemetry-retention.ts",
+    "job:hosted-alert-dispatch": "tsx src/jobs/hosted-alert-dispatch.ts",
+    "job:hosted-incident-verify": "tsx src/jobs/hosted-incident-verify.ts",
     "job:partition-cutover-readiness": "bash scripts/admin/partition-cutover-readiness.sh",
     "perf:phase-d-matrix": "bash scripts/perf/phase-d-matrix.sh",
     "gtm:phase1:gatea": "bash scripts/gtm/gate-a-check.sh",

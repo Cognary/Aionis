@@ -79,6 +79,33 @@ export type ControlAuditEventInput = {
   details?: Record<string, unknown>;
 };
 
+export type AlertChannel = "webhook" | "slack_webhook" | "pagerduty_events";
+export type AlertRouteStatus = "active" | "disabled";
+
+export type ControlAlertRouteInput = {
+  tenant_id: string;
+  channel: AlertChannel;
+  label?: string | null;
+  events?: string[];
+  status?: AlertRouteStatus;
+  target?: string | null;
+  secret?: string | null;
+  headers?: Record<string, string>;
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlAlertDeliveryInput = {
+  route_id: string;
+  tenant_id: string;
+  event_type: string;
+  status: "sent" | "failed" | "skipped";
+  request_id?: string | null;
+  response_code?: number | null;
+  response_body?: string | null;
+  error?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
 export type MemoryRequestTelemetryInput = {
   tenant_id: string;
   scope: string;
@@ -102,6 +129,29 @@ function asJson(v: unknown): Record<string, unknown> {
   return v as Record<string, unknown>;
 }
 
+function asStringMap(v: unknown): Record<string, string> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    const key = trimOrNull(k);
+    const str = trimOrNull(val);
+    if (!key || !str) continue;
+    out[key] = str;
+  }
+  return out;
+}
+
+function asStringArray(v: unknown, fallback: string[] = []): string[] {
+  if (!Array.isArray(v)) return fallback;
+  const out: string[] = [];
+  for (const item of v) {
+    const s = trimOrNull(item);
+    if (!s) continue;
+    out.push(s);
+  }
+  return out.length > 0 ? out : fallback;
+}
+
 function f64(v: unknown, fallback: number): number {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -119,6 +169,12 @@ function round(v: number, digits = 6): number {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function normalizeIsoTimestamp(v: string | null): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 }
 
 export async function upsertControlTenant(db: Db, input: ControlTenantInput) {
@@ -565,6 +621,220 @@ export async function listControlAuditEvents(
   }
 }
 
+export async function createControlAlertRoute(db: Db, input: ControlAlertRouteInput) {
+  const tenantId = trimOrNull(input.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const channel = trimOrNull(input.channel);
+  if (channel !== "webhook" && channel !== "slack_webhook" && channel !== "pagerduty_events") {
+    throw new Error("channel must be one of: webhook|slack_webhook|pagerduty_events");
+  }
+  const label = trimOrNull(input.label);
+  const status = input.status ?? "active";
+  const target = trimOrNull(input.target);
+  const secret = trimOrNull(input.secret);
+  const events = asStringArray(input.events, ["*"]);
+  const headers = asStringMap(input.headers);
+  const metadata = asJson(input.metadata);
+
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      INSERT INTO control_alert_routes (
+        tenant_id, channel, label, events, status, target, secret, headers, metadata
+      )
+      VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8::jsonb, $9::jsonb)
+      RETURNING id, tenant_id, channel, label, events, status, target, headers, metadata, created_at, updated_at
+      `,
+      [tenantId, channel, label, JSON.stringify(events), status, target, secret, JSON.stringify(headers), JSON.stringify(metadata)],
+    );
+    return q.rows[0];
+  });
+}
+
+export async function listControlAlertRoutes(
+  db: Db,
+  opts: {
+    tenant_id?: string;
+    channel?: AlertChannel;
+    status?: AlertRouteStatus;
+    limit?: number;
+    offset?: number;
+  } = {},
+) {
+  const tenantId = trimOrNull(opts.tenant_id);
+  const channel = trimOrNull(opts.channel);
+  const status = trimOrNull(opts.status);
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(500, Math.trunc(opts.limit!))) : 100;
+  const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.trunc(opts.offset!)) : 0;
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (tenantId) {
+    args.push(tenantId);
+    where.push(`tenant_id = $${args.length}`);
+  }
+  if (channel) {
+    args.push(channel);
+    where.push(`channel = $${args.length}`);
+  }
+  if (status) {
+    args.push(status);
+    where.push(`status = $${args.length}`);
+  }
+  args.push(limit);
+  args.push(offset);
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, tenant_id, channel, label, events, status, target, headers, metadata, created_at, updated_at
+        FROM control_alert_routes
+        ${whereSql}
+        ORDER BY created_at DESC
+        LIMIT $${args.length - 1} OFFSET $${args.length}
+        `,
+        args,
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function updateControlAlertRouteStatus(db: Db, idRaw: string, statusRaw: AlertRouteStatus) {
+  const id = trimOrNull(idRaw);
+  if (!id) throw new Error("id is required");
+  const status = trimOrNull(statusRaw);
+  if (status !== "active" && status !== "disabled") {
+    throw new Error("status must be active|disabled");
+  }
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      UPDATE control_alert_routes
+      SET status = $2
+      WHERE id = $1
+      RETURNING id, tenant_id, channel, label, events, status, target, headers, metadata, created_at, updated_at
+      `,
+      [id, status],
+    );
+    return q.rows[0] ?? null;
+  });
+}
+
+export async function listActiveAlertRoutesForEvent(db: Db, args: { tenant_id: string; event_type: string; limit?: number }) {
+  const tenantId = trimOrNull(args.tenant_id);
+  const eventType = trimOrNull(args.event_type);
+  if (!tenantId || !eventType) return [];
+  const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(200, Math.trunc(args.limit!))) : 50;
+
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, tenant_id, channel, label, events, status, target, secret, headers, metadata, created_at, updated_at
+        FROM control_alert_routes
+        WHERE tenant_id = $1
+          AND status = 'active'
+          AND (events ? $2 OR events ? '*')
+        ORDER BY created_at ASC
+        LIMIT $3
+        `,
+        [tenantId, eventType, limit],
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function recordControlAlertDelivery(db: Db, input: ControlAlertDeliveryInput): Promise<void> {
+  const routeId = trimOrNull(input.route_id);
+  const tenantId = trimOrNull(input.tenant_id);
+  const eventType = trimOrNull(input.event_type);
+  const status = trimOrNull(input.status);
+  if (!routeId || !tenantId || !eventType || !status) return;
+  const requestId = trimOrNull(input.request_id);
+  const responseCode = Number.isFinite(input.response_code) ? Math.trunc(Number(input.response_code)) : null;
+  const responseBody = trimOrNull(input.response_body);
+  const error = trimOrNull(input.error);
+  const metadata = asJson(input.metadata);
+
+  try {
+    await withClient(db, async (client) => {
+      await client.query(
+        `
+        INSERT INTO control_alert_deliveries (
+          route_id, tenant_id, event_type, status, request_id, response_code, response_body, error, metadata
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+        `,
+        [routeId, tenantId, eventType, status, requestId, responseCode, responseBody, error, JSON.stringify(metadata)],
+      );
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return;
+    throw err;
+  }
+}
+
+export async function listControlAlertDeliveries(
+  db: Db,
+  opts: {
+    tenant_id?: string;
+    event_type?: string;
+    status?: "sent" | "failed" | "skipped";
+    limit?: number;
+    offset?: number;
+  } = {},
+) {
+  const tenantId = trimOrNull(opts.tenant_id);
+  const eventType = trimOrNull(opts.event_type);
+  const status = trimOrNull(opts.status);
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(500, Math.trunc(opts.limit!))) : 100;
+  const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.trunc(opts.offset!)) : 0;
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (tenantId) {
+    args.push(tenantId);
+    where.push(`tenant_id = $${args.length}`);
+  }
+  if (eventType) {
+    args.push(eventType);
+    where.push(`event_type = $${args.length}`);
+  }
+  if (status) {
+    args.push(status);
+    where.push(`status = $${args.length}`);
+  }
+  args.push(limit);
+  args.push(offset);
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, delivery_id, route_id, tenant_id, event_type, status, request_id, response_code, response_body, error, metadata, created_at
+        FROM control_alert_deliveries
+        ${whereSql}
+        ORDER BY created_at DESC
+        LIMIT $${args.length - 1} OFFSET $${args.length}
+        `,
+        args,
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
 export async function recordMemoryRequestTelemetry(db: Db, input: MemoryRequestTelemetryInput): Promise<void> {
   const tenantId = trimOrNull(input.tenant_id);
   const scope = trimOrNull(input.scope);
@@ -872,6 +1142,7 @@ export async function getTenantRequestTimeseries(
     limit?: number;
     offset?: number;
     retention_hours?: number;
+    anchor_utc?: string;
   },
 ) {
   const tenantId = trimOrNull(args.tenant_id);
@@ -884,6 +1155,8 @@ export async function getTenantRequestTimeseries(
   const endpoint = args.endpoint ?? null;
   const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(20_000, Math.trunc(args.limit!))) : 5000;
   const offset = Number.isFinite(args.offset) ? Math.max(0, Math.trunc(args.offset!)) : 0;
+  const anchorRaw = trimOrNull(args.anchor_utc);
+  const anchorUtc = normalizeIsoTimestamp(anchorRaw);
   const bucket = args.bucket ?? "hour";
   try {
     return await withClient(db, async (client) => {
@@ -896,10 +1169,11 @@ export async function getTenantRequestTimeseries(
           WHERE tenant_id = $1
             AND created_at >= now() - (($2::text || ' hours')::interval)
             AND ($3::text IS NULL OR endpoint = $3::text)
+            AND ($4::timestamptz IS NULL OR created_at <= $4::timestamptz)
           GROUP BY bucket_utc, endpoint
         ) t
         `,
-        [tenantId, windowHours, endpoint],
+        [tenantId, windowHours, endpoint, anchorUtc],
       );
       const total = Number(totalRows.rows[0]?.count ?? 0);
 
@@ -919,12 +1193,13 @@ export async function getTenantRequestTimeseries(
         WHERE tenant_id = $1
           AND created_at >= now() - (($2::text || ' hours')::interval)
           AND ($3::text IS NULL OR endpoint = $3::text)
+          AND ($6::timestamptz IS NULL OR created_at <= $6::timestamptz)
         GROUP BY bucket_utc, endpoint
         ORDER BY bucket_utc DESC, endpoint ASC
         OFFSET $4
         LIMIT $5
         `,
-        [tenantId, windowHours, endpoint, offset, limit],
+        [tenantId, windowHours, endpoint, offset, limit, anchorUtc],
       );
 
       const series = rows.rows.map((r) => {
@@ -959,10 +1234,11 @@ export async function getTenantRequestTimeseries(
         WHERE tenant_id = $1
           AND created_at >= now() - (($2::text || ' hours')::interval)
           AND ($3::text IS NULL OR endpoint = $3::text)
+          AND ($4::timestamptz IS NULL OR created_at <= $4::timestamptz)
         GROUP BY endpoint
         ORDER BY endpoint ASC
         `,
-        [tenantId, windowHours, endpoint],
+        [tenantId, windowHours, endpoint, anchorUtc],
       );
 
       const budget = endpointBudgetRows.rows.map((r) => {
@@ -1000,6 +1276,9 @@ export async function getTenantRequestTimeseries(
           total,
           has_more: offset + series.length < total,
         },
+        snapshot: {
+          anchor_utc: anchorUtc ?? nowIso(),
+        },
         generated_at: nowIso(),
         series,
         budget,
@@ -1027,6 +1306,9 @@ export async function getTenantRequestTimeseries(
           total: 0,
           has_more: false,
         },
+        snapshot: {
+          anchor_utc: anchorUtc ?? nowIso(),
+        },
         generated_at: nowIso(),
         warning: "request_telemetry_table_missing",
         series: [],
@@ -1049,6 +1331,7 @@ export async function getTenantApiKeyUsageReport(
     limit?: number;
     offset?: number;
     retention_hours?: number;
+    anchor_utc?: string;
   },
 ) {
   const tenantId = trimOrNull(args.tenant_id);
@@ -1070,6 +1353,8 @@ export async function getTenantApiKeyUsageReport(
   const endpoint = args.endpoint ?? null;
   const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(1000, Math.trunc(args.limit!))) : 200;
   const offset = Number.isFinite(args.offset) ? Math.max(0, Math.trunc(args.offset!)) : 0;
+  const anchorRaw = trimOrNull(args.anchor_utc);
+  const anchorUtc = normalizeIsoTimestamp(anchorRaw);
 
   try {
     return await withClient(db, async (client) => {
@@ -1083,10 +1368,11 @@ export async function getTenantApiKeyUsageReport(
             AND created_at >= now() - (($2::text || ' hours')::interval)
             AND api_key_prefix IS NOT NULL
             AND ($3::text IS NULL OR endpoint = $3::text)
+            AND ($4::timestamptz IS NULL OR created_at <= $4::timestamptz)
           GROUP BY api_key_prefix, endpoint
         ) t
         `,
-        [tenantId, windowHours, endpoint],
+        [tenantId, windowHours, endpoint, anchorUtc],
       );
       const total = Number(totalRows.rows[0]?.count ?? 0);
 
@@ -1106,6 +1392,7 @@ export async function getTenantApiKeyUsageReport(
             AND created_at >= now() - (($2::text || ' hours')::interval)
             AND api_key_prefix IS NOT NULL
             AND ($3::text IS NULL OR endpoint = $3::text)
+            AND ($7::timestamptz IS NULL OR created_at <= $7::timestamptz)
           GROUP BY api_key_prefix, endpoint
         ),
         baseline AS (
@@ -1123,6 +1410,7 @@ export async function getTenantApiKeyUsageReport(
             AND created_at >= now() - (($4::text || ' hours')::interval)
             AND api_key_prefix IS NOT NULL
             AND ($3::text IS NULL OR endpoint = $3::text)
+            AND ($7::timestamptz IS NULL OR created_at <= $7::timestamptz)
           GROUP BY api_key_prefix, endpoint
         )
         SELECT
@@ -1146,7 +1434,7 @@ export async function getTenantApiKeyUsageReport(
         OFFSET $5
         LIMIT $6
         `,
-        [tenantId, windowHours, endpoint, baselineHours, offset, limit],
+        [tenantId, windowHours, endpoint, baselineHours, offset, limit, anchorUtc],
       );
 
       const items = q.rows.map((r) => {
@@ -1234,6 +1522,9 @@ export async function getTenantApiKeyUsageReport(
           total,
           has_more: offset + items.length < total,
         },
+        snapshot: {
+          anchor_utc: anchorUtc ?? nowIso(),
+        },
         anomalies: {
           count_in_page: items.filter((item) => item.anomaly.is_anomaly).length,
         },
@@ -1257,6 +1548,9 @@ export async function getTenantApiKeyUsageReport(
           offset,
           total: 0,
           has_more: false,
+        },
+        snapshot: {
+          anchor_utc: anchorUtc ?? nowIso(),
         },
         items: [],
       };
