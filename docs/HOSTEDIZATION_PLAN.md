@@ -100,14 +100,25 @@ Required before hosted production rollout:
 3. `job:consistency-check:cross-tenant -- --strict-warnings` pass
 4. `job:health-gate -- --strict-warnings --consistency-check-set scope` pass
 
-## Immediate Execution Batch (Started)
+## Immediate Execution Batch (Completed)
 
 1. Added hosted preflight command: `npm run -s preflight:hosted`
 2. Added docs entry for hostedization plan + command
-3. Next batch:
-   - add hosted-staging CI workflow using preflight + core gate
-   - add tenant packaging matrix doc (Starter / Growth / Enterprise)
-   - add release evidence bundle template for hosted go-live
+3. Added hosted-staging CI workflow using preflight + core gate:
+   - `.github/workflows/hosted-staging-gate.yml`
+4. Added tenant packaging matrix doc (Starter / Growth / Enterprise):
+   - `docs/HOSTED_TENANT_PACKAGING_MATRIX.md`
+5. Added hosted release evidence bundle template:
+   - `docs/HOSTED_RELEASE_EVIDENCE_BUNDLE_TEMPLATE.md`
+
+## Next Execution Batch
+
+1. Control plane API spec draft:
+   - tenant/project/api-key lifecycle contract and auth model.
+2. Per-tenant quota persistence:
+   - managed quota profile table + admin update path.
+3. Hosted operator checklist:
+   - on-call playbook for dead-letter/replay, incident triage, and rollback.
 
 ## Operating Rules
 

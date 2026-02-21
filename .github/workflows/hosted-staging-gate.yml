@@ -1,0 +1,171 @@
+name: Hosted Staging Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_core_gate_perf:
+        description: "Run core gate perf checks (may require dedicated auth/perf setup)"
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "docs/**"
+      - "migrations/**"
+      - "docker-compose.yml"
+      - "package.json"
+      - ".github/workflows/hosted-staging-gate.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-staging-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hosted-staging-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PORT: "3001"
+      BASE_URL: "http://localhost:3001"
+      SCOPE: "hosted_staging_ci"
+      TENANT_ID: "tenant_hosted_staging_ci"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Prepare hosted-staging env
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          npm run -s env:throughput:prod
+          {
+            echo "APP_ENV=prod"
+            echo "PORT=3001"
+            echo "DATABASE_URL=postgres://aionis:aionis@127.0.0.1:5432/aionis_memory"
+            echo "MEMORY_SCOPE=${SCOPE}"
+            echo "MEMORY_TENANT_ID=${TENANT_ID}"
+            echo "MEMORY_AUTH_MODE=api_key"
+            echo 'MEMORY_API_KEYS_JSON={"ci-hosted-key":{"tenant_id":"tenant_hosted_staging_ci","agent_id":"agent_ci","team_id":"team_ci","role":"member"}}'
+            echo "EMBEDDING_PROVIDER=openai"
+            echo "OPENAI_API_KEY=dummy_ci_nonprod_key"
+            echo "RATE_LIMIT_ENABLED=true"
+            echo "TENANT_QUOTA_ENABLED=true"
+            echo "RATE_LIMIT_BYPASS_LOOPBACK=false"
+            echo "MEMORY_RECALL_PROFILE=strict_edges"
+          } >> .env
+
+      - name: Start stack
+        run: docker compose up -d --build
+
+      - name: Wait API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for _ in {1..120}; do
+            if curl -fsS "http://localhost:3001/health" >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "${ok}" -ne 1 ]]; then
+            echo "API not healthy on localhost:3001" >&2
+            exit 1
+          fi
+
+      - name: Run hosted preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run -s preflight:hosted -- \
+            --base-url "http://localhost:3001" \
+            --scope "${SCOPE}" \
+            --tenant-id "${TENANT_ID}" \
+            --run-gates
+
+      - name: Run core production gate (hosted staging profile)
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_PERF_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_core_gate_perf || 'false' }}"
+          npm run -s gate:core:prod -- \
+            --base-url "http://localhost:3001" \
+            --scope "${SCOPE}" \
+            --tenant-id "${TENANT_ID}" \
+            --run-perf "${RUN_PERF_INPUT}"
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          preflight_summary="$(find artifacts/hosted_preflight -type f -name summary.json | sort | tail -n 1 || true)"
+          core_gate_summary="$(find artifacts/core_gate -type f -name summary.json | sort | tail -n 1 || true)"
+          {
+            echo "## Hosted Staging Gate"
+            echo
+            echo "scope: \`${SCOPE}\`"
+            echo "tenant_id: \`${TENANT_ID}\`"
+            echo
+            echo "### Hosted Preflight"
+            if [[ -n "${preflight_summary}" && -f "${preflight_summary}" ]]; then
+              echo "summary: \`${preflight_summary}\`"
+              echo
+              jq '.' "${preflight_summary}"
+            else
+              echo "summary not found"
+            fi
+            echo
+            echo "### Core Production Gate"
+            if [[ -n "${core_gate_summary}" && -f "${core_gate_summary}" ]]; then
+              echo "summary: \`${core_gate_summary}\`"
+              echo
+              jq '.' "${core_gate_summary}"
+            else
+              echo "summary not found"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-staging-gate-artifacts
+          path: |
+            artifacts/hosted_preflight/
+            artifacts/core_gate/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Stop stack
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -f docker-compose.yml ]]; then
+            docker compose down -v
+          else
+            echo "docker-compose.yml not found, skip compose down"
+          fi

@@ -140,6 +140,8 @@ Operator docs:
 
 - [Operator Runbook](docs/OPERATOR_RUNBOOK.md)
 - [Hostedization Execution Plan](docs/HOSTEDIZATION_PLAN.md)
+- [Hosted Tenant Packaging Matrix](docs/HOSTED_TENANT_PACKAGING_MATRIX.md)
+- [Hosted Release Evidence Bundle Template](docs/HOSTED_RELEASE_EVIDENCE_BUNDLE_TEMPLATE.md)
 - [E2E Regression](docs/E2E_REGRESSION.md)
 - [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
 - [LongMemEval Gate](docs/LONGMEMEVAL_GATE.md)

@@ -54,6 +54,8 @@ This index is the entry point for project documentation.
 - [GTM Phase 3 Execution Board](./GTM_PHASE3_EXECUTION_BOARD.md)
 - [External Release Product Plan (Open Core + Hosted + Kernel Control)](./EXTERNAL_RELEASE_PRODUCT_PLAN.md)
 - [Hostedization Execution Plan](./HOSTEDIZATION_PLAN.md)
+- [Hosted Tenant Packaging Matrix](./HOSTED_TENANT_PACKAGING_MATRIX.md)
+- [Hosted Release Evidence Bundle Template](./HOSTED_RELEASE_EVIDENCE_BUNDLE_TEMPLATE.md)
 - [GTM Weekly Status Template](./GTM_WEEKLY_STATUS_TEMPLATE.md)
 - [SDK (TypeScript, P1 MVP)](./SDK.md)
 - [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)
@@ -107,5 +109,10 @@ docker run --rm -it --platform linux/amd64 -p 4000:4000 -v "$PWD/docs:/srv/jekyl
 Then open: `http://localhost:4000/`
 
 Verification stamp:
-- Last reviewed: `2026-02-18`
+- Last reviewed: `2026-02-21`
 - Reviewer: `codex`
+
+## Hosted CI
+
+- Hosted staging gate workflow:
+  - `/Users/lucio/Desktop/Aionis/.github/workflows/hosted-staging-gate.yml`
