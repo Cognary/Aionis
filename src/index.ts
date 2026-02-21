@@ -7,6 +7,7 @@ import { loadEnv } from "./config.js";
 import { createDb, withClient, withTx } from "./db.js";
 import {
   createControlAlertRoute,
+  enqueueControlIncidentPublishJob,
   createApiKeyPrincipalResolver,
   createControlApiKey,
   createTenantQuotaResolver,
@@ -19,6 +20,7 @@ import {
   listControlAlertDeliveries,
   listControlAlertRoutes,
   listControlAuditEvents,
+  listControlIncidentPublishJobs,
   listStaleControlApiKeys,
   listControlTenants,
   recordMemoryRequestTelemetry,
@@ -637,6 +639,15 @@ const ControlAlertRouteStatusSchema = z.object({
   status: z.enum(["active", "disabled"]),
 });
 
+const ControlIncidentPublishJobSchema = z.object({
+  tenant_id: z.string().min(1).max(128),
+  run_id: z.string().min(1).max(256),
+  source_dir: z.string().min(1).max(4096),
+  target: z.string().min(1).max(4096),
+  max_attempts: z.number().int().min(1).max(100).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
 app.post("/v1/admin/control/tenants", async (req, reply) => {
   requireAdminToken(req);
   const body = ControlTenantSchema.parse(req.body ?? {});
@@ -811,6 +822,45 @@ app.get("/v1/admin/control/alerts/deliveries", async (req, reply) => {
     offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
   });
   return reply.code(200).send({ ok: true, deliveries });
+});
+
+app.post("/v1/admin/control/incident-publish/jobs", async (req, reply) => {
+  requireAdminToken(req);
+  const body = ControlIncidentPublishJobSchema.parse(req.body ?? {});
+  const out = await enqueueControlIncidentPublishJob(db, body);
+  await emitControlAudit(req, {
+    action: "incident_publish.enqueue",
+    resource_type: "incident_publish_job",
+    resource_id: String(out.id),
+    tenant_id: String(out.tenant_id),
+    details: {
+      run_id: out.run_id,
+      target: out.target,
+      max_attempts: out.max_attempts,
+    },
+  });
+  return reply.code(200).send({ ok: true, job: out });
+});
+
+app.get("/v1/admin/control/incident-publish/jobs", async (req, reply) => {
+  requireAdminToken(req);
+  const q = req.query as Record<string, unknown> | undefined;
+  const statusRaw = typeof q?.status === "string" ? q.status : undefined;
+  const status =
+    statusRaw === "pending" ||
+    statusRaw === "processing" ||
+    statusRaw === "succeeded" ||
+    statusRaw === "failed" ||
+    statusRaw === "dead_letter"
+      ? statusRaw
+      : undefined;
+  const jobs = await listControlIncidentPublishJobs(db, {
+    tenant_id: typeof q?.tenant_id === "string" ? q.tenant_id : undefined,
+    status,
+    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
+    offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
+  });
+  return reply.code(200).send({ ok: true, jobs });
 });
 
 app.put("/v1/admin/control/tenant-quotas/:tenant_id", async (req, reply) => {

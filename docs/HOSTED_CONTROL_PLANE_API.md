@@ -23,6 +23,7 @@ If `ADMIN_TOKEN` is not configured, control-plane APIs return non-success.
 - `/v1/admin/control/api-keys`
 - `/v1/admin/control/alerts/routes`
 - `/v1/admin/control/alerts/deliveries`
+- `/v1/admin/control/incident-publish/jobs`
 - `/v1/admin/control/tenant-quotas`
 - `/v1/admin/control/audit-events`
 - `/v1/admin/control/dashboard/tenant/:tenant_id`
@@ -192,6 +193,29 @@ Policy DSL notes:
 - `severity_thresholds`: event-specific threshold controls.
 - `quiet_windows`: route-local suppression or critical->warning downgrade windows.
 - `dedupe`: suppress repeated sends within `ttl_seconds` by computed key.
+
+## Incident Publish Queue (Async Mode)
+
+1. Enqueue incident publish job
+
+`POST /v1/admin/control/incident-publish/jobs`
+
+Request:
+
+```json
+{
+  "tenant_id": "tenant_acme",
+  "run_id": "20260221_194500",
+  "source_dir": "/Users/lucio/Desktop/Aionis/artifacts/hosted_incident_bundle/20260221_194500",
+  "target": "gs://my-bucket/aionis/incidents",
+  "max_attempts": 8,
+  "metadata": { "trigger": "release_signoff" }
+}
+```
+
+2. List incident publish jobs
+
+`GET /v1/admin/control/incident-publish/jobs?tenant_id=tenant_acme&status=failed&limit=100&offset=0`
 
 ## Tenant Quota Profile
 

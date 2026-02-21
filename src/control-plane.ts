@@ -106,6 +106,15 @@ export type ControlAlertDeliveryInput = {
   metadata?: Record<string, unknown>;
 };
 
+export type ControlIncidentPublishJobInput = {
+  tenant_id: string;
+  run_id: string;
+  source_dir: string;
+  target: string;
+  max_attempts?: number;
+  metadata?: Record<string, unknown>;
+};
+
 export type MemoryRequestTelemetryInput = {
   tenant_id: string;
   scope: string;
@@ -861,6 +870,219 @@ export async function findRecentControlAlertDeliveryByDedupe(
         LIMIT 1
         `,
         [routeId, dedupeKey, ttlSeconds],
+      );
+      return q.rows[0] ?? null;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return null;
+    throw err;
+  }
+}
+
+export async function enqueueControlIncidentPublishJob(db: Db, input: ControlIncidentPublishJobInput) {
+  const tenantId = trimOrNull(input.tenant_id);
+  const runId = trimOrNull(input.run_id);
+  const sourceDir = trimOrNull(input.source_dir);
+  const target = trimOrNull(input.target);
+  if (!tenantId) throw new Error("tenant_id is required");
+  if (!runId) throw new Error("run_id is required");
+  if (!sourceDir) throw new Error("source_dir is required");
+  if (!target) throw new Error("target is required");
+  const maxAttempts = Number.isFinite(input.max_attempts) ? Math.max(1, Math.min(100, Math.trunc(input.max_attempts!))) : 5;
+  const metadata = asJson(input.metadata);
+
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      INSERT INTO control_incident_publish_jobs (
+        tenant_id, run_id, source_dir, target, max_attempts, metadata
+      )
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      RETURNING
+        id, tenant_id, run_id, source_dir, target, status, attempts, max_attempts,
+        next_attempt_at, locked_at, locked_by, published_uri, last_error, last_response, metadata,
+        created_at, updated_at
+      `,
+      [tenantId, runId, sourceDir, target, maxAttempts, JSON.stringify(metadata)],
+    );
+    return q.rows[0];
+  });
+}
+
+export async function listControlIncidentPublishJobs(
+  db: Db,
+  opts: {
+    tenant_id?: string;
+    status?: "pending" | "processing" | "succeeded" | "failed" | "dead_letter";
+    limit?: number;
+    offset?: number;
+  } = {},
+) {
+  const tenantId = trimOrNull(opts.tenant_id);
+  const status = trimOrNull(opts.status);
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(500, Math.trunc(opts.limit!))) : 100;
+  const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.trunc(opts.offset!)) : 0;
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (tenantId) {
+    args.push(tenantId);
+    where.push(`tenant_id = $${args.length}`);
+  }
+  if (status) {
+    args.push(status);
+    where.push(`status = $${args.length}`);
+  }
+  args.push(limit);
+  args.push(offset);
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT
+          id, tenant_id, run_id, source_dir, target, status, attempts, max_attempts,
+          next_attempt_at, locked_at, locked_by, published_uri, last_error, last_response, metadata,
+          created_at, updated_at
+        FROM control_incident_publish_jobs
+        ${whereSql}
+        ORDER BY created_at DESC
+        LIMIT $${args.length - 1} OFFSET $${args.length}
+        `,
+        args,
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function claimControlIncidentPublishJob(
+  db: Db,
+  args: {
+    worker_id: string;
+    tenant_id?: string;
+  },
+) {
+  const workerId = trimOrNull(args.worker_id);
+  const tenantId = trimOrNull(args.tenant_id);
+  if (!workerId) throw new Error("worker_id is required");
+
+  try {
+    return await withTx(db, async (client) => {
+      const q = await client.query(
+        `
+        WITH pick AS (
+          SELECT id
+          FROM control_incident_publish_jobs
+          WHERE status IN ('pending', 'failed')
+            AND next_attempt_at <= now()
+            AND attempts < max_attempts
+            AND ($1::text IS NULL OR tenant_id = $1::text)
+          ORDER BY next_attempt_at ASC, created_at ASC
+          FOR UPDATE SKIP LOCKED
+          LIMIT 1
+        )
+        UPDATE control_incident_publish_jobs j
+        SET
+          status = 'processing',
+          attempts = j.attempts + 1,
+          locked_at = now(),
+          locked_by = $2
+        FROM pick
+        WHERE j.id = pick.id
+        RETURNING
+          j.id, j.tenant_id, j.run_id, j.source_dir, j.target, j.status, j.attempts, j.max_attempts,
+          j.next_attempt_at, j.locked_at, j.locked_by, j.published_uri, j.last_error, j.last_response, j.metadata,
+          j.created_at, j.updated_at
+        `,
+        [tenantId, workerId],
+      );
+      return q.rows[0] ?? null;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return null;
+    throw err;
+  }
+}
+
+export async function markControlIncidentPublishJobSucceeded(
+  db: Db,
+  args: {
+    id: string;
+    published_uri?: string | null;
+    response?: Record<string, unknown>;
+  },
+) {
+  const id = trimOrNull(args.id);
+  if (!id) throw new Error("id is required");
+  const publishedUri = trimOrNull(args.published_uri);
+  const response = asJson(args.response);
+  return await withClient(db, async (client) => {
+    const q = await client.query(
+      `
+      UPDATE control_incident_publish_jobs
+      SET
+        status = 'succeeded',
+        locked_at = NULL,
+        locked_by = NULL,
+        next_attempt_at = now(),
+        published_uri = $2,
+        last_error = NULL,
+        last_response = $3::jsonb
+      WHERE id = $1
+      RETURNING
+        id, tenant_id, run_id, source_dir, target, status, attempts, max_attempts,
+        next_attempt_at, locked_at, locked_by, published_uri, last_error, last_response, metadata,
+        created_at, updated_at
+      `,
+      [id, publishedUri, JSON.stringify(response)],
+    );
+    return q.rows[0] ?? null;
+  });
+}
+
+export async function markControlIncidentPublishJobFailed(
+  db: Db,
+  args: {
+    id: string;
+    retry_delay_seconds?: number;
+    error?: string | null;
+    response?: Record<string, unknown>;
+  },
+) {
+  const id = trimOrNull(args.id);
+  if (!id) throw new Error("id is required");
+  const retryDelaySeconds = Number.isFinite(args.retry_delay_seconds)
+    ? Math.max(1, Math.min(7 * 24 * 3600, Math.trunc(args.retry_delay_seconds!)))
+    : 60;
+  const error = trimOrNull(args.error);
+  const response = asJson(args.response);
+
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        UPDATE control_incident_publish_jobs
+        SET
+          status = CASE WHEN attempts >= max_attempts THEN 'dead_letter' ELSE 'failed' END,
+          next_attempt_at = CASE
+            WHEN attempts >= max_attempts THEN next_attempt_at
+            ELSE now() + (($2::text || ' seconds')::interval)
+          END,
+          locked_at = NULL,
+          locked_by = NULL,
+          last_error = $3,
+          last_response = $4::jsonb
+        WHERE id = $1
+        RETURNING
+          id, tenant_id, run_id, source_dir, target, status, attempts, max_attempts,
+          next_attempt_at, locked_at, locked_by, published_uri, last_error, last_response, metadata,
+          created_at, updated_at
+        `,
+        [id, retryDelaySeconds, error, JSON.stringify(response)],
       );
       return q.rows[0] ?? null;
     });

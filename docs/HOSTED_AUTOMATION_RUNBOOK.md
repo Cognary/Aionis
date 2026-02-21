@@ -64,6 +64,7 @@ npm run -s incident:bundle:hosted -- \
   --tenant-id tenant_acme \
   --window-hours 168 \
   --dispatch-alerts \
+  --publish-async \
   --publish-target "s3://my-bucket/aionis/incident-bundles"
 ```
 
@@ -74,6 +75,7 @@ npm run -s incident:bundle:hosted -- \
 - `az://account/container/prefix` (Azure account mode)
 - `az://container/prefix` with `AZURE_STORAGE_CONNECTION_STRING`
 - `file:///path` or local path
+- add `--publish-async` to queue publish jobs instead of immediate upload
 
 Standalone publisher plugin:
 
@@ -83,6 +85,13 @@ npm run -s incident:publish:hosted -- \
   --source-dir artifacts/hosted_incident_bundle/<run_id> \
   --target gs://my-bucket/aionis/incidents \
   --run-id <run_id>
+```
+
+Async queue worker:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s job:hosted-incident-publish-worker -- --max-jobs 50 --strict
 ```
 
 Default bundle steps:

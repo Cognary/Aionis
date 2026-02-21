@@ -58,6 +58,9 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 - `npm run -s job:hosted-telemetry-retention -- --strict`
 9. Alert routing rehearsal:
 - `npm run -s job:hosted-alert-dispatch -- --tenant-id <tenant> --dry-run`
+10. Incident publish queue health:
+- `GET /v1/admin/control/incident-publish/jobs?status=failed`
+- worker drill: `npm run -s job:hosted-incident-publish-worker -- --max-jobs 20 --strict`
 
 ## 4. Incident Triage
 

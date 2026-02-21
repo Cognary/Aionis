@@ -36,9 +36,11 @@ ALERT_DISPATCH_DRY_RUN=true
 RUN_AUDIT_SNAPSHOT=true
 STRICT=true
 PUBLISH_TARGET="${PUBLISH_TARGET:-}"
+PUBLISH_ASYNC=false
 SIGNING_KEY="${SIGNING_KEY:-${INCIDENT_BUNDLE_SIGNING_KEY:-}}"
 PUBLISHED_URI=""
 PUBLISH_ADAPTER=""
+PUBLISH_JOB_ID=""
 
 usage() {
   cat <<'USAGE'
@@ -59,6 +61,7 @@ Options:
   --alert-dispatch-live          Dispatch alerts in live mode (default dispatch mode is dry-run)
   --skip-audit-snapshot          Do not fetch audit/dashboard snapshots via admin API
   --publish-target <uri>         Publish bundle to s3://..., gs://..., az://... or local path/file://...
+  --publish-async                Enqueue publish job instead of direct publish
   --signing-key <secret>         HMAC key for evidence index signing (or INCIDENT_BUNDLE_SIGNING_KEY)
   --no-strict                    Always exit 0 even if steps fail
   -h, --help                     Show help
@@ -85,6 +88,7 @@ while [[ $# -gt 0 ]]; do
     --alert-dispatch-live) ALERT_DISPATCH_DRY_RUN=false; shift ;;
     --skip-audit-snapshot) RUN_AUDIT_SNAPSHOT=false; shift ;;
     --publish-target) PUBLISH_TARGET="${2:-}"; shift 2 ;;
+    --publish-async) PUBLISH_ASYNC=true; shift ;;
     --signing-key) SIGNING_KEY="${2:-}"; shift 2 ;;
     --no-strict) STRICT=false; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -208,6 +212,14 @@ publish_bundle() {
   echo "${out_json}"
 }
 
+enqueue_publish_job() {
+  local target="$1"
+  local out_json
+  out_json="$(npm run -s job:hosted-incident-publish-enqueue -- --tenant-id "${TENANT_ID}" --run-id "${RUN_ID}" --source-dir "${OUT_DIR}" --target "${target}" --out "${OUT_DIR}/publish_enqueue.json")"
+  PUBLISH_JOB_ID="$(echo "${out_json}" | jq -r '.job.id // ""')"
+  echo "${out_json}"
+}
+
 if [[ "${RUN_CORE_GATE}" == "true" ]]; then
   run_step_cmd "core_gate_prod" "${OUT_DIR}/01_core_gate.log" \
     npm run -s gate:core:prod -- --base-url "${BASE_URL}" --scope "${SCOPE}" --tenant-id "${TENANT_ID}" --run-perf false
@@ -312,12 +324,20 @@ publish_log="${OUT_DIR}/10_publish_bundle.log"
 if [[ -n "${PUBLISH_TARGET}" ]]; then
   set +e
   {
-    publish_bundle "${PUBLISH_TARGET}"
+    if [[ "${PUBLISH_ASYNC}" == "true" ]]; then
+      enqueue_publish_job "${PUBLISH_TARGET}"
+    else
+      publish_bundle "${PUBLISH_TARGET}"
+    fi
   } > "${publish_log}" 2>&1
   ec=$?
   set -e
   if [[ "${ec}" -eq 0 ]]; then
-    append_step "publish_bundle" "true" "${publish_log}" "target=${PUBLISH_TARGET},adapter=${PUBLISH_ADAPTER}"
+    if [[ "${PUBLISH_ASYNC}" == "true" ]]; then
+      append_step "publish_bundle" "true" "${publish_log}" "queued,target=${PUBLISH_TARGET},job_id=${PUBLISH_JOB_ID}"
+    else
+      append_step "publish_bundle" "true" "${publish_log}" "target=${PUBLISH_TARGET},adapter=${PUBLISH_ADAPTER}"
+    fi
   else
     append_step "publish_bundle" "false" "${publish_log}" "exit_code=${ec}"
   fi
@@ -343,6 +363,8 @@ jq -n \
   --argjson fail_reasons "${fail_reasons}" \
   --arg out_dir "${OUT_DIR}" \
   --arg publish_target "${PUBLISH_TARGET}" \
+  --arg publish_async "$([[ "${PUBLISH_ASYNC}" == "true" ]] && echo true || echo false)" \
+  --arg publish_job_id "${PUBLISH_JOB_ID}" \
   --arg published_uri "${PUBLISHED_URI}" \
   --arg publish_adapter "${PUBLISH_ADAPTER}" \
   --arg evidence_index "${OUT_DIR}/evidence_index.json" \
@@ -366,6 +388,8 @@ jq -n \
       evidence_index_json: $evidence_index,
       evidence_signature_json: $evidence_signature,
       publish_target: $publish_target,
+      publish_async: ($publish_async == "true"),
+      publish_job_id: $publish_job_id,
       publish_adapter: $publish_adapter,
       published_uri: $published_uri
     },
