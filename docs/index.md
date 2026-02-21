@@ -8,6 +8,9 @@ title: "Aionis Documentation Home"
 
 Use this site as the canonical entry for onboarding, API contracts, SDK usage, operations, and release runbooks.
 
+Internal GTM/hosted/operator execution docs are maintained in the private repository:
+- `https://github.com/Cognary/aionis-hosted`
+
 ## Narrative Canon
 
 1. Main narrative: `Verifiable / Operable Memory Kernel`
