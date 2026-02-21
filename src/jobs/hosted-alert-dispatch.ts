@@ -12,6 +12,7 @@ import {
   listStaleControlApiKeys,
   recordControlAlertDelivery,
 } from "../control-plane.js";
+import { formatError } from "../util/error-format.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
@@ -464,7 +465,7 @@ async function postJson(args: {
     const text = await res.text();
     return { ok: res.ok, code: res.status, body: text.slice(0, 2000), error: null };
   } catch (err: any) {
-    return { ok: false, code: null, body: "", error: String(err?.message ?? err) };
+    return { ok: false, code: null, body: "", error: formatError(err) };
   } finally {
     clearTimeout(timer);
   }
@@ -803,7 +804,7 @@ async function main() {
 main()
   .catch((err) => {
     // eslint-disable-next-line no-console
-    console.error(JSON.stringify({ ok: false, error: String(err?.message ?? err) }, null, 2));
+    console.error(JSON.stringify({ ok: false, error: formatError(err) }, null, 2));
     process.exitCode = 1;
   })
   .finally(async () => {

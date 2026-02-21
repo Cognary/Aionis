@@ -2,6 +2,7 @@ import "dotenv/config";
 import { loadEnv } from "../config.js";
 import { closeDb, createDb } from "../db.js";
 import { replayControlIncidentPublishJobs } from "../control-plane.js";
+import { formatError } from "../util/error-format.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
@@ -106,7 +107,7 @@ async function main() {
 main()
   .catch((err) => {
     // eslint-disable-next-line no-console
-    console.error(JSON.stringify({ ok: false, error: String(err?.message ?? err) }, null, 2));
+    console.error(JSON.stringify({ ok: false, error: formatError(err) }, null, 2));
     process.exitCode = 1;
   })
   .finally(async () => {

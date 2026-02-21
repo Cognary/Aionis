@@ -2,6 +2,7 @@ import "dotenv/config";
 import { createHash, createHmac } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { formatError } from "../util/error-format.js";
 
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);
@@ -78,7 +79,7 @@ async function main() {
         if (!signature.valid) signature.error = "signature mismatch";
       } catch (err: any) {
         signature.valid = false;
-        signature.error = String(err?.message ?? err);
+        signature.error = formatError(err);
       }
     }
   }
@@ -114,6 +115,6 @@ async function main() {
 
 main().catch((err) => {
   // eslint-disable-next-line no-console
-  console.error(JSON.stringify({ ok: false, error: String(err?.message ?? err) }, null, 2));
+  console.error(JSON.stringify({ ok: false, error: formatError(err) }, null, 2));
   process.exitCode = 1;
 });
