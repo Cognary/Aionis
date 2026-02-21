@@ -180,9 +180,11 @@ Required before hosted production rollout:
 
 ## Next Upcoming Batch
 
-1. Alert routing escalation policy DSL (severity thresholds, quiet windows, dedupe keys).
-2. Incident publish async mode (queued uploads + retry/dead-letter for storage provider outages).
-3. Provider-specific post-upload integrity attestations (S3 ETag/GCS generation/Azure version id capture).
+1. Alert routing escalation policy DSL (severity thresholds, quiet windows, dedupe keys). (Completed)
+   - dispatch policy surface: `metadata.policy`
+   - dedupe support index: `migrations/0027_control_alert_dedupe_index.sql`
+2. Incident publish async mode (queued uploads + retry/dead-letter for storage provider outages). (Pending)
+3. Provider-specific post-upload integrity attestations (S3 ETag/GCS generation/Azure version id capture). (Pending)
 
 ## Operating Rules
 

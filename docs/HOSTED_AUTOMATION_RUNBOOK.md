@@ -155,6 +155,12 @@ npm run -s job:hosted-alert-dispatch -- \
   --out artifacts/hosted/alert_dispatch/tenant_acme_live.json
 ```
 
+Route policy DSL (configured in route `metadata.policy`) is applied in dispatch order:
+
+1. severity thresholds
+2. quiet window policy
+3. dedupe TTL/key suppression
+
 ## 7) Incident Evidence Verify
 
 Command:

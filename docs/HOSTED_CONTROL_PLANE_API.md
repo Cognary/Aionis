@@ -132,7 +132,32 @@ Request:
   "target": "https://ops.example.com/aionis-alerts",
   "secret": "hmac_shared_secret",
   "headers": { "x-env": "prod" },
-  "metadata": { "owner": "platform" }
+  "metadata": {
+    "owner": "platform",
+    "policy": {
+      "severity_thresholds": {
+        "key_usage_anomaly": { "warning_anomalies": 1, "critical_anomalies": 5 },
+        "key_rotation_sla_failed": {
+          "warning_stale_count": 1,
+          "critical_stale_count": 3,
+          "warning_no_recent_rotation": true
+        }
+      },
+      "quiet_windows": [
+        {
+          "days": [1, 2, 3, 4, 5],
+          "start": "00:00",
+          "end": "07:00",
+          "timezone": "UTC",
+          "mode": "warning_only"
+        }
+      ],
+      "dedupe": {
+        "key": "{{tenant_id}}:{{event_type}}:{{severity}}:{{route_id}}",
+        "ttl_seconds": 1800
+      }
+    }
+  }
 }
 ```
 
@@ -161,6 +186,12 @@ Request:
 4. List alert deliveries
 
 `GET /v1/admin/control/alerts/deliveries?tenant_id=tenant_acme&event_type=key_usage_anomaly&status=failed&limit=200`
+
+Policy DSL notes:
+
+- `severity_thresholds`: event-specific threshold controls.
+- `quiet_windows`: route-local suppression or critical->warning downgrade windows.
+- `dedupe`: suppress repeated sends within `ttl_seconds` by computed key.
 
 ## Tenant Quota Profile
 

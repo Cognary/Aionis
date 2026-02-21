@@ -5,6 +5,7 @@ import path from "node:path";
 import { loadEnv } from "../config.js";
 import { closeDb, createDb } from "../db.js";
 import {
+  findRecentControlAlertDeliveryByDedupe,
   getTenantApiKeyUsageReport,
   listActiveAlertRoutesForEvent,
   listStaleControlApiKeys,
@@ -20,6 +21,23 @@ type RoutedEvent = {
   severity: "warning" | "critical";
   summary: string;
   payload: Record<string, unknown>;
+};
+
+type AlertSeverity = "warning" | "critical";
+
+type AlertPolicy = {
+  severity_thresholds?: Record<string, Record<string, unknown>>;
+  quiet_windows?: Array<{
+    days?: number[];
+    start?: string;
+    end?: string;
+    timezone?: string;
+    mode?: "suppress" | "warning_only";
+  }>;
+  dedupe?: {
+    key?: string;
+    ttl_seconds?: number;
+  };
 };
 
 function argValue(flag: string): string | null {
@@ -47,6 +65,217 @@ function asEventTypeSet(raw: string | null): Set<string> {
     if (p) out.add(p);
   }
   return out;
+}
+
+function asRecord(v: unknown): Record<string, unknown> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  return v as Record<string, unknown>;
+}
+
+function asNumber(v: unknown, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function asBool(v: unknown, fallback: boolean): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const t = v.trim().toLowerCase();
+    if (t === "true") return true;
+    if (t === "false") return false;
+  }
+  return fallback;
+}
+
+function parsePolicy(route: any): AlertPolicy {
+  const md = asRecord(route?.metadata);
+  const raw = md.policy ?? md.alert_policy ?? {};
+  const p = asRecord(raw);
+  const out: AlertPolicy = {};
+  if (p.severity_thresholds && typeof p.severity_thresholds === "object" && !Array.isArray(p.severity_thresholds)) {
+    out.severity_thresholds = p.severity_thresholds as Record<string, Record<string, unknown>>;
+  }
+  if (Array.isArray(p.quiet_windows)) {
+    out.quiet_windows = p.quiet_windows
+      .map((x) => asRecord(x))
+      .map((x) => {
+        const daysRaw = Array.isArray(x.days) ? x.days.map((d) => Number(d)).filter((d) => Number.isFinite(d)) : undefined;
+        return {
+          days: daysRaw?.map((d) => Math.max(0, Math.min(6, Math.trunc(d)))),
+          start: typeof x.start === "string" ? x.start : undefined,
+          end: typeof x.end === "string" ? x.end : undefined,
+          timezone: typeof x.timezone === "string" ? x.timezone : undefined,
+          mode: x.mode === "warning_only" ? "warning_only" : "suppress",
+        };
+      });
+  }
+  if (p.dedupe && typeof p.dedupe === "object" && !Array.isArray(p.dedupe)) {
+    const d = asRecord(p.dedupe);
+    out.dedupe = {
+      key: typeof d.key === "string" ? d.key : undefined,
+      ttl_seconds: Number.isFinite(Number(d.ttl_seconds)) ? Math.trunc(Number(d.ttl_seconds)) : undefined,
+    };
+  }
+  return out;
+}
+
+function severityRank(v: AlertSeverity): number {
+  return v === "critical" ? 2 : 1;
+}
+
+function maxSeverity(a: AlertSeverity, b: AlertSeverity): AlertSeverity {
+  return severityRank(a) >= severityRank(b) ? a : b;
+}
+
+function applySeverityThresholds(event: RoutedEvent, policy: AlertPolicy): RoutedEvent | null {
+  const thresholdMap = asRecord(policy.severity_thresholds ?? {});
+  const threshold = asRecord(thresholdMap[event.event_type]);
+  if (Object.keys(threshold).length === 0) return event;
+
+  if (event.event_type === "key_usage_anomaly") {
+    const anomalies = Math.max(0, Math.trunc(asNumber(event.payload.anomalies_count, 0)));
+    const criticalAnomalies = Math.max(1, Math.trunc(asNumber(threshold.critical_anomalies, Number.POSITIVE_INFINITY)));
+    const warningAnomalies = Math.max(1, Math.trunc(asNumber(threshold.warning_anomalies, 1)));
+    if (anomalies >= criticalAnomalies) {
+      return { ...event, severity: "critical" };
+    }
+    if (anomalies >= warningAnomalies) {
+      return { ...event, severity: "warning" };
+    }
+    return null;
+  }
+
+  if (event.event_type === "key_rotation_sla_failed") {
+    const staleCount = Math.max(0, Math.trunc(asNumber(event.payload.stale_count_for_tenant, 0)));
+    const hasNoRecentRotation = !!event.payload.tenant_without_recent_rotation;
+    const criticalStale = Math.max(1, Math.trunc(asNumber(threshold.critical_stale_count, 1)));
+    const warningStale = Math.max(1, Math.trunc(asNumber(threshold.warning_stale_count, 1)));
+    const warningNoRecentRotation = asBool(threshold.warning_no_recent_rotation, true);
+
+    let sev: AlertSeverity | null = null;
+    if (staleCount >= criticalStale) sev = "critical";
+    else if (staleCount >= warningStale) sev = "warning";
+    if (hasNoRecentRotation && warningNoRecentRotation) {
+      sev = sev ? maxSeverity(sev, "warning") : "warning";
+    }
+    if (!sev) return null;
+    return { ...event, severity: sev };
+  }
+
+  return event;
+}
+
+function parseHmMinutes(raw: string | undefined, fallback: number): number {
+  if (!raw || !/^\d{2}:\d{2}$/.test(raw)) return fallback;
+  const [hh, mm] = raw.split(":").map((v) => Number(v));
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return fallback;
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return fallback;
+  return hh * 60 + mm;
+}
+
+function weekdayNum(name: string): number {
+  switch (name) {
+    case "Sun":
+      return 0;
+    case "Mon":
+      return 1;
+    case "Tue":
+      return 2;
+    case "Wed":
+      return 3;
+    case "Thu":
+      return 4;
+    case "Fri":
+      return 5;
+    case "Sat":
+      return 6;
+    default:
+      return 0;
+  }
+}
+
+function zonedWeekdayMinute(now: Date, timezone: string): { weekday: number; minute: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const weekday = weekdayNum(parts.find((p) => p.type === "weekday")?.value ?? "Sun");
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return {
+    weekday,
+    minute: Math.max(0, Math.min(23, Number.isFinite(hour) ? hour : 0)) * 60 + Math.max(0, Math.min(59, Number.isFinite(minute) ? minute : 0)),
+  };
+}
+
+function inWindow(currentMinute: number, start: number, end: number): boolean {
+  if (start === end) return true;
+  if (start < end) return currentMinute >= start && currentMinute < end;
+  return currentMinute >= start || currentMinute < end;
+}
+
+function applyQuietWindows(
+  event: RoutedEvent,
+  policy: AlertPolicy,
+  now: Date,
+): { event: RoutedEvent | null; quiet_hit: boolean; quiet_mode: string | null } {
+  const windows = Array.isArray(policy.quiet_windows) ? policy.quiet_windows : [];
+  if (windows.length === 0) return { event, quiet_hit: false, quiet_mode: null };
+
+  let current = event;
+  for (const w of windows) {
+    const timezone = w.timezone && w.timezone.trim().length > 0 ? w.timezone.trim() : "UTC";
+    const startMin = parseHmMinutes(w.start, 0);
+    const endMin = parseHmMinutes(w.end, 24 * 60);
+    const days = Array.isArray(w.days) && w.days.length > 0 ? w.days : [0, 1, 2, 3, 4, 5, 6];
+    const mode = w.mode === "warning_only" ? "warning_only" : "suppress";
+    let zoned: { weekday: number; minute: number };
+    try {
+      zoned = zonedWeekdayMinute(now, timezone);
+    } catch {
+      zoned = zonedWeekdayMinute(now, "UTC");
+    }
+    if (!days.includes(zoned.weekday)) continue;
+    if (!inWindow(zoned.minute, startMin, endMin)) continue;
+    if (mode === "suppress") {
+      return { event: null, quiet_hit: true, quiet_mode: "suppress" };
+    }
+    if (mode === "warning_only" && current.severity === "critical") {
+      current = { ...current, severity: "warning" };
+    }
+    return { event: current, quiet_hit: true, quiet_mode: mode };
+  }
+  return { event: current, quiet_hit: false, quiet_mode: null };
+}
+
+function renderTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{([a-z0-9_]+)\}\}/gi, (_m, k) => vars[k] ?? "");
+}
+
+function dedupeConfig(
+  policy: AlertPolicy,
+  args: { route_id: string; channel: string; tenant_id: string; event_type: string; severity: AlertSeverity },
+): { dedupe_key: string; ttl_seconds: number } {
+  const dedupe = asRecord(policy.dedupe ?? {});
+  const template =
+    typeof dedupe.key === "string" && dedupe.key.trim().length > 0
+      ? dedupe.key
+      : "{{tenant_id}}:{{event_type}}:{{severity}}:{{route_id}}";
+  const ttlSeconds = Math.max(60, Math.min(7 * 24 * 3600, Math.trunc(asNumber(dedupe.ttl_seconds, 1800))));
+  const dedupeKey = renderTemplate(template, {
+    tenant_id: args.tenant_id,
+    event_type: args.event_type,
+    severity: args.severity,
+    channel: args.channel,
+    route_id: args.route_id,
+  });
+  return {
+    dedupe_key: dedupeKey,
+    ttl_seconds: ttlSeconds,
+  };
 }
 
 async function collectEvents(args: {
@@ -172,6 +401,7 @@ async function postJson(args: {
 async function deliverEvent(args: {
   route: any;
   event: RoutedEvent;
+  dedupe_key: string;
   timeout_ms: number;
   dry_run: boolean;
 }): Promise<{ status: "sent" | "failed" | "skipped"; code: number | null; body: string; error: string | null }> {
@@ -197,7 +427,7 @@ async function deliverEvent(args: {
     const payload = {
       routing_key: routingKey,
       event_action: "trigger",
-      dedup_key: `${event.tenant_id}:${event.event_type}`,
+      dedup_key: args.dedupe_key,
       payload: {
         summary: event.summary,
         source: "aionis-hosted-alert-dispatch",
@@ -280,6 +510,7 @@ async function main() {
     key_usage_zscore_threshold: keyUsageZscore,
   });
 
+  const now = new Date();
   const deliveries: any[] = [];
   for (const event of events) {
     const routes = await listActiveAlertRoutesForEvent(db, {
@@ -297,9 +528,109 @@ async function main() {
       continue;
     }
     for (const route of routes) {
-      const d = await deliverEvent({ route, event, timeout_ms: timeoutMs, dry_run: dryRun });
+      const routeId = String(route.id);
+      const channel = String(route.channel ?? "");
+      const policy = parsePolicy(route);
+
+      const thresholded = applySeverityThresholds(event, policy);
+      if (!thresholded) {
+        await recordControlAlertDelivery(db, {
+          route_id: routeId,
+          tenant_id: tenantId,
+          event_type: event.event_type,
+          status: "skipped",
+          error: "below_route_threshold",
+          metadata: {
+            dry_run: dryRun,
+            channel,
+            policy_applied: true,
+            reason: "severity_threshold",
+          },
+        });
+        deliveries.push({
+          event_type: event.event_type,
+          route_id: routeId,
+          channel,
+          status: "skipped",
+          reason: "below_route_threshold",
+        });
+        continue;
+      }
+
+      const quietRes = applyQuietWindows(thresholded, policy, now);
+      if (!quietRes.event) {
+        await recordControlAlertDelivery(db, {
+          route_id: routeId,
+          tenant_id: tenantId,
+          event_type: event.event_type,
+          status: "skipped",
+          error: "quiet_window_suppressed",
+          metadata: {
+            dry_run: dryRun,
+            channel,
+            policy_applied: true,
+            reason: "quiet_window",
+            quiet_mode: quietRes.quiet_mode,
+          },
+        });
+        deliveries.push({
+          event_type: event.event_type,
+          route_id: routeId,
+          channel,
+          status: "skipped",
+          reason: "quiet_window_suppressed",
+        });
+        continue;
+      }
+
+      const effectiveEvent = quietRes.event;
+      const dedupe = dedupeConfig(policy, {
+        route_id: routeId,
+        channel,
+        tenant_id: tenantId,
+        event_type: effectiveEvent.event_type,
+        severity: effectiveEvent.severity,
+      });
+      const dedupeHit = await findRecentControlAlertDeliveryByDedupe(db, {
+        route_id: routeId,
+        dedupe_key: dedupe.dedupe_key,
+        ttl_seconds: dedupe.ttl_seconds,
+      });
+      if (dedupeHit) {
+        await recordControlAlertDelivery(db, {
+          route_id: routeId,
+          tenant_id: tenantId,
+          event_type: event.event_type,
+          status: "skipped",
+          error: "dedupe_hit",
+          metadata: {
+            dry_run: dryRun,
+            channel,
+            policy_applied: true,
+            dedupe_key: dedupe.dedupe_key,
+            dedupe_ttl_seconds: dedupe.ttl_seconds,
+            dedupe_last_delivery_at: dedupeHit.created_at ?? null,
+          },
+        });
+        deliveries.push({
+          event_type: event.event_type,
+          route_id: routeId,
+          channel,
+          status: "skipped",
+          reason: "dedupe_hit",
+        });
+        continue;
+      }
+
+      const d = await deliverEvent({
+        route,
+        event: effectiveEvent,
+        dedupe_key: dedupe.dedupe_key,
+        timeout_ms: timeoutMs,
+        dry_run: dryRun,
+      });
       await recordControlAlertDelivery(db, {
-        route_id: String(route.id),
+        route_id: routeId,
         tenant_id: tenantId,
         event_type: event.event_type,
         status: d.status,
@@ -308,14 +639,22 @@ async function main() {
         error: d.error,
         metadata: {
           dry_run: dryRun,
-          channel: route.channel,
+          channel,
+          policy_applied: true,
+          quiet_window_hit: quietRes.quiet_hit,
+          quiet_mode: quietRes.quiet_mode,
+          severity_input: event.severity,
+          severity_output: effectiveEvent.severity,
+          dedupe_key: dedupe.dedupe_key,
+          dedupe_ttl_seconds: dedupe.ttl_seconds,
         },
       });
       deliveries.push({
         event_type: event.event_type,
-        route_id: route.id,
-        channel: route.channel,
+        route_id: routeId,
+        channel,
         status: d.status,
+        severity: effectiveEvent.severity,
         response_code: d.code,
         error: d.error,
       });

@@ -835,6 +835,41 @@ export async function listControlAlertDeliveries(
   }
 }
 
+export async function findRecentControlAlertDeliveryByDedupe(
+  db: Db,
+  args: {
+    route_id: string;
+    dedupe_key: string;
+    ttl_seconds: number;
+  },
+) {
+  const routeId = trimOrNull(args.route_id);
+  const dedupeKey = trimOrNull(args.dedupe_key);
+  if (!routeId || !dedupeKey) return null;
+  const ttlSeconds = Number.isFinite(args.ttl_seconds) ? Math.max(60, Math.min(7 * 24 * 3600, Math.trunc(args.ttl_seconds))) : 1800;
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, delivery_id, route_id, tenant_id, event_type, status, created_at, metadata
+        FROM control_alert_deliveries
+        WHERE route_id = $1
+          AND status = 'sent'
+          AND (metadata->>'dedupe_key') = $2
+          AND created_at >= now() - (($3::text || ' seconds')::interval)
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [routeId, dedupeKey, ttlSeconds],
+      );
+      return q.rows[0] ?? null;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return null;
+    throw err;
+  }
+}
+
 export async function recordMemoryRequestTelemetry(db: Db, input: MemoryRequestTelemetryInput): Promise<void> {
   const tenantId = trimOrNull(input.tenant_id);
   const scope = trimOrNull(input.scope);
