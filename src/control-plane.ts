@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Db } from "./db.js";
-import { withClient } from "./db.js";
+import { withClient, withTx } from "./db.js";
 import { sha256Hex } from "./util/crypto.js";
 import { TokenBucketLimiter } from "./util/ratelimit.js";
 
@@ -36,6 +36,11 @@ export type ControlApiKeyInput = {
   metadata?: Record<string, unknown>;
 };
 
+export type ControlApiKeyRotateInput = {
+  label?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
 export type TenantQuotaProfile = {
   tenant_id: string;
   recall_rps: number;
@@ -63,6 +68,25 @@ type QuotaLimit = {
 
 type TenantQuotaResolved = Record<QuotaKind, QuotaLimit>;
 
+export type ControlAuditEventInput = {
+  actor?: string | null;
+  action: string;
+  resource_type: string;
+  resource_id?: string | null;
+  tenant_id?: string | null;
+  request_id?: string | null;
+  details?: Record<string, unknown>;
+};
+
+export type MemoryRequestTelemetryInput = {
+  tenant_id: string;
+  scope: string;
+  endpoint: "write" | "recall" | "recall_text";
+  status_code: number;
+  latency_ms: number;
+  request_id?: string | null;
+};
+
 function trimOrNull(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const s = v.trim();
@@ -82,6 +106,11 @@ function f64(v: unknown, fallback: number): number {
 function i32(v: unknown, fallback: number): number {
   const n = Number(v);
   return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : fallback;
+}
+
+function round(v: number, digits = 6): number {
+  const f = 10 ** digits;
+  return Math.round(v * f) / f;
 }
 
 function nowIso() {
@@ -271,6 +300,75 @@ export async function revokeControlApiKey(db: Db, id: string) {
   });
 }
 
+export async function rotateControlApiKey(db: Db, id: string, input: ControlApiKeyRotateInput = {}) {
+  const keyId = trimOrNull(id);
+  if (!keyId) throw new Error("id is required");
+  const overrideLabel = trimOrNull(input.label);
+  const overrideMetadata = asJson(input.metadata);
+  const apiKey = generateApiKey();
+  const keyHash = sha256Hex(apiKey);
+  const keyPrefix = apiKey.slice(0, 14);
+
+  return await withTx(db, async (client) => {
+    const cur = await client.query(
+      `
+      SELECT id, tenant_id, project_id, label, role, agent_id, team_id, metadata, status
+      FROM control_api_keys
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [keyId],
+    );
+    const oldRow = cur.rows[0];
+    if (!oldRow) return null;
+    if (String(oldRow.status) !== "active") return null;
+
+    const mergedMetadata = {
+      ...asJson(oldRow.metadata),
+      ...overrideMetadata,
+      rotated_from_key_id: keyId,
+      rotated_at: nowIso(),
+    };
+
+    const ins = await client.query(
+      `
+      INSERT INTO control_api_keys (
+        tenant_id, project_id, label, role, agent_id, team_id, key_hash, key_prefix, metadata
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+      RETURNING id, tenant_id, project_id, label, role, agent_id, team_id, key_prefix, status, metadata, created_at, revoked_at
+      `,
+      [
+        String(oldRow.tenant_id),
+        oldRow.project_id ?? null,
+        overrideLabel ?? trimOrNull(oldRow.label),
+        trimOrNull(oldRow.role),
+        trimOrNull(oldRow.agent_id),
+        trimOrNull(oldRow.team_id),
+        keyHash,
+        keyPrefix,
+        JSON.stringify(mergedMetadata),
+      ],
+    );
+
+    const revoked = await client.query(
+      `
+      UPDATE control_api_keys
+      SET status = 'revoked', revoked_at = now()
+      WHERE id = $1
+      RETURNING id, tenant_id, project_id, label, role, agent_id, team_id, key_prefix, status, metadata, created_at, revoked_at
+      `,
+      [keyId],
+    );
+
+    return {
+      rotated: ins.rows[0],
+      revoked: revoked.rows[0] ?? null,
+      api_key: apiKey,
+    };
+  });
+}
+
 export function createApiKeyPrincipalResolver(db: Db, opts?: { ttl_ms?: number; negative_ttl_ms?: number }) {
   const ttlMs = Math.max(5_000, Math.trunc(opts?.ttl_ms ?? 60_000));
   const negativeTtlMs = Math.max(1_000, Math.trunc(opts?.negative_ttl_ms ?? 10_000));
@@ -390,6 +488,486 @@ export async function deleteTenantQuotaProfile(db: Db, tenantIdRaw: string): Pro
     const q = await client.query("DELETE FROM control_tenant_quotas WHERE tenant_id = $1", [tenantId]);
     return (q.rowCount ?? 0) > 0;
   });
+}
+
+export async function recordControlAuditEvent(db: Db, input: ControlAuditEventInput): Promise<void> {
+  const action = trimOrNull(input.action);
+  const resourceType = trimOrNull(input.resource_type);
+  if (!action) throw new Error("action is required");
+  if (!resourceType) throw new Error("resource_type is required");
+  const actor = trimOrNull(input.actor) ?? "admin_token";
+  const resourceId = trimOrNull(input.resource_id);
+  const tenantId = trimOrNull(input.tenant_id);
+  const requestId = trimOrNull(input.request_id);
+  const details = asJson(input.details);
+  try {
+    await withClient(db, async (client) => {
+      await client.query(
+        `
+        INSERT INTO control_audit_events (
+          actor, action, resource_type, resource_id, tenant_id, request_id, details
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+        `,
+        [actor, action, resourceType, resourceId, tenantId, requestId, JSON.stringify(details)],
+      );
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return;
+    throw err;
+  }
+}
+
+export async function listControlAuditEvents(
+  db: Db,
+  opts: { tenant_id?: string; action?: string; limit?: number; offset?: number } = {},
+) {
+  const tenantId = trimOrNull(opts.tenant_id);
+  const action = trimOrNull(opts.action);
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(500, Math.trunc(opts.limit!))) : 100;
+  const offset = Number.isFinite(opts.offset) ? Math.max(0, Math.trunc(opts.offset!)) : 0;
+  const where: string[] = [];
+  const args: unknown[] = [];
+
+  if (tenantId) {
+    args.push(tenantId);
+    where.push(`tenant_id = $${args.length}`);
+  }
+  if (action) {
+    args.push(action);
+    where.push(`action = $${args.length}`);
+  }
+  args.push(limit);
+  args.push(offset);
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT event_id, actor, action, resource_type, resource_id, tenant_id, request_id, details, created_at
+        FROM control_audit_events
+        ${whereSql}
+        ORDER BY created_at DESC
+        LIMIT $${args.length - 1} OFFSET $${args.length}
+        `,
+        args,
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function recordMemoryRequestTelemetry(db: Db, input: MemoryRequestTelemetryInput): Promise<void> {
+  const tenantId = trimOrNull(input.tenant_id);
+  const scope = trimOrNull(input.scope);
+  const endpoint = trimOrNull(input.endpoint);
+  if (!tenantId || !scope || !endpoint) return;
+  const statusCode = Number.isFinite(input.status_code) ? Math.trunc(input.status_code) : 0;
+  const latencyMs = Number.isFinite(input.latency_ms) ? Math.max(0, input.latency_ms) : 0;
+  const requestId = trimOrNull(input.request_id);
+  try {
+    await withClient(db, async (client) => {
+      await client.query(
+        `
+        INSERT INTO memory_request_telemetry (
+          tenant_id, scope, endpoint, status_code, latency_ms, request_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+        [tenantId, scope, endpoint, statusCode, latencyMs, requestId],
+      );
+    });
+  } catch (err: any) {
+    // During rollout, this table may not exist yet.
+    if (String(err?.code ?? "") === "42P01") return;
+    throw err;
+  }
+}
+
+export async function listStaleControlApiKeys(
+  db: Db,
+  opts: {
+    max_age_days?: number;
+    warn_age_days?: number;
+    rotation_window_days?: number;
+    limit?: number;
+  } = {},
+) {
+  const maxAgeDays = Number.isFinite(opts.max_age_days) ? Math.max(1, Math.trunc(opts.max_age_days!)) : 30;
+  const warnAgeDays = Number.isFinite(opts.warn_age_days) ? Math.max(1, Math.trunc(opts.warn_age_days!)) : 21;
+  const rotationWindowDays = Number.isFinite(opts.rotation_window_days) ? Math.max(1, Math.trunc(opts.rotation_window_days!)) : 30;
+  const limit = Number.isFinite(opts.limit) ? Math.max(1, Math.min(1000, Math.trunc(opts.limit!))) : 200;
+
+  try {
+    return await withClient(db, async (client) => {
+      const stale = await client.query(
+        `
+        SELECT
+          id,
+          tenant_id,
+          project_id,
+          label,
+          key_prefix,
+          created_at,
+          ROUND(EXTRACT(EPOCH FROM (now() - created_at)) / 86400.0, 3) AS age_days
+        FROM control_api_keys
+        WHERE status = 'active'
+          AND created_at <= now() - (($1::text || ' days')::interval)
+        ORDER BY created_at ASC
+        LIMIT $2
+        `,
+        [maxAgeDays, limit],
+      );
+
+      const warn = await client.query(
+        `
+        SELECT
+          id,
+          tenant_id,
+          project_id,
+          label,
+          key_prefix,
+          created_at,
+          ROUND(EXTRACT(EPOCH FROM (now() - created_at)) / 86400.0, 3) AS age_days
+        FROM control_api_keys
+        WHERE status = 'active'
+          AND created_at <= now() - (($1::text || ' days')::interval)
+          AND created_at > now() - (($2::text || ' days')::interval)
+        ORDER BY created_at ASC
+        LIMIT $3
+        `,
+        [warnAgeDays, maxAgeDays, limit],
+      );
+
+      const activeStats = await client.query(
+        `
+        SELECT
+          tenant_id,
+          COUNT(*)::bigint AS active_key_count,
+          MIN(created_at) AS oldest_active_key_at,
+          MAX(created_at) AS newest_active_key_at
+        FROM control_api_keys
+        WHERE status = 'active'
+        GROUP BY tenant_id
+        ORDER BY tenant_id ASC
+        `,
+      );
+
+      const recentRotations = await client.query(
+        `
+        SELECT
+          tenant_id,
+          COUNT(*)::bigint AS recent_rotation_count
+        FROM control_audit_events
+        WHERE action = 'api_key.rotate'
+          AND created_at >= now() - (($1::text || ' days')::interval)
+          AND tenant_id IS NOT NULL
+        GROUP BY tenant_id
+        ORDER BY tenant_id ASC
+        `,
+        [rotationWindowDays],
+      );
+
+      const rotationsByTenant = new Map<string, number>();
+      for (const r of recentRotations.rows) {
+        rotationsByTenant.set(String(r.tenant_id), Number(r.recent_rotation_count ?? 0));
+      }
+
+      const tenantsWithoutRecentRotation = activeStats.rows
+        .map((r) => ({
+          tenant_id: String(r.tenant_id),
+          active_key_count: Number(r.active_key_count ?? 0),
+          oldest_active_key_at: r.oldest_active_key_at,
+          newest_active_key_at: r.newest_active_key_at,
+          recent_rotation_count: rotationsByTenant.get(String(r.tenant_id)) ?? 0,
+        }))
+        .filter((r) => r.active_key_count > 0 && r.recent_rotation_count === 0);
+
+      return {
+        ok: true,
+        checked_at: nowIso(),
+        thresholds: {
+          max_age_days: maxAgeDays,
+          warn_age_days: warnAgeDays,
+          rotation_window_days: rotationWindowDays,
+        },
+        stale: {
+          count: stale.rows.length,
+          sample: stale.rows,
+        },
+        warning_window: {
+          count: warn.rows.length,
+          sample: warn.rows,
+        },
+        active_by_tenant: activeStats.rows,
+        recent_rotations_by_tenant: recentRotations.rows,
+        tenants_without_recent_rotation: tenantsWithoutRecentRotation,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        checked_at: nowIso(),
+        error: "control_plane_schema_missing",
+      };
+    }
+    throw err;
+  }
+}
+
+function tenantScopeCondition(args: unknown[], tenantId: string, defaultTenantId: string): { sql: string; args: unknown[] } {
+  if (tenantId === defaultTenantId) {
+    return { sql: "scope NOT LIKE 'tenant:%'", args };
+  }
+  args.push(`tenant:${tenantId}::scope:%`);
+  return { sql: `scope LIKE $${args.length}`, args };
+}
+
+export async function getTenantDashboardSummary(db: Db, args: { tenant_id: string; default_tenant_id: string }) {
+  const tenantId = trimOrNull(args.tenant_id);
+  const defaultTenantId = trimOrNull(args.default_tenant_id) ?? "default";
+  if (!tenantId) throw new Error("tenant_id is required");
+
+  const scopeArgs: unknown[] = [];
+  const scopeFilter = tenantScopeCondition(scopeArgs, tenantId, defaultTenantId);
+
+  const out: Record<string, unknown> = {
+    tenant_id: tenantId,
+    generated_at: nowIso(),
+    default_tenant_id: defaultTenantId,
+  };
+
+  try {
+    await withClient(db, async (client) => {
+      const activeKeys = await client.query(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'active')::bigint AS active,
+          COUNT(*) FILTER (WHERE status = 'revoked')::bigint AS revoked
+        FROM control_api_keys
+        WHERE tenant_id = $1
+        `,
+        [tenantId],
+      );
+      const tenantState = await client.query(
+        `
+        SELECT status, created_at, updated_at
+        FROM control_tenants
+        WHERE tenant_id = $1
+        LIMIT 1
+        `,
+        [tenantId],
+      );
+      const quota = await client.query(
+        `
+        SELECT *
+        FROM control_tenant_quotas
+        WHERE tenant_id = $1
+        LIMIT 1
+        `,
+        [tenantId],
+      );
+      const nodes = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM memory_nodes
+        WHERE ${scopeFilter.sql}
+        `,
+        scopeFilter.args,
+      );
+      const edges = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM memory_edges
+        WHERE ${scopeFilter.sql}
+        `,
+        scopeFilter.args,
+      );
+      const outbox = await client.query(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE published_at IS NULL)::bigint AS pending,
+          COUNT(*) FILTER (WHERE published_at IS NULL AND attempts > 0)::bigint AS retrying,
+          COUNT(*) FILTER (WHERE failed_at IS NOT NULL)::bigint AS failed
+        FROM memory_outbox
+        WHERE ${scopeFilter.sql}
+        `,
+        scopeFilter.args,
+      );
+      const recall24h = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM memory_recall_audit
+        WHERE ${scopeFilter.sql}
+          AND created_at >= now() - interval '24 hours'
+        `,
+        scopeFilter.args,
+      );
+      const commits24h = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM memory_commits
+        WHERE ${scopeFilter.sql}
+          AND created_at >= now() - interval '24 hours'
+        `,
+        scopeFilter.args,
+      );
+      const activeRules = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM memory_rule_defs
+        WHERE ${scopeFilter.sql}
+          AND state = 'active'
+        `,
+        scopeFilter.args,
+      );
+
+      out.tenant = tenantState.rows[0] ?? null;
+      out.api_keys = {
+        active: Number(activeKeys.rows[0]?.active ?? 0),
+        revoked: Number(activeKeys.rows[0]?.revoked ?? 0),
+      };
+      out.quota_profile = quota.rows[0] ?? null;
+      out.data_plane = {
+        nodes: Number(nodes.rows[0]?.count ?? 0),
+        edges: Number(edges.rows[0]?.count ?? 0),
+        active_rules: Number(activeRules.rows[0]?.count ?? 0),
+        recalls_24h: Number(recall24h.rows[0]?.count ?? 0),
+        commits_24h: Number(commits24h.rows[0]?.count ?? 0),
+      };
+      out.outbox = {
+        pending: Number(outbox.rows[0]?.pending ?? 0),
+        retrying: Number(outbox.rows[0]?.retrying ?? 0),
+        failed: Number(outbox.rows[0]?.failed ?? 0),
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      out.warning = "schema_not_ready_for_dashboard";
+      return out;
+    }
+    throw err;
+  }
+
+  return out;
+}
+
+export async function getTenantRequestTimeseries(
+  db: Db,
+  args: {
+    tenant_id: string;
+    window_hours?: number;
+    bucket?: "hour";
+  },
+) {
+  const tenantId = trimOrNull(args.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const windowHours = Number.isFinite(args.window_hours) ? Math.max(1, Math.min(24 * 30, Math.trunc(args.window_hours!))) : 24 * 7;
+  const bucket = args.bucket ?? "hour";
+  try {
+    return await withClient(db, async (client) => {
+      const rows = await client.query(
+        `
+        SELECT
+          date_trunc('hour', created_at) AS bucket_utc,
+          endpoint,
+          COUNT(*)::bigint AS total,
+          COUNT(*) FILTER (WHERE status_code >= 500)::bigint AS server_errors,
+          COUNT(*) FILTER (WHERE status_code = 429)::bigint AS throttled,
+          COUNT(*) FILTER (WHERE status_code >= 400 AND status_code < 500 AND status_code <> 429)::bigint AS client_errors,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS latency_p50_ms,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS latency_p95_ms,
+          percentile_cont(0.99) WITHIN GROUP (ORDER BY latency_ms) AS latency_p99_ms
+        FROM memory_request_telemetry
+        WHERE tenant_id = $1
+          AND created_at >= now() - (($2::text || ' hours')::interval)
+        GROUP BY bucket_utc, endpoint
+        ORDER BY bucket_utc ASC, endpoint ASC
+        `,
+        [tenantId, windowHours],
+      );
+
+      const series = rows.rows.map((r) => {
+        const total = Number(r.total ?? 0);
+        const serverErrors = Number(r.server_errors ?? 0);
+        const throttled = Number(r.throttled ?? 0);
+        const budgetErrors = serverErrors + throttled;
+        const errorRate = total > 0 ? budgetErrors / total : 0;
+        return {
+          bucket_utc: r.bucket_utc,
+          endpoint: r.endpoint,
+          total,
+          server_errors: serverErrors,
+          throttled,
+          client_errors: Number(r.client_errors ?? 0),
+          error_budget_consumed: budgetErrors,
+          error_rate: round(errorRate),
+          latency_p50_ms: Number(r.latency_p50_ms ?? 0),
+          latency_p95_ms: Number(r.latency_p95_ms ?? 0),
+          latency_p99_ms: Number(r.latency_p99_ms ?? 0),
+        };
+      });
+
+      const endpointBudgetRows = await client.query(
+        `
+        SELECT
+          endpoint,
+          COUNT(*)::bigint AS total,
+          COUNT(*) FILTER (WHERE status_code >= 500)::bigint AS server_errors,
+          COUNT(*) FILTER (WHERE status_code = 429)::bigint AS throttled
+        FROM memory_request_telemetry
+        WHERE tenant_id = $1
+          AND created_at >= now() - (($2::text || ' hours')::interval)
+        GROUP BY endpoint
+        ORDER BY endpoint ASC
+        `,
+        [tenantId, windowHours],
+      );
+
+      const budget = endpointBudgetRows.rows.map((r) => {
+        const total = Number(r.total ?? 0);
+        const serverErrors = Number(r.server_errors ?? 0);
+        const throttled = Number(r.throttled ?? 0);
+        const consumed = serverErrors + throttled;
+        return {
+          endpoint: r.endpoint,
+          total,
+          server_errors: serverErrors,
+          throttled,
+          error_budget_consumed: consumed,
+          error_rate: round(total > 0 ? consumed / total : 0),
+        };
+      });
+
+      return {
+        ok: true,
+        tenant_id: tenantId,
+        bucket,
+        window_hours: windowHours,
+        generated_at: nowIso(),
+        series,
+        budget,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        tenant_id: tenantId,
+        bucket,
+        window_hours: windowHours,
+        generated_at: nowIso(),
+        warning: "request_telemetry_table_missing",
+        series: [],
+        budget: [],
+      };
+    }
+    throw err;
+  }
 }
 
 export function createTenantQuotaResolver(db: Db, args: { defaults: TenantQuotaDefaults; cache_ttl_ms?: number }) {

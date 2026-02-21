@@ -22,6 +22,8 @@ If `ADMIN_TOKEN` is not configured, control-plane APIs return non-success.
 - `/v1/admin/control/projects`
 - `/v1/admin/control/api-keys`
 - `/v1/admin/control/tenant-quotas`
+- `/v1/admin/control/audit-events`
+- `/v1/admin/control/dashboard/tenant/:tenant_id`
 
 ## Tenant Lifecycle
 
@@ -88,9 +90,28 @@ Response includes plaintext `api_key` once. Stored value is hash only.
 
 `GET /v1/admin/control/api-keys?tenant_id=tenant_acme&status=active`
 
-3. Revoke API key
+3. List stale API keys (SLA helper)
+
+`GET /v1/admin/control/api-keys/stale?max_age_days=30&warn_age_days=21&rotation_window_days=30&limit=200`
+
+4. Revoke API key
 
 `POST /v1/admin/control/api-keys/:id/revoke`
+
+5. Rotate API key (atomic revoke + issue new)
+
+`POST /v1/admin/control/api-keys/:id/rotate`
+
+Optional request:
+
+```json
+{
+  "label": "ci-key-rotated",
+  "metadata": { "rotation_reason": "scheduled" }
+}
+```
+
+Response returns new plaintext `api_key` once and marks old key as revoked.
 
 ## Tenant Quota Profile
 
@@ -122,6 +143,48 @@ Request:
 3. Delete quota profile (fallback to global defaults)
 
 `DELETE /v1/admin/control/tenant-quotas/:tenant_id`
+
+## Control Audit Events
+
+1. List audit events
+
+`GET /v1/admin/control/audit-events?tenant_id=tenant_acme&action=api_key.rotate&limit=100&offset=0`
+
+Events include:
+
+- actor
+- action
+- resource type/id
+- tenant_id
+- request_id
+- details json
+- created_at
+
+## Hosted Dashboard API
+
+Tenant summary:
+
+`GET /v1/admin/control/dashboard/tenant/:tenant_id`
+
+Returns:
+
+1. control-plane state:
+- tenant status
+- active/revoked key counts
+- quota profile
+
+2. data-plane state:
+- nodes/edges counts
+- active rules
+- recalls in 24h
+- commits in 24h
+- outbox pending/retrying/failed
+
+Tenant timeseries:
+
+`GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries?window_hours=168`
+
+Returns per-hour endpoint metrics with latency percentiles and error-budget consumption.
 
 ## Runtime Behavior
 

@@ -11,8 +11,15 @@ import {
   createTenantQuotaResolver,
   deleteTenantQuotaProfile,
   getTenantQuotaProfile,
+  getTenantDashboardSummary,
+  getTenantRequestTimeseries,
   listControlApiKeys,
+  listControlAuditEvents,
+  listStaleControlApiKeys,
   listControlTenants,
+  recordMemoryRequestTelemetry,
+  recordControlAuditEvent,
+  rotateControlApiKey,
   revokeControlApiKey,
   upsertControlProject,
   upsertControlTenant,
@@ -232,11 +239,49 @@ const CORS_ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS ?? "*")
   .filter(Boolean);
 const CORS_ALLOW_HEADERS = "content-type,x-api-key,x-tenant-id,authorization,x-request-id";
 const CORS_ALLOW_METHODS = "GET,POST,OPTIONS";
+const TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT = new Map<string, "write" | "recall" | "recall_text">([
+  ["/v1/memory/write", "write"],
+  ["/v1/memory/recall", "recall"],
+  ["/v1/memory/recall_text", "recall_text"],
+]);
 
 function resolveCorsAllowOrigin(origin: string | null): string | null {
   if (CORS_ALLOW_ORIGINS.includes("*")) return "*";
   if (!origin) return null;
   return CORS_ALLOW_ORIGINS.includes(origin) ? origin : null;
+}
+
+function routePath(req: any): string {
+  const raw = String(req?.routeOptions?.url ?? req?.routerPath ?? req?.url ?? "");
+  return raw.split("?")[0] ?? raw;
+}
+
+function telemetryEndpointFromRequest(req: any): "write" | "recall" | "recall_text" | null {
+  if (String(req?.method ?? "").toUpperCase() !== "POST") return null;
+  const p = routePath(req);
+  return TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT.get(p) ?? null;
+}
+
+function resolveRequestScopeForTelemetry(req: any): string {
+  if (typeof req?.aionis_scope === "string" && req.aionis_scope.trim().length > 0) return req.aionis_scope.trim();
+  const body = req?.body;
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    const s = (body as any).scope;
+    if (typeof s === "string" && s.trim().length > 0) return s.trim();
+  }
+  return env.MEMORY_SCOPE;
+}
+
+function resolveRequestTenantForTelemetry(req: any): string {
+  if (typeof req?.aionis_tenant_id === "string" && req.aionis_tenant_id.trim().length > 0) return req.aionis_tenant_id.trim();
+  const body = req?.body;
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    const t = (body as any).tenant_id;
+    if (typeof t === "string" && t.trim().length > 0) return t.trim();
+  }
+  const headerTenant = typeof req?.headers?.["x-tenant-id"] === "string" ? String(req.headers["x-tenant-id"]).trim() : "";
+  if (headerTenant) return headerTenant;
+  return env.MEMORY_TENANT_ID;
 }
 
 function withRecallProfileDefaults(body: unknown, defaults: RecallProfileDefaults) {
@@ -425,6 +470,7 @@ app.log.info(
 );
 
 app.addHook("onRequest", async (req, reply) => {
+  (req as any).aionis_t0_ms = performance.now();
   // Always expose the request id for correlation (client <-> server logs).
   reply.header("x-request-id", req.id);
 
@@ -442,6 +488,27 @@ app.addHook("onRequest", async (req, reply) => {
   // Handle browser preflight directly.
   if (req.method === "OPTIONS") {
     return reply.code(204).send();
+  }
+});
+
+app.addHook("onResponse", async (req, reply) => {
+  const endpoint = telemetryEndpointFromRequest(req);
+  if (!endpoint) return;
+  const t0 = Number((req as any).aionis_t0_ms ?? Number.NaN);
+  const latencyMs = Number.isFinite(t0) ? Math.max(0, performance.now() - t0) : 0;
+  const tenantId = resolveRequestTenantForTelemetry(req);
+  const scope = resolveRequestScopeForTelemetry(req);
+  try {
+    await recordMemoryRequestTelemetry(db, {
+      tenant_id: tenantId,
+      scope,
+      endpoint,
+      status_code: Number(reply.statusCode ?? 0),
+      latency_ms: latencyMs,
+      request_id: String(req.id ?? ""),
+    });
+  } catch (err) {
+    req.log.warn({ err, endpoint, tenant_id: tenantId }, "request telemetry insert failed");
   }
 });
 
@@ -472,6 +539,11 @@ const ControlApiKeySchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+const ControlApiKeyRotateSchema = z.object({
+  label: z.string().max(256).optional().nullable(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
 const ControlTenantQuotaSchema = z.object({
   recall_rps: z.number().positive(),
   recall_burst: z.number().int().positive(),
@@ -489,6 +561,13 @@ app.post("/v1/admin/control/tenants", async (req, reply) => {
   requireAdminToken(req);
   const body = ControlTenantSchema.parse(req.body ?? {});
   const out = await upsertControlTenant(db, body);
+  await emitControlAudit(req, {
+    action: "tenant.upsert",
+    resource_type: "tenant",
+    resource_id: String(out.tenant_id),
+    tenant_id: String(out.tenant_id),
+    details: { status: out.status },
+  });
   return reply.code(200).send({ ok: true, tenant: out });
 });
 
@@ -506,6 +585,13 @@ app.post("/v1/admin/control/projects", async (req, reply) => {
   requireAdminToken(req);
   const body = ControlProjectSchema.parse(req.body ?? {});
   const out = await upsertControlProject(db, body);
+  await emitControlAudit(req, {
+    action: "project.upsert",
+    resource_type: "project",
+    resource_id: String(out.project_id),
+    tenant_id: String(out.tenant_id),
+    details: { status: out.status },
+  });
   return reply.code(200).send({ ok: true, project: out });
 });
 
@@ -513,6 +599,13 @@ app.post("/v1/admin/control/api-keys", async (req, reply) => {
   requireAdminToken(req);
   const body = ControlApiKeySchema.parse(req.body ?? {});
   const out = await createControlApiKey(db, body);
+  await emitControlAudit(req, {
+    action: "api_key.create",
+    resource_type: "api_key",
+    resource_id: String(out.id),
+    tenant_id: String(out.tenant_id),
+    details: { project_id: out.project_id ?? null, key_prefix: out.key_prefix },
+  });
   return reply.code(200).send({ ok: true, key: out });
 });
 
@@ -529,11 +622,49 @@ app.get("/v1/admin/control/api-keys", async (req, reply) => {
   return reply.code(200).send({ ok: true, keys: rows });
 });
 
+app.get("/v1/admin/control/api-keys/stale", async (req, reply) => {
+  requireAdminToken(req);
+  const q = req.query as Record<string, unknown> | undefined;
+  const out = await listStaleControlApiKeys(db, {
+    max_age_days: typeof q?.max_age_days === "string" ? Number(q.max_age_days) : undefined,
+    warn_age_days: typeof q?.warn_age_days === "string" ? Number(q.warn_age_days) : undefined,
+    rotation_window_days: typeof q?.rotation_window_days === "string" ? Number(q.rotation_window_days) : undefined,
+    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
+  });
+  return reply.code(200).send(out);
+});
+
 app.post("/v1/admin/control/api-keys/:id/revoke", async (req, reply) => {
   requireAdminToken(req);
   const id = String((req.params as any)?.id ?? "");
   const out = await revokeControlApiKey(db, id);
   if (!out) return reply.code(404).send({ error: "not_found", message: "api key not found" });
+  await emitControlAudit(req, {
+    action: "api_key.revoke",
+    resource_type: "api_key",
+    resource_id: String(out.id),
+    tenant_id: String(out.tenant_id),
+    details: { key_prefix: out.key_prefix },
+  });
+  return reply.code(200).send({ ok: true, key: out });
+});
+
+app.post("/v1/admin/control/api-keys/:id/rotate", async (req, reply) => {
+  requireAdminToken(req);
+  const id = String((req.params as any)?.id ?? "");
+  const body = ControlApiKeyRotateSchema.parse(req.body ?? {});
+  const out = await rotateControlApiKey(db, id, body);
+  if (!out) return reply.code(404).send({ error: "not_found", message: "active api key not found" });
+  await emitControlAudit(req, {
+    action: "api_key.rotate",
+    resource_type: "api_key",
+    resource_id: String(out.rotated.id),
+    tenant_id: String(out.rotated.tenant_id),
+    details: {
+      revoked_key_id: out.revoked?.id ?? id,
+      key_prefix: out.rotated.key_prefix,
+    },
+  });
   return reply.code(200).send({ ok: true, key: out });
 });
 
@@ -544,6 +675,13 @@ app.put("/v1/admin/control/tenant-quotas/:tenant_id", async (req, reply) => {
   const body = ControlTenantQuotaSchema.parse(req.body ?? {});
   const out = await upsertTenantQuotaProfile(db, tenantId, body);
   tenantQuotaResolver.invalidate(tenantId);
+  await emitControlAudit(req, {
+    action: "tenant_quota.upsert",
+    resource_type: "tenant_quota",
+    resource_id: tenantId,
+    tenant_id: tenantId,
+    details: body,
+  });
   return reply.code(200).send({ ok: true, quota: out });
 });
 
@@ -562,7 +700,52 @@ app.delete("/v1/admin/control/tenant-quotas/:tenant_id", async (req, reply) => {
   if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
   const deleted = await deleteTenantQuotaProfile(db, tenantId);
   tenantQuotaResolver.invalidate(tenantId);
+  if (deleted) {
+    await emitControlAudit(req, {
+      action: "tenant_quota.delete",
+      resource_type: "tenant_quota",
+      resource_id: tenantId,
+      tenant_id: tenantId,
+      details: { deleted: true },
+    });
+  }
   return reply.code(200).send({ ok: true, deleted });
+});
+
+app.get("/v1/admin/control/audit-events", async (req, reply) => {
+  requireAdminToken(req);
+  const q = req.query as Record<string, unknown> | undefined;
+  const events = await listControlAuditEvents(db, {
+    tenant_id: typeof q?.tenant_id === "string" ? q.tenant_id : undefined,
+    action: typeof q?.action === "string" ? q.action : undefined,
+    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
+    offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
+  });
+  return reply.code(200).send({ ok: true, events });
+});
+
+app.get("/v1/admin/control/dashboard/tenant/:tenant_id", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const dashboard = await getTenantDashboardSummary(db, {
+    tenant_id: tenantId,
+    default_tenant_id: env.MEMORY_TENANT_ID,
+  });
+  return reply.code(200).send({ ok: true, dashboard });
+});
+
+app.get("/v1/admin/control/dashboard/tenant/:tenant_id/timeseries", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const q = req.query as Record<string, unknown> | undefined;
+  const out = await getTenantRequestTimeseries(db, {
+    tenant_id: tenantId,
+    window_hours: typeof q?.window_hours === "string" ? Number(q.window_hours) : undefined,
+    bucket: "hour",
+  });
+  return reply.code(200).send(out);
 });
 
 app.post("/v1/memory/write", async (req, reply) => {
@@ -1132,6 +1315,31 @@ async function enforceRecallTextEmbedQuota(req: any, reply: any, tenantId: strin
   }
 }
 
+async function emitControlAudit(
+  req: any,
+  input: {
+    action: string;
+    resource_type: string;
+    resource_id?: string | null;
+    tenant_id?: string | null;
+    details?: Record<string, unknown>;
+  },
+) {
+  try {
+    await recordControlAuditEvent(db, {
+      actor: "admin_token",
+      action: input.action,
+      resource_type: input.resource_type,
+      resource_id: input.resource_id ?? null,
+      tenant_id: input.tenant_id ?? null,
+      request_id: String(req?.id ?? ""),
+      details: input.details ?? {},
+    });
+  } catch (err) {
+    req.log.warn({ err, action: input.action }, "failed to record control audit event");
+  }
+}
+
 function requireAdminToken(req: any) {
   const configured = String(env.ADMIN_TOKEN ?? "").trim();
   if (!configured) {
@@ -1215,6 +1423,14 @@ function withIdentityFromRequest(
     obj.tenant_id = principal.tenant_id;
   } else if (!bodyTenant && headerTenant) {
     obj.tenant_id = headerTenant;
+  }
+  if (typeof obj.tenant_id === "string" && obj.tenant_id.trim().length > 0) {
+    (req as any).aionis_tenant_id = obj.tenant_id.trim();
+  } else if (headerTenant) {
+    (req as any).aionis_tenant_id = headerTenant;
+  }
+  if (typeof obj.scope === "string" && obj.scope.trim().length > 0) {
+    (req as any).aionis_scope = obj.scope.trim();
   }
 
   if (principal && (kind === "recall" || kind === "recall_text")) {

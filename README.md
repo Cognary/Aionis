@@ -144,6 +144,7 @@ Operator docs:
 - [Hosted Release Evidence Bundle Template](docs/HOSTED_RELEASE_EVIDENCE_BUNDLE_TEMPLATE.md)
 - [Hosted Control Plane API (MVP)](docs/HOSTED_CONTROL_PLANE_API.md)
 - [Hosted Operator Checklist](docs/HOSTED_OPERATOR_CHECKLIST.md)
+- [Hosted Automation Runbook](docs/HOSTED_AUTOMATION_RUNBOOK.md)
 - [E2E Regression](docs/E2E_REGRESSION.md)
 - [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
 - [LongMemEval Gate](docs/LONGMEMEVAL_GATE.md)

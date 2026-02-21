@@ -111,7 +111,7 @@ Required before hosted production rollout:
 5. Added hosted release evidence bundle template:
    - `docs/HOSTED_RELEASE_EVIDENCE_BUNDLE_TEMPLATE.md`
 
-## Next Execution Batch
+## Next Execution Batch (Completed)
 
 1. Control plane API spec draft:
    - `docs/HOSTED_CONTROL_PLANE_API.md`
@@ -121,12 +121,32 @@ Required before hosted production rollout:
      - `/v1/admin/control/tenant-quotas/:tenant_id`
 3. Hosted operator checklist:
    - `docs/HOSTED_OPERATOR_CHECKLIST.md`
+4. Control-plane key rotation endpoint:
+   - `POST /v1/admin/control/api-keys/:id/rotate`
+5. Control-plane audit events stream:
+   - migration: `migrations/0023_control_plane_audit_events.sql`
+   - endpoint: `GET /v1/admin/control/audit-events`
+6. Hosted dashboard tenant summary API:
+   - endpoint: `GET /v1/admin/control/dashboard/tenant/:tenant_id`
 
-## Following Batch
+## Following Batch (Completed)
 
-1. Tenant key rotation SLA automation and key-usage telemetry.
-2. Tenant/project CRUD audit events stream (actor + reason + diff).
-3. Hosted dashboard API for per-tenant SLO, backlog, and replay status.
+1. Key rotation SLA automation and proactive stale-key alerting.
+   - job: `npm run -s job:hosted-key-rotation-sla`
+   - endpoint: `GET /v1/admin/control/api-keys/stale`
+2. Per-tenant latency/error budget time-series export for dashboard.
+   - migration: `migrations/0024_memory_request_telemetry.sql`
+   - endpoint: `GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries`
+   - job: `npm run -s job:hosted-tenant-timeseries-export`
+3. Hosted incident bundle auto-export (core gate + governance + audit snapshot).
+   - command: `npm run -s incident:bundle:hosted`
+   - runbook: `docs/HOSTED_AUTOMATION_RUNBOOK.md`
+
+## Next Batch
+
+1. Key-usage telemetry enrichment (key_prefix-level request counters and anomaly detection).
+2. Tenant dashboard chart API hardening (pagination/filtering + retention policy).
+3. Incident bundle upload/export target integration (object storage + signed evidence index).
 
 ## Operating Rules
 

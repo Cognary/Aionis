@@ -45,6 +45,11 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 2. Dead-letter review and replay drill.
 3. Quota pressure review by tenant.
 4. Error budget and SLO trend review.
+5. Control audit review:
+- `GET /v1/admin/control/audit-events?limit=200`
+6. Key hygiene:
+- rotate high-risk keys with `POST /v1/admin/control/api-keys/:id/rotate`
+- run SLA checker: `npm run -s job:hosted-key-rotation-sla -- --strict`
 
 ## 4. Incident Triage
 
@@ -58,6 +63,8 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 - hosted preflight summary
 - worker logs
 - replay/dead-letter evidence
+- control audit events filtered by `tenant_id` and `request_id`
+- tenant dashboard snapshot (`GET /v1/admin/control/dashboard/tenant/:tenant_id`)
 
 3. Immediate mitigations:
 - revoke compromised key
@@ -68,11 +75,13 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 
 1. Fill hosted evidence bundle:
 - `docs/HOSTED_RELEASE_EVIDENCE_BUNDLE_TEMPLATE.md`
-2. Confirm workflow green:
+2. Export hosted incident bundle:
+- `npm run -s incident:bundle:hosted -- --scope default --tenant-id <tenant>`
+3. Confirm workflow green:
 - `core-production-gate.yml`
 - `hosted-staging-gate.yml`
 - `docs-pages.yml` (if docs changed)
-3. Attach Docker digest + SDK versions (if changed).
+4. Attach Docker digest + SDK versions (if changed).
 
 ## Verification Stamp
 
