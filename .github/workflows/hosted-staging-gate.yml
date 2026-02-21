@@ -112,11 +112,11 @@ jobs:
           set -euo pipefail
           admin_hdr=(-H "X-Admin-Token: hosted_ci_admin_token" -H "content-type: application/json")
 
-          tenant_json="$(curl -fsS "http://localhost:3001/v1/admin/control/tenants" "${admin_hdr[@]}" -d '{"tenant_id":"tenant_hosted_ci","display_name":"Hosted CI","status":"active"}')"
+          tenant_json="$(curl -fsS "http://localhost:3001/v1/admin/control/tenants" "${admin_hdr[@]}" -d "{\"tenant_id\":\"${TENANT_ID}\",\"display_name\":\"Hosted CI\",\"status\":\"active\"}")"
           tenant_id="$(echo "${tenant_json}" | jq -r '.tenant.tenant_id')"
-          [[ "${tenant_id}" == "tenant_hosted_ci" ]] || { echo "tenant upsert failed"; echo "${tenant_json}"; exit 1; }
+          [[ "${tenant_id}" == "${TENANT_ID}" ]] || { echo "tenant upsert failed"; echo "${tenant_json}"; exit 1; }
 
-          key_json="$(curl -fsS "http://localhost:3001/v1/admin/control/api-keys" "${admin_hdr[@]}" -d '{"tenant_id":"tenant_hosted_ci","label":"ci-rotate"}')"
+          key_json="$(curl -fsS "http://localhost:3001/v1/admin/control/api-keys" "${admin_hdr[@]}" -d "{\"tenant_id\":\"${TENANT_ID}\",\"label\":\"ci-rotate\"}")"
           key_id="$(echo "${key_json}" | jq -r '.key.id')"
           [[ -n "${key_id}" && "${key_id}" != "null" ]] || { echo "key create failed"; echo "${key_json}"; exit 1; }
 
@@ -124,29 +124,29 @@ jobs:
           rotated_id="$(echo "${rotate_json}" | jq -r '.key.rotated.id')"
           [[ -n "${rotated_id}" && "${rotated_id}" != "null" ]] || { echo "key rotate failed"; echo "${rotate_json}"; exit 1; }
 
-          quota_json="$(curl -fsS -X PUT "http://localhost:3001/v1/admin/control/tenant-quotas/tenant_hosted_ci" "${admin_hdr[@]}" -d '{"recall_rps":20,"recall_burst":40,"write_rps":10,"write_burst":20,"write_max_wait_ms":300,"debug_embed_rps":1,"debug_embed_burst":4,"recall_text_embed_rps":8,"recall_text_embed_burst":16,"recall_text_embed_max_wait_ms":800}')"
+          quota_json="$(curl -fsS -X PUT "http://localhost:3001/v1/admin/control/tenant-quotas/${TENANT_ID}" "${admin_hdr[@]}" -d '{"recall_rps":20,"recall_burst":40,"write_rps":10,"write_burst":20,"write_max_wait_ms":300,"debug_embed_rps":1,"debug_embed_burst":4,"recall_text_embed_rps":8,"recall_text_embed_burst":16,"recall_text_embed_max_wait_ms":800}')"
           quota_tenant="$(echo "${quota_json}" | jq -r '.quota.tenant_id')"
-          [[ "${quota_tenant}" == "tenant_hosted_ci" ]] || { echo "quota upsert failed"; echo "${quota_json}"; exit 1; }
+          [[ "${quota_tenant}" == "${TENANT_ID}" ]] || { echo "quota upsert failed"; echo "${quota_json}"; exit 1; }
 
-          dashboard_json="$(curl -fsS "http://localhost:3001/v1/admin/control/dashboard/tenant/tenant_hosted_ci" -H "X-Admin-Token: hosted_ci_admin_token")"
+          dashboard_json="$(curl -fsS "http://localhost:3001/v1/admin/control/dashboard/tenant/${TENANT_ID}" -H "X-Admin-Token: hosted_ci_admin_token")"
           dashboard_tenant="$(echo "${dashboard_json}" | jq -r '.dashboard.tenant_id')"
-          [[ "${dashboard_tenant}" == "tenant_hosted_ci" ]] || { echo "dashboard failed"; echo "${dashboard_json}"; exit 1; }
+          [[ "${dashboard_tenant}" == "${TENANT_ID}" ]] || { echo "dashboard failed"; echo "${dashboard_json}"; exit 1; }
 
           stale_json="$(curl -fsS "http://localhost:3001/v1/admin/control/api-keys/stale?max_age_days=365&warn_age_days=180&rotation_window_days=30&limit=50" -H "X-Admin-Token: hosted_ci_admin_token")"
           stale_ok="$(echo "${stale_json}" | jq -r '.ok')"
           [[ "${stale_ok}" == "true" ]] || { echo "stale endpoint failed"; echo "${stale_json}"; exit 1; }
 
-          timeseries_json="$(curl -fsS "http://localhost:3001/v1/admin/control/dashboard/tenant/tenant_hosted_ci/timeseries?window_hours=24" -H "X-Admin-Token: hosted_ci_admin_token")"
+          timeseries_json="$(curl -fsS "http://localhost:3001/v1/admin/control/dashboard/tenant/${TENANT_ID}/timeseries?window_hours=24" -H "X-Admin-Token: hosted_ci_admin_token")"
           timeseries_tenant="$(echo "${timeseries_json}" | jq -r '.tenant_id')"
-          [[ "${timeseries_tenant}" == "tenant_hosted_ci" ]] || { echo "timeseries endpoint failed"; echo "${timeseries_json}"; exit 1; }
+          [[ "${timeseries_tenant}" == "${TENANT_ID}" ]] || { echo "timeseries endpoint failed"; echo "${timeseries_json}"; exit 1; }
 
-          rollup_json="$(curl -fsS "http://localhost:3001/v1/admin/control/dashboard/tenant/tenant_hosted_ci/incident-publish-rollup?window_hours=24&sample_limit=10" -H "X-Admin-Token: hosted_ci_admin_token")"
+          rollup_json="$(curl -fsS "http://localhost:3001/v1/admin/control/dashboard/tenant/${TENANT_ID}/incident-publish-rollup?window_hours=24&sample_limit=10" -H "X-Admin-Token: hosted_ci_admin_token")"
           rollup_tenant="$(echo "${rollup_json}" | jq -r '.rollup.tenant_id')"
-          [[ "${rollup_tenant}" == "tenant_hosted_ci" ]] || { echo "incident-publish-rollup endpoint failed"; echo "${rollup_json}"; exit 1; }
+          [[ "${rollup_tenant}" == "${TENANT_ID}" ]] || { echo "incident-publish-rollup endpoint failed"; echo "${rollup_json}"; exit 1; }
 
-          slo_json="$(curl -fsS "http://localhost:3001/v1/admin/control/dashboard/tenant/tenant_hosted_ci/incident-publish-slo?window_hours=24&baseline_hours=168&min_jobs=20" -H "X-Admin-Token: hosted_ci_admin_token")"
+          slo_json="$(curl -fsS "http://localhost:3001/v1/admin/control/dashboard/tenant/${TENANT_ID}/incident-publish-slo?window_hours=24&baseline_hours=168&min_jobs=20" -H "X-Admin-Token: hosted_ci_admin_token")"
           slo_tenant="$(echo "${slo_json}" | jq -r '.report.tenant_id')"
-          [[ "${slo_tenant}" == "tenant_hosted_ci" ]] || { echo "incident-publish-slo endpoint failed"; echo "${slo_json}"; exit 1; }
+          [[ "${slo_tenant}" == "${TENANT_ID}" ]] || { echo "incident-publish-slo endpoint failed"; echo "${slo_json}"; exit 1; }
 
       - name: Run incident publish SLO gate
         shell: bash
@@ -155,7 +155,7 @@ jobs:
           out_dir="artifacts/hosted_ops/ci/${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
           mkdir -p "${out_dir}"
           npm run -s job:hosted-incident-publish-slo -- \
-            --tenant-id "tenant_hosted_ci" \
+            --tenant-id "${TENANT_ID}" \
             --window-hours 24 \
             --baseline-hours 168 \
             --min-jobs 20 \
