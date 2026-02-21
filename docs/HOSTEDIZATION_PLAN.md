@@ -214,6 +214,17 @@ Required before hosted production rollout:
    - endpoint: `GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup`
    - includes queue status mix + replay/preview counts + recent failed/dead-letter sample
 
+## Next Batch (Completed)
+
+1. Incident publish SLO gate with adaptive baseline thresholds. (Completed)
+   - job: `npm run -s job:hosted-incident-publish-slo`
+   - includes current-vs-baseline rate comparison and backlog risk signals
+2. Alert dispatch integration for incident publish SLO degradation. (Completed)
+   - event type: `incident_publish_slo_degraded`
+   - route policy thresholds support this event class
+3. Dashboard SLO endpoint for release evidence pull-through. (Completed)
+   - endpoint: `GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-slo`
+
 ## Operating Rules
 
 1. Perf and stress tests must use isolated scope and tenant.

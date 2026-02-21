@@ -14,7 +14,8 @@ This runbook covers hosted automation for:
 4. key-prefix usage anomaly checks,
 5. request telemetry retention cleanup,
 6. tenant alert dispatch routing,
-7. incident evidence checksum/signature verify.
+7. incident evidence checksum/signature verify,
+8. incident publish SLO gate.
 
 ## 1) Key Rotation SLA Check
 
@@ -76,6 +77,7 @@ npm run -s incident:bundle:hosted -- \
 - `az://container/prefix` with `AZURE_STORAGE_CONNECTION_STRING`
 - `file:///path` or local path
 - add `--publish-async` to queue publish jobs instead of immediate upload
+- add `--skip-incident-slo` only for emergency/manual evidence export (not recommended for release gates)
 
 Standalone publisher plugin:
 
@@ -138,11 +140,12 @@ Default bundle steps:
 3. key rotation SLA check
 4. tenant timeseries export
 5. key-prefix usage anomaly check
-6. optional tenant alert dispatch (`--dispatch-alerts`, default dry-run)
-7. audit/dashboard snapshot from admin APIs
-8. evidence index generation (+ optional HMAC signature)
-9. evidence checksum/signature verification
-10. optional publish to object storage/local target
+6. incident publish SLO gate
+7. optional tenant alert dispatch (`--dispatch-alerts`, default dry-run)
+8. audit/dashboard snapshot from admin APIs
+9. evidence index generation (+ optional HMAC signature)
+10. evidence checksum/signature verification
+11. optional publish to object storage/local target
 
 Output directory:
 
@@ -202,6 +205,12 @@ npm run -s job:hosted-alert-dispatch -- \
   --out artifacts/hosted/alert_dispatch/tenant_acme_live.json
 ```
 
+Default event set:
+
+- `key_rotation_sla_failed`
+- `key_usage_anomaly`
+- `incident_publish_slo_degraded`
+
 Route policy DSL (configured in route `metadata.policy`) is applied in dispatch order:
 
 1. severity thresholds
@@ -219,6 +228,27 @@ npm run -s job:hosted-incident-verify -- \
   --strict
 ```
 
+## 8) Incident Publish SLO Gate
+
+Command:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s job:hosted-incident-publish-slo -- \
+  --tenant-id tenant_acme \
+  --window-hours 24 \
+  --baseline-hours 168 \
+  --min-jobs 20 \
+  --adaptive-multiplier 2 \
+  --failure-rate-floor 0.05 \
+  --dead-letter-rate-floor 0.02 \
+  --backlog-warning-abs 200 \
+  --dead-letter-backlog-warning-abs 20 \
+  --dead-letter-backlog-critical-abs 50 \
+  --strict \
+  --out artifacts/hosted/incident_publish_slo/tenant_acme.json
+```
+
 ## Admin API Endpoints for Dashboard/Ops
 
 1. `GET /v1/admin/control/api-keys/stale`
@@ -227,6 +257,7 @@ npm run -s job:hosted-incident-verify -- \
 4. `GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries`
 5. `GET /v1/admin/control/dashboard/tenant/:tenant_id/key-usage`
 6. `GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup`
+7. `GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-slo`
 6. `GET /v1/admin/control/alerts/routes`
 7. `GET /v1/admin/control/alerts/deliveries`
 

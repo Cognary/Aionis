@@ -1642,6 +1642,204 @@ export async function getTenantIncidentPublishRollup(
   }
 }
 
+export async function getTenantIncidentPublishSloReport(
+  db: Db,
+  args: {
+    tenant_id: string;
+    window_hours?: number;
+    baseline_hours?: number;
+    anchor_utc?: string;
+    min_jobs?: number;
+    adaptive_multiplier?: number;
+    failure_rate_floor?: number;
+    dead_letter_rate_floor?: number;
+    backlog_warning_abs?: number;
+    dead_letter_backlog_warning_abs?: number;
+    dead_letter_backlog_critical_abs?: number;
+  },
+) {
+  const tenantId = trimOrNull(args.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const windowHours = Number.isFinite(args.window_hours) ? Math.max(1, Math.min(24 * 365, Math.trunc(args.window_hours!))) : 24;
+  const baselineHours = Number.isFinite(args.baseline_hours)
+    ? Math.max(windowHours + 1, Math.min(24 * 365, Math.trunc(args.baseline_hours!)))
+    : Math.max(windowHours + 1, 24 * 7);
+  const minJobs = Number.isFinite(args.min_jobs) ? Math.max(1, Math.min(1_000_000, Math.trunc(args.min_jobs!))) : 20;
+  const adaptiveMultiplier = Number.isFinite(args.adaptive_multiplier)
+    ? Math.max(1, Math.min(20, Number(args.adaptive_multiplier)))
+    : 2;
+  const failureRateFloor = Number.isFinite(args.failure_rate_floor) ? Math.max(0, Math.min(1, Number(args.failure_rate_floor))) : 0.05;
+  const deadLetterRateFloor = Number.isFinite(args.dead_letter_rate_floor)
+    ? Math.max(0, Math.min(1, Number(args.dead_letter_rate_floor)))
+    : 0.02;
+  const backlogWarningAbs = Number.isFinite(args.backlog_warning_abs)
+    ? Math.max(1, Math.min(1_000_000, Math.trunc(args.backlog_warning_abs!)))
+    : 200;
+  const deadLetterBacklogWarningAbs = Number.isFinite(args.dead_letter_backlog_warning_abs)
+    ? Math.max(1, Math.min(1_000_000, Math.trunc(args.dead_letter_backlog_warning_abs!)))
+    : 20;
+  const deadLetterBacklogCriticalAbs = Number.isFinite(args.dead_letter_backlog_critical_abs)
+    ? Math.max(deadLetterBacklogWarningAbs, Math.min(1_000_000, Math.trunc(args.dead_letter_backlog_critical_abs!)))
+    : Math.max(deadLetterBacklogWarningAbs, 50);
+  const anchor = normalizeIsoTimestamp(trimOrNull(args.anchor_utc)) ?? nowIso();
+
+  function countByStatus(rows: Array<{ status: string; count: string | number }>) {
+    const out: Record<string, number> = {};
+    for (const r of rows) {
+      const status = String(r.status);
+      out[status] = Number(r.count ?? 0);
+    }
+    return out;
+  }
+
+  function buildMetrics(statusCounts: Record<string, number>) {
+    const succeeded = Number(statusCounts.succeeded ?? 0);
+    const failed = Number(statusCounts.failed ?? 0);
+    const deadLetter = Number(statusCounts.dead_letter ?? 0);
+    const total = succeeded + failed + deadLetter;
+    const failureRate = total > 0 ? (failed + deadLetter) / total : 0;
+    const deadLetterRate = total > 0 ? deadLetter / total : 0;
+    return {
+      succeeded,
+      failed,
+      dead_letter: deadLetter,
+      total_processed: total,
+      failure_rate: round(failureRate),
+      dead_letter_rate: round(deadLetterRate),
+    };
+  }
+
+  try {
+    return await withClient(db, async (client) => {
+      const curRows = await client.query(
+        `
+        SELECT status, COUNT(*)::bigint AS count
+        FROM control_incident_publish_jobs
+        WHERE tenant_id = $1
+          AND updated_at > ($2::timestamptz - (($3::text || ' hours')::interval))
+          AND updated_at <= $2::timestamptz
+        GROUP BY status
+        `,
+        [tenantId, anchor, windowHours],
+      );
+      const baseRows = await client.query(
+        `
+        SELECT status, COUNT(*)::bigint AS count
+        FROM control_incident_publish_jobs
+        WHERE tenant_id = $1
+          AND updated_at > ($2::timestamptz - (($4::text || ' hours')::interval))
+          AND updated_at <= ($2::timestamptz - (($3::text || ' hours')::interval))
+        GROUP BY status
+        `,
+        [tenantId, anchor, windowHours, baselineHours],
+      );
+      const backlogRow = await client.query(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE status IN ('pending', 'processing', 'failed'))::bigint AS open_backlog,
+          COUNT(*) FILTER (WHERE status = 'dead_letter')::bigint AS dead_letter_backlog
+        FROM control_incident_publish_jobs
+        WHERE tenant_id = $1
+        `,
+        [tenantId],
+      );
+
+      const currentCounts = countByStatus(curRows.rows as any[]);
+      const baselineCounts = countByStatus(baseRows.rows as any[]);
+      const current = buildMetrics(currentCounts);
+      const baseline = buildMetrics(baselineCounts);
+      const openBacklog = Number(backlogRow.rows[0]?.open_backlog ?? 0);
+      const deadLetterBacklog = Number(backlogRow.rows[0]?.dead_letter_backlog ?? 0);
+
+      const failureRateThreshold = Math.max(
+        failureRateFloor,
+        baseline.total_processed >= minJobs ? baseline.failure_rate * adaptiveMultiplier : failureRateFloor,
+      );
+      const deadLetterRateThreshold = Math.max(
+        deadLetterRateFloor,
+        baseline.total_processed >= minJobs ? baseline.dead_letter_rate * adaptiveMultiplier : deadLetterRateFloor,
+      );
+
+      const warningSignals: string[] = [];
+      const criticalSignals: string[] = [];
+
+      if (current.total_processed >= minJobs && current.failure_rate > failureRateThreshold) {
+        warningSignals.push("failure_rate_above_threshold");
+      }
+      if (current.total_processed >= minJobs && current.dead_letter_rate > deadLetterRateThreshold) {
+        warningSignals.push("dead_letter_rate_above_threshold");
+      }
+      if (openBacklog > backlogWarningAbs) {
+        warningSignals.push("open_backlog_above_threshold");
+      }
+      if (deadLetterBacklog > deadLetterBacklogWarningAbs) {
+        warningSignals.push("dead_letter_backlog_above_threshold");
+      }
+
+      if (current.total_processed >= minJobs && current.failure_rate > failureRateThreshold * 1.5) {
+        criticalSignals.push("failure_rate_far_above_threshold");
+      }
+      if (current.total_processed >= minJobs && current.dead_letter_rate > deadLetterRateThreshold * 1.5) {
+        criticalSignals.push("dead_letter_rate_far_above_threshold");
+      }
+      if (deadLetterBacklog > deadLetterBacklogCriticalAbs) {
+        criticalSignals.push("dead_letter_backlog_critical");
+      }
+
+      const degraded = warningSignals.length > 0 || criticalSignals.length > 0;
+      const severity = criticalSignals.length > 0 ? "critical" : warningSignals.length > 0 ? "warning" : null;
+
+      return {
+        ok: true,
+        tenant_id: tenantId,
+        generated_at: nowIso(),
+        snapshot: {
+          anchor_utc: anchor,
+          window_hours: windowHours,
+          baseline_hours: baselineHours,
+        },
+        thresholds: {
+          min_jobs: minJobs,
+          adaptive_multiplier: round(adaptiveMultiplier),
+          failure_rate_floor: round(failureRateFloor),
+          dead_letter_rate_floor: round(deadLetterRateFloor),
+          failure_rate_threshold: round(failureRateThreshold),
+          dead_letter_rate_threshold: round(deadLetterRateThreshold),
+          backlog_warning_abs: backlogWarningAbs,
+          dead_letter_backlog_warning_abs: deadLetterBacklogWarningAbs,
+          dead_letter_backlog_critical_abs: deadLetterBacklogCriticalAbs,
+        },
+        metrics: {
+          current,
+          baseline,
+          backlog: {
+            open_backlog: openBacklog,
+            dead_letter_backlog: deadLetterBacklog,
+          },
+        },
+        degraded,
+        severity,
+        warning_signals: warningSignals,
+        critical_signals: criticalSignals,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        tenant_id: tenantId,
+        generated_at: nowIso(),
+        warning: "incident_publish_schema_missing",
+        degraded: false,
+        severity: null,
+        warning_signals: [],
+        critical_signals: [],
+      };
+    }
+    throw err;
+  }
+}
+
 export async function getTenantRequestTimeseries(
   db: Db,
   args: {

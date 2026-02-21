@@ -129,7 +129,7 @@ Request:
   "tenant_id": "tenant_acme",
   "channel": "webhook",
   "label": "ops-webhook",
-  "events": ["key_rotation_sla_failed", "key_usage_anomaly"],
+  "events": ["key_rotation_sla_failed", "key_usage_anomaly", "incident_publish_slo_degraded"],
   "target": "https://ops.example.com/aionis-alerts",
   "secret": "hmac_shared_secret",
   "headers": { "x-env": "prod" },
@@ -142,6 +142,11 @@ Request:
           "warning_stale_count": 1,
           "critical_stale_count": 3,
           "warning_no_recent_rotation": true
+        },
+        "incident_publish_slo_degraded": {
+          "warning_signals": 1,
+          "critical_signals": 2,
+          "critical_dead_letter_backlog": 50
         }
       },
       "quiet_windows": [
@@ -366,6 +371,17 @@ Returns release-evidence roll-up for publish queue operations:
 - queue status distribution (`pending|processing|succeeded|failed|dead_letter`)
 - replay execution/preview counts from audit events
 - recent failed/dead-letter sample for triage
+
+Tenant incident publish SLO report:
+
+`GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-slo?window_hours=24&baseline_hours=168&min_jobs=20&adaptive_multiplier=2`
+
+Returns adaptive gate metrics:
+
+- current vs baseline publish outcome rates
+- derived thresholds (floors + adaptive multiplier)
+- backlog thresholds and live backlog counts
+- degradation verdict (`degraded`, `severity`, `warning_signals`, `critical_signals`)
 
 ## Runtime Behavior
 

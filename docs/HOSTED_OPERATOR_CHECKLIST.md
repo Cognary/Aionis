@@ -65,6 +65,8 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 - `POST /v1/admin/control/incident-publish/jobs/replay` (scoped to tenant, bounded `limit`)
 - preview first: `npm run -s job:hosted-incident-publish-replay -- --tenant-id <tenant> --statuses dead_letter,failed --limit 50 --dry-run --strict`
 - execute replay: `npm run -s job:hosted-incident-publish-replay -- --tenant-id <tenant> --statuses dead_letter,failed --limit 50`
+12. Incident publish SLO gate:
+- `npm run -s job:hosted-incident-publish-slo -- --tenant-id <tenant> --strict`
 
 ## 4. Incident Triage
 
@@ -81,6 +83,7 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 - control audit events filtered by `tenant_id` and `request_id`
 - tenant dashboard snapshot (`GET /v1/admin/control/dashboard/tenant/:tenant_id`)
 - incident publish roll-up (`GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup`)
+- incident publish SLO report (`GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-slo`)
 - alert delivery history (`GET /v1/admin/control/alerts/deliveries?tenant_id=<tenant>`)
 
 3. Immediate mitigations:

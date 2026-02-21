@@ -31,6 +31,7 @@ RUN_GOVERNANCE=true
 RUN_KEY_SLA=true
 RUN_TIMESERIES=true
 RUN_KEY_USAGE=true
+RUN_INCIDENT_SLO=true
 RUN_ALERT_DISPATCH=false
 ALERT_DISPATCH_DRY_RUN=true
 RUN_AUDIT_SNAPSHOT=true
@@ -58,6 +59,7 @@ Options:
   --skip-key-sla                 Do not run hosted key rotation SLA check
   --skip-timeseries              Do not run tenant timeseries export job
   --skip-key-usage               Do not run key-prefix usage anomaly check
+  --skip-incident-slo            Do not run incident publish SLO gate
   --dispatch-alerts              Run hosted alert dispatch step
   --alert-dispatch-live          Dispatch alerts in live mode (default dispatch mode is dry-run)
   --skip-audit-snapshot          Do not fetch audit/dashboard snapshots via admin API
@@ -85,6 +87,7 @@ while [[ $# -gt 0 ]]; do
     --skip-key-sla) RUN_KEY_SLA=false; shift ;;
     --skip-timeseries) RUN_TIMESERIES=false; shift ;;
     --skip-key-usage) RUN_KEY_USAGE=false; shift ;;
+    --skip-incident-slo) RUN_INCIDENT_SLO=false; shift ;;
     --dispatch-alerts) RUN_ALERT_DISPATCH=true; shift ;;
     --alert-dispatch-live) ALERT_DISPATCH_DRY_RUN=false; shift ;;
     --skip-audit-snapshot) RUN_AUDIT_SNAPSHOT=false; shift ;;
@@ -256,6 +259,13 @@ if [[ "${RUN_KEY_USAGE}" == "true" ]]; then
     npm run -s job:hosted-key-usage-anomaly -- --tenant-id "${TENANT_ID}" --window-hours "${WINDOW_HOURS}" --strict --out "${OUT_DIR}/key_usage_anomaly.json"
 else
   append_step "key_usage_anomaly" "true" "${OUT_DIR}/05_key_usage_anomaly.log" "skipped"
+fi
+
+if [[ "${RUN_INCIDENT_SLO}" == "true" ]]; then
+  run_step_cmd "incident_publish_slo" "${OUT_DIR}/05b_incident_publish_slo.log" \
+    npm run -s job:hosted-incident-publish-slo -- --tenant-id "${TENANT_ID}" --window-hours "${WINDOW_HOURS}" --baseline-hours "$((WINDOW_HOURS * 4))" --strict --out "${OUT_DIR}/incident_publish_slo.json"
+else
+  append_step "incident_publish_slo" "true" "${OUT_DIR}/05b_incident_publish_slo.log" "skipped"
 fi
 
 if [[ "${RUN_ALERT_DISPATCH}" == "true" ]]; then

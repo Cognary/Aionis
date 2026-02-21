@@ -68,6 +68,7 @@
     "job:hosted-key-rotation-sla": "tsx src/jobs/hosted-key-rotation-sla.ts",
     "job:hosted-tenant-timeseries-export": "tsx src/jobs/hosted-tenant-timeseries-export.ts",
     "job:hosted-key-usage-anomaly": "tsx src/jobs/hosted-key-usage-anomaly.ts",
+    "job:hosted-incident-publish-slo": "tsx src/jobs/hosted-incident-publish-slo.ts",
     "job:hosted-telemetry-retention": "tsx src/jobs/hosted-telemetry-retention.ts",
     "job:hosted-alert-dispatch": "tsx src/jobs/hosted-alert-dispatch.ts",
     "job:hosted-incident-verify": "tsx src/jobs/hosted-incident-verify.ts",

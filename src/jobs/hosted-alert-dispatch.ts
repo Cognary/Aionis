@@ -7,6 +7,7 @@ import { closeDb, createDb } from "../db.js";
 import {
   findRecentControlAlertDeliveryByDedupe,
   getTenantApiKeyUsageReport,
+  getTenantIncidentPublishSloReport,
   listActiveAlertRoutesForEvent,
   listStaleControlApiKeys,
   recordControlAlertDelivery,
@@ -58,7 +59,7 @@ function clampInt(v: number, min: number, max: number): number {
 }
 
 function asEventTypeSet(raw: string | null): Set<string> {
-  const input = (raw ?? "key_rotation_sla_failed,key_usage_anomaly").trim();
+  const input = (raw ?? "key_rotation_sla_failed,key_usage_anomaly,incident_publish_slo_degraded").trim();
   const out = new Set<string>();
   for (const part of input.split(",")) {
     const p = part.trim();
@@ -160,6 +161,26 @@ function applySeverityThresholds(event: RoutedEvent, policy: AlertPolicy): Route
     }
     if (!sev) return null;
     return { ...event, severity: sev };
+  }
+
+  if (event.event_type === "incident_publish_slo_degraded") {
+    const warningSignalCount = Math.max(0, Math.trunc(asNumber(event.payload.warning_signal_count, 0)));
+    const criticalSignalCount = Math.max(0, Math.trunc(asNumber(event.payload.critical_signal_count, 0)));
+    const deadLetterBacklog = Math.max(0, Math.trunc(asNumber(event.payload.dead_letter_backlog, 0)));
+    const criticalSignalsThreshold = Math.max(1, Math.trunc(asNumber(threshold.critical_signals, 1)));
+    const warningSignalsThreshold = Math.max(1, Math.trunc(asNumber(threshold.warning_signals, 1)));
+    const criticalDeadLetterBacklog = Math.max(
+      1,
+      Math.trunc(asNumber(threshold.critical_dead_letter_backlog, Number.POSITIVE_INFINITY)),
+    );
+
+    if (criticalSignalCount >= criticalSignalsThreshold || deadLetterBacklog >= criticalDeadLetterBacklog) {
+      return { ...event, severity: "critical" };
+    }
+    if (warningSignalCount >= warningSignalsThreshold) {
+      return { ...event, severity: "warning" };
+    }
+    return null;
   }
 
   return event;
@@ -288,6 +309,15 @@ async function collectEvents(args: {
   key_usage_baseline_hours: number;
   key_usage_min_requests: number;
   key_usage_zscore_threshold: number;
+  incident_slo_window_hours: number;
+  incident_slo_baseline_hours: number;
+  incident_slo_min_jobs: number;
+  incident_slo_adaptive_multiplier: number;
+  incident_slo_failure_rate_floor: number;
+  incident_slo_dead_letter_rate_floor: number;
+  incident_slo_backlog_warning_abs: number;
+  incident_slo_dead_letter_backlog_warning_abs: number;
+  incident_slo_dead_letter_backlog_critical_abs: number;
 }): Promise<RoutedEvent[]> {
   const out: RoutedEvent[] = [];
 
@@ -347,6 +377,48 @@ async function collectEvents(args: {
           filters: (usage as any)?.filters ?? null,
           anomalies_count: anomalies.length,
           anomalies_sample: anomalies.slice(0, 100),
+        },
+      });
+    }
+  }
+
+  if (args.event_types.has("incident_publish_slo_degraded")) {
+    const slo = await getTenantIncidentPublishSloReport(db, {
+      tenant_id: args.tenant_id,
+      window_hours: args.incident_slo_window_hours,
+      baseline_hours: args.incident_slo_baseline_hours,
+      min_jobs: args.incident_slo_min_jobs,
+      adaptive_multiplier: args.incident_slo_adaptive_multiplier,
+      failure_rate_floor: args.incident_slo_failure_rate_floor,
+      dead_letter_rate_floor: args.incident_slo_dead_letter_rate_floor,
+      backlog_warning_abs: args.incident_slo_backlog_warning_abs,
+      dead_letter_backlog_warning_abs: args.incident_slo_dead_letter_backlog_warning_abs,
+      dead_letter_backlog_critical_abs: args.incident_slo_dead_letter_backlog_critical_abs,
+    });
+    if ((slo as any)?.degraded) {
+      const warningSignals = Array.isArray((slo as any)?.warning_signals) ? ((slo as any).warning_signals as string[]) : [];
+      const criticalSignals = Array.isArray((slo as any)?.critical_signals)
+        ? ((slo as any).critical_signals as string[])
+        : [];
+      const severity = (slo as any)?.severity === "critical" ? "critical" : "warning";
+      out.push({
+        event_type: "incident_publish_slo_degraded",
+        tenant_id: args.tenant_id,
+        severity,
+        summary: `tenant ${args.tenant_id} incident publish SLO degraded (${warningSignals.length} warning / ${criticalSignals.length} critical signal(s))`,
+        payload: {
+          degraded: true,
+          severity,
+          warning_signal_count: warningSignals.length,
+          critical_signal_count: criticalSignals.length,
+          warning_signals: warningSignals,
+          critical_signals: criticalSignals,
+          dead_letter_backlog: Number((slo as any)?.metrics?.backlog?.dead_letter_backlog ?? 0),
+          open_backlog: Number((slo as any)?.metrics?.backlog?.open_backlog ?? 0),
+          current: (slo as any)?.metrics?.current ?? null,
+          baseline: (slo as any)?.metrics?.baseline ?? null,
+          thresholds: (slo as any)?.thresholds ?? null,
+          snapshot: (slo as any)?.snapshot ?? null,
         },
       });
     }
@@ -497,6 +569,33 @@ async function main() {
   const keyUsageBaseline = clampInt(Number(argValue("--key-usage-baseline-hours") ?? "168"), keyUsageWindow + 1, 24 * 365);
   const keyUsageMinReq = clampInt(Number(argValue("--key-usage-min-requests") ?? "30"), 1, 1_000_000);
   const keyUsageZscore = Math.max(0.5, Math.min(100, Number(argValue("--key-usage-zscore-threshold") ?? "3")));
+  const incidentSloWindow = clampInt(Number(argValue("--incident-slo-window-hours") ?? "24"), 1, 24 * 365);
+  const incidentSloBaseline = clampInt(
+    Number(argValue("--incident-slo-baseline-hours") ?? "168"),
+    incidentSloWindow + 1,
+    24 * 365,
+  );
+  const incidentSloMinJobs = clampInt(Number(argValue("--incident-slo-min-jobs") ?? "20"), 1, 1_000_000);
+  const incidentSloAdaptiveMultiplier = Math.max(
+    1,
+    Math.min(20, Number(argValue("--incident-slo-adaptive-multiplier") ?? "2")),
+  );
+  const incidentSloFailureRateFloor = Math.max(0, Math.min(1, Number(argValue("--incident-slo-failure-rate-floor") ?? "0.05")));
+  const incidentSloDeadLetterRateFloor = Math.max(
+    0,
+    Math.min(1, Number(argValue("--incident-slo-dead-letter-rate-floor") ?? "0.02")),
+  );
+  const incidentSloBacklogWarningAbs = clampInt(Number(argValue("--incident-slo-backlog-warning-abs") ?? "200"), 1, 1_000_000);
+  const incidentSloDeadLetterBacklogWarningAbs = clampInt(
+    Number(argValue("--incident-slo-dead-letter-backlog-warning-abs") ?? "20"),
+    1,
+    1_000_000,
+  );
+  const incidentSloDeadLetterBacklogCriticalAbs = clampInt(
+    Number(argValue("--incident-slo-dead-letter-backlog-critical-abs") ?? "50"),
+    incidentSloDeadLetterBacklogWarningAbs,
+    1_000_000,
+  );
 
   const events = await collectEvents({
     tenant_id: tenantId,
@@ -508,6 +607,15 @@ async function main() {
     key_usage_baseline_hours: keyUsageBaseline,
     key_usage_min_requests: keyUsageMinReq,
     key_usage_zscore_threshold: keyUsageZscore,
+    incident_slo_window_hours: incidentSloWindow,
+    incident_slo_baseline_hours: incidentSloBaseline,
+    incident_slo_min_jobs: incidentSloMinJobs,
+    incident_slo_adaptive_multiplier: incidentSloAdaptiveMultiplier,
+    incident_slo_failure_rate_floor: incidentSloFailureRateFloor,
+    incident_slo_dead_letter_rate_floor: incidentSloDeadLetterRateFloor,
+    incident_slo_backlog_warning_abs: incidentSloBacklogWarningAbs,
+    incident_slo_dead_letter_backlog_warning_abs: incidentSloDeadLetterBacklogWarningAbs,
+    incident_slo_dead_letter_backlog_critical_abs: incidentSloDeadLetterBacklogCriticalAbs,
   });
 
   const now = new Date();

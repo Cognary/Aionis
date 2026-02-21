@@ -16,6 +16,7 @@ import {
   getTenantApiKeyUsageReport,
   getTenantDashboardSummary,
   getTenantIncidentPublishRollup,
+  getTenantIncidentPublishSloReport,
   getTenantRequestTimeseries,
   listControlApiKeys,
   listControlAlertDeliveries,
@@ -1012,6 +1013,31 @@ app.get("/v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup",
     sample_limit: sampleLimit,
   });
   return reply.code(200).send({ ok: true, rollup });
+});
+
+app.get("/v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-slo", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const q = req.query as Record<string, unknown> | undefined;
+  const report = await getTenantIncidentPublishSloReport(db, {
+    tenant_id: tenantId,
+    window_hours: typeof q?.window_hours === "string" ? Number(q.window_hours) : undefined,
+    baseline_hours: typeof q?.baseline_hours === "string" ? Number(q.baseline_hours) : undefined,
+    min_jobs: typeof q?.min_jobs === "string" ? Number(q.min_jobs) : undefined,
+    adaptive_multiplier: typeof q?.adaptive_multiplier === "string" ? Number(q.adaptive_multiplier) : undefined,
+    failure_rate_floor: typeof q?.failure_rate_floor === "string" ? Number(q.failure_rate_floor) : undefined,
+    dead_letter_rate_floor:
+      typeof q?.dead_letter_rate_floor === "string" ? Number(q.dead_letter_rate_floor) : undefined,
+    backlog_warning_abs: typeof q?.backlog_warning_abs === "string" ? Number(q.backlog_warning_abs) : undefined,
+    dead_letter_backlog_warning_abs:
+      typeof q?.dead_letter_backlog_warning_abs === "string" ? Number(q.dead_letter_backlog_warning_abs) : undefined,
+    dead_letter_backlog_critical_abs:
+      typeof q?.dead_letter_backlog_critical_abs === "string"
+        ? Number(q.dead_letter_backlog_critical_abs)
+        : undefined,
+  });
+  return reply.code(200).send({ ok: true, report });
 });
 
 app.get("/v1/admin/control/dashboard/tenant/:tenant_id/timeseries", async (req, reply) => {
