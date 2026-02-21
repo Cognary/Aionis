@@ -92,6 +92,15 @@ docker run --rm -it \
   aionis-standalone:local
 ```
 
+Or use published standalone image:
+
+```bash
+docker run --rm -it \
+  -p 3001:3001 \
+  -v aionis-standalone-data:/var/lib/postgresql/data \
+  ghcr.io/cognary/aionis:standalone-latest
+```
+
 ## Core API
 
 1. `GET /health`
@@ -107,6 +116,7 @@ Full contract:
 1. TypeScript SDK: [`@aionis/sdk`](https://www.npmjs.com/package/@aionis/sdk)
 2. Python SDK: [`aionis-sdk`](https://pypi.org/project/aionis-sdk/)
 3. Docker image: `ghcr.io/cognary/aionis:latest`
+4. Docker standalone image: `ghcr.io/cognary/aionis:standalone-latest`
 
 Release docs:
 

@@ -4,84 +4,125 @@ title: "Docker Release Runbook"
 
 # Docker Release Runbook
 
-Last updated: `2026-02-18`
+Last updated: `2026-02-21`
 
 ## Scope
 
-This runbook covers publishing the Aionis API image to GHCR.
+This runbook covers two independent GHCR publish lanes:
 
-- default image repo (script fallback): `ghcr.io/<owner>/aionis`
-- current production repo example: `ghcr.io/cognary/aionis`
+1. Main API image
+- tag format: `vX.Y.Z`
+- moving tag: `latest`
 - source Dockerfile: `/Users/lucio/Desktop/Aionis/Dockerfile`
-- publish workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docker-publish.yml`
+- workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docker-publish.yml`
+
+2. Standalone image
+- tag format: `standalone-vX.Y.Z`
+- moving tag: `standalone-latest`
+- source Dockerfile: `/Users/lucio/Desktop/Aionis/Dockerfile.standalone`
+- workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docker-standalone-publish.yml`
+
+Default image repo: `ghcr.io/<owner>/aionis`
+Production repo example: `ghcr.io/cognary/aionis`
 
 ## Prerequisites
 
 1. `npm run build` passes.
-2. Gate/health checks are green for the target release.
-3. You have push permission to GHCR package namespace.
-4. For local publish, set:
-   - `GHCR_USERNAME` (or `GITHUB_ACTOR`)
-   - `GHCR_TOKEN` (or `GITHUB_TOKEN`)
-5. For GitHub Actions publish (recommended for stable automation), set repository/org secrets:
-   - `GHCR_USERNAME`
-   - `GHCR_TOKEN` (`write:packages` scope)
+2. Core gate/health checks are green for target release.
+3. You have GHCR push permission.
+4. For local publish, set credentials:
+- `GHCR_USERNAME` (or `GITHUB_ACTOR`)
+- `GHCR_TOKEN` (or `GITHUB_TOKEN`)
+5. For Actions publish, set repository/org secrets:
+- `GHCR_USERNAME`
+- `GHCR_TOKEN` (`write:packages` scope)
 
-## Local build + push
+## Local publish commands
 
-Dry-run local build (single platform, no push):
+Main image dry run:
 
 ```bash
 cd /Users/lucio/Desktop/Aionis
 npm run docker:publish:ghcr:dry-run
 ```
 
-Publish multi-arch image:
+Standalone image dry run:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+TAG=standalone-v0.1.8 npm run docker:publish:standalone:ghcr:dry-run
+```
+
+Main image push:
 
 ```bash
 cd /Users/lucio/Desktop/Aionis
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
 IMAGE_REPO=ghcr.io/<owner>/aionis \
-TAG=v0.1.4 \
+TAG=v0.1.8 \
 PLATFORMS=linux/amd64,linux/arm64 \
 PUBLISH_LATEST=true \
 npm run docker:publish:ghcr
 ```
 
-## GitHub Actions publish
-
-Trigger automatically by tag:
+Standalone image push:
 
 ```bash
-git tag docker-v0.1.4
-git push origin docker-v0.1.4
+cd /Users/lucio/Desktop/Aionis
+export GHCR_USERNAME=<your_github_user>
+export GHCR_TOKEN=<your_ghcr_token>
+IMAGE_REPO=ghcr.io/<owner>/aionis \
+TAG=standalone-v0.1.8 \
+PLATFORMS=linux/amd64,linux/arm64 \
+PUBLISH_LATEST=true \
+npm run docker:publish:standalone:ghcr
 ```
 
-Or manual `workflow_dispatch` in `Docker Publish` with:
+## GitHub Actions publish
 
-1. `tag` (e.g. `v0.1.4`)
-2. `image_repo` (optional override)
-3. `platforms` (default `linux/amd64,linux/arm64`)
-4. `publish_latest`
-5. `dry_run`
+Main lane auto trigger:
 
-Credential behavior in workflow:
+```bash
+git tag docker-v0.1.8
+git push origin docker-v0.1.8
+```
 
-1. If `GHCR_USERNAME` + `GHCR_TOKEN` secrets exist, workflow uses them (recommended).
-2. Otherwise it falls back to `${{ github.actor }}` + `${{ secrets.GITHUB_TOKEN }}`.
-3. If fallback hits `403 Forbidden` on push, configure the GHCR secrets above.
+Standalone lane auto trigger:
+
+```bash
+git tag standalone-v0.1.8
+git push origin standalone-v0.1.8
+```
+
+You can also run each workflow via `workflow_dispatch`.
+
+Credential behavior in both workflows:
+
+1. Prefer `GHCR_USERNAME` + `GHCR_TOKEN` secrets.
+2. Fallback to `${{ github.actor }}` + `${{ secrets.GITHUB_TOKEN }}`.
+3. If fallback gets `403 Forbidden`, configure GHCR secrets explicitly.
 
 ## Verification
 
+Main image:
+
 ```bash
-docker pull ghcr.io/cognary/aionis:v0.1.4
-docker run --rm -p 3001:3001 ghcr.io/cognary/aionis:v0.1.4
-curl -fsS http://localhost:3001/health
+docker pull ghcr.io/cognary/aionis:v0.1.8
+docker pull ghcr.io/cognary/aionis:latest
+docker manifest inspect ghcr.io/cognary/aionis:v0.1.8 | head
+```
+
+Standalone image:
+
+```bash
+docker pull ghcr.io/cognary/aionis:standalone-v0.1.8
+docker pull ghcr.io/cognary/aionis:standalone-latest
+docker manifest inspect ghcr.io/cognary/aionis:standalone-v0.1.8 | head
 ```
 
 ## Rollback
 
-1. Re-point deployment to previous known-good tag.
-2. Keep immutable bad tag for audit; do not overwrite.
-3. Publish fixed patch tag (e.g. `v0.1.2`).
+1. Re-point deployments to prior known-good immutable tag.
+2. Keep bad tag for audit; do not overwrite immutable versions.
+3. Publish patch version tag and move only floating tags (`latest` or `standalone-latest`).

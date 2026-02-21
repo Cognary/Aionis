@@ -31,6 +31,8 @@
     "docker:run:standalone": "docker run --rm -it -p 3001:3001 -v aionis-standalone-data:/var/lib/postgresql/data aionis-standalone:local",
     "docker:publish:ghcr": "bash scripts/docker-publish-ghcr.sh",
     "docker:publish:ghcr:dry-run": "bash scripts/docker-publish-ghcr.sh --dry-run --no-login",
+    "docker:publish:standalone:ghcr": "bash scripts/docker-publish-standalone-ghcr.sh",
+    "docker:publish:standalone:ghcr:dry-run": "bash scripts/docker-publish-standalone-ghcr.sh --dry-run --no-login",
     "env:throughput:prod": "bash scripts/env/apply-throughput-profile.sh prod",
     "env:throughput:benchmark": "bash scripts/env/apply-throughput-profile.sh benchmark",
     "env:throughput:apply": "bash scripts/env/apply-throughput-profile.sh",
