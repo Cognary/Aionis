@@ -88,6 +88,8 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 - `npm run -s incident:bundle:hosted -- --scope default --tenant-id <tenant>`
 3. If required, publish bundle to object storage with evidence signature:
 - `INCIDENT_BUNDLE_SIGNING_KEY=<secret> npm run -s incident:bundle:hosted -- --scope default --tenant-id <tenant> --publish-target s3://<bucket>/<prefix>`
+- GCS: `--publish-target gs://<bucket>/<prefix>`
+- Azure: `--publish-target az://<account>/<container>/<prefix>` (or `az://<container>/<prefix>` + `AZURE_STORAGE_CONNECTION_STRING`)
 4. Confirm workflow green:
 - `core-production-gate.yml`
 - `hosted-staging-gate.yml`

@@ -38,6 +38,7 @@ STRICT=true
 PUBLISH_TARGET="${PUBLISH_TARGET:-}"
 SIGNING_KEY="${SIGNING_KEY:-${INCIDENT_BUNDLE_SIGNING_KEY:-}}"
 PUBLISHED_URI=""
+PUBLISH_ADAPTER=""
 
 usage() {
   cat <<'USAGE'
@@ -57,7 +58,7 @@ Options:
   --dispatch-alerts              Run hosted alert dispatch step
   --alert-dispatch-live          Dispatch alerts in live mode (default dispatch mode is dry-run)
   --skip-audit-snapshot          Do not fetch audit/dashboard snapshots via admin API
-  --publish-target <uri>         Publish bundle to s3://... or local path/file://...
+  --publish-target <uri>         Publish bundle to s3://..., gs://..., az://... or local path/file://...
   --signing-key <secret>         HMAC key for evidence index signing (or INCIDENT_BUNDLE_SIGNING_KEY)
   --no-strict                    Always exit 0 even if steps fail
   -h, --help                     Show help
@@ -200,24 +201,11 @@ build_evidence_index() {
 
 publish_bundle() {
   local target="$1"
-  if [[ -z "${target}" ]]; then
-    return 0
-  fi
-  if [[ "${target}" == s3://* ]]; then
-    need aws
-    local uri="${target%/}/${RUN_ID}"
-    aws s3 cp "${OUT_DIR}/" "${uri}/" --recursive
-    PUBLISHED_URI="${uri}"
-    return 0
-  fi
-  local local_target="${target}"
-  if [[ "${target}" == file://* ]]; then
-    local_target="${target#file://}"
-  fi
-  local dest="${local_target%/}/${RUN_ID}"
-  mkdir -p "${dest}"
-  cp -R "${OUT_DIR}/." "${dest}/"
-  PUBLISHED_URI="${dest}"
+  local out_json
+  out_json="$(scripts/hosted/publish-incident-bundle.sh --source-dir "${OUT_DIR}" --target "${target}" --run-id "${RUN_ID}")"
+  PUBLISHED_URI="$(echo "${out_json}" | jq -r '.published_uri // ""')"
+  PUBLISH_ADAPTER="$(echo "${out_json}" | jq -r '.adapter // ""')"
+  echo "${out_json}"
 }
 
 if [[ "${RUN_CORE_GATE}" == "true" ]]; then
@@ -329,7 +317,7 @@ if [[ -n "${PUBLISH_TARGET}" ]]; then
   ec=$?
   set -e
   if [[ "${ec}" -eq 0 ]]; then
-    append_step "publish_bundle" "true" "${publish_log}" "target=${PUBLISH_TARGET}"
+    append_step "publish_bundle" "true" "${publish_log}" "target=${PUBLISH_TARGET},adapter=${PUBLISH_ADAPTER}"
   else
     append_step "publish_bundle" "false" "${publish_log}" "exit_code=${ec}"
   fi
@@ -356,6 +344,7 @@ jq -n \
   --arg out_dir "${OUT_DIR}" \
   --arg publish_target "${PUBLISH_TARGET}" \
   --arg published_uri "${PUBLISHED_URI}" \
+  --arg publish_adapter "${PUBLISH_ADAPTER}" \
   --arg evidence_index "${OUT_DIR}/evidence_index.json" \
   --arg evidence_signature "${OUT_DIR}/evidence_index.sig.json" \
   --arg signed "$([[ -n "${SIGNING_KEY}" ]] && echo true || echo false)" \
@@ -377,6 +366,7 @@ jq -n \
       evidence_index_json: $evidence_index,
       evidence_signature_json: $evidence_signature,
       publish_target: $publish_target,
+      publish_adapter: $publish_adapter,
       published_uri: $published_uri
     },
     evidence: {

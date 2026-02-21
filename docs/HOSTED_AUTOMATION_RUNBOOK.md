@@ -67,6 +67,24 @@ npm run -s incident:bundle:hosted -- \
   --publish-target "s3://my-bucket/aionis/incident-bundles"
 ```
 
+`--publish-target` supports:
+
+- `s3://bucket/prefix`
+- `gs://bucket/prefix`
+- `az://account/container/prefix` (Azure account mode)
+- `az://container/prefix` with `AZURE_STORAGE_CONNECTION_STRING`
+- `file:///path` or local path
+
+Standalone publisher plugin:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s incident:publish:hosted -- \
+  --source-dir artifacts/hosted_incident_bundle/<run_id> \
+  --target gs://my-bucket/aionis/incidents \
+  --run-id <run_id>
+```
+
 Default bundle steps:
 
 1. `gate:core:prod` (`run-perf=false`)

@@ -156,7 +156,7 @@ Required before hosted production rollout:
    - command: `npm run -s incident:bundle:hosted -- --publish-target <uri>`
    - artifacts: `evidence_index.json` + optional `evidence_index.sig.json`
 
-## Upcoming Batch (In Progress)
+## Upcoming Batch (Completed)
 
 1. Tenant-level alert routing hooks (PagerDuty/Slack/webhook fan-out by policy). (Completed)
    - migration: `migrations/0026_control_alert_routing.sql`
@@ -170,9 +170,19 @@ Required before hosted production rollout:
    - endpoints:
      - `GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries?cursor=...`
      - `GET /v1/admin/control/dashboard/tenant/:tenant_id/key-usage?cursor=...`
-3. Hosted incident publisher plugins (S3/GCS/Azure adapters + checksum verification job). (In Progress)
-   - completed: checksum verification job `npm run -s job:hosted-incident-verify`
-   - pending: GCS/Azure publish adapters
+3. Hosted incident publisher plugins (S3/GCS/Azure adapters + checksum verification job). (Completed)
+   - checksum verification job: `npm run -s job:hosted-incident-verify`
+   - publish adapters:
+     - `s3://` (AWS S3)
+     - `gs://` (GCS via gsutil/gcloud)
+     - `az://` (Azure Blob via az cli)
+   - plugin entrypoint: `scripts/hosted/publish-incident-bundle.sh`
+
+## Next Upcoming Batch
+
+1. Alert routing escalation policy DSL (severity thresholds, quiet windows, dedupe keys).
+2. Incident publish async mode (queued uploads + retry/dead-letter for storage provider outages).
+3. Provider-specific post-upload integrity attestations (S3 ETag/GCS generation/Azure version id capture).
 
 ## Operating Rules
 

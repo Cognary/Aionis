@@ -92,6 +92,7 @@
     "preflight:prod": "bash scripts/prod-preflight.sh",
     "preflight:hosted": "bash scripts/hosted/preflight-hosted.sh",
     "incident:bundle:hosted": "bash scripts/hosted/export-incident-bundle.sh",
+    "incident:publish:hosted": "bash scripts/hosted/publish-incident-bundle.sh",
     "job:compression-rollup": "tsx src/jobs/compression-rollup.ts",
     "job:consolidation-candidates": "tsx src/jobs/consolidation-candidates.ts",
     "job:consolidation-apply": "tsx src/jobs/consolidation-apply.ts",
