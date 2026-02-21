@@ -258,35 +258,51 @@ probe_database_connectivity() {
     exit 2
   fi
 
-  local local_db_target_hash=""
-  local_db_target_hash="$(
+  local hash_probe_json=""
+  hash_probe_json="$(
     DATABASE_URL="${DATABASE_URL}" node -e '
       const { createHash } = require("node:crypto");
       const raw = process.env.DATABASE_URL || "";
+      const h = (s) => createHash("sha256").update(s).digest("hex");
       try {
         const u = new URL(raw);
         const rawHost = (u.hostname || "").toLowerCase();
-        const host = rawHost === "localhost" || rawHost === "127.0.0.1" || rawHost === "::1" ? "loopback" : rawHost;
+        const isLoopback = rawHost === "localhost" || rawHost === "127.0.0.1" || rawHost === "::1";
+        const canonicalHost = isLoopback ? "loopback" : rawHost;
         const protocol = (u.protocol || "").toLowerCase();
         const port = u.port || ((protocol === "postgresql:" || protocol === "postgres:") ? "5432" : "");
         const db = (u.pathname || "/").replace(/^\/+/, "");
-        if (!host || !port || !db) process.exit(1);
-        const normalized = `${host}:${port}/${db}`;
-        process.stdout.write(createHash("sha256").update(normalized).digest("hex"));
+        if (!canonicalHost || !port || !db) process.exit(1);
+
+        const candidates = new Set([`${canonicalHost}:${port}/${db}`]);
+        // Docker compose often uses service alias "db" in container while host probes use loopback.
+        if (isLoopback) candidates.add(`db:${port}/${db}`);
+        if (rawHost === "db") candidates.add(`loopback:${port}/${db}`);
+
+        const hashes = Array.from(candidates).map(h);
+        process.stdout.write(JSON.stringify({ canonical: h(`${canonicalHost}:${port}/${db}`), hashes }));
       } catch {
         process.exit(1);
       }
     ' 2>/dev/null || true
   )"
 
+  local local_db_target_hash=""
+  local local_db_target_hashes=""
+  if [[ -n "${hash_probe_json}" ]]; then
+    local_db_target_hash="$(echo "${hash_probe_json}" | jq -r '.canonical // empty' 2>/dev/null || true)"
+    local_db_target_hashes="$(echo "${hash_probe_json}" | jq -r '.hashes // [] | join(",")' 2>/dev/null || true)"
+  fi
+
   {
     echo "db_runner=${DB_RUNNER}"
     echo "local_db_target_hash=${local_db_target_hash:-unknown}"
+    echo "local_db_target_hashes=${local_db_target_hashes:-unknown}"
     echo "api_db_target_hash=${API_DATABASE_TARGET_HASH:-unknown}"
   } >> "${probe_file}"
 
-  if [[ -n "${local_db_target_hash}" && -n "${API_DATABASE_TARGET_HASH}" ]]; then
-    if [[ "${local_db_target_hash}" == "${API_DATABASE_TARGET_HASH}" ]]; then
+  if [[ -n "${local_db_target_hashes}" && -n "${API_DATABASE_TARGET_HASH}" ]]; then
+    if echo ",${local_db_target_hashes}," | grep -q ",${API_DATABASE_TARGET_HASH},"; then
       DB_TARGET_HASH_MATCH="true"
     else
       DB_TARGET_HASH_MATCH="false"
