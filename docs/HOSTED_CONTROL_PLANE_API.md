@@ -217,6 +217,15 @@ Request:
 
 `GET /v1/admin/control/incident-publish/jobs?tenant_id=tenant_acme&status=failed&limit=100&offset=0`
 
+Operational note:
+
+- Sync publish path (`incident:bundle:hosted --publish-target ...`) stores provider attestation at:
+  - `artifacts/hosted_incident_bundle/<run_id>/publish_attestation.json`
+- Attestation schema varies by adapter:
+  - S3: `etag`, `version_id`, `last_modified`
+  - GCS: `generation`, `metageneration`, `etag`
+  - Azure Blob: `etag`, `version_id`, `last_modified`
+
 ## Tenant Quota Profile
 
 1. Upsert quota profile

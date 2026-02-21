@@ -41,6 +41,7 @@ SIGNING_KEY="${SIGNING_KEY:-${INCIDENT_BUNDLE_SIGNING_KEY:-}}"
 PUBLISHED_URI=""
 PUBLISH_ADAPTER=""
 PUBLISH_JOB_ID=""
+PUBLISH_ATTESTATION_JSON=""
 
 usage() {
   cat <<'USAGE'
@@ -209,6 +210,8 @@ publish_bundle() {
   out_json="$(scripts/hosted/publish-incident-bundle.sh --source-dir "${OUT_DIR}" --target "${target}" --run-id "${RUN_ID}")"
   PUBLISHED_URI="$(echo "${out_json}" | jq -r '.published_uri // ""')"
   PUBLISH_ADAPTER="$(echo "${out_json}" | jq -r '.adapter // ""')"
+  PUBLISH_ATTESTATION_JSON="${OUT_DIR}/publish_attestation.json"
+  echo "${out_json}" | jq '.attestation // {}' > "${PUBLISH_ATTESTATION_JSON}"
   echo "${out_json}"
 }
 
@@ -367,6 +370,7 @@ jq -n \
   --arg publish_job_id "${PUBLISH_JOB_ID}" \
   --arg published_uri "${PUBLISHED_URI}" \
   --arg publish_adapter "${PUBLISH_ADAPTER}" \
+  --arg publish_attestation_json "${PUBLISH_ATTESTATION_JSON}" \
   --arg evidence_index "${OUT_DIR}/evidence_index.json" \
   --arg evidence_signature "${OUT_DIR}/evidence_index.sig.json" \
   --arg signed "$([[ -n "${SIGNING_KEY}" ]] && echo true || echo false)" \
@@ -391,6 +395,7 @@ jq -n \
       publish_async: ($publish_async == "true"),
       publish_job_id: $publish_job_id,
       publish_adapter: $publish_adapter,
+      publish_attestation_json: $publish_attestation_json,
       published_uri: $published_uri
     },
     evidence: {

@@ -87,6 +87,12 @@ npm run -s incident:publish:hosted -- \
   --run-id <run_id>
 ```
 
+Publisher output includes provider attestation metadata:
+
+- S3: object `etag` + `version_id` (when available)
+- GCS: object `generation` / `metageneration`
+- Azure Blob: object `etag` + `version_id` (when available)
+
 Async queue worker:
 
 ```bash
@@ -111,6 +117,7 @@ Output directory:
 
 - `artifacts/hosted_incident_bundle/<run_id>/`
 - includes `evidence_index.json` and optional `evidence_index.sig.json`
+- sync publish mode also emits `publish_attestation.json`
 
 ## 4) Key-Prefix Usage Anomaly Check
 

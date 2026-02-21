@@ -192,7 +192,13 @@ Required before hosted production rollout:
      - `npm run -s job:hosted-incident-publish-enqueue`
      - `npm run -s job:hosted-incident-publish-worker`
    - incident bundle mode: `npm run -s incident:bundle:hosted -- --publish-async --publish-target <uri>`
-3. Provider-specific post-upload integrity attestations (S3 ETag/GCS generation/Azure version id capture). (Pending)
+3. Provider-specific post-upload integrity attestations (S3 ETag/GCS generation/Azure version id capture). (Completed)
+   - sync publish output now includes provider attestation and writes:
+     - `artifacts/hosted_incident_bundle/<run_id>/publish_attestation.json`
+   - providers:
+     - S3: `etag` + `version_id` (if enabled)
+     - GCS: `generation` + `metageneration`
+     - Azure Blob: `etag` + `version_id` (if available)
 
 ## Operating Rules
 
