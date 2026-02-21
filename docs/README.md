@@ -88,10 +88,10 @@ cd /Users/lucio/Desktop/Aionis
 npm run docs:check
 ```
 
-- Run hosted preflight:
+- Hosted preflight moved to private repo:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
+cd /tmp/aionis-hosted
 npm run -s preflight:hosted -- --run-gates
 ```
 
@@ -118,5 +118,5 @@ Verification stamp:
 
 ## Hosted CI
 
-- Hosted staging gate workflow:
-  - `/Users/lucio/Desktop/Aionis/.github/workflows/hosted-staging-gate.yml`
+Hosted CI has moved to private repository:
+- `https://github.com/Cognary/aionis-hosted`

@@ -65,7 +65,7 @@ Three pillars remain fixed:
 ## Repo Topology (Target)
 
 1. Public: `github.com/Cognary/Aionis` (Open Core)
-2. Private: hosted runtime/control-plane repo (internal)
+2. Private: `github.com/Cognary/aionis-hosted` (hosted runtime/control-plane/internal ops)
 3. Optional private package(s): hosted adapter modules
 
 This keeps community distribution and standardization in one place while protecting hosted execution moat.

@@ -105,18 +105,6 @@ jobs:
           fi
           npm run -s job:governance-weekly-report -- "${args[@]}"
 
-      - name: Run hosted key rotation SLA check
-        shell: bash
-        run: |
-          set -euo pipefail
-          out_dir="artifacts/hosted_ops/weekly/${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
-          mkdir -p "${out_dir}"
-          npm run -s job:hosted-key-rotation-sla -- \
-            --max-age-days 30 \
-            --warn-age-days 21 \
-            --rotation-window-days 30 \
-            --out "${out_dir}/key_rotation_sla_summary.json"
-
       - name: Publish summary
         if: always()
         shell: bash
@@ -124,7 +112,6 @@ jobs:
           set -euo pipefail
           summary_file="$(find artifacts/governance -type f -name summary.json | sort | tail -n 1 || true)"
           weekly_md="$(find artifacts/governance -type f -name WEEKLY_STATUS.md | sort | tail -n 1 || true)"
-          key_sla_summary="$(find artifacts/hosted_ops -type f -name key_rotation_sla_summary.json | sort | tail -n 1 || true)"
           {
             echo "## Governance Weekly Report"
             echo
@@ -137,16 +124,6 @@ jobs:
             fi
             echo
             echo "weekly markdown: \`${weekly_md:-not found}\`"
-            echo
-            echo "## Hosted Key Rotation SLA"
-            echo
-            if [[ -n "${key_sla_summary}" && -f "${key_sla_summary}" ]]; then
-              echo "summary: \`${key_sla_summary}\`"
-              echo
-              jq '.' "${key_sla_summary}"
-            else
-              echo "summary not found"
-            fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload artifacts
@@ -156,7 +133,6 @@ jobs:
           name: governance-weekly-report-artifacts
           path: |
             artifacts/governance/
-            artifacts/hosted_ops/
           retention-days: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.event.inputs.artifact_retention_days || '14') }}
           if-no-files-found: warn
 

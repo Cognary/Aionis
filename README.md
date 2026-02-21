@@ -172,12 +172,9 @@ Operator docs:
 - [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
 - [LongMemEval Gate](docs/LONGMEMEVAL_GATE.md)
 
-Hosted preflight:
+Hosted operations and automation implementation now live in private repo:
 
-```bash
-cd /Users/lucio/Desktop/Aionis
-npm run -s preflight:hosted -- --run-gates
-```
+- [aionis-hosted](https://github.com/Cognary/aionis-hosted)
 
 ## Documentation Hub
 
