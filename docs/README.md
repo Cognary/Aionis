@@ -56,6 +56,8 @@ This index is the entry point for project documentation.
 - [Hostedization Execution Plan](./HOSTEDIZATION_PLAN.md)
 - [Hosted Tenant Packaging Matrix](./HOSTED_TENANT_PACKAGING_MATRIX.md)
 - [Hosted Release Evidence Bundle Template](./HOSTED_RELEASE_EVIDENCE_BUNDLE_TEMPLATE.md)
+- [Hosted Control Plane API (MVP)](./HOSTED_CONTROL_PLANE_API.md)
+- [Hosted Operator Checklist](./HOSTED_OPERATOR_CHECKLIST.md)
 - [GTM Weekly Status Template](./GTM_WEEKLY_STATUS_TEMPLATE.md)
 - [SDK (TypeScript, P1 MVP)](./SDK.md)
 - [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)

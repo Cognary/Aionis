@@ -142,6 +142,8 @@ Operator docs:
 - [Hostedization Execution Plan](docs/HOSTEDIZATION_PLAN.md)
 - [Hosted Tenant Packaging Matrix](docs/HOSTED_TENANT_PACKAGING_MATRIX.md)
 - [Hosted Release Evidence Bundle Template](docs/HOSTED_RELEASE_EVIDENCE_BUNDLE_TEMPLATE.md)
+- [Hosted Control Plane API (MVP)](docs/HOSTED_CONTROL_PLANE_API.md)
+- [Hosted Operator Checklist](docs/HOSTED_OPERATOR_CHECKLIST.md)
 - [E2E Regression](docs/E2E_REGRESSION.md)
 - [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
 - [LongMemEval Gate](docs/LONGMEMEVAL_GATE.md)

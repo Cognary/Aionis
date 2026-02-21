@@ -2,9 +2,22 @@ import "dotenv/config";
 import Fastify from "fastify";
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { loadEnv } from "./config.js";
 import { createDb, withClient, withTx } from "./db.js";
+import {
+  createApiKeyPrincipalResolver,
+  createControlApiKey,
+  createTenantQuotaResolver,
+  deleteTenantQuotaProfile,
+  getTenantQuotaProfile,
+  listControlApiKeys,
+  listControlTenants,
+  revokeControlApiKey,
+  upsertControlProject,
+  upsertControlTenant,
+  upsertTenantQuotaProfile,
+} from "./control-plane.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "./memory/write.js";
 import { rehydrateArchiveNodes } from "./memory/rehydrate.js";
 import { activateMemoryNodes } from "./memory/nodes-activate.js";
@@ -91,41 +104,26 @@ const recallTextEmbedLimiter = env.RATE_LIMIT_ENABLED
     })
   : null;
 
-const tenantRecallLimiter = env.TENANT_QUOTA_ENABLED
-  ? new TokenBucketLimiter({
-      rate_per_sec: env.TENANT_RECALL_RATE_LIMIT_RPS,
-      burst: env.TENANT_RECALL_RATE_LIMIT_BURST,
-      ttl_ms: env.RATE_LIMIT_TTL_MS,
-      sweep_every_n: 500,
-    })
-  : null;
+const resolveControlPlaneApiKeyPrincipal = createApiKeyPrincipalResolver(db, {
+  ttl_ms: 60_000,
+  negative_ttl_ms: 10_000,
+});
 
-const tenantDebugEmbedLimiter = env.TENANT_QUOTA_ENABLED
-  ? new TokenBucketLimiter({
-      rate_per_sec: env.TENANT_DEBUG_EMBED_RATE_LIMIT_RPS,
-      burst: env.TENANT_DEBUG_EMBED_RATE_LIMIT_BURST,
-      ttl_ms: env.RATE_LIMIT_TTL_MS,
-      sweep_every_n: 500,
-    })
-  : null;
-
-const tenantWriteLimiter = env.TENANT_QUOTA_ENABLED
-  ? new TokenBucketLimiter({
-      rate_per_sec: env.TENANT_WRITE_RATE_LIMIT_RPS,
-      burst: env.TENANT_WRITE_RATE_LIMIT_BURST,
-      ttl_ms: env.RATE_LIMIT_TTL_MS,
-      sweep_every_n: 500,
-    })
-  : null;
-
-const tenantRecallTextEmbedLimiter = env.TENANT_QUOTA_ENABLED
-  ? new TokenBucketLimiter({
-      rate_per_sec: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
-      burst: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_BURST,
-      ttl_ms: env.RATE_LIMIT_TTL_MS,
-      sweep_every_n: 500,
-    })
-  : null;
+const tenantQuotaResolver = createTenantQuotaResolver(db, {
+  cache_ttl_ms: env.CONTROL_TENANT_QUOTA_CACHE_TTL_MS,
+  defaults: {
+    recall_rps: env.TENANT_RECALL_RATE_LIMIT_RPS,
+    recall_burst: env.TENANT_RECALL_RATE_LIMIT_BURST,
+    write_rps: env.TENANT_WRITE_RATE_LIMIT_RPS,
+    write_burst: env.TENANT_WRITE_RATE_LIMIT_BURST,
+    write_max_wait_ms: env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS,
+    debug_embed_rps: env.TENANT_DEBUG_EMBED_RATE_LIMIT_RPS,
+    debug_embed_burst: env.TENANT_DEBUG_EMBED_RATE_LIMIT_BURST,
+    recall_text_embed_rps: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
+    recall_text_embed_burst: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_BURST,
+    recall_text_embed_max_wait_ms: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS,
+  },
+});
 
 const recallTextEmbedCache =
   embedder && env.RECALL_TEXT_EMBED_CACHE_ENABLED
@@ -398,6 +396,7 @@ app.log.info(
     tenant_id: env.MEMORY_TENANT_ID,
     auth_mode: env.MEMORY_AUTH_MODE,
     tenant_quota_enabled: env.TENANT_QUOTA_ENABLED,
+    control_tenant_quota_cache_ttl_ms: env.CONTROL_TENANT_QUOTA_CACHE_TTL_MS,
     recall_text_embed_cache_enabled: !!recallTextEmbedCache,
     recall_text_embed_cache_ttl_ms: env.RECALL_TEXT_EMBED_CACHE_TTL_MS,
     memory_recall_profile: env.MEMORY_RECALL_PROFILE,
@@ -448,9 +447,127 @@ app.addHook("onRequest", async (req, reply) => {
 
 app.get("/health", async () => ({ ok: true, database_target_hash: healthDatabaseTargetHash }));
 
+const ControlTenantSchema = z.object({
+  tenant_id: z.string().min(1).max(128),
+  display_name: z.string().max(256).optional().nullable(),
+  status: z.enum(["active", "suspended"]).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+const ControlProjectSchema = z.object({
+  project_id: z.string().min(1).max(128),
+  tenant_id: z.string().min(1).max(128),
+  display_name: z.string().max(256).optional().nullable(),
+  status: z.enum(["active", "archived"]).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+const ControlApiKeySchema = z.object({
+  tenant_id: z.string().min(1).max(128),
+  project_id: z.string().max(128).optional().nullable(),
+  label: z.string().max(256).optional().nullable(),
+  role: z.string().max(128).optional().nullable(),
+  agent_id: z.string().max(128).optional().nullable(),
+  team_id: z.string().max(128).optional().nullable(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+const ControlTenantQuotaSchema = z.object({
+  recall_rps: z.number().positive(),
+  recall_burst: z.number().int().positive(),
+  write_rps: z.number().positive(),
+  write_burst: z.number().int().positive(),
+  write_max_wait_ms: z.number().int().min(0),
+  debug_embed_rps: z.number().positive(),
+  debug_embed_burst: z.number().int().positive(),
+  recall_text_embed_rps: z.number().positive(),
+  recall_text_embed_burst: z.number().int().positive(),
+  recall_text_embed_max_wait_ms: z.number().int().min(0),
+});
+
+app.post("/v1/admin/control/tenants", async (req, reply) => {
+  requireAdminToken(req);
+  const body = ControlTenantSchema.parse(req.body ?? {});
+  const out = await upsertControlTenant(db, body);
+  return reply.code(200).send({ ok: true, tenant: out });
+});
+
+app.get("/v1/admin/control/tenants", async (req, reply) => {
+  requireAdminToken(req);
+  const q = req.query as Record<string, unknown> | undefined;
+  const status = q?.status === "active" || q?.status === "suspended" ? q.status : undefined;
+  const limit = typeof q?.limit === "string" ? Number(q.limit) : undefined;
+  const offset = typeof q?.offset === "string" ? Number(q.offset) : undefined;
+  const rows = await listControlTenants(db, { status, limit, offset });
+  return reply.code(200).send({ ok: true, tenants: rows });
+});
+
+app.post("/v1/admin/control/projects", async (req, reply) => {
+  requireAdminToken(req);
+  const body = ControlProjectSchema.parse(req.body ?? {});
+  const out = await upsertControlProject(db, body);
+  return reply.code(200).send({ ok: true, project: out });
+});
+
+app.post("/v1/admin/control/api-keys", async (req, reply) => {
+  requireAdminToken(req);
+  const body = ControlApiKeySchema.parse(req.body ?? {});
+  const out = await createControlApiKey(db, body);
+  return reply.code(200).send({ ok: true, key: out });
+});
+
+app.get("/v1/admin/control/api-keys", async (req, reply) => {
+  requireAdminToken(req);
+  const q = req.query as Record<string, unknown> | undefined;
+  const rows = await listControlApiKeys(db, {
+    tenant_id: typeof q?.tenant_id === "string" ? q.tenant_id : undefined,
+    project_id: typeof q?.project_id === "string" ? q.project_id : undefined,
+    status: q?.status === "active" || q?.status === "revoked" ? q.status : undefined,
+    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
+    offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
+  });
+  return reply.code(200).send({ ok: true, keys: rows });
+});
+
+app.post("/v1/admin/control/api-keys/:id/revoke", async (req, reply) => {
+  requireAdminToken(req);
+  const id = String((req.params as any)?.id ?? "");
+  const out = await revokeControlApiKey(db, id);
+  if (!out) return reply.code(404).send({ error: "not_found", message: "api key not found" });
+  return reply.code(200).send({ ok: true, key: out });
+});
+
+app.put("/v1/admin/control/tenant-quotas/:tenant_id", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const body = ControlTenantQuotaSchema.parse(req.body ?? {});
+  const out = await upsertTenantQuotaProfile(db, tenantId, body);
+  tenantQuotaResolver.invalidate(tenantId);
+  return reply.code(200).send({ ok: true, quota: out });
+});
+
+app.get("/v1/admin/control/tenant-quotas/:tenant_id", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const out = await getTenantQuotaProfile(db, tenantId);
+  if (!out) return reply.code(404).send({ error: "not_found", message: "tenant quota profile not found" });
+  return reply.code(200).send({ ok: true, quota: out });
+});
+
+app.delete("/v1/admin/control/tenant-quotas/:tenant_id", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const deleted = await deleteTenantQuotaProfile(db, tenantId);
+  tenantQuotaResolver.invalidate(tenantId);
+  return reply.code(200).send({ ok: true, deleted });
+});
+
 app.post("/v1/memory/write", async (req, reply) => {
   const t0 = performance.now();
-  const principal = requireMemoryPrincipal(req);
+  const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "write");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
@@ -530,7 +647,7 @@ app.post("/v1/memory/write", async (req, reply) => {
 
 // On-demand archive retrieval policy: rehydrate selected nodes from archive/cold back to warm/hot.
 app.post("/v1/memory/archive/rehydrate", async (req, reply) => {
-  const principal = requireMemoryPrincipal(req);
+  const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "rehydrate");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
@@ -545,7 +662,7 @@ app.post("/v1/memory/archive/rehydrate", async (req, reply) => {
 
 // Node activation/feedback ingestion for adaptive decay signals.
 app.post("/v1/memory/nodes/activate", async (req, reply) => {
-  const principal = requireMemoryPrincipal(req);
+  const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "activate");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
@@ -561,7 +678,7 @@ app.post("/v1/memory/nodes/activate", async (req, reply) => {
 app.post("/v1/memory/recall", async (req, reply) => {
   const t0 = performance.now();
   const timings: Record<string, number> = {};
-  const principal = requireMemoryPrincipal(req);
+  const principal = await requireMemoryPrincipal(req);
   const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall");
   const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
   const baseProfile = resolveRecallProfile("recall", tenantFromBody(bodyRaw));
@@ -654,7 +771,7 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
 
   const t0 = performance.now();
   const timings: Record<string, number> = {};
-  const principal = requireMemoryPrincipal(req);
+  const principal = await requireMemoryPrincipal(req);
   const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall_text");
   const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
   const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
@@ -812,7 +929,7 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
 });
 
 app.post("/v1/memory/feedback", async (req, reply) => {
-  const principal = requireMemoryPrincipal(req);
+  const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "feedback");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
@@ -826,7 +943,7 @@ app.post("/v1/memory/feedback", async (req, reply) => {
 });
 
 app.post("/v1/memory/rules/state", async (req, reply) => {
-  const principal = requireMemoryPrincipal(req);
+  const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "rules_state");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
@@ -837,7 +954,7 @@ app.post("/v1/memory/rules/state", async (req, reply) => {
 // Execution injection: evaluate SHADOW/ACTIVE rules against a caller-provided context object.
 // This is designed for planner/tool selector integration (rules are not applied automatically by this service).
 app.post("/v1/memory/rules/evaluate", async (req, reply) => {
-  const principal = requireMemoryPrincipal(req);
+  const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "rules_evaluate");
   await enforceRateLimit(req, reply, "recall"); // same protection class as recall
   await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
@@ -856,7 +973,7 @@ app.post("/v1/memory/rules/evaluate", async (req, reply) => {
 // Tool selector helper: apply ACTIVE (and optionally SHADOW) rule policy to candidate tool names.
 // Intended for planner/tool selector integration to keep tool selection consistent.
 app.post("/v1/memory/tools/select", async (req, reply) => {
-  const principal = requireMemoryPrincipal(req);
+  const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "tools_select");
   await enforceRateLimit(req, reply, "recall"); // same protection class as recall
   await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
@@ -875,7 +992,7 @@ app.post("/v1/memory/tools/select", async (req, reply) => {
 // Feedback loop for tool selection: attribute a (positive/negative/neutral) outcome to matched rules.
 // This updates memory_rule_defs positive/negative counts to drive future rule ordering.
 app.post("/v1/memory/tools/feedback", async (req, reply) => {
-  const principal = requireMemoryPrincipal(req);
+  const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "tools_feedback");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
@@ -988,35 +1105,66 @@ async function enforceRecallTextEmbedQuota(req: any, reply: any, tenantId: strin
     }
   }
 
-  if (env.TENANT_QUOTA_ENABLED && tenantRecallTextEmbedLimiter) {
-    const key = `tenant:${tenantId}:recall_text_embed`;
-    let waitedMs = 0;
-    let res = tenantRecallTextEmbedLimiter.check(key, 1);
-    if (!res.allowed && env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS > 0) {
-      waitedMs = Math.min(env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS, Math.max(1, res.retry_after_ms));
-      await sleep(waitedMs);
-      res = tenantRecallTextEmbedLimiter.check(key, 1);
-    }
-    if (!res.allowed) {
-      reply.header("retry-after", Math.ceil(res.retry_after_ms / 1000));
-      throw new HttpError(
-        429,
-        "tenant_rate_limited_recall_text_embed",
-        "tenant recall_text embedding quota exceeded; retry later",
-        {
-          tenant_id: tenantId,
-          retry_after_ms: res.retry_after_ms,
-          waited_ms: waitedMs,
-        },
-      );
-    }
+  if (!env.TENANT_QUOTA_ENABLED) return;
+  const quota = await tenantQuotaResolver.resolve(tenantId);
+  const cfg = quota.recall_text_embed;
+  const limiter = tenantQuotaResolver.limiterFor(tenantId, "recall_text_embed", cfg);
+  const key = `tenant:${tenantId}:recall_text_embed`;
+  let waitedMs = 0;
+  let res = limiter.check(key, 1);
+  if (!res.allowed && cfg.max_wait_ms > 0) {
+    waitedMs = Math.min(cfg.max_wait_ms, Math.max(1, res.retry_after_ms));
+    await sleep(waitedMs);
+    res = limiter.check(key, 1);
+  }
+  if (!res.allowed) {
+    reply.header("retry-after", Math.ceil(res.retry_after_ms / 1000));
+    throw new HttpError(
+      429,
+      "tenant_rate_limited_recall_text_embed",
+      "tenant recall_text embedding quota exceeded; retry later",
+      {
+        tenant_id: tenantId,
+        retry_after_ms: res.retry_after_ms,
+        waited_ms: waitedMs,
+      },
+    );
   }
 }
 
-function requireMemoryPrincipal(req: any): AuthPrincipal | null {
+function requireAdminToken(req: any) {
+  const configured = String(env.ADMIN_TOKEN ?? "").trim();
+  if (!configured) {
+    throw new HttpError(503, "admin_not_configured", "ADMIN_TOKEN is not configured");
+  }
+  const provided = String(req?.headers?.["x-admin-token"] ?? "").trim();
+  if (!provided || provided !== configured) {
+    throw new HttpError(401, "unauthorized_admin", "valid X-Admin-Token is required");
+  }
+}
+
+async function requireMemoryPrincipal(req: any): Promise<AuthPrincipal | null> {
   if (authResolver.mode === "off") return null;
   const principal = authResolver.resolve(req?.headers ?? {});
-  if (!principal) {
+  if (principal) return principal;
+
+  if (authResolver.mode === "api_key" || authResolver.mode === "api_key_or_jwt") {
+    const apiKey = typeof req?.headers?.["x-api-key"] === "string" ? String(req.headers["x-api-key"]).trim() : "";
+    if (apiKey) {
+      const resolved = await resolveControlPlaneApiKeyPrincipal(apiKey);
+      if (resolved) {
+        return {
+          tenant_id: resolved.tenant_id,
+          agent_id: resolved.agent_id,
+          team_id: resolved.team_id,
+          role: resolved.role,
+          source: "api_key",
+        };
+      }
+    }
+  }
+
+  {
     const hint =
       authResolver.required_header_hint === "x-api-key"
         ? "X-Api-Key"
@@ -1027,7 +1175,6 @@ function requireMemoryPrincipal(req: any): AuthPrincipal | null {
             : "authorization";
     throw new HttpError(401, "unauthorized", `valid ${hint} is required`);
   }
-  return principal;
 }
 
 function assertIdentityMatch(field: string, provided: string | null, expected: string | null) {
@@ -1121,14 +1268,14 @@ function tenantFromBody(body: unknown): string {
 
 async function enforceTenantQuota(req: any, reply: any, kind: "recall" | "debug_embeddings" | "write", tenantId: string) {
   if (!env.TENANT_QUOTA_ENABLED) return;
-  const limiter =
-    kind === "debug_embeddings" ? tenantDebugEmbedLimiter : kind === "write" ? tenantWriteLimiter : tenantRecallLimiter;
-  if (!limiter) return;
+  const quota = await tenantQuotaResolver.resolve(tenantId);
+  const cfg = kind === "debug_embeddings" ? quota.debug_embeddings : kind === "write" ? quota.write : quota.recall;
+  const limiter = tenantQuotaResolver.limiterFor(tenantId, kind, cfg);
   const key = `tenant:${tenantId}:${kind}`;
   let waitedMs = 0;
   let res = limiter.check(key, 1);
-  if (!res.allowed && kind === "write" && env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS > 0) {
-    waitedMs = Math.min(env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS, Math.max(1, res.retry_after_ms));
+  if (!res.allowed && kind === "write" && cfg.max_wait_ms > 0) {
+    waitedMs = Math.min(cfg.max_wait_ms, Math.max(1, res.retry_after_ms));
     await sleep(waitedMs);
     res = limiter.check(key, 1);
   }

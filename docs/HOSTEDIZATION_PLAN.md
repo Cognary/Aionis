@@ -114,11 +114,19 @@ Required before hosted production rollout:
 ## Next Execution Batch
 
 1. Control plane API spec draft:
-   - tenant/project/api-key lifecycle contract and auth model.
+   - `docs/HOSTED_CONTROL_PLANE_API.md`
 2. Per-tenant quota persistence:
-   - managed quota profile table + admin update path.
+   - migration: `migrations/0022_hosted_control_plane_mvp.sql`
+   - runtime + admin update path:
+     - `/v1/admin/control/tenant-quotas/:tenant_id`
 3. Hosted operator checklist:
-   - on-call playbook for dead-letter/replay, incident triage, and rollback.
+   - `docs/HOSTED_OPERATOR_CHECKLIST.md`
+
+## Following Batch
+
+1. Tenant key rotation SLA automation and key-usage telemetry.
+2. Tenant/project CRUD audit events stream (actor + reason + diff).
+3. Hosted dashboard API for per-tenant SLO, backlog, and replay status.
 
 ## Operating Rules
 

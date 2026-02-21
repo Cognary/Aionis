@@ -57,6 +57,7 @@ const EnvSchema = z.object({
   TENANT_WRITE_RATE_LIMIT_RPS: z.coerce.number().positive().default(10),
   TENANT_WRITE_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(20),
   TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS: z.coerce.number().int().min(0).max(5000).default(300),
+  CONTROL_TENANT_QUOTA_CACHE_TTL_MS: z.coerce.number().int().positive().max(300000).default(30000),
   // Query embedding cache for recall_text (reduces upstream provider RPM pressure).
   RECALL_TEXT_EMBED_CACHE_ENABLED: z
     .string()
