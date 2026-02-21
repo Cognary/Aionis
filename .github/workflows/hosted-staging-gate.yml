@@ -140,6 +140,34 @@ jobs:
           timeseries_tenant="$(echo "${timeseries_json}" | jq -r '.tenant_id')"
           [[ "${timeseries_tenant}" == "tenant_hosted_ci" ]] || { echo "timeseries endpoint failed"; echo "${timeseries_json}"; exit 1; }
 
+          rollup_json="$(curl -fsS "http://localhost:3001/v1/admin/control/dashboard/tenant/tenant_hosted_ci/incident-publish-rollup?window_hours=24&sample_limit=10" -H "X-Admin-Token: hosted_ci_admin_token")"
+          rollup_tenant="$(echo "${rollup_json}" | jq -r '.rollup.tenant_id')"
+          [[ "${rollup_tenant}" == "tenant_hosted_ci" ]] || { echo "incident-publish-rollup endpoint failed"; echo "${rollup_json}"; exit 1; }
+
+          slo_json="$(curl -fsS "http://localhost:3001/v1/admin/control/dashboard/tenant/tenant_hosted_ci/incident-publish-slo?window_hours=24&baseline_hours=168&min_jobs=20" -H "X-Admin-Token: hosted_ci_admin_token")"
+          slo_tenant="$(echo "${slo_json}" | jq -r '.report.tenant_id')"
+          [[ "${slo_tenant}" == "tenant_hosted_ci" ]] || { echo "incident-publish-slo endpoint failed"; echo "${slo_json}"; exit 1; }
+
+      - name: Run incident publish SLO gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out_dir="artifacts/hosted_ops/ci/${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "${out_dir}"
+          npm run -s job:hosted-incident-publish-slo -- \
+            --tenant-id "tenant_hosted_ci" \
+            --window-hours 24 \
+            --baseline-hours 168 \
+            --min-jobs 20 \
+            --adaptive-multiplier 2 \
+            --failure-rate-floor 0.05 \
+            --dead-letter-rate-floor 0.02 \
+            --backlog-warning-abs 200 \
+            --dead-letter-backlog-warning-abs 20 \
+            --dead-letter-backlog-critical-abs 50 \
+            --strict \
+            --out "${out_dir}/incident_publish_slo_summary.json"
+
       - name: Run core production gate (hosted staging profile)
         shell: bash
         run: |
@@ -157,6 +185,7 @@ jobs:
         run: |
           set -euo pipefail
           preflight_summary="$(find artifacts/hosted_preflight -type f -name summary.json | sort | tail -n 1 || true)"
+          incident_slo_summary="$(find artifacts/hosted_ops -type f -name incident_publish_slo_summary.json | sort | tail -n 1 || true)"
           core_gate_summary="$(find artifacts/core_gate -type f -name summary.json | sort | tail -n 1 || true)"
           {
             echo "## Hosted Staging Gate"
@@ -169,6 +198,15 @@ jobs:
               echo "summary: \`${preflight_summary}\`"
               echo
               jq '.' "${preflight_summary}"
+            else
+              echo "summary not found"
+            fi
+            echo
+            echo "### Incident Publish SLO Gate"
+            if [[ -n "${incident_slo_summary}" && -f "${incident_slo_summary}" ]]; then
+              echo "summary: \`${incident_slo_summary}\`"
+              echo
+              jq '.' "${incident_slo_summary}"
             else
               echo "summary not found"
             fi
@@ -190,6 +228,7 @@ jobs:
           name: hosted-staging-gate-artifacts
           path: |
             artifacts/hosted_preflight/
+            artifacts/hosted_ops/
             artifacts/core_gate/
           retention-days: 14
           if-no-files-found: warn
