@@ -205,8 +205,14 @@ Required before hosted production rollout:
 1. Incident publish dead-letter replay operations for hosted operators. (Completed)
    - endpoint: `POST /v1/admin/control/incident-publish/jobs/replay`
    - job: `npm run -s job:hosted-incident-publish-replay`
-2. Replay workflow hardening (filter/limit defaults + bounded audit evidence). (Pending)
-3. Hosted release evidence dashboard roll-up for replay outcomes. (Pending)
+2. Replay workflow hardening (filter/limit defaults + bounded audit evidence). (Completed)
+   - default replay limit hardened to `50` (max `200`)
+   - replay requires scoped filters (`tenant_id` or `ids`) unless explicit `allow_all_tenants=true`
+   - dry-run preview added for safe candidate inspection
+   - API and job output bounded to `jobs_sample` (no unbounded payloads)
+3. Hosted release evidence dashboard roll-up for replay outcomes. (Completed)
+   - endpoint: `GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup`
+   - includes queue status mix + replay/preview counts + recent failed/dead-letter sample
 
 ## Operating Rules
 

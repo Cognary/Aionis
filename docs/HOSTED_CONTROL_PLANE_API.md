@@ -227,9 +227,10 @@ Request:
 {
   "tenant_id": "tenant_acme",
   "statuses": ["dead_letter", "failed"],
-  "limit": 100,
+  "limit": 50,
   "reset_attempts": true,
-  "reason": "storage_outage_recovered"
+  "reason": "storage_outage_recovered",
+  "dry_run": false
 }
 ```
 
@@ -237,6 +238,14 @@ Optional:
 
 - `ids`: replay only specific job ids (UUID array, max 500)
 - `statuses`: defaults to `["dead_letter", "failed"]`
+- `dry_run`: preview candidates only, no state mutation
+- `allow_all_tenants`: required for cross-tenant replay without `tenant_id`/`ids`
+- `limit`: defaults to `50`, max `200`
+
+Safety constraints:
+
+- replay requires `tenant_id` or `ids`, unless `allow_all_tenants=true`
+- response is bounded and returns `jobs_sample` instead of full job payload
 
 Operational note:
 
@@ -347,6 +356,16 @@ Note:
 
 - key-prefix telemetry is recorded only for authenticated hosted control-plane keys (`x-api-key`).
 - static env API keys still authenticate traffic, but do not produce hosted key-prefix attribution.
+
+Tenant incident publish roll-up:
+
+`GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup?window_hours=168&sample_limit=20`
+
+Returns release-evidence roll-up for publish queue operations:
+
+- queue status distribution (`pending|processing|succeeded|failed|dead_letter`)
+- replay execution/preview counts from audit events
+- recent failed/dead-letter sample for triage
 
 ## Runtime Behavior
 

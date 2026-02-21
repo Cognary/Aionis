@@ -122,6 +122,8 @@ export type ControlIncidentPublishReplayInput = {
   limit?: number;
   reset_attempts?: boolean;
   reason?: string;
+  dry_run?: boolean;
+  allow_all_tenants?: boolean;
 };
 
 export type MemoryRequestTelemetryInput = {
@@ -980,11 +982,37 @@ export async function replayControlIncidentPublishJobs(db: Db, input: ControlInc
     .map((x) => trimOrNull(x))
     .filter((x): x is string => !!x)
     .slice(0, 500);
-  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(500, Math.trunc(input.limit!))) : 100;
+  const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(200, Math.trunc(input.limit!))) : 50;
   const resetAttempts = input.reset_attempts ?? true;
   const reason = trimOrNull(input.reason) ?? "manual_replay";
+  const dryRun = input.dry_run ?? false;
+  const allowAllTenants = input.allow_all_tenants ?? false;
+  if (!tenantId && ids.length === 0 && !allowAllTenants) {
+    throw new Error("tenant_id or ids is required unless allow_all_tenants=true");
+  }
 
   try {
+    if (dryRun) {
+      return await withClient(db, async (client) => {
+        const q = await client.query(
+          `
+          SELECT
+            id, tenant_id, run_id, source_dir, target, status, attempts, max_attempts,
+            next_attempt_at, locked_at, locked_by, published_uri, last_error, last_response, metadata,
+            created_at, updated_at
+          FROM control_incident_publish_jobs
+          WHERE ($1::text IS NULL OR tenant_id = $1::text)
+            AND status = ANY($2::text[])
+            AND ($3::text[] IS NULL OR id::text = ANY($3::text[]))
+          ORDER BY created_at ASC
+          LIMIT $4
+          `,
+          [tenantId, statuses, ids.length > 0 ? ids : null, limit],
+        );
+        return q.rows;
+      });
+    }
+
     return await withTx(db, async (client) => {
       const q = await client.query(
         `
@@ -1459,6 +1487,159 @@ export async function getTenantDashboardSummary(db: Db, args: { tenant_id: strin
   }
 
   return out;
+}
+
+export async function getTenantIncidentPublishRollup(
+  db: Db,
+  args: {
+    tenant_id: string;
+    window_hours?: number;
+    sample_limit?: number;
+  },
+) {
+  const tenantId = trimOrNull(args.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const windowHours = Number.isFinite(args.window_hours)
+    ? Math.max(1, Math.min(24 * 365, Math.trunc(args.window_hours!)))
+    : 24 * 7;
+  const sampleLimit = Number.isFinite(args.sample_limit) ? Math.max(1, Math.min(100, Math.trunc(args.sample_limit!))) : 20;
+
+  try {
+    return await withClient(db, async (client) => {
+      const statusRows = await client.query(
+        `
+        SELECT status, COUNT(*)::bigint AS count
+        FROM control_incident_publish_jobs
+        WHERE tenant_id = $1
+          AND created_at >= now() - (($2::text || ' hours')::interval)
+        GROUP BY status
+        ORDER BY status ASC
+        `,
+        [tenantId, windowHours],
+      );
+
+      const replayRows = await client.query(
+        `
+        SELECT
+          action,
+          COUNT(*)::bigint AS events,
+          SUM(
+            CASE
+              WHEN (details->>'replayed_count') ~ '^[0-9]+$' THEN (details->>'replayed_count')::bigint
+              ELSE 0
+            END
+          )::bigint AS replayed_count,
+          SUM(
+            CASE
+              WHEN (details->>'candidate_count') ~ '^[0-9]+$' THEN (details->>'candidate_count')::bigint
+              ELSE 0
+            END
+          )::bigint AS candidate_count
+        FROM control_audit_events
+        WHERE tenant_id = $1
+          AND action IN ('incident_publish.replay', 'incident_publish.replay.preview')
+          AND created_at >= now() - (($2::text || ' hours')::interval)
+        GROUP BY action
+        ORDER BY action ASC
+        `,
+        [tenantId, windowHours],
+      );
+
+      const sampleRows = await client.query(
+        `
+        SELECT
+          id,
+          run_id,
+          status,
+          attempts,
+          max_attempts,
+          target,
+          last_error,
+          updated_at
+        FROM control_incident_publish_jobs
+        WHERE tenant_id = $1
+          AND status IN ('failed', 'dead_letter')
+        ORDER BY updated_at DESC
+        LIMIT $2
+        `,
+        [tenantId, sampleLimit],
+      );
+
+      const statusCounts: Record<string, number> = {};
+      let total = 0;
+      for (const r of statusRows.rows) {
+        const status = String(r.status);
+        const count = Number(r.count ?? 0);
+        statusCounts[status] = count;
+        total += count;
+      }
+
+      const replayAgg = {
+        replay_events: 0,
+        preview_events: 0,
+        replayed_count: 0,
+        candidate_count: 0,
+      };
+      for (const r of replayRows.rows) {
+        const action = String(r.action);
+        const events = Number(r.events ?? 0);
+        const replayedCount = Number(r.replayed_count ?? 0);
+        const candidateCount = Number(r.candidate_count ?? 0);
+        if (action === "incident_publish.replay") replayAgg.replay_events += events;
+        if (action === "incident_publish.replay.preview") replayAgg.preview_events += events;
+        replayAgg.replayed_count += replayedCount;
+        replayAgg.candidate_count += candidateCount;
+      }
+
+      const failedSample = sampleRows.rows.map((r) => ({
+        id: String(r.id),
+        run_id: r.run_id == null ? null : String(r.run_id),
+        status: r.status == null ? null : String(r.status),
+        attempts: Number(r.attempts ?? 0),
+        max_attempts: Number(r.max_attempts ?? 0),
+        target: r.target == null ? null : String(r.target),
+        last_error: r.last_error == null ? null : String(r.last_error),
+        updated_at: r.updated_at,
+      }));
+
+      return {
+        ok: true,
+        tenant_id: tenantId,
+        window_hours: windowHours,
+        generated_at: nowIso(),
+        jobs: {
+          total,
+          status_counts: statusCounts,
+          failed_or_dead_letter: (statusCounts.failed ?? 0) + (statusCounts.dead_letter ?? 0),
+        },
+        replay: replayAgg,
+        failed_sample: failedSample,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        tenant_id: tenantId,
+        window_hours: windowHours,
+        generated_at: nowIso(),
+        warning: "incident_publish_schema_missing",
+        jobs: {
+          total: 0,
+          status_counts: {},
+          failed_or_dead_letter: 0,
+        },
+        replay: {
+          replay_events: 0,
+          preview_events: 0,
+          replayed_count: 0,
+          candidate_count: 0,
+        },
+        failed_sample: [],
+      };
+    }
+    throw err;
+  }
 }
 
 export async function getTenantRequestTimeseries(

@@ -15,6 +15,7 @@ import {
   getTenantQuotaProfile,
   getTenantApiKeyUsageReport,
   getTenantDashboardSummary,
+  getTenantIncidentPublishRollup,
   getTenantRequestTimeseries,
   listControlApiKeys,
   listControlAlertDeliveries,
@@ -653,10 +654,27 @@ const ControlIncidentPublishReplaySchema = z.object({
   tenant_id: z.string().min(1).max(128).optional(),
   statuses: z.array(z.enum(["failed", "dead_letter"])).max(8).optional(),
   ids: z.array(z.string().uuid()).max(500).optional(),
-  limit: z.number().int().min(1).max(500).optional(),
+  limit: z.number().int().min(1).max(200).optional(),
   reset_attempts: z.boolean().optional(),
   reason: z.string().min(1).max(256).optional(),
+  dry_run: z.boolean().optional(),
+  allow_all_tenants: z.boolean().optional(),
 });
+
+function summarizeIncidentPublishReplayRows(rows: any[], sampleLimit = 20) {
+  const sample = rows.slice(0, sampleLimit).map((row) => ({
+    id: String(row.id),
+    tenant_id: row.tenant_id == null ? null : String(row.tenant_id),
+    run_id: row.run_id == null ? null : String(row.run_id),
+    status: row.status == null ? null : String(row.status),
+    attempts: Number.isFinite(Number(row.attempts)) ? Number(row.attempts) : null,
+    max_attempts: Number.isFinite(Number(row.max_attempts)) ? Number(row.max_attempts) : null,
+    target: row.target == null ? null : String(row.target),
+    next_attempt_at: row.next_attempt_at == null ? null : String(row.next_attempt_at),
+    updated_at: row.updated_at == null ? null : String(row.updated_at),
+  }));
+  return sample;
+}
 
 app.post("/v1/admin/control/tenants", async (req, reply) => {
   requireAdminToken(req);
@@ -876,23 +894,42 @@ app.get("/v1/admin/control/incident-publish/jobs", async (req, reply) => {
 app.post("/v1/admin/control/incident-publish/jobs/replay", async (req, reply) => {
   requireAdminToken(req);
   const body = ControlIncidentPublishReplaySchema.parse(req.body ?? {});
+  const hasIds = Array.isArray(body.ids) && body.ids.length > 0;
+  if (!body.tenant_id && !hasIds && !body.allow_all_tenants) {
+    throw new HttpError(
+      400,
+      "invalid_request",
+      "tenant_id or ids is required unless allow_all_tenants=true",
+    );
+  }
   const jobs = await replayControlIncidentPublishJobs(db, body);
+  const jobsSample = summarizeIncidentPublishReplayRows(jobs, 20);
+  const dryRun = body.dry_run ?? false;
   const tenantId = body.tenant_id ?? (jobs[0]?.tenant_id ? String(jobs[0].tenant_id) : null);
   await emitControlAudit(req, {
-    action: "incident_publish.replay",
+    action: dryRun ? "incident_publish.replay.preview" : "incident_publish.replay",
     resource_type: "incident_publish_job_batch",
     resource_id: `${tenantId ?? "all"}:${new Date().toISOString()}`,
     tenant_id: tenantId,
     details: {
-      replayed_count: jobs.length,
+      replayed_count: dryRun ? 0 : jobs.length,
+      candidate_count: jobs.length,
       statuses: body.statuses ?? ["dead_letter", "failed"],
-      limit: body.limit ?? 100,
+      limit: body.limit ?? 50,
       reset_attempts: body.reset_attempts ?? true,
+      dry_run: dryRun,
+      allow_all_tenants: body.allow_all_tenants ?? false,
       reason: body.reason ?? "manual_replay",
-      sample_job_ids: jobs.slice(0, 20).map((x: any) => String(x.id)),
+      sample_job_ids: jobsSample.map((x) => String(x.id)),
     },
   });
-  return reply.code(200).send({ ok: true, replayed_count: jobs.length, jobs });
+  return reply.code(200).send({
+    ok: true,
+    dry_run: dryRun,
+    replayed_count: dryRun ? 0 : jobs.length,
+    candidate_count: jobs.length,
+    jobs_sample: jobsSample,
+  });
 });
 
 app.put("/v1/admin/control/tenant-quotas/:tenant_id", async (req, reply) => {
@@ -960,6 +997,21 @@ app.get("/v1/admin/control/dashboard/tenant/:tenant_id", async (req, reply) => {
     default_tenant_id: env.MEMORY_TENANT_ID,
   });
   return reply.code(200).send({ ok: true, dashboard });
+});
+
+app.get("/v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const q = req.query as Record<string, unknown> | undefined;
+  const windowHours = typeof q?.window_hours === "string" ? Number(q.window_hours) : undefined;
+  const sampleLimit = typeof q?.sample_limit === "string" ? Number(q.sample_limit) : undefined;
+  const rollup = await getTenantIncidentPublishRollup(db, {
+    tenant_id: tenantId,
+    window_hours: windowHours,
+    sample_limit: sampleLimit,
+  });
+  return reply.code(200).send({ ok: true, rollup });
 });
 
 app.get("/v1/admin/control/dashboard/tenant/:tenant_id/timeseries", async (req, reply) => {

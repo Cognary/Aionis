@@ -43,12 +43,18 @@ function parseStatuses(raw: string | null): Array<"failed" | "dead_letter"> {
 
 async function main() {
   const tenantId = (argValue("--tenant-id") ?? "").trim() || undefined;
-  const limit = clampInt(Number(argValue("--limit") ?? "100"), 1, 500);
+  const allowAllTenants = hasFlag("--all-tenants");
+  const dryRun = hasFlag("--dry-run");
+  const limit = clampInt(Number(argValue("--limit") ?? "50"), 1, 200);
   const statuses = parseStatuses(argValue("--statuses"));
   const ids = parseIds(argValue("--ids"));
   const resetAttempts = !hasFlag("--no-reset-attempts");
   const reason = (argValue("--reason") ?? "manual_replay").trim();
   const strict = hasFlag("--strict");
+
+  if (!tenantId && ids.length === 0 && !allowAllTenants) {
+    throw new Error("tenant-id or ids is required unless --all-tenants is set");
+  }
 
   const jobs = await replayControlIncidentPublishJobs(db, {
     tenant_id: tenantId,
@@ -57,19 +63,35 @@ async function main() {
     limit,
     reset_attempts: resetAttempts,
     reason,
+    dry_run: dryRun,
+    allow_all_tenants: allowAllTenants,
   });
+
+  const jobsSample = jobs.slice(0, 20).map((row: any) => ({
+    id: String(row.id),
+    tenant_id: row.tenant_id == null ? null : String(row.tenant_id),
+    run_id: row.run_id == null ? null : String(row.run_id),
+    status: row.status == null ? null : String(row.status),
+    attempts: Number.isFinite(Number(row.attempts)) ? Number(row.attempts) : null,
+    max_attempts: Number.isFinite(Number(row.max_attempts)) ? Number(row.max_attempts) : null,
+    target: row.target == null ? null : String(row.target),
+    next_attempt_at: row.next_attempt_at == null ? null : String(row.next_attempt_at),
+  }));
 
   const summary = {
     ok: true,
     strict,
+    dry_run: dryRun,
+    allow_all_tenants: allowAllTenants,
     tenant_id: tenantId ?? null,
-    replayed_count: jobs.length,
+    replayed_count: dryRun ? 0 : jobs.length,
+    candidate_count: jobs.length,
     statuses,
     ids_count: ids.length,
     limit,
     reset_attempts: resetAttempts,
     reason,
-    jobs,
+    jobs_sample: jobsSample,
     checked_at: new Date().toISOString(),
   };
 

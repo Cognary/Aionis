@@ -63,7 +63,8 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 - worker drill: `npm run -s job:hosted-incident-publish-worker -- --max-jobs 20 --strict`
 11. Dead-letter replay drill:
 - `POST /v1/admin/control/incident-publish/jobs/replay` (scoped to tenant, bounded `limit`)
-- CLI fallback: `npm run -s job:hosted-incident-publish-replay -- --tenant-id <tenant> --statuses dead_letter,failed --limit 50`
+- preview first: `npm run -s job:hosted-incident-publish-replay -- --tenant-id <tenant> --statuses dead_letter,failed --limit 50 --dry-run --strict`
+- execute replay: `npm run -s job:hosted-incident-publish-replay -- --tenant-id <tenant> --statuses dead_letter,failed --limit 50`
 
 ## 4. Incident Triage
 
@@ -79,6 +80,7 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 - replay/dead-letter evidence
 - control audit events filtered by `tenant_id` and `request_id`
 - tenant dashboard snapshot (`GET /v1/admin/control/dashboard/tenant/:tenant_id`)
+- incident publish roll-up (`GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup`)
 - alert delivery history (`GET /v1/admin/control/alerts/deliveries?tenant_id=<tenant>`)
 
 3. Immediate mitigations:

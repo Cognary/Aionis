@@ -107,8 +107,28 @@ cd /Users/lucio/Desktop/Aionis
 npm run -s job:hosted-incident-publish-replay -- \
   --tenant-id tenant_acme \
   --statuses dead_letter,failed \
-  --limit 100 \
+  --limit 50 \
   --reason provider_recovered
+```
+
+Preview-only replay candidates (no mutation):
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s job:hosted-incident-publish-replay -- \
+  --tenant-id tenant_acme \
+  --statuses dead_letter,failed \
+  --limit 50 \
+  --dry-run \
+  --strict
+```
+
+Replay outcome roll-up (release evidence snapshot):
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+curl -fsS "http://localhost:${PORT:-3001}/v1/admin/control/dashboard/tenant/tenant_acme/incident-publish-rollup?window_hours=168&sample_limit=20" \
+  -H "X-Admin-Token: ${ADMIN_TOKEN}"
 ```
 
 Default bundle steps:
@@ -206,6 +226,7 @@ npm run -s job:hosted-incident-verify -- \
 3. `GET /v1/admin/control/dashboard/tenant/:tenant_id`
 4. `GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries`
 5. `GET /v1/admin/control/dashboard/tenant/:tenant_id/key-usage`
+6. `GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup`
 6. `GET /v1/admin/control/alerts/routes`
 7. `GET /v1/admin/control/alerts/deliveries`
 
