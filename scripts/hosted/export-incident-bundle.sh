@@ -30,8 +30,12 @@ RUN_CORE_GATE=true
 RUN_GOVERNANCE=true
 RUN_KEY_SLA=true
 RUN_TIMESERIES=true
+RUN_KEY_USAGE=true
 RUN_AUDIT_SNAPSHOT=true
 STRICT=true
+PUBLISH_TARGET="${PUBLISH_TARGET:-}"
+SIGNING_KEY="${SIGNING_KEY:-${INCIDENT_BUNDLE_SIGNING_KEY:-}}"
+PUBLISHED_URI=""
 
 usage() {
   cat <<'USAGE'
@@ -47,12 +51,16 @@ Options:
   --skip-governance              Do not run governance weekly report
   --skip-key-sla                 Do not run hosted key rotation SLA check
   --skip-timeseries              Do not run tenant timeseries export job
+  --skip-key-usage               Do not run key-prefix usage anomaly check
   --skip-audit-snapshot          Do not fetch audit/dashboard snapshots via admin API
+  --publish-target <uri>         Publish bundle to s3://... or local path/file://...
+  --signing-key <secret>         HMAC key for evidence index signing (or INCIDENT_BUNDLE_SIGNING_KEY)
   --no-strict                    Always exit 0 even if steps fail
   -h, --help                     Show help
 
 Environment:
-  ADMIN_TOKEN                    Required for --run-audit-snapshot (X-Admin-Token)
+  ADMIN_TOKEN                    Required for audit snapshot endpoints (X-Admin-Token)
+  INCIDENT_BUNDLE_SIGNING_KEY    Optional default signing key for evidence index
 USAGE
 }
 
@@ -67,7 +75,10 @@ while [[ $# -gt 0 ]]; do
     --skip-governance) RUN_GOVERNANCE=false; shift ;;
     --skip-key-sla) RUN_KEY_SLA=false; shift ;;
     --skip-timeseries) RUN_TIMESERIES=false; shift ;;
+    --skip-key-usage) RUN_KEY_USAGE=false; shift ;;
     --skip-audit-snapshot) RUN_AUDIT_SNAPSHOT=false; shift ;;
+    --publish-target) PUBLISH_TARGET="${2:-}"; shift 2 ;;
+    --signing-key) SIGNING_KEY="${2:-}"; shift 2 ;;
     --no-strict) STRICT=false; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown arg: $1" >&2; usage >&2; exit 1 ;;
@@ -108,6 +119,101 @@ run_step_cmd() {
   append_step "${name}" "${ok}" "${log_file}" "exit_code=${ec}"
 }
 
+sha256_file() {
+  local file="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  else
+    shasum -a 256 "${file}" | awk '{print $1}'
+  fi
+}
+
+file_size_bytes() {
+  local file="$1"
+  if stat -f%z "${file}" >/dev/null 2>&1; then
+    stat -f%z "${file}"
+  else
+    stat -c%s "${file}"
+  fi
+}
+
+build_evidence_index() {
+  local index_file="${OUT_DIR}/evidence_index.json"
+  local sig_file="${OUT_DIR}/evidence_index.sig.json"
+  local files_json='[]'
+
+  while IFS= read -r file; do
+    [[ -z "${file}" ]] && continue
+    local rel="${file#"${OUT_DIR}/"}"
+    local digest
+    digest="$(sha256_file "${file}")"
+    local bytes
+    bytes="$(file_size_bytes "${file}")"
+    files_json="$(echo "${files_json}" | jq \
+      --arg path "${rel}" \
+      --arg sha256 "${digest}" \
+      --argjson size_bytes "${bytes}" \
+      '. + [{path:$path, sha256:$sha256, size_bytes:$size_bytes}]')"
+  done < <(find "${OUT_DIR}" -type f ! -name 'evidence_index.json' ! -name 'evidence_index.sig.json' | LC_ALL=C sort)
+
+  jq -n \
+    --arg run_id "${RUN_ID}" \
+    --arg generated_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+    --arg out_dir "${OUT_DIR}" \
+    --argjson files "${files_json}" \
+    '{
+      run_id: $run_id,
+      generated_at: $generated_at,
+      out_dir: $out_dir,
+      file_count: ($files | length),
+      files: $files
+    }' > "${index_file}"
+
+  if [[ -n "${SIGNING_KEY}" ]]; then
+    if ! command -v openssl >/dev/null 2>&1; then
+      echo "openssl is required when signing is enabled" >&2
+      return 21
+    fi
+    local sig
+    sig="$(openssl dgst -sha256 -hmac "${SIGNING_KEY}" "${index_file}" | awk '{print $2}')"
+    jq -n \
+      --arg run_id "${RUN_ID}" \
+      --arg generated_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+      --arg signature_hex "${sig}" \
+      --arg algorithm "HMAC-SHA256" \
+      --arg index_file "evidence_index.json" \
+      '{
+        run_id: $run_id,
+        generated_at: $generated_at,
+        algorithm: $algorithm,
+        index_file: $index_file,
+        signature_hex: $signature_hex
+      }' > "${sig_file}"
+  fi
+}
+
+publish_bundle() {
+  local target="$1"
+  if [[ -z "${target}" ]]; then
+    return 0
+  fi
+  if [[ "${target}" == s3://* ]]; then
+    need aws
+    local uri="${target%/}/${RUN_ID}"
+    aws s3 cp "${OUT_DIR}/" "${uri}/" --recursive
+    PUBLISHED_URI="${uri}"
+    return 0
+  fi
+  local local_target="${target}"
+  if [[ "${target}" == file://* ]]; then
+    local_target="${target#file://}"
+  fi
+  local dest="${local_target%/}/${RUN_ID}"
+  mkdir -p "${dest}"
+  cp -R "${OUT_DIR}/." "${dest}/"
+  PUBLISHED_URI="${dest}"
+}
+
 if [[ "${RUN_CORE_GATE}" == "true" ]]; then
   run_step_cmd "core_gate_prod" "${OUT_DIR}/01_core_gate.log" \
     npm run -s gate:core:prod -- --base-url "${BASE_URL}" --scope "${SCOPE}" --tenant-id "${TENANT_ID}" --run-perf false
@@ -136,8 +242,15 @@ else
   append_step "tenant_timeseries_export" "true" "${OUT_DIR}/04_timeseries.log" "skipped"
 fi
 
+if [[ "${RUN_KEY_USAGE}" == "true" ]]; then
+  run_step_cmd "key_usage_anomaly" "${OUT_DIR}/05_key_usage_anomaly.log" \
+    npm run -s job:hosted-key-usage-anomaly -- --tenant-id "${TENANT_ID}" --window-hours "${WINDOW_HOURS}" --strict --out "${OUT_DIR}/key_usage_anomaly.json"
+else
+  append_step "key_usage_anomaly" "true" "${OUT_DIR}/05_key_usage_anomaly.log" "skipped"
+fi
+
 if [[ "${RUN_AUDIT_SNAPSHOT}" == "true" ]]; then
-  audit_log="${OUT_DIR}/05_audit_snapshot.log"
+  audit_log="${OUT_DIR}/06_audit_snapshot.log"
   set +e
   {
     if [[ -z "${ADMIN_TOKEN:-}" ]]; then
@@ -150,6 +263,8 @@ if [[ "${RUN_AUDIT_SNAPSHOT}" == "true" ]]; then
       -H "X-Admin-Token: ${ADMIN_TOKEN}" > "${OUT_DIR}/dashboard_summary.json"
     curl -fsS "${BASE_URL}/v1/admin/control/dashboard/tenant/${TENANT_ID}/timeseries?window_hours=${WINDOW_HOURS}" \
       -H "X-Admin-Token: ${ADMIN_TOKEN}" > "${OUT_DIR}/dashboard_timeseries.json"
+    curl -fsS "${BASE_URL}/v1/admin/control/dashboard/tenant/${TENANT_ID}/key-usage?window_hours=${WINDOW_HOURS}" \
+      -H "X-Admin-Token: ${ADMIN_TOKEN}" > "${OUT_DIR}/dashboard_key_usage.json"
   } > "${audit_log}" 2>&1
   ec=$?
   set -e
@@ -161,7 +276,37 @@ if [[ "${RUN_AUDIT_SNAPSHOT}" == "true" ]]; then
     append_step "audit_snapshot" "false" "${audit_log}" "exit_code=${ec}"
   fi
 else
-  append_step "audit_snapshot" "true" "${OUT_DIR}/05_audit_snapshot.log" "skipped"
+  append_step "audit_snapshot" "true" "${OUT_DIR}/06_audit_snapshot.log" "skipped"
+fi
+
+evidence_log="${OUT_DIR}/07_evidence_index.log"
+set +e
+{
+  build_evidence_index
+} > "${evidence_log}" 2>&1
+ec=$?
+set -e
+if [[ "${ec}" -eq 0 ]]; then
+  append_step "evidence_index" "true" "${evidence_log}" "ok"
+else
+  append_step "evidence_index" "false" "${evidence_log}" "exit_code=${ec}"
+fi
+
+publish_log="${OUT_DIR}/08_publish_bundle.log"
+if [[ -n "${PUBLISH_TARGET}" ]]; then
+  set +e
+  {
+    publish_bundle "${PUBLISH_TARGET}"
+  } > "${publish_log}" 2>&1
+  ec=$?
+  set -e
+  if [[ "${ec}" -eq 0 ]]; then
+    append_step "publish_bundle" "true" "${publish_log}" "target=${PUBLISH_TARGET}"
+  else
+    append_step "publish_bundle" "false" "${publish_log}" "exit_code=${ec}"
+  fi
+else
+  append_step "publish_bundle" "true" "${publish_log}" "skipped_no_publish_target"
 fi
 
 summary="${OUT_DIR}/summary.json"
@@ -181,6 +326,11 @@ jq -n \
   --argjson steps "${steps}" \
   --argjson fail_reasons "${fail_reasons}" \
   --arg out_dir "${OUT_DIR}" \
+  --arg publish_target "${PUBLISH_TARGET}" \
+  --arg published_uri "${PUBLISHED_URI}" \
+  --arg evidence_index "${OUT_DIR}/evidence_index.json" \
+  --arg evidence_signature "${OUT_DIR}/evidence_index.sig.json" \
+  --arg signed "$([[ -n "${SIGNING_KEY}" ]] && echo true || echo false)" \
   '{
     ok: $ok,
     run_id: $run_id,
@@ -195,7 +345,14 @@ jq -n \
     fail_reasons: $fail_reasons,
     artifacts: {
       out_dir: $out_dir,
-      summary_json: ($out_dir + "/summary.json")
+      summary_json: ($out_dir + "/summary.json"),
+      evidence_index_json: $evidence_index,
+      evidence_signature_json: $evidence_signature,
+      publish_target: $publish_target,
+      published_uri: $published_uri
+    },
+    evidence: {
+      signed: ($signed == "true")
     }
   }' > "${summary}"
 

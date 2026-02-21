@@ -142,11 +142,25 @@ Required before hosted production rollout:
    - command: `npm run -s incident:bundle:hosted`
    - runbook: `docs/HOSTED_AUTOMATION_RUNBOOK.md`
 
-## Next Batch
+## Next Batch (Completed)
 
 1. Key-usage telemetry enrichment (key_prefix-level request counters and anomaly detection).
+   - migration: `migrations/0025_request_telemetry_key_prefix.sql`
+   - endpoint: `GET /v1/admin/control/dashboard/tenant/:tenant_id/key-usage`
+   - job: `npm run -s job:hosted-key-usage-anomaly`
 2. Tenant dashboard chart API hardening (pagination/filtering + retention policy).
+   - endpoint hardening: `GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries`
+   - config: `CONTROL_TELEMETRY_RETENTION_HOURS`
+   - retention job: `npm run -s job:hosted-telemetry-retention`
 3. Incident bundle upload/export target integration (object storage + signed evidence index).
+   - command: `npm run -s incident:bundle:hosted -- --publish-target <uri>`
+   - artifacts: `evidence_index.json` + optional `evidence_index.sig.json`
+
+## Upcoming Batch
+
+1. Tenant-level alert routing hooks (PagerDuty/Slack/webhook fan-out by policy).
+2. Dashboard API cursors for high-cardinality tenants (cursor token + snapshot consistency).
+3. Hosted incident publisher plugins (S3/GCS/Azure adapters + checksum verification job).
 
 ## Operating Rules
 

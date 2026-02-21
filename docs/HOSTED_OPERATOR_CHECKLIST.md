@@ -17,6 +17,7 @@ Use this checklist for hosted staging and production operations.
 - `TENANT_QUOTA_ENABLED=true`
 - `RATE_LIMIT_BYPASS_LOOPBACK=false`
 - non-fake embedding provider configured
+- `CONTROL_TELEMETRY_RETENTION_HOURS` set for dashboard data horizon
 
 2. Gate commands:
 
@@ -50,6 +51,10 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 6. Key hygiene:
 - rotate high-risk keys with `POST /v1/admin/control/api-keys/:id/rotate`
 - run SLA checker: `npm run -s job:hosted-key-rotation-sla -- --strict`
+7. Key-prefix abuse/anomaly review:
+- `npm run -s job:hosted-key-usage-anomaly -- --strict`
+8. Telemetry retention cleanup:
+- `npm run -s job:hosted-telemetry-retention -- --strict`
 
 ## 4. Incident Triage
 
@@ -77,11 +82,13 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 - `docs/HOSTED_RELEASE_EVIDENCE_BUNDLE_TEMPLATE.md`
 2. Export hosted incident bundle:
 - `npm run -s incident:bundle:hosted -- --scope default --tenant-id <tenant>`
-3. Confirm workflow green:
+3. If required, publish bundle to object storage with evidence signature:
+- `INCIDENT_BUNDLE_SIGNING_KEY=<secret> npm run -s incident:bundle:hosted -- --scope default --tenant-id <tenant> --publish-target s3://<bucket>/<prefix>`
+4. Confirm workflow green:
 - `core-production-gate.yml`
 - `hosted-staging-gate.yml`
 - `docs-pages.yml` (if docs changed)
-4. Attach Docker digest + SDK versions (if changed).
+5. Attach Docker digest + SDK versions (if changed).
 
 ## Verification Stamp
 

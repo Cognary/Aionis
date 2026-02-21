@@ -9,6 +9,7 @@ export type ApiKeyPrincipal = {
   agent_id: string | null;
   team_id: string | null;
   role: string | null;
+  key_prefix: string | null;
 };
 
 export type ControlTenantInput = {
@@ -84,8 +85,11 @@ export type MemoryRequestTelemetryInput = {
   endpoint: "write" | "recall" | "recall_text";
   status_code: number;
   latency_ms: number;
+  api_key_prefix?: string | null;
   request_id?: string | null;
 };
+
+type TelemetryEndpoint = "write" | "recall" | "recall_text";
 
 function trimOrNull(v: unknown): string | null {
   if (typeof v !== "string") return null;
@@ -386,7 +390,7 @@ export function createApiKeyPrincipalResolver(db: Db, opts?: { ttl_ms?: number; 
       const row = await withClient(db, async (client) => {
         const q = await client.query(
           `
-          SELECT k.tenant_id, k.agent_id, k.team_id, k.role
+          SELECT k.tenant_id, k.agent_id, k.team_id, k.role, k.key_prefix
           FROM control_api_keys k
           JOIN control_tenants t ON t.tenant_id = k.tenant_id
           WHERE k.key_hash = $1
@@ -404,6 +408,7 @@ export function createApiKeyPrincipalResolver(db: Db, opts?: { ttl_ms?: number; 
             agent_id: trimOrNull(row.agent_id),
             team_id: trimOrNull(row.team_id),
             role: trimOrNull(row.role),
+            key_prefix: trimOrNull(row.key_prefix),
           }
         : null;
       cache.set(hash, { expires_at: now + (principal ? ttlMs : negativeTtlMs), principal });
@@ -567,17 +572,18 @@ export async function recordMemoryRequestTelemetry(db: Db, input: MemoryRequestT
   if (!tenantId || !scope || !endpoint) return;
   const statusCode = Number.isFinite(input.status_code) ? Math.trunc(input.status_code) : 0;
   const latencyMs = Number.isFinite(input.latency_ms) ? Math.max(0, input.latency_ms) : 0;
+  const apiKeyPrefix = trimOrNull(input.api_key_prefix);
   const requestId = trimOrNull(input.request_id);
   try {
     await withClient(db, async (client) => {
       await client.query(
         `
         INSERT INTO memory_request_telemetry (
-          tenant_id, scope, endpoint, status_code, latency_ms, request_id
+          tenant_id, scope, endpoint, status_code, latency_ms, api_key_prefix, request_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         `,
-        [tenantId, scope, endpoint, statusCode, latencyMs, requestId],
+        [tenantId, scope, endpoint, statusCode, latencyMs, apiKeyPrefix, requestId],
       );
     });
   } catch (err: any) {
@@ -862,14 +868,41 @@ export async function getTenantRequestTimeseries(
     tenant_id: string;
     window_hours?: number;
     bucket?: "hour";
+    endpoint?: TelemetryEndpoint;
+    limit?: number;
+    offset?: number;
+    retention_hours?: number;
   },
 ) {
   const tenantId = trimOrNull(args.tenant_id);
   if (!tenantId) throw new Error("tenant_id is required");
-  const windowHours = Number.isFinite(args.window_hours) ? Math.max(1, Math.min(24 * 30, Math.trunc(args.window_hours!))) : 24 * 7;
+  const retentionHours = Number.isFinite(args.retention_hours)
+    ? Math.max(1, Math.min(24 * 365, Math.trunc(args.retention_hours!)))
+    : 24 * 30;
+  const requestedWindowHours = Number.isFinite(args.window_hours) ? Math.max(1, Math.min(24 * 365, Math.trunc(args.window_hours!))) : 24 * 7;
+  const windowHours = Math.min(requestedWindowHours, retentionHours);
+  const endpoint = args.endpoint ?? null;
+  const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(20_000, Math.trunc(args.limit!))) : 5000;
+  const offset = Number.isFinite(args.offset) ? Math.max(0, Math.trunc(args.offset!)) : 0;
   const bucket = args.bucket ?? "hour";
   try {
     return await withClient(db, async (client) => {
+      const totalRows = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM (
+          SELECT date_trunc('hour', created_at) AS bucket_utc, endpoint
+          FROM memory_request_telemetry
+          WHERE tenant_id = $1
+            AND created_at >= now() - (($2::text || ' hours')::interval)
+            AND ($3::text IS NULL OR endpoint = $3::text)
+          GROUP BY bucket_utc, endpoint
+        ) t
+        `,
+        [tenantId, windowHours, endpoint],
+      );
+      const total = Number(totalRows.rows[0]?.count ?? 0);
+
       const rows = await client.query(
         `
         SELECT
@@ -885,10 +918,13 @@ export async function getTenantRequestTimeseries(
         FROM memory_request_telemetry
         WHERE tenant_id = $1
           AND created_at >= now() - (($2::text || ' hours')::interval)
+          AND ($3::text IS NULL OR endpoint = $3::text)
         GROUP BY bucket_utc, endpoint
-        ORDER BY bucket_utc ASC, endpoint ASC
+        ORDER BY bucket_utc DESC, endpoint ASC
+        OFFSET $4
+        LIMIT $5
         `,
-        [tenantId, windowHours],
+        [tenantId, windowHours, endpoint, offset, limit],
       );
 
       const series = rows.rows.map((r) => {
@@ -922,10 +958,11 @@ export async function getTenantRequestTimeseries(
         FROM memory_request_telemetry
         WHERE tenant_id = $1
           AND created_at >= now() - (($2::text || ' hours')::interval)
+          AND ($3::text IS NULL OR endpoint = $3::text)
         GROUP BY endpoint
         ORDER BY endpoint ASC
         `,
-        [tenantId, windowHours],
+        [tenantId, windowHours, endpoint],
       );
 
       const budget = endpointBudgetRows.rows.map((r) => {
@@ -948,6 +985,21 @@ export async function getTenantRequestTimeseries(
         tenant_id: tenantId,
         bucket,
         window_hours: windowHours,
+        retention: {
+          retention_hours: retentionHours,
+          requested_window_hours: requestedWindowHours,
+          applied_window_hours: windowHours,
+          truncated: requestedWindowHours > windowHours,
+        },
+        filters: {
+          endpoint,
+        },
+        page: {
+          limit,
+          offset,
+          total,
+          has_more: offset + series.length < total,
+        },
         generated_at: nowIso(),
         series,
         budget,
@@ -960,10 +1012,309 @@ export async function getTenantRequestTimeseries(
         tenant_id: tenantId,
         bucket,
         window_hours: windowHours,
+        retention: {
+          retention_hours: retentionHours,
+          requested_window_hours: requestedWindowHours,
+          applied_window_hours: windowHours,
+          truncated: requestedWindowHours > windowHours,
+        },
+        filters: {
+          endpoint,
+        },
+        page: {
+          limit,
+          offset,
+          total: 0,
+          has_more: false,
+        },
         generated_at: nowIso(),
         warning: "request_telemetry_table_missing",
         series: [],
         budget: [],
+      };
+    }
+    throw err;
+  }
+}
+
+export async function getTenantApiKeyUsageReport(
+  db: Db,
+  args: {
+    tenant_id: string;
+    window_hours?: number;
+    baseline_hours?: number;
+    min_requests?: number;
+    zscore_threshold?: number;
+    endpoint?: TelemetryEndpoint;
+    limit?: number;
+    offset?: number;
+    retention_hours?: number;
+  },
+) {
+  const tenantId = trimOrNull(args.tenant_id);
+  if (!tenantId) throw new Error("tenant_id is required");
+  const retentionHours = Number.isFinite(args.retention_hours)
+    ? Math.max(1, Math.min(24 * 365, Math.trunc(args.retention_hours!)))
+    : 24 * 30;
+  const requestedWindowHours = Number.isFinite(args.window_hours) ? Math.max(1, Math.min(24 * 365, Math.trunc(args.window_hours!))) : 24;
+  const windowHours = Math.min(requestedWindowHours, retentionHours);
+  const requestedBaselineHours = Number.isFinite(args.baseline_hours)
+    ? Math.max(windowHours + 1, Math.min(24 * 365, Math.trunc(args.baseline_hours!)))
+    : 24 * 7;
+  const baselineHours = Math.max(windowHours + 1, Math.min(requestedBaselineHours, retentionHours * 3));
+  const baselineSliceHours = Math.max(1, baselineHours - windowHours);
+  const minRequests = Number.isFinite(args.min_requests) ? Math.max(1, Math.min(1_000_000, Math.trunc(args.min_requests!))) : 30;
+  const zscoreThreshold = Number.isFinite(args.zscore_threshold)
+    ? Math.max(0.5, Math.min(100, Number(args.zscore_threshold)))
+    : 3;
+  const endpoint = args.endpoint ?? null;
+  const limit = Number.isFinite(args.limit) ? Math.max(1, Math.min(1000, Math.trunc(args.limit!))) : 200;
+  const offset = Number.isFinite(args.offset) ? Math.max(0, Math.trunc(args.offset!)) : 0;
+
+  try {
+    return await withClient(db, async (client) => {
+      const totalRows = await client.query(
+        `
+        SELECT COUNT(*)::bigint AS count
+        FROM (
+          SELECT api_key_prefix, endpoint
+          FROM memory_request_telemetry
+          WHERE tenant_id = $1
+            AND created_at >= now() - (($2::text || ' hours')::interval)
+            AND api_key_prefix IS NOT NULL
+            AND ($3::text IS NULL OR endpoint = $3::text)
+          GROUP BY api_key_prefix, endpoint
+        ) t
+        `,
+        [tenantId, windowHours, endpoint],
+      );
+      const total = Number(totalRows.rows[0]?.count ?? 0);
+
+      const q = await client.query(
+        `
+        WITH recent AS (
+          SELECT
+            api_key_prefix,
+            endpoint,
+            COUNT(*)::bigint AS recent_total,
+            COUNT(*) FILTER (WHERE status_code >= 500)::bigint AS recent_server_errors,
+            COUNT(*) FILTER (WHERE status_code = 429)::bigint AS recent_throttled,
+            AVG(latency_ms) AS recent_latency_avg_ms,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS recent_latency_p95_ms
+          FROM memory_request_telemetry
+          WHERE tenant_id = $1
+            AND created_at >= now() - (($2::text || ' hours')::interval)
+            AND api_key_prefix IS NOT NULL
+            AND ($3::text IS NULL OR endpoint = $3::text)
+          GROUP BY api_key_prefix, endpoint
+        ),
+        baseline AS (
+          SELECT
+            api_key_prefix,
+            endpoint,
+            COUNT(*)::bigint AS baseline_total,
+            COUNT(*) FILTER (WHERE status_code >= 500)::bigint AS baseline_server_errors,
+            COUNT(*) FILTER (WHERE status_code = 429)::bigint AS baseline_throttled,
+            AVG(latency_ms) AS baseline_latency_avg_ms,
+            stddev_pop(latency_ms) AS baseline_latency_stddev_ms
+          FROM memory_request_telemetry
+          WHERE tenant_id = $1
+            AND created_at < now() - (($2::text || ' hours')::interval)
+            AND created_at >= now() - (($4::text || ' hours')::interval)
+            AND api_key_prefix IS NOT NULL
+            AND ($3::text IS NULL OR endpoint = $3::text)
+          GROUP BY api_key_prefix, endpoint
+        )
+        SELECT
+          r.api_key_prefix,
+          r.endpoint,
+          r.recent_total,
+          r.recent_server_errors,
+          r.recent_throttled,
+          r.recent_latency_avg_ms,
+          r.recent_latency_p95_ms,
+          COALESCE(b.baseline_total, 0)::bigint AS baseline_total,
+          COALESCE(b.baseline_server_errors, 0)::bigint AS baseline_server_errors,
+          COALESCE(b.baseline_throttled, 0)::bigint AS baseline_throttled,
+          b.baseline_latency_avg_ms,
+          b.baseline_latency_stddev_ms
+        FROM recent r
+        LEFT JOIN baseline b
+          ON b.api_key_prefix = r.api_key_prefix
+         AND b.endpoint = r.endpoint
+        ORDER BY r.recent_total DESC, r.api_key_prefix ASC, r.endpoint ASC
+        OFFSET $5
+        LIMIT $6
+        `,
+        [tenantId, windowHours, endpoint, baselineHours, offset, limit],
+      );
+
+      const items = q.rows.map((r) => {
+        const recentTotal = Number(r.recent_total ?? 0);
+        const recentServerErrors = Number(r.recent_server_errors ?? 0);
+        const recentThrottled = Number(r.recent_throttled ?? 0);
+        const recentBudgetErrors = recentServerErrors + recentThrottled;
+        const recentErrorRate = recentTotal > 0 ? recentBudgetErrors / recentTotal : 0;
+        const recentLatencyAvgMs = Number(r.recent_latency_avg_ms ?? 0);
+        const recentLatencyP95Ms = Number(r.recent_latency_p95_ms ?? 0);
+
+        const baselineTotal = Number(r.baseline_total ?? 0);
+        const baselineServerErrors = Number(r.baseline_server_errors ?? 0);
+        const baselineThrottled = Number(r.baseline_throttled ?? 0);
+        const baselineBudgetErrors = baselineServerErrors + baselineThrottled;
+        const baselineErrorRate = baselineTotal > 0 ? baselineBudgetErrors / baselineTotal : 0;
+        const baselineLatencyAvgMs = Number(r.baseline_latency_avg_ms ?? 0);
+        const baselineLatencyStddevMs = Number(r.baseline_latency_stddev_ms ?? 0);
+
+        const expectedRecent = baselineTotal > 0 ? (baselineTotal * windowHours) / baselineSliceHours : 0;
+        const trafficRatio = expectedRecent > 0 ? recentTotal / expectedRecent : recentTotal > 0 ? Number.POSITIVE_INFINITY : 1;
+        const latencyZscore =
+          baselineLatencyStddevMs > 0 ? (recentLatencyAvgMs - baselineLatencyAvgMs) / baselineLatencyStddevMs : 0;
+
+        const anomalyReasons: string[] = [];
+        if (recentTotal >= minRequests && Number.isFinite(trafficRatio) && trafficRatio >= 2) {
+          anomalyReasons.push("request_spike");
+        }
+        if (recentTotal >= minRequests && latencyZscore >= zscoreThreshold) {
+          anomalyReasons.push("latency_regression");
+        }
+        if (recentTotal >= minRequests && recentErrorRate >= 0.05 && recentErrorRate >= baselineErrorRate * 2) {
+          anomalyReasons.push("error_budget_regression");
+        }
+
+        return {
+          api_key_prefix: r.api_key_prefix,
+          endpoint: r.endpoint,
+          recent: {
+            total: recentTotal,
+            server_errors: recentServerErrors,
+            throttled: recentThrottled,
+            error_rate: round(recentErrorRate),
+            latency_avg_ms: round(recentLatencyAvgMs),
+            latency_p95_ms: round(recentLatencyP95Ms),
+          },
+          baseline: {
+            total: baselineTotal,
+            server_errors: baselineServerErrors,
+            throttled: baselineThrottled,
+            error_rate: round(baselineErrorRate),
+            latency_avg_ms: round(baselineLatencyAvgMs),
+            latency_stddev_ms: round(baselineLatencyStddevMs),
+            slice_hours: baselineSliceHours,
+          },
+          anomaly: {
+            is_anomaly: anomalyReasons.length > 0,
+            reasons: anomalyReasons,
+            traffic_ratio: Number.isFinite(trafficRatio) ? round(trafficRatio) : null,
+            latency_zscore: round(latencyZscore),
+          },
+        };
+      });
+
+      return {
+        ok: true,
+        tenant_id: tenantId,
+        generated_at: nowIso(),
+        retention: {
+          retention_hours: retentionHours,
+          requested_window_hours: requestedWindowHours,
+          applied_window_hours: windowHours,
+          requested_baseline_hours: requestedBaselineHours,
+          applied_baseline_hours: baselineHours,
+          truncated: requestedWindowHours > windowHours || requestedBaselineHours > baselineHours,
+        },
+        filters: {
+          endpoint,
+          min_requests: minRequests,
+          zscore_threshold: zscoreThreshold,
+        },
+        page: {
+          limit,
+          offset,
+          total,
+          has_more: offset + items.length < total,
+        },
+        anomalies: {
+          count_in_page: items.filter((item) => item.anomaly.is_anomaly).length,
+        },
+        items,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        tenant_id: tenantId,
+        generated_at: nowIso(),
+        warning: "request_telemetry_table_missing",
+        filters: {
+          endpoint,
+          min_requests: minRequests,
+          zscore_threshold: zscoreThreshold,
+        },
+        page: {
+          limit,
+          offset,
+          total: 0,
+          has_more: false,
+        },
+        items: [],
+      };
+    }
+    throw err;
+  }
+}
+
+export async function purgeMemoryRequestTelemetry(
+  db: Db,
+  args: {
+    older_than_hours: number;
+    tenant_id?: string | null;
+    batch_limit?: number;
+  },
+) {
+  const olderThanHours = Number.isFinite(args.older_than_hours)
+    ? Math.max(1, Math.min(24 * 3650, Math.trunc(args.older_than_hours)))
+    : 24 * 30;
+  const tenantId = trimOrNull(args.tenant_id ?? null);
+  const batchLimit = Number.isFinite(args.batch_limit) ? Math.max(1, Math.min(200_000, Math.trunc(args.batch_limit!))) : 20_000;
+
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        WITH victims AS (
+          SELECT id
+          FROM memory_request_telemetry
+          WHERE created_at < now() - (($1::text || ' hours')::interval)
+            AND ($2::text IS NULL OR tenant_id = $2::text)
+          ORDER BY id ASC
+          LIMIT $3
+        )
+        DELETE FROM memory_request_telemetry t
+        USING victims v
+        WHERE t.id = v.id
+        RETURNING t.id
+        `,
+        [olderThanHours, tenantId, batchLimit],
+      );
+      return {
+        ok: true,
+        tenant_id: tenantId,
+        older_than_hours: olderThanHours,
+        batch_limit: batchLimit,
+        deleted: q.rowCount ?? 0,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      return {
+        ok: false,
+        tenant_id: tenantId,
+        older_than_hours: olderThanHours,
+        batch_limit: batchLimit,
+        warning: "request_telemetry_table_missing",
+        deleted: 0,
       };
     }
     throw err;

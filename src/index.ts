@@ -11,6 +11,7 @@ import {
   createTenantQuotaResolver,
   deleteTenantQuotaProfile,
   getTenantQuotaProfile,
+  getTenantApiKeyUsageReport,
   getTenantDashboardSummary,
   getTenantRequestTimeseries,
   listControlApiKeys,
@@ -262,6 +263,12 @@ function telemetryEndpointFromRequest(req: any): "write" | "recall" | "recall_te
   return TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT.get(p) ?? null;
 }
 
+function parseTelemetryEndpoint(v: unknown): "write" | "recall" | "recall_text" | undefined {
+  if (typeof v !== "string") return undefined;
+  if (v === "write" || v === "recall" || v === "recall_text") return v;
+  return undefined;
+}
+
 function resolveRequestScopeForTelemetry(req: any): string {
   if (typeof req?.aionis_scope === "string" && req.aionis_scope.trim().length > 0) return req.aionis_scope.trim();
   const body = req?.body;
@@ -282,6 +289,12 @@ function resolveRequestTenantForTelemetry(req: any): string {
   const headerTenant = typeof req?.headers?.["x-tenant-id"] === "string" ? String(req.headers["x-tenant-id"]).trim() : "";
   if (headerTenant) return headerTenant;
   return env.MEMORY_TENANT_ID;
+}
+
+function resolveRequestApiKeyPrefixForTelemetry(req: any): string | null {
+  const tagged = (req as any)?.aionis_api_key_prefix;
+  if (typeof tagged === "string" && tagged.trim().length > 0) return tagged.trim();
+  return null;
 }
 
 function withRecallProfileDefaults(body: unknown, defaults: RecallProfileDefaults) {
@@ -442,6 +455,8 @@ app.log.info(
     auth_mode: env.MEMORY_AUTH_MODE,
     tenant_quota_enabled: env.TENANT_QUOTA_ENABLED,
     control_tenant_quota_cache_ttl_ms: env.CONTROL_TENANT_QUOTA_CACHE_TTL_MS,
+    control_telemetry_retention_hours: env.CONTROL_TELEMETRY_RETENTION_HOURS,
+    control_telemetry_purge_batch_limit: env.CONTROL_TELEMETRY_PURGE_BATCH_LIMIT,
     recall_text_embed_cache_enabled: !!recallTextEmbedCache,
     recall_text_embed_cache_ttl_ms: env.RECALL_TEXT_EMBED_CACHE_TTL_MS,
     memory_recall_profile: env.MEMORY_RECALL_PROFILE,
@@ -505,6 +520,7 @@ app.addHook("onResponse", async (req, reply) => {
       endpoint,
       status_code: Number(reply.statusCode ?? 0),
       latency_ms: latencyMs,
+      api_key_prefix: resolveRequestApiKeyPrefixForTelemetry(req),
       request_id: String(req.id ?? ""),
     });
   } catch (err) {
@@ -740,10 +756,43 @@ app.get("/v1/admin/control/dashboard/tenant/:tenant_id/timeseries", async (req, 
   const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
   if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
   const q = req.query as Record<string, unknown> | undefined;
+  const endpointRaw = typeof q?.endpoint === "string" ? q.endpoint : undefined;
+  const endpoint = parseTelemetryEndpoint(endpointRaw);
+  if (endpointRaw && !endpoint) {
+    throw new HttpError(400, "invalid_request", "endpoint must be one of: write|recall|recall_text");
+  }
   const out = await getTenantRequestTimeseries(db, {
     tenant_id: tenantId,
     window_hours: typeof q?.window_hours === "string" ? Number(q.window_hours) : undefined,
+    endpoint,
+    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
+    offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
+    retention_hours: env.CONTROL_TELEMETRY_RETENTION_HOURS,
     bucket: "hour",
+  });
+  return reply.code(200).send(out);
+});
+
+app.get("/v1/admin/control/dashboard/tenant/:tenant_id/key-usage", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const q = req.query as Record<string, unknown> | undefined;
+  const endpointRaw = typeof q?.endpoint === "string" ? q.endpoint : undefined;
+  const endpoint = parseTelemetryEndpoint(endpointRaw);
+  if (endpointRaw && !endpoint) {
+    throw new HttpError(400, "invalid_request", "endpoint must be one of: write|recall|recall_text");
+  }
+  const out = await getTenantApiKeyUsageReport(db, {
+    tenant_id: tenantId,
+    window_hours: typeof q?.window_hours === "string" ? Number(q.window_hours) : undefined,
+    baseline_hours: typeof q?.baseline_hours === "string" ? Number(q.baseline_hours) : undefined,
+    min_requests: typeof q?.min_requests === "string" ? Number(q.min_requests) : undefined,
+    zscore_threshold: typeof q?.zscore_threshold === "string" ? Number(q.zscore_threshold) : undefined,
+    endpoint,
+    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
+    offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
+    retention_hours: env.CONTROL_TELEMETRY_RETENTION_HOURS,
   });
   return reply.code(200).send(out);
 });
@@ -1361,6 +1410,7 @@ async function requireMemoryPrincipal(req: any): Promise<AuthPrincipal | null> {
     if (apiKey) {
       const resolved = await resolveControlPlaneApiKeyPrincipal(apiKey);
       if (resolved) {
+        (req as any).aionis_api_key_prefix = resolved.key_prefix;
         return {
           tenant_id: resolved.tenant_id,
           agent_id: resolved.agent_id,

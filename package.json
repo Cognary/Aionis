@@ -67,6 +67,8 @@
     "job:scope-purge": "tsx src/jobs/scope-purge.ts",
     "job:hosted-key-rotation-sla": "tsx src/jobs/hosted-key-rotation-sla.ts",
     "job:hosted-tenant-timeseries-export": "tsx src/jobs/hosted-tenant-timeseries-export.ts",
+    "job:hosted-key-usage-anomaly": "tsx src/jobs/hosted-key-usage-anomaly.ts",
+    "job:hosted-telemetry-retention": "tsx src/jobs/hosted-telemetry-retention.ts",
     "job:partition-cutover-readiness": "bash scripts/admin/partition-cutover-readiness.sh",
     "perf:phase-d-matrix": "bash scripts/perf/phase-d-matrix.sh",
     "gtm:phase1:gatea": "bash scripts/gtm/gate-a-check.sh",

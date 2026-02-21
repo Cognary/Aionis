@@ -10,7 +10,9 @@ This runbook covers hosted automation for:
 
 1. key rotation SLA + stale-key alerting,
 2. tenant latency/error-budget timeseries export,
-3. incident evidence bundle export.
+3. incident evidence bundle export + publish,
+4. key-prefix usage anomaly checks,
+5. request telemetry retention cleanup.
 
 ## 1) Key Rotation SLA Check
 
@@ -58,7 +60,8 @@ npm run -s incident:bundle:hosted -- \
   --base-url "http://localhost:${PORT:-3001}" \
   --scope default \
   --tenant-id tenant_acme \
-  --window-hours 168
+  --window-hours 168 \
+  --publish-target "s3://my-bucket/aionis/incident-bundles"
 ```
 
 Default bundle steps:
@@ -67,11 +70,45 @@ Default bundle steps:
 2. governance weekly report (`--strict-warnings`)
 3. key rotation SLA check
 4. tenant timeseries export
-5. audit/dashboard snapshot from admin APIs
+5. key-prefix usage anomaly check
+6. audit/dashboard snapshot from admin APIs
+7. evidence index generation (+ optional HMAC signature)
+8. optional publish to object storage/local target
 
 Output directory:
 
 - `artifacts/hosted_incident_bundle/<run_id>/`
+- includes `evidence_index.json` and optional `evidence_index.sig.json`
+
+## 4) Key-Prefix Usage Anomaly Check
+
+Command:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s job:hosted-key-usage-anomaly -- \
+  --tenant-id tenant_acme \
+  --window-hours 24 \
+  --baseline-hours 168 \
+  --min-requests 30 \
+  --zscore-threshold 3 \
+  --strict \
+  --out artifacts/hosted/key_usage/tenant_acme.json
+```
+
+## 5) Telemetry Retention Cleanup
+
+Command:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+npm run -s job:hosted-telemetry-retention -- \
+  --older-than-hours 720 \
+  --batch-limit 20000 \
+  --max-passes 20 \
+  --strict \
+  --out artifacts/hosted/telemetry_retention/summary.json
+```
 
 ## Admin API Endpoints for Dashboard/Ops
 
@@ -79,6 +116,7 @@ Output directory:
 2. `GET /v1/admin/control/audit-events`
 3. `GET /v1/admin/control/dashboard/tenant/:tenant_id`
 4. `GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries`
+5. `GET /v1/admin/control/dashboard/tenant/:tenant_id/key-usage`
 
 ## Verification Stamp
 

@@ -182,9 +182,34 @@ Returns:
 
 Tenant timeseries:
 
-`GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries?window_hours=168`
+`GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries?window_hours=168&endpoint=recall&limit=500&offset=0`
 
 Returns per-hour endpoint metrics with latency percentiles and error-budget consumption.
+Query options:
+
+- `window_hours`: requested lookback window
+- `endpoint`: optional filter (`write|recall|recall_text`)
+- `limit` + `offset`: series pagination for dashboard chart pulls
+
+Timeseries API is retention-aware:
+
+- window is capped by `CONTROL_TELEMETRY_RETENTION_HOURS`
+- response includes retention metadata + page metadata
+
+Tenant key usage/anomaly:
+
+`GET /v1/admin/control/dashboard/tenant/:tenant_id/key-usage?window_hours=24&baseline_hours=168&min_requests=30&zscore_threshold=3&limit=200&offset=0`
+
+Returns key-prefix level counters and anomaly signals:
+
+- request spike (`recent / expected >= 2`)
+- latency regression (`zscore >= threshold`)
+- error budget regression (`server_error + throttled` growth)
+
+Note:
+
+- key-prefix telemetry is recorded only for authenticated hosted control-plane keys (`x-api-key`).
+- static env API keys still authenticate traffic, but do not produce hosted key-prefix attribution.
 
 ## Runtime Behavior
 
