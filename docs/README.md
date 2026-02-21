@@ -91,7 +91,8 @@ npm run docs:check
 - Hosted preflight moved to private repo:
 
 ```bash
-cd /tmp/aionis-hosted
+git clone https://github.com/Cognary/aionis-hosted.git
+cd aionis-hosted
 npm run -s preflight:hosted -- --run-gates
 ```
 
