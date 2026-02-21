@@ -4,6 +4,19 @@
 
 Aionis gives your agents durable memory with real APIs, operational guardrails, and fast integration paths.
 
+## Open Core Boundary
+
+No new GitHub repo is required now.
+
+`/Users/lucio/Desktop/Aionis` remains the Open Core public repo, and hosted moat capabilities are separated by boundary:
+
+1. Public: kernel, API/SDK contracts, derived async baseline, rules baseline, runbooks/specs
+2. Private: hosted control-plane implementation, billing/metering internals, enterprise IAM/compliance internals, managed ops internals
+
+Boundary spec:
+
+- [Open Core Boundary](docs/OPEN_CORE_BOUNDARY.md)
+
 ## Narrative Canon (Fixed)
 
 1. Main narrative: `Verifiable / Operable Memory Kernel`

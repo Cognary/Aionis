@@ -9,6 +9,7 @@ This index is the entry point for project documentation.
 ## Core
 
 - [Architecture](./ARCHITECTURE.md)
+- [Open Core Boundary](./OPEN_CORE_BOUNDARY.md)
 - [5-Minute Developer Onboarding](./ONBOARDING_5MIN.md)
 - [API Contract (Hard)](./API_CONTRACT.md)
 - [Stability Roadmap](./STABILITY_ROADMAP.md)
