@@ -100,7 +100,7 @@ You can also run each workflow via `workflow_dispatch`.
 Credential behavior in both workflows:
 
 1. Prefer `GHCR_USERNAME` + `GHCR_TOKEN` secrets.
-2. Fallback to `${{ github.actor }}` + `${{ secrets.GITHUB_TOKEN }}`.
+2. Fallback to `$\\{\\{ github.actor \\}\\}` + `$\\{\\{ secrets.GITHUB_TOKEN \\}\\}`.
 3. If fallback gets `403 Forbidden`, configure GHCR secrets explicitly.
 
 ## Verification

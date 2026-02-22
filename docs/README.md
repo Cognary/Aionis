@@ -61,8 +61,8 @@ Private repository:
 
 ```bash
 cd /Users/lucio/Desktop/Aionis
-npm run docs:check
 npm --prefix docs-site run dev
+npm run docs:check
 ```
 
 ## Docs Website (GitHub Pages)

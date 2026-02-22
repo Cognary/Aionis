@@ -4,9 +4,11 @@
   "version": "0.1.0",
   "description": "VitePress tooling for Aionis documentation site",
   "scripts": {
-    "dev": "vitepress dev ../docs --host 0.0.0.0 --port 4173",
-    "build": "vitepress build ../docs",
-    "preview": "vitepress preview ../docs --host 0.0.0.0 --port 4174"
+    "prepare:docs-link": "mkdir -p ../docs && ln -sfn ../docs-site/node_modules ../docs/node_modules",
+    "postinstall": "npm run prepare:docs-link",
+    "dev": "npm run prepare:docs-link && vitepress dev ../docs --host 0.0.0.0 --port 4173",
+    "build": "npm run prepare:docs-link && vitepress build ../docs",
+    "preview": "npm run prepare:docs-link && vitepress preview ../docs --host 0.0.0.0 --port 4174"
   },
   "devDependencies": {
     "vitepress": "^1.6.3"
