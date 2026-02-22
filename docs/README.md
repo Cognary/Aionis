@@ -70,4 +70,4 @@ npm run docs:check
 - Publish workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docs-pages.yml`
 - VitePress config: `/Users/lucio/Desktop/Aionis/docs/.vitepress/config.ts`
 - Theme override: `/Users/lucio/Desktop/Aionis/docs/.vitepress/theme/custom.css`
-- URL: `https://cognary.github.io/Aionis/`
+- URL: `https://doc.aionisos.com/`

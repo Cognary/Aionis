@@ -2,9 +2,10 @@ import { defineConfig } from "vitepress";
 
 export default defineConfig({
   lang: "en-US",
+  site: "https://doc.aionisos.com",
   title: "Aionis Docs",
   description: "A verifiable, operable memory kernel for agent systems.",
-  base: "/Aionis/",
+  base: "/",
   cleanUrls: true,
   lastUpdated: true,
   srcExclude: [
