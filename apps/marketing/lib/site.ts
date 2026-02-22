@@ -59,24 +59,28 @@ export const productHighlights = [
     title: "Production Guardrails",
     desc: "Outbox worker, consistency checks, rate limits, and regression gates in one stack.",
   },
+  {
+    title: "Budget-Controlled Compression",
+    desc: "Context compaction profiles and token budgets reduce context size while preserving items/citations traceability.",
+  },
 ];
 
 export const statHighlights = [
-  { value: "3", label: "Core APIs", note: "health, write, recall_text" },
+  { value: "3", label: "Pillars", note: "audit-first + derived async + memory -> policy" },
+  { value: "3", label: "Compression KPIs", note: "ratio + items retain + citations retain" },
   { value: "2", label: "Published SDKs", note: "TypeScript + Python" },
-  { value: "1", label: "Operable kernel", note: "audit + async derive + policy" },
-  { value: "24/7", label: "Operator posture", note: "runbook + regression + health gate" },
+  { value: "1", label: "Kernel narrative", note: "verifiable + operable + evidence-driven" },
 ];
 
 export const docsLinks = [
   { label: "5-Minute Onboarding", path: "ONBOARDING_5MIN.md" },
   { label: "API Contract", path: "API_CONTRACT.md" },
-  { label: "SDK Guide", path: "SDK.md" },
-  { label: "Operator Runbook", path: "OPERATOR_RUNBOOK.md" },
-  { label: "Performance Baseline", path: "PERFORMANCE_BASELINE.md" },
+  { label: "Production Core Gate", path: "PRODUCTION_CORE_GATE.md" },
+  { label: "Adaptive Compression Plan", path: "ADAPTIVE_COMPRESSION_PLAN.md" },
+  { label: "Packaging Plan", path: "PACKAGING_PLAN.md" },
   { label: "Narrative Canon", path: "NARRATIVE_CANON.md" },
-  { label: "Commercial Strategy", path: "COMMERCIAL_STRATEGY.md" },
   { label: "Release Narrative Template", path: "RELEASE_NARRATIVE_TEMPLATE.md" },
+  { label: "Operator Runbook", path: "OPERATOR_RUNBOOK.md" },
 ];
 
 export const docsJourneys = [
@@ -97,6 +101,12 @@ export const docsJourneys = [
     copy: "Verify health gates, consistency checks, and regression criteria prior to release.",
     steps: ["Review operator runbook", "Run E2E regression checklist", "Track baseline performance"],
     primaryDoc: { label: "Open runbook", path: "OPERATOR_RUNBOOK.md" },
+  },
+  {
+    title: "Narrative and launch packaging",
+    copy: "Use one release structure across website, docs, and launch assets with compression evidence included.",
+    steps: ["Open packaging plan", "Use release narrative template", "Attach gate and KPI evidence"],
+    primaryDoc: { label: "Open packaging plan", path: "PACKAGING_PLAN.md" },
   },
 ];
 
@@ -132,6 +142,8 @@ export const docsRoleTracks = [
     title: "Release Manager",
     copy: "Publish SDK and Docker artifacts with auditable release checklists.",
     items: [
+      { label: "Packaging Plan", path: "PACKAGING_PLAN.md" },
+      { label: "Production Core Gate", path: "PRODUCTION_CORE_GATE.md" },
       { label: "SDK Release", path: "SDK_RELEASE.md" },
       { label: "Docker Release", path: "DOCKER_RELEASE.md" },
       { label: "Docs Index", path: "README.md" },
@@ -141,8 +153,11 @@ export const docsRoleTracks = [
 
 export const docsOperations = [
   {
-    title: "Release runbooks",
+    title: "Release packaging",
     items: [
+      { label: "Packaging Plan", path: "PACKAGING_PLAN.md" },
+      { label: "Release Narrative Template", path: "RELEASE_NARRATIVE_TEMPLATE.md" },
+      { label: "Production Core Gate", path: "PRODUCTION_CORE_GATE.md" },
       { label: "SDK Release", path: "SDK_RELEASE.md" },
       { label: "Docker Release", path: "DOCKER_RELEASE.md" },
     ],
@@ -153,6 +168,7 @@ export const docsOperations = [
       { label: "E2E Regression", path: "E2E_REGRESSION.md" },
       { label: "Stability Roadmap", path: "STABILITY_ROADMAP.md" },
       { label: "Performance Baseline", path: "PERFORMANCE_BASELINE.md" },
+      { label: "Adaptive Compression Plan", path: "ADAPTIVE_COMPRESSION_PLAN.md" },
     ],
   },
 ];
@@ -184,11 +200,20 @@ export const docsCatalog = [
     ],
   },
   {
+    title: "Narrative and Packaging",
+    items: [
+      { label: "Narrative Canon", path: "NARRATIVE_CANON.md" },
+      { label: "Packaging Plan", path: "PACKAGING_PLAN.md" },
+      { label: "Release Narrative Template", path: "RELEASE_NARRATIVE_TEMPLATE.md" },
+    ],
+  },
+  {
     title: "Operations and Quality",
     items: [
       { label: "Operator Runbook", path: "OPERATOR_RUNBOOK.md" },
       { label: "E2E Regression", path: "E2E_REGRESSION.md" },
       { label: "Performance Baseline", path: "PERFORMANCE_BASELINE.md" },
+      { label: "Production Core Gate", path: "PRODUCTION_CORE_GATE.md" },
       { label: "Stability Roadmap", path: "STABILITY_ROADMAP.md" },
     ],
   },

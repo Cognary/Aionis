@@ -6,7 +6,7 @@ title: "Aionis Documentation Home"
 
 **Aionis is a Verifiable / Operable Memory Kernel for agents.**
 
-Use this site as the canonical entry for onboarding, API contracts, SDK usage, operations, and release runbooks.
+Use this site as the canonical entry for onboarding, API contracts, SDK usage, release packaging, and production operations.
 
 Internal GTM/hosted/operator execution docs are maintained in the private repository:
 - `https://github.com/Cognary/aionis-hosted`
@@ -20,11 +20,28 @@ Internal GTM/hosted/operator execution docs are maintained in the private reposi
 Narrative assets:
 
 - [Narrative Canon](./NARRATIVE_CANON.md)
+- [Packaging Plan](./PACKAGING_PLAN.md)
 - [Commercial Strategy](./COMMERCIAL_STRATEGY.md)
 - [Release Narrative Template](./RELEASE_NARRATIVE_TEMPLATE.md)
 - [Technical Release Material](./RELEASE_MATERIAL_TECHNICAL.md)
 - [Product Release Material](./RELEASE_MATERIAL_PRODUCT.md)
 - [Business Release Material](./RELEASE_MATERIAL_BUSINESS.md)
+
+## Token Compression as Evidence Layer
+
+Compression is part of Aionis production evidence, not the primary category claim.
+
+Required KPI set:
+
+1. `compression_ratio`
+2. `items_retain_ratio`
+3. `citations_retain_ratio`
+
+References:
+
+- [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
+- [Performance Baseline](./PERFORMANCE_BASELINE.md)
+- [Production Core Gate](./PRODUCTION_CORE_GATE.md)
 
 ## Start Here
 
@@ -32,6 +49,7 @@ Narrative assets:
 2. [API Contract](./API_CONTRACT.md)
 3. [SDK Guide](./SDK.md)
 4. [Operator Runbook](./OPERATOR_RUNBOOK.md)
+5. [Packaging Plan](./PACKAGING_PLAN.md)
 
 ## By Responsibility
 

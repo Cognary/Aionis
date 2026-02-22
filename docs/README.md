@@ -15,6 +15,7 @@ This is the public documentation index for Aionis Open Core.
 - [Architecture](./ARCHITECTURE.md)
 - [API Contract](./API_CONTRACT.md)
 - [SDK Guide](./SDK.md)
+- [Packaging Plan](./PACKAGING_PLAN.md)
 
 ### Operations / Reliability
 
@@ -33,10 +34,17 @@ This is the public documentation index for Aionis Open Core.
 ### Narrative / Positioning
 
 - [Narrative Canon](./NARRATIVE_CANON.md)
+- [Packaging Plan](./PACKAGING_PLAN.md)
 - [Release Narrative Template](./RELEASE_NARRATIVE_TEMPLATE.md)
 - [Technical Release Material](./RELEASE_MATERIAL_TECHNICAL.md)
 - [Product Release Material](./RELEASE_MATERIAL_PRODUCT.md)
 - [Business Release Material](./RELEASE_MATERIAL_BUSINESS.md)
+
+### Compression Evidence
+
+- [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
+- [Performance Baseline](./PERFORMANCE_BASELINE.md)
+- [Production Core Gate](./PRODUCTION_CORE_GATE.md)
 
 ### Boundary
 

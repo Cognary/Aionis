@@ -7,7 +7,7 @@ import { analyticsEvents } from "@/lib/analytics";
 export const metadata: Metadata = {
   title: "Aionis Docs | Production-ready documentation gateway",
   description:
-    "Find onboarding, API contracts, SDK integration, operations, and release runbooks for deploying Aionis to production.",
+    "Find onboarding, API contracts, packaging narrative standards, operations gates, and release evidence references for Aionis.",
 };
 
 export default function DocsPage() {
@@ -18,9 +18,9 @@ export default function DocsPage() {
     <section className="section">
       <div className="container">
         <p className="eyebrow">Documentation</p>
-        <h1>Production docs portal from first run to release</h1>
+        <h1>One docs portal from first run to production packaging</h1>
         <p className="hero-copy">
-          This page is the canonical docs gateway for onboarding, API integration, quality gates, and release operations.
+          This is the canonical gateway for onboarding, API integration, release narrative packaging, and production operations.
         </p>
         <div className="hero-cta">
           <a
@@ -72,7 +72,7 @@ export default function DocsPage() {
           <SectionLead
             eyebrow="Narrative canon"
             title="One public story across product and engineering"
-            copy="Aionis messaging and release notes follow one structure: Problem, Architecture Principles, Evidence, Boundaries, and Next Step."
+            copy="Aionis messaging follows one structure: Problem, Architecture Principles, Evidence, Boundaries, and Next Step."
           />
           <div className="grid-cards">
             <article className="card">
@@ -80,7 +80,7 @@ export default function DocsPage() {
               <ul className="list">
                 <li>Verifiable / Operable Memory Kernel</li>
                 <li>Audit-first, Derived async, Memory to Policy</li>
-                <li>Evidence-based release communication</li>
+                <li>Token compression treated as evidence layer</li>
               </ul>
             </article>
             <article className="card">
@@ -92,6 +92,11 @@ export default function DocsPage() {
                   </a>
                 </li>
                 <li>
+                  <a href={docsHref("PACKAGING_PLAN.md")} target="_blank" rel="noreferrer">
+                    Packaging Plan
+                  </a>
+                </li>
+                <li>
                   <a href={docsHref("RELEASE_NARRATIVE_TEMPLATE.md")} target="_blank" rel="noreferrer">
                     Release Narrative Template
                   </a>
@@ -99,6 +104,44 @@ export default function DocsPage() {
                 <li>
                   <a href={docsHref("COMMERCIAL_STRATEGY.md")} target="_blank" rel="noreferrer">
                     Commercial Strategy
+                  </a>
+                </li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section" style={{ paddingBottom: 0 }}>
+          <SectionLead
+            eyebrow="Compression evidence"
+            title="Token efficiency is measured, not hand-waved"
+            copy="Compression is positioned as an efficiency layer with reproducible KPI and gate integration."
+          />
+          <div className="grid-cards">
+            <article className="card">
+              <h3>Required KPI</h3>
+              <ul className="list">
+                <li>compression_ratio</li>
+                <li>items_retain_ratio</li>
+                <li>citations_retain_ratio</li>
+              </ul>
+            </article>
+            <article className="card">
+              <h3>Runbook references</h3>
+              <ul className="list">
+                <li>
+                  <a href={docsHref("PRODUCTION_CORE_GATE.md")} target="_blank" rel="noreferrer">
+                    Production Core Gate
+                  </a>
+                </li>
+                <li>
+                  <a href={docsHref("PERFORMANCE_BASELINE.md")} target="_blank" rel="noreferrer">
+                    Performance Baseline
+                  </a>
+                </li>
+                <li>
+                  <a href={docsHref("ADAPTIVE_COMPRESSION_PLAN.md")} target="_blank" rel="noreferrer">
+                    Adaptive Compression Plan
                   </a>
                 </li>
               </ul>

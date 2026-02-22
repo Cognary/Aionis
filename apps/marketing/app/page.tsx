@@ -150,18 +150,36 @@ make quickstart`}</pre>
         <div className="container">
           <SectionLead
             eyebrow="Evidence"
-            title="Signals you can verify now"
-            copy="Aionis release quality is backed by reproducible checks, public artifacts, and operator runbooks."
+            title="Production evidence you can verify now"
+            copy="Aionis releases are backed by reproducible gates, artifact versions, and compression-quality KPIs."
           />
           <div className="grid-cards">
             <article className="card">
-              <h3>Production checks</h3>
+              <h3>Core production gate</h3>
               <ul className="list">
                 <li>Contract smoke and docs checks</li>
                 <li>Health gate and consistency-check sets</li>
-                <li>Regression scripts for release validation</li>
+                <li>Recall/write SLO thresholds</li>
               </ul>
             </article>
+            <article className="card">
+              <h3>Compression evidence layer</h3>
+              <ul className="list">
+                <li>compression_ratio (token reduction)</li>
+                <li>items_retain_ratio (context coverage)</li>
+                <li>citations_retain_ratio (traceability retention)</li>
+              </ul>
+            </article>
+          </div>
+          <pre className="code-block">{`npm run -s gate:core:prod -- \\
+  --base-url "http://localhost:\${PORT:-3001}" \\
+  --scope default \\
+  --run-perf true \\
+  --compression-gate-mode non_blocking \\
+  --compression-ratio-min 0.40 \\
+  --compression-items-retain-min 0.95 \\
+  --compression-citations-retain-min 0.95`}</pre>
+          <div className="grid-cards" style={{ marginTop: 14 }}>
             <article className="card">
               <h3>Published artifacts</h3>
               <ul className="list">
@@ -170,11 +188,15 @@ make quickstart`}</pre>
                 <li>{registries.dockerImage}:{registries.dockerTag}</li>
               </ul>
             </article>
+            <article className="card">
+              <h3>Packaging references</h3>
+              <ul className="list">
+                <li><a href="/docs#PACKAGING_PLAN-md">Packaging Plan</a></li>
+                <li><a href="/docs#NARRATIVE_CANON-md">Narrative Canon</a></li>
+                <li><a href="/docs#RELEASE_NARRATIVE_TEMPLATE-md">Release Narrative Template</a></li>
+              </ul>
+            </article>
           </div>
-          <pre className="code-block">{`npm run -s test:contract
-npm run -s docs:check
-npm run -s job:health-gate -- --strict-warnings
-npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
         </div>
       </section>
 

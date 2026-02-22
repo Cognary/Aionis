@@ -37,6 +37,8 @@ docs_navigation:
         url: /ARCHITECTURE/
       - label: API Contract
         url: /API_CONTRACT/
+      - label: Packaging Plan
+        url: /PACKAGING_PLAN/
   - title: SDK
     items:
       - label: SDK Guide
@@ -49,12 +51,22 @@ docs_navigation:
     items:
       - label: Operator Runbook
         url: /OPERATOR_RUNBOOK/
+      - label: Production Core Gate
+        url: /PRODUCTION_CORE_GATE/
       - label: E2E Regression
         url: /E2E_REGRESSION/
       - label: Performance Baseline
         url: /PERFORMANCE_BASELINE/
+      - label: Adaptive Compression Plan
+        url: /ADAPTIVE_COMPRESSION_PLAN/
       - label: Docker Release
         url: /DOCKER_RELEASE/
+  - title: Narrative
+    items:
+      - label: Narrative Canon
+        url: /NARRATIVE_CANON/
+      - label: Release Narrative Template
+        url: /RELEASE_NARRATIVE_TEMPLATE/
   - title: Integrations
     items:
       - label: OpenWork Integration

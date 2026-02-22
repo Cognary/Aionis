@@ -26,11 +26,26 @@ Boundary spec:
 Narrative docs:
 
 - [Narrative Canon](docs/NARRATIVE_CANON.md)
+- [Packaging Plan](docs/PACKAGING_PLAN.md)
 - [Commercial Strategy](docs/COMMERCIAL_STRATEGY.md)
 - [Release Narrative Template](docs/RELEASE_NARRATIVE_TEMPLATE.md)
 - [Technical Release Material](docs/RELEASE_MATERIAL_TECHNICAL.md)
 - [Product Release Material](docs/RELEASE_MATERIAL_PRODUCT.md)
 - [Business Release Material](docs/RELEASE_MATERIAL_BUSINESS.md)
+
+## Packaging and Narrative Operations
+
+Aionis public packaging follows one repeatable structure:
+
+1. `Problem`
+2. `Architecture Principles`
+3. `Evidence`
+4. `Boundaries`
+5. `Next Step`
+
+Execution source:
+
+- [Packaging Plan](docs/PACKAGING_PLAN.md)
 
 ## Why Aionis
 
@@ -48,6 +63,22 @@ Most agent memory demos stop at a vector store. Aionis is built for real workloa
 2. Agent copilots with policy-aware tool selection
 3. Team workflows with tenant/agent/team scoped memory
 4. Memory-backed MCP / OpenWork / LangGraph integrations
+
+## Token Compression (Evidence Layer)
+
+Compression is included as an efficiency layer, not as the primary category claim.
+
+Required KPI set:
+
+1. `compression_ratio`
+2. `items_retain_ratio`
+3. `citations_retain_ratio`
+
+References:
+
+- [Adaptive Compression Plan](docs/ADAPTIVE_COMPRESSION_PLAN.md)
+- [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
+- [Production Core Gate](docs/PRODUCTION_CORE_GATE.md)
 
 ## 3-Minute Demo
 
