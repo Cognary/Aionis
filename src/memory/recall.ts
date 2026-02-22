@@ -608,7 +608,10 @@ export async function memoryRecallParsed(
     for (const row of rr.rows) ruleDefMap.set(row.rule_node_id, row);
   }
 
-  const { text: context_text, items: context_items, citations } = buildContext(rankedAll, nodeMapAll, ruleDefMap);
+  const { text: context_text, items: context_items, citations } = buildContext(rankedAll, nodeMapAll, ruleDefMap, {
+    context_token_budget: parsed.context_token_budget,
+    context_char_budget: parsed.context_char_budget,
+  });
 
   // DTO serialization (B): stable, minimal by default.
   const outNodes: NodeDTO[] = outNodeRows.map((n) => {

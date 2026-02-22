@@ -85,6 +85,7 @@ echo "MEMORY_RECALL_PROFILE_POLICY_JSON=${MEMORY_RECALL_PROFILE_POLICY_JSON:-{}}
 echo "MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED=${MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED:-true}"
 echo "MEMORY_RECALL_ADAPTIVE_WAIT_MS=${MEMORY_RECALL_ADAPTIVE_WAIT_MS:-200}"
 echo "MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE=${MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE:-strict_edges}"
+echo "MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT=${MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT:-0}"
 ```
 
 6. Throughput profile check/apply:
@@ -95,6 +96,15 @@ npm run -s env:throughput:prod
 ```
 
 This updates only the managed throughput block in `.env` and keeps existing secrets unchanged.
+
+7. Optional context compaction smoke (`recall_text`):
+
+```bash
+curl -sS localhost:${PORT:-3001}/v1/memory/recall_text \
+  -H 'content-type: application/json' \
+  -d '{"query_text":"release policy","context_token_budget":600}' \
+| jq '{context_chars:(.context.text|length), items:(.context.items|length), citations:(.context.citations|length)}'
+```
 
 ## Weekly
 

@@ -44,6 +44,7 @@ import { updateRuleState } from "./memory/rules.js";
 import { evaluateRules } from "./memory/rules-evaluate.js";
 import { selectTools } from "./memory/tools-select.js";
 import { toolSelectionFeedback } from "./memory/tools-feedback.js";
+import { estimateTokenCountFromText } from "./memory/context.js";
 import { createEmbeddingProviderFromEnv } from "./embeddings/index.js";
 import { EmbedHttpError } from "./embeddings/http.js";
 import { runTopicClusterForEventIds } from "./jobs/topicClusterLib.js";
@@ -1298,6 +1299,9 @@ app.post("/v1/memory/recall", async (req, reply) => {
     gate.release();
   }
   const ms = performance.now() - t0;
+  const contextText = typeof out?.context?.text === "string" ? out.context.text : "";
+  const contextChars = contextText.length;
+  const contextEstTokens = estimateTokenCountFromText(contextText);
   req.log.info(
     {
       recall: {
@@ -1315,6 +1319,10 @@ app.post("/v1/memory/recall", async (req, reply) => {
         edges: out.subgraph.edges.length,
         neighborhood_counts: (out as any).debug?.neighborhood_counts ?? null,
         rules: (out as any).rules ? { considered: (out as any).rules.considered, matched: (out as any).rules.matched } : null,
+        context_chars: contextChars,
+        context_est_tokens: contextEstTokens,
+        context_token_budget: parsed.context_token_budget ?? null,
+        context_char_budget: parsed.context_char_budget ?? null,
         profile: adaptiveProfile.profile,
         profile_source: baseProfile.source,
         adaptive_profile_applied: adaptiveProfile.applied,
@@ -1342,6 +1350,14 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
   const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
   const body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
   let parsed = MemoryRecallTextRequest.parse(body);
+  let contextBudgetDefaultApplied = false;
+  if (parsed.context_token_budget === undefined && parsed.context_char_budget === undefined && env.MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT > 0) {
+    parsed = MemoryRecallTextRequest.parse({
+      ...(parsed as any),
+      context_token_budget: env.MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT,
+    });
+    contextBudgetDefaultApplied = true;
+  }
   const wantDebugEmbeddingsText = parsed.return_debug && parsed.include_embeddings;
   await enforceRateLimit(req, reply, "recall");
   await enforceTenantQuota(req, reply, "recall", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
@@ -1413,6 +1429,8 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
       ranked_limit: parsed.ranked_limit,
       min_edge_weight: parsed.min_edge_weight,
       min_edge_confidence: parsed.min_edge_confidence,
+      context_token_budget: parsed.context_token_budget,
+      context_char_budget: parsed.context_char_budget,
       rules_context: parsed.rules_context,
       rules_include_shadow: parsed.rules_include_shadow,
       rules_limit: parsed.rules_limit,
@@ -1455,6 +1473,9 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
     gate.release();
   }
   const ms = performance.now() - t0;
+  const contextText = typeof out?.context?.text === "string" ? out.context.text : "";
+  const contextChars = contextText.length;
+  const contextEstTokens = estimateTokenCountFromText(contextText);
   req.log.info(
     {
       recall_text: {
@@ -1479,6 +1500,11 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
         edges: out.subgraph.edges.length,
         neighborhood_counts: (out as any).debug?.neighborhood_counts ?? null,
         rules: (out as any).rules ? { considered: (out as any).rules.considered, matched: (out as any).rules.matched } : null,
+        context_chars: contextChars,
+        context_est_tokens: contextEstTokens,
+        context_token_budget: recallParsed.context_token_budget ?? null,
+        context_char_budget: recallParsed.context_char_budget ?? null,
+        context_budget_default_applied: contextBudgetDefaultApplied,
         profile: adaptiveProfile.profile,
         profile_source: baseProfile.source,
         adaptive_profile_applied: adaptiveProfile.applied,

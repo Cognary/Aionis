@@ -142,6 +142,8 @@ export type MemoryRecallInput = {
   ranked_limit?: number;
   min_edge_weight?: number;
   min_edge_confidence?: number;
+  context_token_budget?: number;
+  context_char_budget?: number;
   rules_context?: unknown;
   rules_include_shadow?: boolean;
   rules_limit?: number;

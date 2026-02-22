@@ -100,6 +100,8 @@ const EnvSchema = z.object({
     .transform((v) => v === "true"),
   MEMORY_RECALL_ADAPTIVE_WAIT_MS: z.coerce.number().int().min(1).max(60_000).default(200),
   MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: z.enum(["legacy", "strict_edges", "quality_first"]).default("strict_edges"),
+  // Optional default compaction budget for recall_text context output. 0 disables.
+  MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT: z.coerce.number().int().min(0).max(256000).default(0),
   PII_REDACTION: z
     .string()
     .optional()

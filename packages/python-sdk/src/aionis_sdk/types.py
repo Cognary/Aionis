@@ -93,6 +93,8 @@ class MemoryRecallInput(TypedDict, total=False):
     ranked_limit: int
     min_edge_weight: float
     min_edge_confidence: float
+    context_token_budget: int
+    context_char_budget: int
     rules_context: Dict[str, Any]
     rules_include_shadow: bool
     rules_limit: int

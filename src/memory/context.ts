@@ -53,6 +53,19 @@ export type ContextItem =
       commit_id?: string | null;
     };
 
+export type ContextBuildOptions = {
+  context_token_budget?: number | null;
+  context_char_budget?: number | null;
+};
+
+type SectionId = "topics" | "entities" | "events" | "rules";
+
+type SectionLine = {
+  text: string;
+  importance: number;
+  active: boolean;
+};
+
 function pickTop(
   ranked: RankedItem[],
   nodes: Map<string, NodeRow>,
@@ -83,14 +96,40 @@ function isCompressionConcept(n: NodeRow): boolean {
   return n.type === "concept" && n.slots?.summary_kind === "compression_rollup";
 }
 
+export function estimateTokenCountFromText(text: string): number {
+  const chars = text.length;
+  if (chars <= 0) return 0;
+  // Conservative heuristic across mixed-language payloads.
+  return Math.max(1, Math.ceil(chars / 4));
+}
+
+function resolveContextCharBudget(opts?: ContextBuildOptions): number | null {
+  const charBudgetRaw = Number(opts?.context_char_budget ?? 0);
+  if (Number.isFinite(charBudgetRaw) && charBudgetRaw > 0) return Math.max(160, Math.trunc(charBudgetRaw));
+  const tokenBudgetRaw = Number(opts?.context_token_budget ?? 0);
+  if (Number.isFinite(tokenBudgetRaw) && tokenBudgetRaw > 0) return Math.max(160, Math.trunc(tokenBudgetRaw) * 4);
+  return null;
+}
+
 export function buildContext(
   ranked: RankedItem[],
   nodes: Map<string, NodeRow>,
   ruleDefs: Map<string, RuleDefRow>,
+  options?: ContextBuildOptions,
 ): { text: string; items: ContextItem[]; citations: Array<{ node_id: string; commit_id: string | null; raw_ref: string | null; evidence_ref: string | null }> } {
   const items: ContextItem[] = [];
   const citations: Array<{ node_id: string; commit_id: string | null; raw_ref: string | null; evidence_ref: string | null }> =
     [];
+  const sections: Record<SectionId, { title: string; lines: SectionLine[] }> = {
+    topics: { title: "Topics / Concepts", lines: [] },
+    entities: { title: "Entities", lines: [] },
+    events: { title: "Supporting Events / Evidence", lines: [] },
+    rules: { title: "Applicable Rules (Shadow/Active)", lines: [] },
+  };
+  const sectionOrder: SectionId[] = ["topics", "entities", "events", "rules"];
+  const addLine = (section: SectionId, text: string, importance: number) => {
+    sections[section].lines.push({ text, importance, active: true });
+  };
 
   const seen = new Set<string>();
   const pushCitation = (n: NodeRow) => {
@@ -159,55 +198,45 @@ export function buildContext(
     pushCitation(n);
   }
 
-  const lines: string[] = [];
-  const section = (title: string) => {
-    if (lines.length > 0) lines.push("");
-    lines.push(`# ${title}`);
-  };
-
   if (topics.length) {
-    section("Topics / Concepts");
     for (const n of topics) {
       const label = n.title ?? n.id;
       const summary = n.text_summary ? `: ${n.text_summary}` : "";
       if (isCompressionConcept(n)) {
         const covered = Number(n.slots?.source_event_count ?? 0);
-        lines.push(`- ${label}${summary} (node:${n.id}, compression, covers=${covered})`);
+        addLine("topics", `- ${label}${summary} (node:${n.id}, compression, covers=${covered})`, 10);
         const refs = Array.isArray(n.slots?.citations) ? (n.slots.citations as any[]) : [];
         for (const c of refs.slice(0, 3)) {
           if (!c || typeof c !== "object") continue;
           const refNode = typeof c.node_id === "string" ? c.node_id : null;
           if (!refNode) continue;
-          lines.push(`  evidence_node=${refNode}`);
+          addLine("topics", `  evidence_node=${refNode}`, 90);
         }
       } else {
-        lines.push(`- ${label}${summary} (node:${n.id})`);
+        addLine("topics", `- ${label}${summary} (node:${n.id})`, 10);
       }
     }
   }
 
   if (entities.length) {
-    section("Entities");
     for (const n of entities) {
       const label = n.title ?? n.id;
       const summary = n.text_summary ? `: ${n.text_summary}` : "";
-      lines.push(`- ${label}${summary} (node:${n.id})`);
+      addLine("entities", `- ${label}${summary} (node:${n.id})`, 40);
     }
   }
 
   if (events.length) {
-    section("Supporting Events / Evidence");
     for (const n of events) {
       const summary = n.text_summary ?? "(no summary)";
       const refs: string[] = [];
       if (n.raw_ref) refs.push(`raw_ref=${n.raw_ref}`);
       if (n.evidence_ref) refs.push(`evidence_ref=${n.evidence_ref}`);
-      lines.push(`- ${summary} (node:${n.id}${refs.length ? `, ${refs.join(", ")}` : ""})`);
+      addLine("events", `- ${summary} (node:${n.id}${refs.length ? `, ${refs.join(", ")}` : ""})`, 70);
     }
   }
 
   if (rules.length) {
-    section("Applicable Rules (Shadow/Active)");
     for (const n of rules) {
       const d = ruleDefs.get(n.id);
       const state = d?.state ?? "unknown";
@@ -219,13 +248,44 @@ export function buildContext(
         d?.rule_scope === "agent" && d?.target_agent_id
           ? ` target_agent=${d.target_agent_id}`
           : d?.rule_scope === "team" && d?.target_team_id
-            ? ` target_team=${d.target_team_id}`
+          ? ` target_team=${d.target_team_id}`
             : "";
-      lines.push(`- state=${state}${scopeInfo}${targetInfo}${stats} summary=${n.text_summary ?? "(none)"} (node:${n.id})`);
-      if (ifj) lines.push(`  if=${fmtJsonCompact(ifj)}`);
-      if (thenj) lines.push(`  then=${fmtJsonCompact(thenj)}`);
+      addLine("rules", `- state=${state}${scopeInfo}${targetInfo}${stats} summary=${n.text_summary ?? "(none)"} (node:${n.id})`, 20);
+      if (ifj) addLine("rules", `  if=${fmtJsonCompact(ifj)}`, 80);
+      if (thenj) addLine("rules", `  then=${fmtJsonCompact(thenj)}`, 80);
     }
   }
 
-  return { text: lines.join("\n"), items, citations };
+  const renderText = (): string => {
+    const out: string[] = [];
+    for (const section of sectionOrder) {
+      const active = sections[section].lines.filter((l) => l.active);
+      if (active.length === 0) continue;
+      if (out.length > 0) out.push("");
+      out.push(`# ${sections[section].title}`);
+      for (const line of active) out.push(line.text);
+    }
+    return out.join("\n");
+  };
+
+  const charBudget = resolveContextCharBudget(options);
+  let text = renderText();
+  if (charBudget !== null && text.length > charBudget) {
+    const removable: SectionLine[] = [];
+    for (const section of sectionOrder) {
+      for (const line of sections[section].lines) removable.push(line);
+    }
+    removable.sort((a, b) => b.importance - a.importance);
+    let activeCount = removable.length;
+    for (const line of removable) {
+      if (text.length <= charBudget) break;
+      if (!line.active) continue;
+      if (activeCount <= 1) break;
+      line.active = false;
+      activeCount -= 1;
+      text = renderText();
+    }
+  }
+
+  return { text, items, citations };
 }

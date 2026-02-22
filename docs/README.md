@@ -22,6 +22,7 @@ This is the public documentation index for Aionis Open Core.
 - [Production Core Gate](./PRODUCTION_CORE_GATE.md)
 - [E2E Regression Checklist](./E2E_REGRESSION.md)
 - [Performance Baseline](./PERFORMANCE_BASELINE.md)
+- [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
 - [Docker Release Runbook](./DOCKER_RELEASE.md)
 
 ### Integrations

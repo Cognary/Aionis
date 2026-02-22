@@ -96,6 +96,8 @@ Profiles:
 - `ranked_limit?: number` (default from recall profile, max 500)
 - `min_edge_weight?: number` (default from recall profile, max 1) stage-2 edge fetch filter
 - `min_edge_confidence?: number` (default from recall profile, max 1) stage-2 edge fetch filter
+- `context_token_budget?: number` (optional; compacts `context.text` toward token budget using conservative estimation, keeps `items/citations` intact)
+- `context_char_budget?: number` (optional; direct char budget override for `context.text`; takes precedence over token budget)
 - `include_meta?: boolean` (default false)
 - `include_slots?: boolean` (default false)
 - `include_slots_preview?: boolean` (default false)
@@ -141,6 +143,8 @@ Server embeds `query_text` using the configured embedding provider, then calls t
 **Request**
 - Same fields as `/recall`, except:
   - `query_text: string` (required)
+  - server can apply default `context_token_budget` when request omits both compaction fields:
+    - `MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT` (`0` disables)
 
 **Response**
 - Same as `/recall`, plus:
@@ -185,6 +189,7 @@ Debug embeddings are the most likely “silent data export” channel. The serve
 - When compression concept summaries are present in ranked context, `context.text` prefers summary-first rendering and reduces raw event fanout.
 - In compression mode, events already cited by selected compression summaries are excluded from context event listing to avoid duplicate token spend.
 - Compression summaries must remain evidence-backed through citations and graph edges (`derived_from`).
+- When `context_token_budget` or `context_char_budget` is set, Aionis compacts `context.text` by dropping lower-priority detail lines first (evidence fanout and verbose rule lines), while preserving structured `context.items` and `context.citations`.
 
 ---
 
