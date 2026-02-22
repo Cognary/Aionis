@@ -1,83 +1,85 @@
 ---
-title: "Aionis Documentation Home"
+layout: home
+title: "Aionis Docs"
+
+hero:
+  name: "Aionis"
+  text: "Verifiable / Operable Memory Kernel"
+  tagline: "Audit-first memory infrastructure for production agents. Source-of-record writes, async derived pipelines, and policy-driven recall."
+  actions:
+    - theme: brand
+      text: Start in 5 Minutes
+      link: /ONBOARDING_5MIN
+    - theme: alt
+      text: API Contract
+      link: /API_CONTRACT
+    - theme: alt
+      text: Operator Runbook
+      link: /OPERATOR_RUNBOOK
+
+features:
+  - title: Audit-first
+    details: Every write is traceable by commit chain and source metadata, so memory behavior is replayable and reviewable.
+  - title: Derived Async
+    details: Embedding, clustering, and rollups are asynchronous derivatives. Core writes stay non-blocking under model failures.
+  - title: Memory -> Policy
+    details: Rules and feedback convert memory into executable behavior for planners, tool selectors, and governance gates.
 ---
 
-# Aionis Documentation
+## Platform Snapshot
 
-**Aionis is a Verifiable / Operable Memory Kernel for agents.**
+- Open Core focus: single-tenant memory kernel with production-grade operability primitives.
+- Release artifacts:
+  - npm: [@aionis/sdk](https://www.npmjs.com/package/@aionis/sdk)
+  - PyPI: [aionis-sdk](https://pypi.org/project/aionis-sdk/)
+  - Docker: [ghcr.io/cognary/aionis](https://github.com/orgs/cognary/packages/container/package/aionis)
+- Hosted/internal execution docs live in private repo:
+  - [cognary/aionis-hosted](https://github.com/Cognary/aionis-hosted)
 
-Use this site as the canonical entry for onboarding, API contracts, SDK usage, release packaging, and production operations.
+## Evidence Playground
 
-Internal GTM/hosted/operator execution docs are maintained in the private repository:
-- `https://github.com/Cognary/aionis-hosted`
+<CompressionEstimator />
 
-## Narrative Canon
+<RecallProfileExplorer />
 
-1. Main narrative: `Verifiable / Operable Memory Kernel`
-2. Pillars: `Audit-first`, `Derived async`, `Memory -> Policy`
-3. Release template: `Problem -> Architecture Principles -> Evidence -> Boundaries -> Next Step`
+## Canonical Narrative
 
-Narrative assets:
+1. Main narrative: `Verifiable / Operable Memory Kernel`.
+2. Pillars: `Audit-first`, `Derived async`, `Memory -> Policy`.
+3. Release storyline template: `Problem -> Architecture Principles -> Evidence -> Boundaries -> Next Step`.
+
+Primary references:
 
 - [Narrative Canon](./NARRATIVE_CANON.md)
 - [Packaging Plan](./PACKAGING_PLAN.md)
-- [Commercial Strategy](./COMMERCIAL_STRATEGY.md)
 - [Release Narrative Template](./RELEASE_NARRATIVE_TEMPLATE.md)
 - [Technical Release Material](./RELEASE_MATERIAL_TECHNICAL.md)
 - [Product Release Material](./RELEASE_MATERIAL_PRODUCT.md)
 - [Business Release Material](./RELEASE_MATERIAL_BUSINESS.md)
 
-## Token Compression as Evidence Layer
+## Evidence Gates
 
-Compression is part of Aionis production evidence, not the primary category claim.
-
-Required KPI set:
-
-1. `compression_ratio`
-2. `items_retain_ratio`
-3. `citations_retain_ratio`
-
-References:
-
-- [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
-- [Performance Baseline](./PERFORMANCE_BASELINE.md)
-- [Production Core Gate](./PRODUCTION_CORE_GATE.md)
-
-## Start Here
-
-1. [5-Minute Onboarding](./ONBOARDING_5MIN.md)
-2. [API Contract](./API_CONTRACT.md)
-3. [SDK Guide](./SDK.md)
+1. [Production Core Gate](./PRODUCTION_CORE_GATE.md)
+2. [Performance Baseline](./PERFORMANCE_BASELINE.md)
+3. [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
 4. [Operator Runbook](./OPERATOR_RUNBOOK.md)
-5. [Packaging Plan](./PACKAGING_PLAN.md)
 
-## By Responsibility
+## Role-Oriented Paths
 
-1. Application Engineer:
-   [ONBOARDING_5MIN.md](./ONBOARDING_5MIN.md),
-   [SDK.md](./SDK.md),
-   [SDK_COMPATIBILITY_MATRIX.md](./SDK_COMPATIBILITY_MATRIX.md)
-2. Platform / API Owner:
-   [API_CONTRACT.md](./API_CONTRACT.md),
-   [PLANNER_CONTEXT.md](./PLANNER_CONTEXT.md),
-   [RULE_LIFECYCLE.md](./RULE_LIFECYCLE.md),
-   [EXECUTION_LOOP_GATE.md](./EXECUTION_LOOP_GATE.md),
-   [POLICY_ADAPTATION_GATE.md](./POLICY_ADAPTATION_GATE.md),
-   [GOVERNANCE_WEEKLY_REPORT.md](./GOVERNANCE_WEEKLY_REPORT.md)
-3. SRE / Operations:
-   [OPERATOR_RUNBOOK.md](./OPERATOR_RUNBOOK.md),
-   [E2E_REGRESSION.md](./E2E_REGRESSION.md),
-   [PERFORMANCE_BASELINE.md](./PERFORMANCE_BASELINE.md)
-4. Release Manager:
-   [SDK_RELEASE.md](./SDK_RELEASE.md),
-   [DOCKER_RELEASE.md](./DOCKER_RELEASE.md)
+- Application Engineer:
+  - [5-Minute Onboarding](./ONBOARDING_5MIN.md)
+  - [SDK Guide](./SDK.md)
+  - [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)
+- Platform / API Owner:
+  - [API Contract](./API_CONTRACT.md)
+  - [Planner Context](./PLANNER_CONTEXT.md)
+  - [Rule Lifecycle](./RULE_LIFECYCLE.md)
+- SRE / Operations:
+  - [Operator Runbook](./OPERATOR_RUNBOOK.md)
+  - [E2E Regression Checklist](./E2E_REGRESSION.md)
+  - [Performance Baseline](./PERFORMANCE_BASELINE.md)
+- Release Manager:
+  - [SDK Release](./SDK_RELEASE.md)
+  - [Docker Release](./DOCKER_RELEASE.md)
 
-## Full Catalog
-
-Use [README.md](./README.md) for the complete documentation index.
-
-## Release Artifacts
-
-1. npm: [@aionis/sdk](https://www.npmjs.com/package/@aionis/sdk)
-2. PyPI: [aionis-sdk](https://pypi.org/project/aionis-sdk/)
-3. Docker: [ghcr.io/cognary/aionis](https://github.com/orgs/cognary/packages/container/package/aionis)
+Full public catalog: [Docs Index](./README.md)

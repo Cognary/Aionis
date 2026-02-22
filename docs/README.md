@@ -62,10 +62,12 @@ Private repository:
 ```bash
 cd /Users/lucio/Desktop/Aionis
 npm run docs:check
+npm --prefix docs-site run dev
 ```
 
 ## Docs Website (GitHub Pages)
 
 - Publish workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docs-pages.yml`
-- Site config: `/Users/lucio/Desktop/Aionis/docs/_config.yml`
+- VitePress config: `/Users/lucio/Desktop/Aionis/docs/.vitepress/config.ts`
+- Theme override: `/Users/lucio/Desktop/Aionis/docs/.vitepress/theme/custom.css`
 - URL: `https://cognary.github.io/Aionis/`

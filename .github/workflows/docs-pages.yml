@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "docs/**"
+      - "docs-site/**"
       - ".github/workflows/docs-pages.yml"
 
 permissions:
@@ -30,16 +31,21 @@ jobs:
         with:
           enablement: true
 
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@v1
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          source: ./docs
-          destination: ./_site
+          node-version: "20"
+
+      - name: Install docs dependencies
+        run: npm --prefix docs-site install
+
+      - name: Build with VitePress
+        run: npm --prefix docs-site run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./_site
+          path: ./docs/.vitepress/dist
 
   deploy:
     runs-on: ubuntu-latest

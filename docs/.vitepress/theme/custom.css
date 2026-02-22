@@ -1,0 +1,159 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+:root {
+  --vp-font-family-base: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --vp-font-family-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --vp-c-brand-1: #0f172a;
+  --vp-c-brand-2: #1d4ed8;
+  --vp-c-brand-3: #38bdf8;
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #0f172a 10%, #1d4ed8 60%, #38bdf8 100%);
+}
+
+.dark {
+  --vp-c-brand-1: #93c5fd;
+  --vp-c-brand-2: #60a5fa;
+  --vp-c-brand-3: #38bdf8;
+}
+
+.VPHome {
+  background:
+    radial-gradient(90rem 40rem at 90% -10%, rgba(56, 189, 248, 0.14), transparent 65%),
+    radial-gradient(70rem 30rem at -10% -20%, rgba(29, 78, 216, 0.16), transparent 55%);
+}
+
+.VPHomeHero .name,
+.VPHero .name {
+  letter-spacing: -0.02em;
+}
+
+.VPHomeHero .text,
+.VPHero .text {
+  max-width: 38rem;
+}
+
+.VPFeature {
+  border: 1px solid rgba(2, 6, 23, 0.08);
+  border-radius: 16px;
+}
+
+.dark .VPFeature {
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+.aionis-lab-card {
+  margin: 1.25rem 0;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.85) 0%, rgba(241, 245, 249, 0.85) 100%);
+  padding: 1rem;
+}
+
+.dark .aionis-lab-card {
+  border-color: rgba(148, 163, 184, 0.3);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.55) 0%, rgba(2, 6, 23, 0.65) 100%);
+}
+
+.aionis-lab-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.aionis-lab-header p {
+  margin: 0.35rem 0 0;
+  opacity: 0.78;
+}
+
+.aionis-lab-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.aionis-lab-grid label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
+
+.aionis-lab-grid input[type="number"],
+.aionis-lab-grid input[type="text"] {
+  width: 100%;
+}
+
+.aionis-metrics-grid {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.aionis-metrics-grid article {
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 0.65rem 0.8rem;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.dark .aionis-metrics-grid article {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.aionis-metrics-grid span {
+  display: block;
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+.aionis-metrics-grid strong {
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.aionis-profile-tabs {
+  margin-top: 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.aionis-profile-tabs button {
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0.35rem 0.72rem;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.aionis-profile-tabs button.active {
+  color: #ffffff;
+  background: linear-gradient(120deg, #0f172a, #1d4ed8);
+  border-color: transparent;
+}
+
+.dark .aionis-profile-tabs button {
+  background: rgba(15, 23, 42, 0.65);
+  color: #dbeafe;
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.aionis-lab-note {
+  margin: 0.8rem 0 0;
+  font-size: 0.86rem;
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+  .aionis-lab-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .aionis-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}

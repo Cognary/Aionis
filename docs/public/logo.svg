@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="aionisLogoGradient" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A" />
+      <stop offset="0.55" stop-color="#1D4ED8" />
+      <stop offset="1" stop-color="#38BDF8" />
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="24" fill="url(#aionisLogoGradient)" />
+  <path
+    d="M64 30 30 98h18.5l7.1-15.3h16.8L79.5 98H98L64 30Zm-1.2 30.2 6.2 13.4H56.6l6.2-13.4Z"
+    fill="#F8FAFC"
+  />
+</svg>
