@@ -98,6 +98,7 @@ Profiles:
 - `min_edge_confidence?: number` (default from recall profile, max 1) stage-2 edge fetch filter
 - `context_token_budget?: number` (optional; compacts `context.text` toward token budget using conservative estimation, keeps `items/citations` intact)
 - `context_char_budget?: number` (optional; direct char budget override for `context.text`; takes precedence over token budget)
+- `context_compaction_profile?: "balanced"|"aggressive"` (optional; section-level compaction preset, default `balanced`)
 - `include_meta?: boolean` (default false)
 - `include_slots?: boolean` (default false)
 - `include_slots_preview?: boolean` (default false)
@@ -117,7 +118,7 @@ Profiles:
 - `subgraph: { nodes: NodeDTO[], edges: EdgeDTO[] }`
 - `context: { text: string, items: any[], citations: any[] }`
 - `rules?: { scope, considered, matched, skipped_invalid_then, invalid_then_sample, applied }` (only when `rules_context` is provided)
-- `debug?: { neighborhood_counts: { nodes:number, edges:number }, embeddings?: DebugEmbeddingDTO[] }` (only when `return_debug=true`)
+- `debug?: { neighborhood_counts: { nodes:number, edges:number }, embeddings?: DebugEmbeddingDTO[], context_compaction?: { profile, token_budget, char_budget, applied, before_chars, after_chars, before_est_tokens, after_est_tokens, dropped_lines, dropped_by_section } }` (only when `return_debug=true`)
 
 **NodeDTO (whitelist)**
 - Always: `id`, `type`, `title`, `text_summary`
@@ -190,6 +191,9 @@ Debug embeddings are the most likely “silent data export” channel. The serve
 - In compression mode, events already cited by selected compression summaries are excluded from context event listing to avoid duplicate token spend.
 - Compression summaries must remain evidence-backed through citations and graph edges (`derived_from`).
 - When `context_token_budget` or `context_char_budget` is set, Aionis compacts `context.text` by dropping lower-priority detail lines first (evidence fanout and verbose rule lines), while preserving structured `context.items` and `context.citations`.
+- `context_compaction_profile` presets:
+  - `balanced`: keeps richer rule/event details when budget allows.
+  - `aggressive`: trims event fanout and verbose rule JSON earlier, preserving topic/concept and rule summary lines first.
 
 ---
 

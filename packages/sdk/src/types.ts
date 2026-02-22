@@ -144,6 +144,7 @@ export type MemoryRecallInput = {
   min_edge_confidence?: number;
   context_token_budget?: number;
   context_char_budget?: number;
+  context_compaction_profile?: "balanced" | "aggressive";
   rules_context?: unknown;
   rules_include_shadow?: boolean;
   rules_limit?: number;

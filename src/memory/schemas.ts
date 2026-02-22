@@ -105,6 +105,8 @@ export const MemoryRecallRequest = z.object({
   // Optional context compaction budgets (for context.text only).
   context_token_budget: z.number().int().positive().max(256000).optional(),
   context_char_budget: z.number().int().positive().max(1000000).optional(),
+  // Optional context compaction policy preset.
+  context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
   // Optional: evaluate SHADOW/ACTIVE rules alongside recall to produce an applied policy patch for the planner.
   // Use the normalized "Planner Context" shape (see docs/PLANNER_CONTEXT.md).
   rules_context: z.any().optional(),
@@ -138,6 +140,8 @@ export const MemoryRecallTextRequest = z.object({
   // Optional context compaction budgets (for context.text only).
   context_token_budget: z.number().int().positive().max(256000).optional(),
   context_char_budget: z.number().int().positive().max(1000000).optional(),
+  // Optional context compaction policy preset.
+  context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
   // Optional: same as MemoryRecallRequest.rules_* but for recall_text.
   rules_context: z.any().optional(),
   rules_include_shadow: z.boolean().optional().default(false),

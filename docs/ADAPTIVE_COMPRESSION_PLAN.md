@@ -52,7 +52,7 @@ Secondary:
 
 ## Phase 1 (Now): Budget-Driven Context Compaction
 
-Status: `in_progress`
+Status: `completed`
 
 Deliverables:
 
@@ -73,7 +73,7 @@ Acceptance:
 
 ## Phase 2: Multi-Level Compression Strategy
 
-Status: `pending`
+Status: `completed`
 
 Deliverables:
 

@@ -102,8 +102,8 @@ This updates only the managed throughput block in `.env` and keeps existing secr
 ```bash
 curl -sS localhost:${PORT:-3001}/v1/memory/recall_text \
   -H 'content-type: application/json' \
-  -d '{"query_text":"release policy","context_token_budget":600}' \
-| jq '{context_chars:(.context.text|length), items:(.context.items|length), citations:(.context.citations|length)}'
+  -d '{"query_text":"release policy","context_token_budget":600,"context_compaction_profile":"aggressive","return_debug":true}' \
+| jq '{context_chars:(.context.text|length), items:(.context.items|length), citations:(.context.citations|length), compaction:.debug.context_compaction}'
 ```
 
 ## Weekly
