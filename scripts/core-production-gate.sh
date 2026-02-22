@@ -430,6 +430,7 @@ if [[ "${RUN_PERF}" == "true" ]]; then
       --timeout-ms "${PERF_TIMEOUT_MS}" \
       --pace-ms "${PERF_PACE_MS}" \
       --compression-check "${PERF_COMPRESSION_CHECK}" \
+      --compression-pair-gate-mode "${COMPRESSION_GATE_MODE}" \
       --compression-samples "${PERF_COMPRESSION_SAMPLES}" \
       --compression-token-budget "${PERF_COMPRESSION_TOKEN_BUDGET}" \
       --compression-profile "${PERF_COMPRESSION_PROFILE}" \

@@ -182,6 +182,9 @@ async function main() {
   const embedOnWrite = (argValue("--embed-on-write") ?? "false").trim().toLowerCase() === "true";
   const compressionCheckRaw = (argValue("--compression-check") ?? (mode === "compression" ? "true" : "false")).trim().toLowerCase();
   const compressionCheck = compressionCheckRaw === "true";
+  const compressionPairGateModeRaw = (argValue("--compression-pair-gate-mode") ?? "blocking").trim().toLowerCase();
+  const compressionPairGateMode: "blocking" | "non_blocking" =
+    compressionPairGateModeRaw === "non_blocking" ? "non_blocking" : "blocking";
   const compressionSamples = clampInt(Number(argValue("--compression-samples") ?? "20"), 1, 2000);
   const compressionTokenBudget = clampInt(Number(argValue("--compression-token-budget") ?? "600"), 64, 256000);
   const compressionProfileRaw = (argValue("--compression-profile") ?? "aggressive").trim().toLowerCase();
@@ -414,7 +417,8 @@ async function main() {
             transport_error_rate: c.transport_error_rate,
           }));
   const compressionPairGate = compression ? compression.ok_pairs > 0 : true;
-  const runOk = transportFailCases.length === 0 && compressionPairGate;
+  const compressionPairGateEnforced = compressionPairGateMode === "blocking";
+  const runOk = transportFailCases.length === 0 && (!compressionPairGateEnforced || compressionPairGate);
 
   // eslint-disable-next-line no-console
   console.log(
@@ -437,6 +441,7 @@ async function main() {
           fail_on_transport_error_rate: failTransportRate,
           embed_on_write: embedOnWrite,
           compression_check: compressionCheck || mode === "compression",
+          compression_pair_gate_mode: compressionPairGateMode,
           compression_samples: compressionSamples,
           compression_token_budget: compressionTokenBudget,
           compression_profile: compressionProfile,
@@ -449,6 +454,8 @@ async function main() {
           },
           compression_pair_gate: {
             enabled: compression !== null,
+            mode: compressionPairGateMode,
+            enforced: compressionPairGateEnforced,
             min_ok_pairs: 1,
             ok_pairs: compression?.ok_pairs ?? 0,
             pass: compressionPairGate,

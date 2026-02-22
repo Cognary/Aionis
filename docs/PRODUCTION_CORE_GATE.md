@@ -68,6 +68,7 @@ Control knobs:
 - `--compression-items-retain-min <0..1>`
 - `--compression-citations-retain-min <0..1>`
 - `--perf-compression-check true|false`
+- `--compression-pair-gate-mode non_blocking|blocking` (normally follows `--compression-gate-mode`)
 - `--perf-compression-samples <n>`
 - `--perf-compression-token-budget <n>`
 - `--perf-compression-profile balanced|aggressive`
