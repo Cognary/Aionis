@@ -12,6 +12,7 @@ Blocking metrics:
 1. Integrity: scope health gate (`strict_warnings`) + cross-tenant consistency (`strict_warnings`)
 2. Operability: build/contract/docs/sdk release checks
 3. Availability and SLO: recall/write perf benchmark thresholds
+4. Compression KPI (optional blocking): context compression ratio + retain metrics
 
 Auxiliary only (non-blocking):
 1. LongMemEval
@@ -28,7 +29,11 @@ npm run -s gate:core:prod -- \
   --run-perf true \
   --recall-p95-max-ms 1200 \
   --write-p95-max-ms 800 \
-  --error-rate-max 0.02
+  --error-rate-max 0.02 \
+  --compression-gate-mode non_blocking \
+  --compression-ratio-min 0.40 \
+  --compression-items-retain-min 0.95 \
+  --compression-citations-retain-min 0.95
 ```
 
 `--db-runner` notes:
@@ -42,6 +47,30 @@ Artifacts:
 - `artifacts/core_gate/<run_id>/06_health_gate_scope.json`
 - `artifacts/core_gate/<run_id>/07_consistency_cross_tenant.json`
 - `artifacts/core_gate/<run_id>/08_perf_benchmark.json`
+
+## Compression KPI Gate
+
+Compression KPI is collected via `job:perf-benchmark` and surfaced in `summary.json`:
+
+- `blocking_metrics.compression_kpi.thresholds`
+- `blocking_metrics.compression_kpi.observed`
+- `blocking_metrics.compression_kpi.pass`
+
+Modes:
+
+1. `non_blocking` (default): threshold breaches are added to `warn_reasons`, gate can still pass.
+2. `blocking`: threshold breaches are added to `fail_reasons`, gate fails.
+
+Control knobs:
+
+- `--compression-gate-mode non_blocking|blocking`
+- `--compression-ratio-min <0..1>`
+- `--compression-items-retain-min <0..1>`
+- `--compression-citations-retain-min <0..1>`
+- `--perf-compression-check true|false`
+- `--perf-compression-samples <n>`
+- `--perf-compression-token-budget <n>`
+- `--perf-compression-profile balanced|aggressive`
 
 ## CI workflow
 

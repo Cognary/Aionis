@@ -84,6 +84,9 @@ Output fields:
 - `cases[].rps`
 - `cases[].failed`
 - `cases[].by_status`
+- `compression.summary.compression_ratio.mean` (when `--compression-check=true`)
+- `compression.summary.items_retain_ratio.mean`
+- `compression.summary.citations_retain_ratio.mean`
 
 One-command matrix (seed + bench + explain + report):
 
@@ -126,6 +129,9 @@ PERF_PROFILE=write_slo SCALES=100000 npm run perf:phase-d-matrix
 
 # 3) Worker SLO (auto build embed backlog before worker benchmark)
 PERF_PROFILE=worker_slo SCALES=100000 npm run perf:phase-d-matrix
+
+# 4) Compression SLO (focus on compaction KPI, non-blocking by default in core gate)
+PERF_PROFILE=compression_slo SCALES=100000 npm run perf:phase-d-matrix
 ```
 
 Artifacts default path:
@@ -139,6 +145,7 @@ Profile behavior summary:
 - `recall_slo`: benchmark mode `recall`, tuned concurrency + adaptive pacing (`429`-aware) for recall stability checks; skips explain/worker benchmark unless overridden.
 - `write_slo`: benchmark mode `write`, conservative write concurrency + adaptive pacing to reduce `429` distortion; skips explain/worker benchmark unless overridden.
 - `worker_slo`: lightweight recall benchmark + extra write pass with `embed_on_write=true` to create outbox backlog before worker throughput measurement.
+- `compression_slo`: recall benchmark with compression KPI sampling (`--compression-check=true`) for token-budget compaction quality tracking.
 
 ## 5) Worker Throughput Benchmark
 

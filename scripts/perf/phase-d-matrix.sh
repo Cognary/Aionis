@@ -42,6 +42,11 @@ WORKER_BACKLOG_WRITES="${WORKER_BACKLOG_WRITES:-}"
 WORKER_BACKLOG_CONCURRENCY="${WORKER_BACKLOG_CONCURRENCY:-}"
 BENCH_PACE_MS="${BENCH_PACE_MS:-0}"
 BENCH_FAIL_ON_TRANSPORT_ERROR_RATE="${BENCH_FAIL_ON_TRANSPORT_ERROR_RATE:-}"
+COMPRESSION_CHECK="${COMPRESSION_CHECK:-}"
+COMPRESSION_SAMPLES="${COMPRESSION_SAMPLES:-}"
+COMPRESSION_TOKEN_BUDGET="${COMPRESSION_TOKEN_BUDGET:-}"
+COMPRESSION_PROFILE="${COMPRESSION_PROFILE:-}"
+COMPRESSION_QUERY_TEXT="${COMPRESSION_QUERY_TEXT:-}"
 AUTO_ADAPT_RATE_LIMIT="${AUTO_ADAPT_RATE_LIMIT:-}"
 MAX_RATE_LIMIT_RETRIES="${MAX_RATE_LIMIT_RETRIES:-4}"
 PACE_STEP_MS="${PACE_STEP_MS:-25}"
@@ -91,8 +96,23 @@ case "${PERF_PROFILE}" in
     WORKER_BACKLOG_CONCURRENCY="${WORKER_BACKLOG_CONCURRENCY:-1}"
     EMBED_ON_WRITE="${EMBED_ON_WRITE:-false}"
     ;;
+  compression_slo)
+    BENCH_MODE="${BENCH_MODE:-recall}"
+    RECALL_REQUESTS="${RECALL_REQUESTS:-220}"
+    RECALL_CONCURRENCY="${RECALL_CONCURRENCY:-6}"
+    WRITE_REQUESTS="${WRITE_REQUESTS:-20}"
+    WRITE_CONCURRENCY="${WRITE_CONCURRENCY:-1}"
+    BENCH_PACE_MS="${BENCH_PACE_MS:-40}"
+    MAX_RATE_LIMIT_RETRIES="${MAX_RATE_LIMIT_RETRIES:-10}"
+    RUN_EXPLAIN="${RUN_EXPLAIN:-false}"
+    RUN_WORKER_BENCHMARK="${RUN_WORKER_BENCHMARK:-false}"
+    COMPRESSION_CHECK="${COMPRESSION_CHECK:-true}"
+    COMPRESSION_SAMPLES="${COMPRESSION_SAMPLES:-40}"
+    COMPRESSION_TOKEN_BUDGET="${COMPRESSION_TOKEN_BUDGET:-600}"
+    COMPRESSION_PROFILE="${COMPRESSION_PROFILE:-aggressive}"
+    ;;
   *)
-    echo "invalid PERF_PROFILE: ${PERF_PROFILE}. expected: balanced|recall_slo|write_slo|worker_slo" >&2
+    echo "invalid PERF_PROFILE: ${PERF_PROFILE}. expected: balanced|recall_slo|write_slo|worker_slo|compression_slo" >&2
     exit 1
     ;;
 esac
@@ -109,6 +129,11 @@ RUN_WORKER_BENCHMARK="${RUN_WORKER_BENCHMARK:-true}"
 WORKER_ITERATIONS="${WORKER_ITERATIONS:-8}"
 WORKER_BACKLOG_WRITES="${WORKER_BACKLOG_WRITES:-120}"
 WORKER_BACKLOG_CONCURRENCY="${WORKER_BACKLOG_CONCURRENCY:-1}"
+COMPRESSION_CHECK="${COMPRESSION_CHECK:-false}"
+COMPRESSION_SAMPLES="${COMPRESSION_SAMPLES:-20}"
+COMPRESSION_TOKEN_BUDGET="${COMPRESSION_TOKEN_BUDGET:-600}"
+COMPRESSION_PROFILE="${COMPRESSION_PROFILE:-aggressive}"
+COMPRESSION_QUERY_TEXT="${COMPRESSION_QUERY_TEXT:-memory graph perf compression}"
 
 if [[ -z "${AUTO_ADAPT_RATE_LIMIT}" ]]; then
   if [[ "${PERF_PROFILE}" == "recall_slo" || "${PERF_PROFILE}" == "write_slo" ]]; then
@@ -132,6 +157,7 @@ echo "[phase-d] benchmark mode: ${BENCH_MODE}"
 echo "[phase-d] scope strategy: ${SCOPE_STRATEGY} (reset mode: ${RESET_MODE})"
 echo "[phase-d] reset impl: ${RESET_IMPL} (purge mode: ${RESET_PURGE_MODE}, allow fallback delete: ${RESET_PURGE_ALLOW_FALLBACK_DELETE}, fail on delete: ${RESET_PURGE_FAIL_ON_DELETE})"
 echo "[phase-d] rate-limit adapt: ${AUTO_ADAPT_RATE_LIMIT} (max retries: ${MAX_RATE_LIMIT_RETRIES}, pace ms: ${BENCH_PACE_MS})"
+echo "[phase-d] compression check: ${COMPRESSION_CHECK} (samples: ${COMPRESSION_SAMPLES}, token budget: ${COMPRESSION_TOKEN_BUDGET}, profile: ${COMPRESSION_PROFILE})"
 if [[ -n "${BENCH_FAIL_ON_TRANSPORT_ERROR_RATE}" ]]; then
   echo "[phase-d] transport error gate threshold: ${BENCH_FAIL_ON_TRANSPORT_ERROR_RATE}"
 fi
@@ -254,6 +280,11 @@ for scale in $(echo "${SCALES}" | tr ',' ' '); do
       --write-concurrency "${bench_write_concurrency}"
       --pace-ms "${bench_pace_ms}"
       --embed-on-write "${EMBED_ON_WRITE}"
+      --compression-check "${COMPRESSION_CHECK}"
+      --compression-samples "${COMPRESSION_SAMPLES}"
+      --compression-token-budget "${COMPRESSION_TOKEN_BUDGET}"
+      --compression-profile "${COMPRESSION_PROFILE}"
+      --compression-query-text "${COMPRESSION_QUERY_TEXT}"
     )
     if [[ -n "${BENCH_FAIL_ON_TRANSPORT_ERROR_RATE}" ]]; then
       bench_cmd+=(--fail-on-transport-error-rate "${BENCH_FAIL_ON_TRANSPORT_ERROR_RATE}")
