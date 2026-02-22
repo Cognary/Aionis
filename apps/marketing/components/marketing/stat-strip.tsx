@@ -2,7 +2,7 @@ import { statHighlights } from "@/lib/site";
 
 export function StatStrip() {
   return (
-    <section className="section" style={{ paddingTop: 16 }}>
+    <section className="section">
       <div className="container stat-strip">
         {statHighlights.map((item) => (
           <article key={item.label} className="stat-item">

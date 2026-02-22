@@ -32,7 +32,7 @@ export default function HomePage() {
             <pre className="code-block">{`git clone https://github.com/Cognary/Aionis
 cd Aionis
 make quickstart`}</pre>
-            <div className="hero-cta" style={{ marginTop: 14 }}>
+            <div className="hero-cta" style={{ marginTop: 24 }}>
               <Link className="btn btn-ghost" href="/playground" data-analytics-event={analyticsEvents.CTA_OPEN_PLAYGROUND_CLICK}>
                 Open Playground
               </Link>
@@ -66,7 +66,7 @@ make quickstart`}</pre>
                 </tr>
               </tbody>
             </table>
-            <div className="hero-cta" style={{ marginTop: 18 }}>
+            <div className="hero-cta" style={{ marginTop: 32 }}>
               <Link className="btn btn-solid" href="/product/personal" data-analytics-event={analyticsEvents.CTA_START_OSS_CLICK}>
                 Start OSS
               </Link>
