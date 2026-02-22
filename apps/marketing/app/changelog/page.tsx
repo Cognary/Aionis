@@ -75,7 +75,7 @@ export default function ChangelogPage() {
               <h3>Docker (GHCR)</h3>
               <ul className="list">
                 <li>{registries.dockerImage}</li>
-                <li>Tag: {registries.dockerTag}, latest</li>
+                <li>Tags: {registries.dockerTag} (default), latest (floating)</li>
                 <li>
                   <a href={registries.dockerUrl} target="_blank" rel="noreferrer">
                     Open image

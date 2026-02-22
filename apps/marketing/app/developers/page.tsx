@@ -82,11 +82,13 @@ export default function DevelopersPage() {
           <pre className="code-block">{`npm i ${registries.npmPackage}@${registries.npmVersion}
 pip install ${registries.pypiPackage}==${registries.pypiVersion}
 
-curl -sS http://localhost:3001/v1/memory/write \\
+BASE_URL="http://localhost:\${PORT:-3001}"
+
+curl -sS "$BASE_URL/v1/memory/write" \\
   -H 'content-type: application/json' \\
   -d '{"input_text":"quickstart","nodes":[{"client_id":"evt_1","type":"event","text_summary":"hello"}]}'
 
-curl -sS http://localhost:3001/v1/memory/recall_text \\
+curl -sS "$BASE_URL/v1/memory/recall_text" \\
   -H 'content-type: application/json' \\
   -d '{"query_text":"hello","limit":5}'`}</pre>
         </section>

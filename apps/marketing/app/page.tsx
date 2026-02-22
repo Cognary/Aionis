@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CtaBand } from "@/components/marketing/cta-band";
 import { FeatureGrid } from "@/components/marketing/feature-grid";
 import { Hero } from "@/components/marketing/hero";
+import { KernelInteractiveLab } from "@/components/marketing/kernel-interactive-lab";
 import { SectionLead } from "@/components/marketing/section-lead";
 import { StatStrip } from "@/components/marketing/stat-strip";
 import { analyticsEvents } from "@/lib/analytics";
@@ -145,6 +146,8 @@ make quickstart`}</pre>
           </div>
         </div>
       </section>
+
+      <KernelInteractiveLab />
 
       <section className="section">
         <div className="container">

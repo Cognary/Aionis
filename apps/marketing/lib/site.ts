@@ -7,13 +7,13 @@ export const siteConfig = {
   repoUrl: "https://github.com/Cognary/Aionis",
   registries: {
     npmPackage: "@aionis/sdk",
-    npmVersion: process.env.NEXT_PUBLIC_AIONIS_NPM_VERSION ?? "0.1.0",
+    npmVersion: process.env.NEXT_PUBLIC_AIONIS_NPM_VERSION ?? "0.1.4",
     npmUrl: "https://www.npmjs.com/package/@aionis/sdk",
     pypiPackage: "aionis-sdk",
-    pypiVersion: process.env.NEXT_PUBLIC_AIONIS_PYPI_VERSION ?? "0.1.0",
+    pypiVersion: process.env.NEXT_PUBLIC_AIONIS_PYPI_VERSION ?? "0.1.4",
     pypiUrl: "https://pypi.org/project/aionis-sdk/",
     dockerImage: process.env.NEXT_PUBLIC_AIONIS_DOCKER_IMAGE ?? "ghcr.io/cognary/aionis",
-    dockerTag: process.env.NEXT_PUBLIC_AIONIS_DOCKER_TAG ?? "v0.1.4",
+    dockerTag: process.env.NEXT_PUBLIC_AIONIS_DOCKER_TAG ?? "latest",
     dockerUrl: process.env.NEXT_PUBLIC_AIONIS_DOCKER_URL ?? "https://github.com/orgs/cognary/packages/container/package/aionis",
   },
 };

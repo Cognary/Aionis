@@ -6,10 +6,10 @@ type Props = {
 
 export function SectionLead({ eyebrow, title, copy }: Props) {
   return (
-    <div>
+    <div className="section-lead">
       {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
       <h2>{title}</h2>
-      {copy ? <p className="hero-copy">{copy}</p> : null}
+      {copy ? <p className="section-copy">{copy}</p> : null}
     </div>
   );
 }

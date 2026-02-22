@@ -81,7 +81,7 @@ curl -sS "$BASE_URL/v1/memory/recall_text" \
 TypeScript:
 
 ```bash
-npm i @aionis/sdk@0.1.0
+npm i @aionis/sdk@0.1.4
 ```
 
 ```ts
@@ -114,7 +114,7 @@ try {
 Python:
 
 ```bash
-pip install aionis-sdk==0.1.0
+pip install aionis-sdk==0.1.4
 ```
 
 ```python
