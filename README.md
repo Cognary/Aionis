@@ -162,6 +162,15 @@ Full contract:
 3. Docker image: `ghcr.io/cognary/aionis:latest`
 4. Docker standalone image: `ghcr.io/cognary/aionis:standalone-latest`
 
+## Current Release Baseline
+
+1. Core (GitHub release tag): `v0.1.2`
+2. TypeScript SDK (npm): `0.1.4`
+3. Python SDK (PyPI): `0.1.4`
+4. Docker main image tag line: `docker-v0.1.2` (publishes image tag `0.1.2`)
+5. Docker standalone image tag line: `standalone-v0.1.8`
+6. Docs site: `https://doc.aionisos.com/`
+
 Release docs:
 
 - [SDK Guide](docs/SDK.md)

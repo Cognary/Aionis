@@ -71,3 +71,10 @@ npm run docs:check
 - VitePress config: `/Users/lucio/Desktop/Aionis/docs/.vitepress/config.ts`
 - Theme override: `/Users/lucio/Desktop/Aionis/docs/.vitepress/theme/custom.css`
 - URL: `https://doc.aionisos.com/`
+
+## Public Release Baseline
+
+1. Core release tag: `v0.1.2`
+2. npm SDK: `0.1.4`
+3. PyPI SDK: `0.1.4`
+4. Docker line: `0.1.2` (main), `standalone-v0.1.8` (standalone)
