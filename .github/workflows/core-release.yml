@@ -1,0 +1,115 @@
+name: Core Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "CHANGELOG.md"
+      - ".github/workflows/core-release.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Core release tag (e.g. v0.1.2). Leave empty to use latest v* tag."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: meta
+        shell: bash
+        env:
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG}"
+          if [[ -z "${tag}" ]]; then
+            tag="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+          fi
+          if [[ -z "${tag}" ]]; then
+            echo "no core tag found (expected v*)." >&2
+            exit 1
+          fi
+          if [[ ! "${tag}" =~ ^v[0-9] ]]; then
+            echo "invalid core tag: ${tag} (expected vX.Y.Z)." >&2
+            exit 1
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release body from changelog
+        id: body
+        shell: bash
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          body_path="$(mktemp)"
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { capture=1; next }
+            capture && $0 ~ "^## \\[" { exit }
+            capture { print }
+          ' CHANGELOG.md > "$body_path"
+
+          if [[ ! -s "$body_path" ]]; then
+            {
+              echo "Core release ${TAG}"
+              echo
+              echo "No changelog section found for ${version} in CHANGELOG.md."
+            } > "$body_path"
+          fi
+
+          echo "body_path=${body_path}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub release
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          BODY_PATH: ${{ steps.body.outputs.body_path }}
+        with:
+          script: |
+            const fs = require("fs");
+            const tag = process.env.TAG;
+            const bodyPath = process.env.BODY_PATH;
+            const body = fs.readFileSync(bodyPath, "utf8").trim();
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const releaseName = `Aionis Core ${tag}`;
+
+            try {
+              const existing = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: existing.data.id,
+                tag_name: tag,
+                name: releaseName,
+                body,
+                draft: false,
+                prerelease: false
+              });
+              core.info(`updated existing release for ${tag}`);
+            } catch (err) {
+              if (err.status !== 404) throw err;
+              await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tag,
+                name: releaseName,
+                body,
+                draft: false,
+                prerelease: false
+              });
+              core.info(`created release for ${tag}`);
+            }
