@@ -77,6 +77,18 @@ Default recall knobs are profile-driven:
   - `MEMORY_RECALL_ADAPTIVE_WAIT_MS=<threshold>`
   - `MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE=<profile>`
   - adaptive downgrade only applies when request did **not** explicitly pin recall knobs
+- optional adaptive hard-cap on sustained queue pressure:
+  - `MEMORY_RECALL_ADAPTIVE_HARD_CAP_ENABLED=true`
+  - `MEMORY_RECALL_ADAPTIVE_HARD_CAP_WAIT_MS=<threshold>`
+  - hard-cap budgets:
+    - `MEMORY_RECALL_ADAPTIVE_HARD_CAP_LIMIT`
+    - `MEMORY_RECALL_ADAPTIVE_HARD_CAP_NEIGHBORHOOD_HOPS`
+    - `MEMORY_RECALL_ADAPTIVE_HARD_CAP_MAX_NODES`
+    - `MEMORY_RECALL_ADAPTIVE_HARD_CAP_MAX_EDGES`
+    - `MEMORY_RECALL_ADAPTIVE_HARD_CAP_RANKED_LIMIT`
+    - `MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_WEIGHT`
+    - `MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_CONFIDENCE`
+  - hard-cap also applies only when request did **not** explicitly pin recall knobs
 
 Profiles:
 - `strict_edges` (default): `limit=24`, `hops=2`, `max_nodes=60`, `max_edges=80`, `ranked_limit=140`, `min_edge_weight=0.2`, `min_edge_confidence=0.2`
@@ -140,6 +152,7 @@ Profiles:
 ### `POST /v1/memory/recall_text`
 
 Server embeds `query_text` using the configured embedding provider, then calls the same recall pipeline as `/recall`.
+This includes the same profile policy, adaptive downgrade, and adaptive hard-cap behavior.
 
 **Request**
 - Same fields as `/recall`, except:

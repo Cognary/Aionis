@@ -100,6 +100,21 @@ const EnvSchema = z.object({
     .transform((v) => v === "true"),
   MEMORY_RECALL_ADAPTIVE_WAIT_MS: z.coerce.number().int().min(1).max(60_000).default(200),
   MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: z.enum(["legacy", "strict_edges", "quality_first"]).default("strict_edges"),
+  // Additional queue-pressure hard caps to trim recall tail latency.
+  MEMORY_RECALL_ADAPTIVE_HARD_CAP_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  MEMORY_RECALL_ADAPTIVE_HARD_CAP_WAIT_MS: z.coerce.number().int().min(1).max(60_000).default(600),
+  MEMORY_RECALL_ADAPTIVE_HARD_CAP_LIMIT: z.coerce.number().int().positive().max(200).default(16),
+  MEMORY_RECALL_ADAPTIVE_HARD_CAP_NEIGHBORHOOD_HOPS: z.coerce.number().int().min(1).max(2).default(1),
+  MEMORY_RECALL_ADAPTIVE_HARD_CAP_MAX_NODES: z.coerce.number().int().positive().max(200).default(40),
+  MEMORY_RECALL_ADAPTIVE_HARD_CAP_MAX_EDGES: z.coerce.number().int().positive().max(100).default(50),
+  MEMORY_RECALL_ADAPTIVE_HARD_CAP_RANKED_LIMIT: z.coerce.number().int().positive().max(500).default(90),
+  MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_WEIGHT: z.coerce.number().min(0).max(1).default(0.25),
+  MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.25),
   // Optional default compaction budget for recall_text context output. 0 disables.
   MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT: z.coerce.number().int().min(0).max(256000).default(0),
   PII_REDACTION: z

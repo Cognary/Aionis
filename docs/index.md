@@ -66,8 +66,9 @@ Primary references:
 
 1. [Production Core Gate](./PRODUCTION_CORE_GATE.md)
 2. [Performance Baseline](./PERFORMANCE_BASELINE.md)
-3. [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
-4. [Operator Runbook](./OPERATOR_RUNBOOK.md)
+3. [Recall Tail Latency Plan](./RECALL_TAIL_LATENCY_PLAN.md)
+4. [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
+5. [Operator Runbook](./OPERATOR_RUNBOOK.md)
 
 ## Role-Oriented Paths
 

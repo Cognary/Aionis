@@ -239,6 +239,12 @@ type RecallAdaptiveResolution = {
   reason: "disabled" | "explicit_knobs" | "wait_below_threshold" | "already_target_profile" | "queue_pressure";
 };
 
+type RecallHardCapResolution = {
+  defaults: RecallProfileDefaults;
+  applied: boolean;
+  reason: "disabled" | "explicit_knobs" | "wait_below_threshold" | "already_capped" | "queue_pressure_hard_cap";
+};
+
 const globalRecallProfileDefaults = RECALL_PROFILE_DEFAULTS[env.MEMORY_RECALL_PROFILE];
 const recallProfilePolicy = parseRecallProfilePolicy(env.MEMORY_RECALL_PROFILE_POLICY_JSON);
 
@@ -475,6 +481,43 @@ function resolveAdaptiveRecallProfile(baseProfile: RecallProfileName, gateWaitMs
   return { profile: target, defaults: RECALL_PROFILE_DEFAULTS[target], applied: true, reason: "queue_pressure" };
 }
 
+function resolveAdaptiveRecallHardCap(
+  current: RecallProfileDefaults,
+  gateWaitMs: number,
+  hasExplicitKnobs: boolean,
+): RecallHardCapResolution {
+  if (!env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_ENABLED) {
+    return { defaults: current, applied: false, reason: "disabled" };
+  }
+  if (hasExplicitKnobs) {
+    return { defaults: current, applied: false, reason: "explicit_knobs" };
+  }
+  if (gateWaitMs < env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_WAIT_MS) {
+    return { defaults: current, applied: false, reason: "wait_below_threshold" };
+  }
+  const capped: RecallProfileDefaults = {
+    limit: Math.min(current.limit, env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_LIMIT),
+    neighborhood_hops: (Math.min(current.neighborhood_hops, env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_NEIGHBORHOOD_HOPS) as 1 | 2),
+    max_nodes: Math.min(current.max_nodes, env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_MAX_NODES),
+    max_edges: Math.min(current.max_edges, env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_MAX_EDGES),
+    ranked_limit: Math.min(current.ranked_limit, env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_RANKED_LIMIT),
+    min_edge_weight: Math.max(current.min_edge_weight, env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_WEIGHT),
+    min_edge_confidence: Math.max(current.min_edge_confidence, env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_CONFIDENCE),
+  };
+  const changed =
+    capped.limit !== current.limit ||
+    capped.neighborhood_hops !== current.neighborhood_hops ||
+    capped.max_nodes !== current.max_nodes ||
+    capped.max_edges !== current.max_edges ||
+    capped.ranked_limit !== current.ranked_limit ||
+    capped.min_edge_weight !== current.min_edge_weight ||
+    capped.min_edge_confidence !== current.min_edge_confidence;
+  if (!changed) {
+    return { defaults: current, applied: false, reason: "already_capped" };
+  }
+  return { defaults: capped, applied: true, reason: "queue_pressure_hard_cap" };
+}
+
 const app = Fastify({
   logger: true,
   bodyLimit: 5 * 1024 * 1024,
@@ -519,6 +562,17 @@ app.log.info(
     memory_recall_adaptive_downgrade_enabled: env.MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED,
     memory_recall_adaptive_wait_ms: env.MEMORY_RECALL_ADAPTIVE_WAIT_MS,
     memory_recall_adaptive_target_profile: env.MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE,
+    memory_recall_adaptive_hard_cap_enabled: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_ENABLED,
+    memory_recall_adaptive_hard_cap_wait_ms: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_WAIT_MS,
+    memory_recall_adaptive_hard_cap_defaults: {
+      limit: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_LIMIT,
+      neighborhood_hops: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_NEIGHBORHOOD_HOPS,
+      max_nodes: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_MAX_NODES,
+      max_edges: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_MAX_EDGES,
+      ranked_limit: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_RANKED_LIMIT,
+      min_edge_weight: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_WEIGHT,
+      min_edge_confidence: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_CONFIDENCE,
+    },
     write_rate_limit_wait_ms: env.WRITE_RATE_LIMIT_MAX_WAIT_MS,
     tenant_write_rate_limit_wait_ms: env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS,
     recall_text_embed_rate_limit_rps: env.RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
@@ -1260,6 +1314,22 @@ app.post("/v1/memory/recall", async (req, reply) => {
   if (adaptiveProfile.applied) {
     parsed = MemoryRecallRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
   }
+  const adaptiveHardCap = resolveAdaptiveRecallHardCap(
+    {
+      limit: parsed.limit,
+      neighborhood_hops: parsed.neighborhood_hops as 1 | 2,
+      max_nodes: parsed.max_nodes,
+      max_edges: parsed.max_edges,
+      ranked_limit: parsed.ranked_limit,
+      min_edge_weight: parsed.min_edge_weight,
+      min_edge_confidence: parsed.min_edge_confidence,
+    },
+    gate.wait_ms,
+    explicitRecallKnobs,
+  );
+  if (adaptiveHardCap.applied) {
+    parsed = MemoryRecallRequest.parse({ ...(parsed as any), ...adaptiveHardCap.defaults });
+  }
   const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
   let out: any;
   try {
@@ -1328,6 +1398,9 @@ app.post("/v1/memory/recall", async (req, reply) => {
         profile_source: baseProfile.source,
         adaptive_profile_applied: adaptiveProfile.applied,
         adaptive_profile_reason: adaptiveProfile.reason,
+        adaptive_hard_cap_applied: adaptiveHardCap.applied,
+        adaptive_hard_cap_reason: adaptiveHardCap.reason,
+        adaptive_hard_cap_wait_ms: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_WAIT_MS,
         inflight_wait_ms: gate.wait_ms,
         ms,
         timings_ms: timings,
@@ -1380,6 +1453,22 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
   const adaptiveProfile = resolveAdaptiveRecallProfile(baseProfile.profile, gate.wait_ms, explicitRecallKnobs);
   if (adaptiveProfile.applied) {
     parsed = MemoryRecallTextRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
+  }
+  const adaptiveHardCap = resolveAdaptiveRecallHardCap(
+    {
+      limit: parsed.limit,
+      neighborhood_hops: parsed.neighborhood_hops as 1 | 2,
+      max_nodes: parsed.max_nodes,
+      max_edges: parsed.max_edges,
+      ranked_limit: parsed.ranked_limit,
+      min_edge_weight: parsed.min_edge_weight,
+      min_edge_confidence: parsed.min_edge_confidence,
+    },
+    gate.wait_ms,
+    explicitRecallKnobs,
+  );
+  if (adaptiveHardCap.applied) {
+    parsed = MemoryRecallTextRequest.parse({ ...(parsed as any), ...adaptiveHardCap.defaults });
   }
   let out: any;
   try {
@@ -1512,6 +1601,9 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
         profile_source: baseProfile.source,
         adaptive_profile_applied: adaptiveProfile.applied,
         adaptive_profile_reason: adaptiveProfile.reason,
+        adaptive_hard_cap_applied: adaptiveHardCap.applied,
+        adaptive_hard_cap_reason: adaptiveHardCap.reason,
+        adaptive_hard_cap_wait_ms: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_WAIT_MS,
         inflight_wait_ms: gate.wait_ms,
         ms,
         timings_ms: timings,

@@ -61,6 +61,7 @@ export default defineConfig({
           { text: "Production Core Gate", link: "/PRODUCTION_CORE_GATE" },
           { text: "E2E Regression", link: "/E2E_REGRESSION" },
           { text: "Performance Baseline", link: "/PERFORMANCE_BASELINE" },
+          { text: "Recall Tail Latency Plan", link: "/RECALL_TAIL_LATENCY_PLAN" },
           { text: "Adaptive Compression Plan", link: "/ADAPTIVE_COMPRESSION_PLAN" },
           { text: "Governance Weekly Report", link: "/GOVERNANCE_WEEKLY_REPORT" },
           { text: "Docker Release", link: "/DOCKER_RELEASE" },
