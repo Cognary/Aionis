@@ -252,6 +252,21 @@ Use these as default SLO-style boundaries. Tune by scope once traffic stabilizes
 - Run `npm run job:quality-eval` and inspect `summary.failed` (or `failed_checks` in `job:health-gate` output).
 - Run `npm run job:salience-decay` and re-check.
 - If failure is `ready_ratio` related, inspect embedding backfill and outbox worker.
+- If `embedding_untracked_nodes` is non-zero, run controlled repair:
+
+```bash
+# safe planning first
+npm run -s ops:embedding-untracked-repair -- --scope default
+
+# explicit apply during maintenance window
+npm run -s ops:embedding-untracked-repair -- \
+  --scope default \
+  --apply \
+  --run-worker-once \
+  --worker-runs 3 \
+  --strict \
+  --max-untracked-after 0
+```
 
 2. If consistency errors appear:
 - Run `npm run job:consistency-check:scope -- --scope default` and inspect the failing check names.

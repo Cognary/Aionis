@@ -291,6 +291,37 @@ Options:
 - `--model <string>` (optional; defaults to current embedding provider name if configured)
 - `--dry-run`
 
+## Embedding Untracked Repair (Offline)
+
+Repair legacy eligible nodes that have not entered embedding pipeline yet (`embedding_untracked_nodes`).
+Default mode is read-only dry-run; use explicit apply for writes.
+
+```bash
+# planning only (safe)
+npm run job:embedding-untracked-repair -- --scope default --dry-run
+
+# apply repair in batches
+npm run job:embedding-untracked-repair -- --scope default --limit 5000 --batch-size 200
+
+# one-shot controlled flow: before/after quality snapshot + optional worker once
+npm run ops:embedding-untracked-repair -- --scope default --apply --run-worker-once --worker-runs 3 --strict
+```
+
+Options (job):
+
+- `--scope <scope>` (default: `MEMORY_SCOPE`)
+- `--limit <n>` (default: `5000`, max: `50000`)
+- `--batch-size <n>` (default: `200`, max: `2000`)
+- `--sample <n>` (default: `20`, max: `200`)
+- `--model <provider:model>` (optional; defaults to current embedding provider name if configured)
+- `--dry-run`
+
+Options (wrapper script):
+
+- `--apply` (default dry-run)
+- `--run-worker-once --worker-runs <n>` (advance embed queue after enqueue)
+- `--strict --max-untracked-after <n>` (exit `2` when final untracked count exceeds threshold)
+
 ## Private Rule Owner Backfill (Offline)
 
 Repair legacy `type=rule` rows where `memory_lane=private` but owner fields are missing.
