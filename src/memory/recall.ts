@@ -197,6 +197,7 @@ export async function memoryRecallParsed(
   auth: RecallAuth,
   telemetry?: RecallTelemetry,
   endpoint: "recall" | "recall_text" = "recall",
+  options?: { stage1_exact_fallback_on_empty?: boolean },
 ) {
   const tenancy = resolveTenantScope(
     { scope: parsed.scope, tenant_id: parsed.tenant_id },
@@ -205,6 +206,7 @@ export async function memoryRecallParsed(
   const scope = tenancy.scope_key;
   const consumerAgentId = parsed.consumer_agent_id?.trim() || null;
   const consumerTeamId = parsed.consumer_team_id?.trim() || null;
+  const stage1ExactFallbackOnEmpty = options?.stage1_exact_fallback_on_empty ?? true;
   assertDim(parsed.query_embedding, 1536);
 
   enforceHardContract(parsed, auth);
@@ -219,8 +221,11 @@ export async function memoryRecallParsed(
     }
   }
 
-  // Stage 1: pgvector candidates (excluding draft/disabled rules).
-  const stage1 = await timed("stage1_candidates", () =>
+  const oversample = Math.max(parsed.limit, Math.min(1000, parsed.limit * 5));
+  const stage1Params = [toVectorLiteral(parsed.query_embedding), scope, oversample, parsed.limit, consumerAgentId, consumerTeamId];
+
+  // Stage 1 (primary): ANN kNN candidate fetch (fast path).
+  const stage1Ann = await timed("stage1_candidates_ann", () =>
     client.query<Candidate>(
       `
       WITH knn AS (
@@ -281,14 +286,88 @@ export async function memoryRecallParsed(
       ORDER BY k.distance ASC
       LIMIT $4
       `,
-      (() => {
-        const oversample = Math.max(parsed.limit, Math.min(1000, parsed.limit * 5));
-        return [toVectorLiteral(parsed.query_embedding), scope, oversample, parsed.limit, consumerAgentId, consumerTeamId];
-      })(),
+      stage1Params,
     ),
   );
 
-  const seeds = stage1.rows;
+  let seeds = stage1Ann.rows;
+  const stage1AnnSeedCount = seeds.length;
+  const stage1ExactFallbackAttempted = stage1AnnSeedCount === 0 && stage1ExactFallbackOnEmpty;
+  let stage1Mode: "ann" | "exact_fallback" = "ann";
+
+  if (stage1ExactFallbackAttempted) {
+    const stage1Exact = await timed("stage1_candidates_exact_fallback", () =>
+      client.query<Candidate>(
+        `
+        WITH ranked AS (
+          -- Exact fallback: compute distance first and order by derived scalar distance.
+          -- This avoids ANN false-empty long-tail misses under strict filters.
+          SELECT
+            n.id,
+            n.type::text AS type,
+            n.title,
+            n.text_summary,
+            n.tier::text AS tier,
+            n.salience,
+            n.confidence,
+            ((n.embedding <=> $1::vector(1536))::double precision + 0.0) AS distance
+          FROM memory_nodes n
+          WHERE n.scope = $2
+            AND n.tier IN ('hot', 'warm')
+            AND n.embedding IS NOT NULL
+            AND n.embedding_status = 'ready'
+            AND (
+              n.memory_lane = 'shared'::memory_lane
+              OR (n.memory_lane = 'private'::memory_lane AND n.owner_agent_id = $5::text)
+              OR ($6::text IS NOT NULL AND n.memory_lane = 'private'::memory_lane AND n.owner_team_id = $6::text)
+            )
+        ),
+        knn AS (
+          SELECT *
+          FROM ranked
+          ORDER BY distance ASC
+          LIMIT $3
+        )
+        SELECT
+          k.id,
+          k.type,
+          k.title,
+          k.text_summary,
+          k.tier,
+          k.salience,
+          k.confidence,
+          1.0 - k.distance AS similarity
+        FROM knn k
+        WHERE k.type IN ('event', 'topic', 'concept', 'entity', 'rule')
+          AND (
+            k.type <> 'topic'
+            OR EXISTS (
+              SELECT 1
+              FROM memory_nodes t
+              WHERE t.id = k.id
+                AND COALESCE(t.slots->>'topic_state', 'active') = 'active'
+            )
+          )
+          AND (
+            k.type <> 'rule'
+            OR EXISTS (
+              SELECT 1
+              FROM memory_rule_defs d
+              WHERE d.scope = $2
+                AND d.rule_node_id = k.id
+                AND d.state IN ('shadow', 'active')
+            )
+          )
+        ORDER BY k.distance ASC
+        LIMIT $4
+        `,
+        stage1Params,
+      ),
+    );
+    seeds = stage1Exact.rows;
+    stage1Mode = "exact_fallback";
+  }
+
   const seedIds = seeds.map((s) => s.id);
 
   if (seedIds.length === 0) {
@@ -299,7 +378,21 @@ export async function memoryRecallParsed(
       subgraph: { nodes: [], edges: [] },
       ranked: [],
       context: { text: "", items: [], citations: [] },
-      ...(parsed.return_debug ? { debug: { neighborhood_counts: { nodes: 0, edges: 0 }, embeddings: undefined } } : {}),
+      ...(parsed.return_debug
+        ? {
+            debug: {
+              neighborhood_counts: { nodes: 0, edges: 0 },
+              embeddings: undefined,
+              stage1: {
+                mode: stage1Mode,
+                ann_seed_count: stage1AnnSeedCount,
+                final_seed_count: 0,
+                exact_fallback_enabled: stage1ExactFallbackOnEmpty,
+                exact_fallback_attempted: stage1ExactFallbackAttempted,
+              },
+            },
+          }
+        : {}),
     };
   }
 
@@ -754,6 +847,13 @@ export async function memoryRecallParsed(
             neighborhood_counts: { nodes: nodeMapAll.size, edges: edgesAll.length },
             embeddings: embedding_debug,
             context_compaction,
+            stage1: {
+              mode: stage1Mode,
+              ann_seed_count: stage1AnnSeedCount,
+              final_seed_count: seeds.length,
+              exact_fallback_enabled: stage1ExactFallbackOnEmpty,
+              exact_fallback_attempted: stage1ExactFallbackAttempted,
+            },
           },
         }
       : {}),

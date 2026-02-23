@@ -115,6 +115,13 @@ const EnvSchema = z.object({
   MEMORY_RECALL_ADAPTIVE_HARD_CAP_RANKED_LIMIT: z.coerce.number().int().positive().max(500).default(90),
   MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_WEIGHT: z.coerce.number().min(0).max(1).default(0.25),
   MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.25),
+  // Stage-1 safety net: if ANN recall returns zero seeds, run one exact KNN pass to avoid false-empty recall.
+  MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
   // Optional default compaction budget for recall_text context output. 0 disables.
   MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT: z.coerce.number().int().min(0).max(256000).default(0),
   PII_REDACTION: z

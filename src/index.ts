@@ -573,6 +573,7 @@ app.log.info(
       min_edge_weight: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_WEIGHT,
       min_edge_confidence: env.MEMORY_RECALL_ADAPTIVE_HARD_CAP_MIN_EDGE_CONFIDENCE,
     },
+    memory_recall_stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
     write_rate_limit_wait_ms: env.WRITE_RATE_LIMIT_MAX_WAIT_MS,
     tenant_write_rate_limit_wait_ms: env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS,
     recall_text_embed_rate_limit_rps: env.RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
@@ -1334,11 +1335,20 @@ app.post("/v1/memory/recall", async (req, reply) => {
   let out: any;
   try {
     out = await withClient(db, async (client) => {
-      const base = await memoryRecallParsed(client, parsed, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, auth, {
-        timing: (stage, ms) => {
-          timings[stage] = (timings[stage] ?? 0) + ms;
+      const base = await memoryRecallParsed(
+        client,
+        parsed,
+        env.MEMORY_SCOPE,
+        env.MEMORY_TENANT_ID,
+        auth,
+        {
+          timing: (stage, ms) => {
+            timings[stage] = (timings[stage] ?? 0) + ms;
+          },
         },
-      }, "recall");
+        "recall",
+        { stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY },
+      );
 
       if (parsed.rules_context !== undefined && parsed.rules_context !== null) {
         const rulesRes = await evaluateRules(
@@ -1394,6 +1404,11 @@ app.post("/v1/memory/recall", async (req, reply) => {
         context_token_budget: parsed.context_token_budget ?? null,
         context_char_budget: parsed.context_char_budget ?? null,
         context_compaction_profile: parsed.context_compaction_profile ?? "balanced",
+        stage1_exact_fallback_enabled: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
+        stage1_exact_fallback_used: Number.isFinite(timings["stage1_candidates_exact_fallback"]),
+        stage1_ann_seed_count: (out as any).debug?.stage1?.ann_seed_count ?? null,
+        stage1_ann_ms: timings["stage1_candidates_ann"] ?? null,
+        stage1_exact_fallback_ms: timings["stage1_candidates_exact_fallback"] ?? null,
         profile: adaptiveProfile.profile,
         profile_source: baseProfile.source,
         adaptive_profile_applied: adaptiveProfile.applied,
@@ -1529,11 +1544,20 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
     const wantDebugEmbeddings = recallParsed.return_debug && recallParsed.include_embeddings;
     const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
     out = await withClient(db, async (client) => {
-      const base = await memoryRecallParsed(client, recallParsed, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, auth, {
-        timing: (stage, ms) => {
-          timings[stage] = (timings[stage] ?? 0) + ms;
+      const base = await memoryRecallParsed(
+        client,
+        recallParsed,
+        env.MEMORY_SCOPE,
+        env.MEMORY_TENANT_ID,
+        auth,
+        {
+          timing: (stage, ms) => {
+            timings[stage] = (timings[stage] ?? 0) + ms;
+          },
         },
-      }, "recall_text");
+        "recall_text",
+        { stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY },
+      );
 
       if (recallParsed.rules_context !== undefined && recallParsed.rules_context !== null) {
         const rulesRes = await evaluateRules(
@@ -1597,6 +1621,11 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
         context_char_budget: recallParsed.context_char_budget ?? null,
         context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
         context_budget_default_applied: contextBudgetDefaultApplied,
+        stage1_exact_fallback_enabled: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
+        stage1_exact_fallback_used: Number.isFinite(timings["stage1_candidates_exact_fallback"]),
+        stage1_ann_seed_count: (out as any).debug?.stage1?.ann_seed_count ?? null,
+        stage1_ann_ms: timings["stage1_candidates_ann"] ?? null,
+        stage1_exact_fallback_ms: timings["stage1_candidates_exact_fallback"] ?? null,
         profile: adaptiveProfile.profile,
         profile_source: baseProfile.source,
         adaptive_profile_applied: adaptiveProfile.applied,
