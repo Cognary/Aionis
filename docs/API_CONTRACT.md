@@ -309,6 +309,7 @@ Optional by flags:
 - same meta-family fields as other node DTOs when `include_meta=true`
 
 Lane visibility policy matches `find/recall`: shared always visible; private events require owner match via `consumer_agent_id`/`consumer_team_id`.
+Session envelope visibility follows the same rule; if the session topic is not visible, response returns `session=null` and `events=[]`.
 
 ### `POST /v1/memory/packs/export`
 

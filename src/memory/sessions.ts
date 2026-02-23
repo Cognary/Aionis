@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type pg from "pg";
 import type { EmbeddingProvider } from "../embeddings/types.js";
+import { HttpError } from "../util/http.js";
 import {
   MemoryEventWriteRequest,
   MemorySessionCreateRequest,
@@ -55,6 +56,15 @@ type EventRow = {
   edge_confidence: number;
 };
 
+type SessionRow = {
+  id: string;
+  title: string | null;
+  text_summary: string | null;
+  memory_lane: "private" | "shared";
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
+};
+
 function sessionKey(v: string): string {
   return encodeURIComponent(v.trim());
 }
@@ -86,6 +96,30 @@ function normalizeEventWriteInput(body: unknown): MemoryEventWriteInput {
 
 function normalizeSessionEventsListInput(input: unknown): MemorySessionEventsListInput {
   return MemorySessionEventsListRequest.parse(input);
+}
+
+function normalizedIdentity(input: { owner_agent_id?: string; owner_team_id?: string; producer_agent_id?: string }) {
+  const ownerAgentId = input.owner_agent_id?.trim() || null;
+  const ownerTeamId = input.owner_team_id?.trim() || null;
+  const producerAgentId = input.producer_agent_id?.trim() || null;
+  return {
+    owner_agent_id: ownerAgentId,
+    owner_team_id: ownerTeamId,
+    producer_agent_id: producerAgentId,
+    writer_agent_id: ownerAgentId ?? producerAgentId,
+  };
+}
+
+function assertSessionWriteAllowed(
+  session: SessionRow,
+  writer: { writer_agent_id: string | null; owner_team_id: string | null },
+): void {
+  if (session.memory_lane === "shared") return;
+  const agentMatch =
+    !!session.owner_agent_id && !!writer.writer_agent_id && session.owner_agent_id === writer.writer_agent_id;
+  const teamMatch = !!session.owner_team_id && !!writer.owner_team_id && session.owner_team_id === writer.owner_team_id;
+  if (agentMatch || teamMatch) return;
+  throw new HttpError(403, "session_owner_mismatch", "cannot append events to a private session owned by another principal");
 }
 
 export async function createSession(client: pg.PoolClient, body: unknown, opts: SessionWriteOptions) {
@@ -179,6 +213,36 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
   const eid = parsed.event_id?.trim() || randomUUID();
   const sessionCid = sessionClientId(sid);
   const eventCid = sessionEventClientId(sid, eid);
+  const writerIdentity = normalizedIdentity({
+    owner_agent_id: parsed.owner_agent_id,
+    owner_team_id: parsed.owner_team_id,
+    producer_agent_id: parsed.producer_agent_id,
+  });
+  const existingSessionRes = await client.query<SessionRow>(
+    `
+    SELECT
+      id,
+      title,
+      text_summary,
+      memory_lane::text AS memory_lane,
+      owner_agent_id,
+      owner_team_id
+    FROM memory_nodes
+    WHERE scope = $1
+      AND type = 'topic'::memory_node_type
+      AND client_id = $2
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [tenancy.scope_key, sessionCid],
+  );
+  const existingSession = existingSessionRes.rows[0] ?? null;
+  if (existingSession) {
+    assertSessionWriteAllowed(existingSession, writerIdentity);
+  }
+  const effectiveLane = existingSession?.memory_lane ?? parsed.memory_lane;
+  const effectiveOwnerAgentId = existingSession?.owner_agent_id ?? parsed.owner_agent_id;
+  const effectiveOwnerTeamId = existingSession?.owner_team_id ?? parsed.owner_team_id;
   const title = parsed.title?.trim() || null;
   const textSummary = parsed.text_summary?.trim() || parsed.input_text?.trim() || parsed.title?.trim() || `session event ${eid}`;
   const inputText = parsed.input_text?.trim() || textSummary;
@@ -199,10 +263,10 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
     actor: parsed.actor ?? "event_api",
     input_text: inputText,
     auto_embed: parsed.auto_embed ?? true,
-    memory_lane: parsed.memory_lane,
+    memory_lane: effectiveLane,
     producer_agent_id: parsed.producer_agent_id,
-    owner_agent_id: parsed.owner_agent_id,
-    owner_team_id: parsed.owner_team_id,
+    owner_agent_id: effectiveOwnerAgentId,
+    owner_team_id: effectiveOwnerTeamId,
     nodes: [
       {
         client_id: sessionCid,
@@ -292,17 +356,28 @@ export async function listSessionEvents(client: pg.PoolClient, input: unknown, o
   );
   const sid = parsed.session_id.trim();
   const sessionCid = sessionClientId(sid);
-  const sr = await client.query<{ id: string; title: string | null; text_summary: string | null }>(
+  const sr = await client.query<SessionRow>(
     `
-    SELECT id, title, text_summary
+    SELECT
+      id,
+      title,
+      text_summary,
+      memory_lane::text AS memory_lane,
+      owner_agent_id,
+      owner_team_id
     FROM memory_nodes
     WHERE scope = $1
       AND type = 'topic'::memory_node_type
       AND client_id = $2
+      AND (
+        memory_lane = 'shared'::memory_lane
+        OR (memory_lane = 'private'::memory_lane AND owner_agent_id = $3::text)
+        OR ($4::text IS NOT NULL AND memory_lane = 'private'::memory_lane AND owner_team_id = $4::text)
+      )
     ORDER BY created_at DESC
     LIMIT 1
     `,
-    [tenancy.scope_key, sessionCid],
+    [tenancy.scope_key, sessionCid, parsed.consumer_agent_id ?? null, parsed.consumer_team_id ?? null],
   );
   const session = sr.rows[0] ?? null;
   if (!session) {

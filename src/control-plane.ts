@@ -616,18 +616,45 @@ export async function rotateControlApiKey(db: Db, id: string, input: ControlApiK
   });
 }
 
-export function createApiKeyPrincipalResolver(db: Db, opts?: { ttl_ms?: number; negative_ttl_ms?: number }) {
+export function createApiKeyPrincipalResolver(
+  db: Db,
+  opts?: { ttl_ms?: number; negative_ttl_ms?: number; max_entries?: number },
+) {
   const ttlMs = Math.max(5_000, Math.trunc(opts?.ttl_ms ?? 60_000));
   const negativeTtlMs = Math.max(1_000, Math.trunc(opts?.negative_ttl_ms ?? 10_000));
+  const maxEntries = Math.max(1, Math.trunc(opts?.max_entries ?? 20_000));
   const cache = new Map<string, { expires_at: number; principal: ApiKeyPrincipal | null }>();
+
+  const cacheGet = (hash: string, now: number): ApiKeyPrincipal | null | undefined => {
+    const hit = cache.get(hash);
+    if (!hit) return undefined;
+    if (hit.expires_at <= now) {
+      cache.delete(hash);
+      return undefined;
+    }
+    // LRU bump to keep hot keys.
+    cache.delete(hash);
+    cache.set(hash, hit);
+    return hit.principal;
+  };
+
+  const cacheSet = (hash: string, principal: ApiKeyPrincipal | null, ttlMsLocal: number, now: number): void => {
+    if (cache.has(hash)) cache.delete(hash);
+    cache.set(hash, { expires_at: now + ttlMsLocal, principal });
+    while (cache.size > maxEntries) {
+      const oldest = cache.keys().next();
+      if (oldest.done) break;
+      cache.delete(oldest.value);
+    }
+  };
 
   return async (rawApiKey: string): Promise<ApiKeyPrincipal | null> => {
     const key = trimOrNull(rawApiKey);
     if (!key) return null;
     const hash = sha256Hex(key);
     const now = Date.now();
-    const cached = cache.get(hash);
-    if (cached && cached.expires_at > now) return cached.principal;
+    const cached = cacheGet(hash, now);
+    if (cached !== undefined) return cached;
 
     try {
       const row = await withClient(db, async (client) => {
@@ -654,7 +681,7 @@ export function createApiKeyPrincipalResolver(db: Db, opts?: { ttl_ms?: number; 
             key_prefix: trimOrNull(row.key_prefix),
           }
         : null;
-      cache.set(hash, { expires_at: now + (principal ? ttlMs : negativeTtlMs), principal });
+      cacheSet(hash, principal, principal ? ttlMs : negativeTtlMs, now);
       return principal;
     } catch (err: any) {
       // table missing during migration rollout should not block existing env key auth.

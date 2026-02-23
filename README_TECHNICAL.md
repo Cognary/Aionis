@@ -94,21 +94,15 @@ make stack-down
 
 ## Web Apps
 
-This repo includes:
+This repo includes the docs site toolchain:
 
-1. Marketing site: `apps/marketing` (Next.js)
-2. Docs site toolchain: `docs-site` (VitePress; sources live under `docs/`)
+1. Docs site toolchain: `docs-site` (VitePress; sources live under `docs/`)
+
+Note: `apps/marketing` may contain local build artifacts in some environments, but the source app is not part of this Open Core checkout.
 
 Dev:
 
-1. Marketing:
-
-```bash
-cd /path/to/Aionis
-npm run dev:web
-```
-
-2. Docs:
+1. Docs:
 
 ```bash
 cd /path/to/Aionis
@@ -208,8 +202,8 @@ SDK client is available at:
 
 Current release status:
 
-- TypeScript SDK published: `@aionis/sdk@0.1.0`.
-- Python SDK published: `aionis-sdk==0.1.0`.
+- TypeScript SDK published: `@aionis/sdk@0.1.5`.
+- Python SDK published: `aionis-sdk==0.1.5`.
 - Release runbook: `/path/to/Aionis/docs/SDK_RELEASE.md`.
 
 Smoke:

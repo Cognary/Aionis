@@ -4,6 +4,7 @@ import { HttpError } from "../util/http.js";
 import { requireAdminTokenHeader } from "../util/admin_auth.js";
 import { resolveTenantScope } from "../memory/tenant.js";
 import {
+  createApiKeyPrincipalResolver,
   normalizeControlAlertRouteTarget,
   normalizeControlIncidentPublishSourceDir,
   normalizeControlIncidentPublishTarget,
@@ -13,6 +14,7 @@ import { ruleMatchesContext } from "../memory/rule-engine.js";
 import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
 import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
+import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 
 type QueryResult<T> = { rows: T[]; rowCount: number };
 
@@ -58,6 +60,90 @@ class FakePgClient {
     }
 
     throw new Error(`FakePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class SessionAccessPgClient {
+  private readonly sessionId = "00000000-0000-0000-0000-000000000111";
+  private readonly eventId = "00000000-0000-0000-0000-000000000222";
+
+  async query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+    if (s.includes("FROM memory_nodes") && s.includes("client_id = $2") && s.includes("type = 'topic'::memory_node_type")) {
+      if (!s.includes("memory_lane")) throw new Error("session lookup must enforce lane visibility");
+      const consumerAgent = params?.[2] ?? null;
+      if (consumerAgent === "agent_a") {
+        return {
+          rows: [
+            {
+              id: this.sessionId,
+              title: "Private Session",
+              text_summary: "session summary",
+              memory_lane: "private",
+              owner_agent_id: "agent_a",
+              owner_team_id: null,
+            } as any,
+          ] as T[],
+          rowCount: 1,
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    }
+    if (s.includes("FROM memory_edges me") && s.includes("me.type = 'part_of'::memory_edge_type")) {
+      return {
+        rows: [
+          {
+            id: this.eventId,
+            client_id: "session_event:s1:e1",
+            type: "event",
+            title: "E1",
+            text_summary: "event one",
+            slots: { event_id: "e1" },
+            memory_lane: "private",
+            producer_agent_id: "agent_a",
+            owner_agent_id: "agent_a",
+            owner_team_id: null,
+            embedding_status: "ready",
+            embedding_model: "fake",
+            raw_ref: null,
+            evidence_ref: null,
+            salience: 0.5,
+            importance: 0.5,
+            confidence: 0.8,
+            last_activated: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-000000000333",
+            edge_weight: 1,
+            edge_confidence: 1,
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+    throw new Error(`SessionAccessPgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class SessionWriteGuardPgClient {
+  async query<T>(sql: string): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+    if (s.includes("FROM memory_nodes") && s.includes("client_id = $2") && s.includes("type = 'topic'::memory_node_type")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000000511",
+            title: "Private Session",
+            text_summary: "session summary",
+            memory_lane: "private",
+            owner_agent_id: "agent_a",
+            owner_team_id: null,
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+    throw new Error(`SessionWriteGuardPgClient: unexpected query after guard: ${s.slice(0, 200)}...`);
   }
 }
 
@@ -469,6 +555,80 @@ async function run() {
   assert.equal(toolPolicy.explain.contributions[0].weight, 1);
   const preferConflict = toolPolicy.explain.conflicts.find((c: any) => c.code === "prefer_competing_top_choice");
   assert.equal(preferConflict?.winner_rule_node_id, "r_high");
+
+  // Session events listing must apply lane visibility to the session envelope itself.
+  const sessionReader = new SessionAccessPgClient();
+  const visible = await listSessionEvents(
+    sessionReader as any,
+    { tenant_id: "default", scope: "default", session_id: "s1", consumer_agent_id: "agent_a", limit: 20, offset: 0 },
+    { defaultScope: "default", defaultTenantId: "default" },
+  );
+  assert.equal(visible.session?.session_id, "s1");
+  assert.equal(visible.events.length, 1);
+  const hidden = await listSessionEvents(
+    sessionReader as any,
+    { tenant_id: "default", scope: "default", session_id: "s1", consumer_agent_id: "agent_b", limit: 20, offset: 0 },
+    { defaultScope: "default", defaultTenantId: "default" },
+  );
+  assert.equal(hidden.session, null);
+  assert.equal(hidden.events.length, 0);
+
+  // Session event writes must reject cross-owner append into private sessions.
+  const writeGuard = new SessionWriteGuardPgClient();
+  await assert.rejects(
+    () =>
+      writeSessionEvent(
+        writeGuard as any,
+        {
+          tenant_id: "default",
+          scope: "default",
+          session_id: "s1",
+          event_id: "e1",
+          input_text: "event one",
+          owner_agent_id: "agent_b",
+          producer_agent_id: "agent_b",
+        },
+        {
+          defaultScope: "default",
+          defaultTenantId: "default",
+          maxTextLen: 8000,
+          piiRedaction: false,
+          allowCrossScopeEdges: false,
+          shadowDualWriteEnabled: false,
+          shadowDualWriteStrict: false,
+          embedder: null,
+        },
+      ),
+    (err: any) => err instanceof HttpError && err.statusCode === 403 && err.code === "session_owner_mismatch",
+  );
+
+  // API key principal resolver cache must stay bounded and evict old entries.
+  let apiKeyLookupQueries = 0;
+  const resolver = createApiKeyPrincipalResolver(
+    {
+      pool: {
+        connect: async () => ({
+          query: async () => {
+            apiKeyLookupQueries += 1;
+            return {
+              rows: [{ tenant_id: "default", agent_id: null, team_id: null, role: null, key_prefix: "ak_live_test" }],
+              rowCount: 1,
+            };
+          },
+          release: () => {},
+        }),
+      },
+    } as any,
+    { ttl_ms: 60_000, negative_ttl_ms: 60_000, max_entries: 2 },
+  );
+  await resolver("k1");
+  await resolver("k2");
+  await resolver("k3");
+  assert.equal(apiKeyLookupQueries, 3);
+  await resolver("k1"); // should be evicted when cache max_entries=2
+  assert.equal(apiKeyLookupQueries, 4);
+  await resolver("k3"); // latest key should still be cached
+  assert.equal(apiKeyLookupQueries, 4);
 }
 
 run()
