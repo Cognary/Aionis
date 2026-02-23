@@ -1,11 +1,14 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 set -euo pipefail
 
-cd /Users/lucio/Desktop/Aionis
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "${ROOT_DIR}"
 
 # Ensure env vars are available to the process (launchd does not load shell rc files).
 set -a
-source .env
+if [[ -f .env ]]; then
+  source .env
+fi
 set +a
 
 if [[ ! -f dist/index.js ]]; then
@@ -13,4 +16,3 @@ if [[ ! -f dist/index.js ]]; then
 fi
 
 exec node dist/index.js
-

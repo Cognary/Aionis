@@ -5,19 +5,19 @@ This repo is a minimal, runnable skeleton for a "Memory Graph" backed by Postgre
 ## Current GTM Snapshot (2026-02-17)
 
 - Phase 1 Gate A: pass  
-  `/Users/lucio/Desktop/Aionis/artifacts/gtm/gate_a/20260217_132642/summary.json`
+  `/path/to/Aionis/artifacts/gtm/gate_a/20260217_132642/summary.json`
 - Phase 2 Gate B (blocking + API smoke): pass  
-  `/Users/lucio/Desktop/Aionis/artifacts/gtm/gate_b/20260217_140548/summary.json`
+  `/path/to/Aionis/artifacts/gtm/gate_b/20260217_140548/summary.json`
 - Phase 2 integrations (OpenWork/LangGraph/MCP): pass  
-  `/Users/lucio/Desktop/Aionis/artifacts/gtm/phase2_integrations/20260217_140317/summary.json`
+  `/path/to/Aionis/artifacts/gtm/phase2_integrations/20260217_140317/summary.json`
 - Phase 3 Gate C: has pass sample, but not yet continuously stable  
-  pass sample: `/Users/lucio/Desktop/Aionis/artifacts/gtm/gate_c/20260217_172017/summary.json`  
-  latest quick sample (`error_rate_pass=false`): `/Users/lucio/Desktop/Aionis/artifacts/gtm/gate_c/20260217_172832/summary.json`
+  pass sample: `/path/to/Aionis/artifacts/gtm/gate_c/20260217_172017/summary.json`  
+  latest quick sample (`error_rate_pass=false`): `/path/to/Aionis/artifacts/gtm/gate_c/20260217_172832/summary.json`
 
 ## 3-Minute Experience (Recommended)
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
+cd /path/to/Aionis
 make quickstart
 ```
 
@@ -92,34 +92,28 @@ Stop:
 make stack-down
 ```
 
-## Web UI (Graph Visualization)
+## Web Apps
 
-This repo includes a minimal web UI in `apps/web` for:
+This repo includes:
 
-- capturing notes (writes an `event` with `slots.content`)
-- searching via `recall_text`
-- visualizing the returned `subgraph` as an interactive graph
-- copying the server-built `context.text`
+1. Marketing site: `apps/marketing` (Next.js)
+2. Docs site toolchain: `docs-site` (VitePress; sources live under `docs/`)
 
-Dev (two terminals):
+Dev:
 
-1. Start API:
+1. Marketing:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
-npm run dev
+cd /path/to/Aionis
+npm run dev:web
 ```
 
-2. Install web deps and start web UI (Vite dev server proxies `/v1/*` to the API):
+2. Docs:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis/apps/web
-npm install
-# Point the UI proxy at your API (check `.env` PORT or `curl http://localhost:<port>/health`).
-AIONIS_API_ORIGIN="http://localhost:${PORT:-3001}" npm run dev
+cd /path/to/Aionis
+npm run docs:dev
 ```
-
-Open: `http://localhost:5173`.
 
 ## API (Fastify + TypeScript)
 
@@ -140,7 +134,7 @@ npm run dev
 Start production-like API process (single command):
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
+cd /path/to/Aionis
 set -a; source .env; set +a
 npm run build
 nohup node dist/index.js > /tmp/aionis_api.log 2>&1 &
@@ -175,19 +169,19 @@ npm run fake-embed -- "some text" > /tmp/emb.json
 
 Recommended planner context shape:
 
-- `/Users/lucio/Desktop/Aionis/docs/PLANNER_CONTEXT.md`
-- `/Users/lucio/Desktop/Aionis/examples/planner_context.json`
+- `/path/to/Aionis/docs/PLANNER_CONTEXT.md`
+- `/path/to/Aionis/examples/planner_context.json`
 
 Try:
 
 ```bash
-/Users/lucio/Desktop/Aionis/examples/rules_evaluate.sh | jq '.applied'
+/path/to/Aionis/examples/rules_evaluate.sh | jq '.applied'
 ```
 
 Tool selector:
 
 ```bash
-/Users/lucio/Desktop/Aionis/examples/tools_select.sh psql curl bash \
+/path/to/Aionis/examples/tools_select.sh psql curl bash \
 | jq '{selected:.selection.selected, ordered:.selection.ordered, lane:.rules.agent_visibility_summary.lane}'
 ```
 
@@ -206,17 +200,17 @@ Endpoints:
 
 SDK client is available at:
 
-- `/Users/lucio/Desktop/Aionis/src/sdk/index.ts`
-- `/Users/lucio/Desktop/Aionis/packages/sdk` (`@aionis/sdk` publishable package)
-- `/Users/lucio/Desktop/Aionis/docs/SDK.md`
-- `/Users/lucio/Desktop/Aionis/docs/SDK_COMPATIBILITY_MATRIX.md`
-- `/Users/lucio/Desktop/Aionis/docs/SDK_RELEASE.md`
+- `/path/to/Aionis/src/sdk/index.ts`
+- `/path/to/Aionis/packages/sdk` (`@aionis/sdk` publishable package)
+- `/path/to/Aionis/docs/SDK.md`
+- `/path/to/Aionis/docs/SDK_COMPATIBILITY_MATRIX.md`
+- `/path/to/Aionis/docs/SDK_RELEASE.md`
 
 Current release status:
 
 - TypeScript SDK published: `@aionis/sdk@0.1.0`.
 - Python SDK published: `aionis-sdk==0.1.0`.
-- Release runbook: `/Users/lucio/Desktop/Aionis/docs/SDK_RELEASE.md`.
+- Release runbook: `/path/to/Aionis/docs/SDK_RELEASE.md`.
 
 Smoke:
 
@@ -244,7 +238,7 @@ make sdk-release-check
 
 Runbook:
 
-- `/Users/lucio/Desktop/Aionis/docs/DOCKER_RELEASE.md`
+- `/path/to/Aionis/docs/DOCKER_RELEASE.md`
 
 Local dry-run build:
 
@@ -319,7 +313,7 @@ RESET_PURGE_FAIL_ON_DELETE=false npm run perf:phase-d-matrix
 
 Artifacts are written to:
 
-- `/Users/lucio/Desktop/Aionis/artifacts/perf/<timestamp>/`
+- `/path/to/Aionis/artifacts/perf/<timestamp>/`
 - final report: `PERFORMANCE_REPORT_V1.md`
 
 Manual tools:
@@ -329,7 +323,7 @@ npm run job:perf-seed -- --scope perf --events 100000 --topics 1000 --reset
 npm run job:scope-purge -- --scope perf --tenant-id default --mode partition --apply
 npm run job:perf-benchmark -- --scope perf --mode all
 npm run job:perf-worker-benchmark -- --scope default --iterations 8
-npm run job:perf-report -- --dir /Users/lucio/Desktop/Aionis/artifacts/perf/<run_id>
+npm run job:perf-report -- --dir /path/to/Aionis/artifacts/perf/<run_id>
 ```
 
 ### One-Click Regression (Step 2-7)
@@ -460,7 +454,7 @@ npm run gtm:phase1:gatea
 
 Artifacts:
 
-- `/Users/lucio/Desktop/Aionis/artifacts/gtm/gate_a/<run_id>/summary.json`
+- `/path/to/Aionis/artifacts/gtm/gate_a/<run_id>/summary.json`
 - demo/value/docs logs under the same directory
 
 CI/blocking mode:
@@ -507,7 +501,7 @@ Generate prioritized fix tasks automatically from review `go_no_go_reasons`:
 LOOKBACK_DAYS=30 OWNER=lucio npm run gtm:phase1:fix-plan
 ```
 
-Outputs `FIX_TASKS.md` + `tasks.json` under `/Users/lucio/Desktop/Aionis/artifacts/gtm/fix_plan/<run_id>/`.
+Outputs `FIX_TASKS.md` + `tasks.json` under `/path/to/Aionis/artifacts/gtm/fix_plan/<run_id>/`.
 
 Export fix tasks to Jira/Linear CSV import files:
 
@@ -515,7 +509,7 @@ Export fix tasks to Jira/Linear CSV import files:
 LOOKBACK_DAYS=30 OWNER=lucio npm run gtm:phase1:fix-export
 ```
 
-Outputs `jira_import.csv` + `linear_import.csv` under `/Users/lucio/Desktop/Aionis/artifacts/gtm/fix_export/<run_id>/`.
+Outputs `jira_import.csv` + `linear_import.csv` under `/path/to/Aionis/artifacts/gtm/fix_export/<run_id>/`.
 Also emits split CSVs for rollout:
 - `jira_import_p0.csv`, `jira_import_p1p2.csv`
 - `linear_import_p0.csv`, `linear_import_p1p2.csv`
@@ -546,7 +540,7 @@ ITERATIONS=3 MIN_PASS_RATE=0.8 MIN_EXECUTED=3 npm run gtm:phase1:ci-gate
 
 `ci-gate` now includes review-pack, fix-plan, and fix-export outputs in its `summary.json`.
 
-GitHub Actions workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/gtm-phase1-gate.yml`
+GitHub Actions workflow: `/path/to/Aionis/.github/workflows/gtm-phase1-gate.yml`
 
 - supports manual run (`workflow_dispatch`) with inputs
 - runs weekly by schedule
@@ -569,10 +563,10 @@ GATEB_FAIL_ON_FAIL=true GATEB_REQUIRE_API_SMOKE=true npm run gtm:phase2:gateb
 
 Artifacts:
 
-- `/Users/lucio/Desktop/Aionis/artifacts/gtm/gate_b/<run_id>/summary.json`
+- `/path/to/Aionis/artifacts/gtm/gate_b/<run_id>/summary.json`
 - TS/Python build/release/smoke logs under the same directory
 
-GitHub Actions workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/gtm-phase2-gate.yml`
+GitHub Actions workflow: `/path/to/Aionis/.github/workflows/gtm-phase2-gate.yml`
 
 ### GTM Phase 3 Gate C Check
 
@@ -616,8 +610,8 @@ GATEC_PACE_MAX_MS=2000
 Current note: Gate C has pass samples, but sustained pass still depends on environment-specific rate-limit capacity and benchmark pacing.
 You can inspect adaptive pacing behavior in:
 
-- `/Users/lucio/Desktop/Aionis/artifacts/gtm/gate_c/<run_id>/summary.json` -> `metrics.adaptive_rate_limit`
-- `/Users/lucio/Desktop/Aionis/artifacts/gtm/gate_c/<run_id>/perf/benchmark_adapt_<scale>.json`
+- `/path/to/Aionis/artifacts/gtm/gate_c/<run_id>/summary.json` -> `metrics.adaptive_rate_limit`
+- `/path/to/Aionis/artifacts/gtm/gate_c/<run_id>/perf/benchmark_adapt_<scale>.json`
 
 Error-rate diagnostics in Gate C summary:
 
@@ -677,7 +671,7 @@ Behavior highlights:
 - can optionally enforce GTM Phase1 gate via `PREFLIGHT_GTM_PHASE1_GATE=true`
 - runs write smoke and `recall_text` smoke
 - enforces `recall_text` must not return generic `500` (upstream faults must be mapped to `429/503/502`)
-- writes artifacts to `/Users/lucio/Desktop/Aionis/artifacts/preflight/<run_id>/`
+- writes artifacts to `/path/to/Aionis/artifacts/preflight/<run_id>/`
 
 ### Rate Limits (P3.2)
 
@@ -770,7 +764,7 @@ Tenant-level quotas are independent from per-IP rate limits:
 Quick smoke:
 
 ```bash
-bash /Users/lucio/Desktop/Aionis/examples/tenant_isolation_smoke.sh
+bash /path/to/Aionis/examples/tenant_isolation_smoke.sh
 # stricter e2e (assert tenant visibility + cross-tenant consistency checks)
 npm run e2e:phasec-tenant
 ```

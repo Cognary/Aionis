@@ -6,8 +6,8 @@ title: "Aionis SDK (TypeScript + Python)"
 
 当前提供两个 SDK：
 
-1. TypeScript: `/Users/lucio/Desktop/Aionis/packages/sdk`（`@aionis/sdk`）
-2. Python: `/Users/lucio/Desktop/Aionis/packages/python-sdk`（`aionis-sdk`）
+1. TypeScript: `packages/sdk`（`@aionis/sdk`）
+2. Python: `packages/python-sdk`（`aionis-sdk`）
 
 目标是替代直接手写 `curl` JSON，并保持同一错误语义与接口形态。
 
@@ -115,7 +115,6 @@ try {
 ## 7. Smoke Commands
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run sdk:smoke
 npm run sdk:tools-feedback-smoke
 npm run sdk:py:smoke
@@ -129,7 +128,6 @@ npm run sdk:py:smoke
 ## 8. Build + Release Checks
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run sdk:build
 npm run sdk:pack-dry-run
 npm run sdk:release-check
@@ -139,14 +137,14 @@ npm run sdk:py:release-check
 
 Package files:
 
-1. `/Users/lucio/Desktop/Aionis/packages/sdk/package.json`
-2. `/Users/lucio/Desktop/Aionis/packages/sdk/README.md`
-3. `/Users/lucio/Desktop/Aionis/packages/sdk/CHANGELOG.md`
-4. `/Users/lucio/Desktop/Aionis/packages/python-sdk/pyproject.toml`
-5. `/Users/lucio/Desktop/Aionis/packages/python-sdk/README.md`
-6. `/Users/lucio/Desktop/Aionis/packages/python-sdk/CHANGELOG.md`
+1. `packages/sdk/package.json`
+2. `packages/sdk/README.md`
+3. `packages/sdk/CHANGELOG.md`
+4. `packages/python-sdk/pyproject.toml`
+5. `packages/python-sdk/README.md`
+6. `packages/python-sdk/CHANGELOG.md`
 
 Compatibility matrix:
 
-- `/Users/lucio/Desktop/Aionis/docs/SDK_COMPATIBILITY_MATRIX.md`
-- `/Users/lucio/Desktop/Aionis/docs/SDK_RELEASE.md`
+- `docs/SDK_COMPATIBILITY_MATRIX.md`
+- `docs/SDK_RELEASE.md`

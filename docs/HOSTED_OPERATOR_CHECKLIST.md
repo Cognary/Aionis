@@ -15,4 +15,4 @@ Use private repo docs for:
 3. Tenant governance/SLO operations
 
 Open Core boundary reference:
-- `/Users/lucio/Desktop/Aionis/docs/OPEN_CORE_BOUNDARY.md`
+- `/path/to/Aionis/docs/OPEN_CORE_BOUNDARY.md`

@@ -61,7 +61,6 @@ Auxiliary benchmarks (`LongMemEval` / `LoCoMo`) are non-blocking regression evid
 - Run production preflight in strict orchestration mode:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 APP_ENV=prod \
 MEMORY_AUTH_MODE=api_key \
 RATE_LIMIT_ENABLED=true \
@@ -77,7 +76,6 @@ npm run -s preflight:prod
 Run this from repo root to fail-fast on hard blockers:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s gate:core:prod -- \
   --base-url "http://localhost:${PORT:-3001}" \
   --scope default \
@@ -93,14 +91,12 @@ npm run -s gate:core:prod -- \
 1. Docker image dry-run:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s docker:publish:ghcr:dry-run
 ```
 
 2. Docker image publish:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 export GHCR_USERNAME=<your_user>
 export GHCR_TOKEN=<your_token>
 IMAGE_REPO=ghcr.io/cognary/aionis \
@@ -113,7 +109,6 @@ npm run -s docker:publish:ghcr
 3. SDK publish (if version changed and release approved):
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s sdk:publish:dry-run
 npm run -s sdk:py:build-dist
 npm run -s sdk:py:publish:dry-run

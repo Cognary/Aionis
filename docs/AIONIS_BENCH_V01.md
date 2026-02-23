@@ -45,7 +45,6 @@ aionis-bench/
 ## Run
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s bench:aionis:v01
 ```
 

@@ -19,7 +19,6 @@ AionisBench v0.1 is the minimum reproducible benchmark suite aligned to Aionis c
 ## Run
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s bench:aionis:v01
 ```
 
@@ -37,7 +36,7 @@ python3 aionis-bench/run_v01.py \
 
 Default output:
 
-- `/Users/lucio/Desktop/Aionis/artifacts/aionisbench/runs/<run_id>/details.json`
-- `/Users/lucio/Desktop/Aionis/artifacts/aionisbench/runs/<run_id>/summary.json`
-- `/Users/lucio/Desktop/Aionis/artifacts/aionisbench/runs/<run_id>/report.md`
-- `/Users/lucio/Desktop/Aionis/artifacts/aionisbench/runs/<run_id>/raw/*.json`
+- `artifacts/aionisbench/runs/<run_id>/details.json`
+- `artifacts/aionisbench/runs/<run_id>/summary.json`
+- `artifacts/aionisbench/runs/<run_id>/report.md`
+- `artifacts/aionisbench/runs/<run_id>/raw/*.json`

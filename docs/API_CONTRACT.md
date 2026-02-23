@@ -29,6 +29,9 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
 - Isolation key is `(tenant_id, scope)` (internally encoded as a tenant-aware scope key).
 - Backward compatibility:
   - `tenant_id=default` keeps legacy single-tenant scope behavior.
+- Scope naming:
+  - `scope` must be non-empty
+  - `scope` must not start with reserved prefix `tenant:` (reserved for internal tenant-derived scope keys)
 
 ## Auth Identity Mapping (Phase C MVP)
 

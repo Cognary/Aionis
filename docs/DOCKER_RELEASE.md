@@ -13,14 +13,14 @@ This runbook covers two independent GHCR publish lanes:
 1. Main API image
 - tag format: `vX.Y.Z`
 - moving tag: `latest`
-- source Dockerfile: `/Users/lucio/Desktop/Aionis/Dockerfile`
-- workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docker-publish.yml`
+- source Dockerfile: `Dockerfile`
+- workflow: `.github/workflows/docker-publish.yml`
 
 2. Standalone image
 - tag format: `standalone-vX.Y.Z`
 - moving tag: `standalone-latest`
-- source Dockerfile: `/Users/lucio/Desktop/Aionis/Dockerfile.standalone`
-- workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docker-standalone-publish.yml`
+- source Dockerfile: `Dockerfile.standalone`
+- workflow: `.github/workflows/docker-standalone-publish.yml`
 
 Default image repo: `ghcr.io/<owner>/aionis`
 Production repo example: `ghcr.io/cognary/aionis`
@@ -42,21 +42,18 @@ Production repo example: `ghcr.io/cognary/aionis`
 Main image dry run:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run docker:publish:ghcr:dry-run
 ```
 
 Standalone image dry run:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 TAG=standalone-v0.1.9 npm run docker:publish:standalone:ghcr:dry-run
 ```
 
 Main image push:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
 IMAGE_REPO=ghcr.io/<owner>/aionis \
@@ -69,7 +66,6 @@ npm run docker:publish:ghcr
 Standalone image push:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
 IMAGE_REPO=ghcr.io/<owner>/aionis \

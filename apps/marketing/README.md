@@ -5,7 +5,7 @@ Next.js marketing site for Aionis (Personal public + Enterprise inquiry).
 ## Run
 
 ```bash
-cd /Users/lucio/Desktop/Aionis/apps/marketing
+cd apps/marketing
 npm install
 npm run dev
 ```

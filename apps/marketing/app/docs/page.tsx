@@ -102,8 +102,8 @@ export default function DocsPage() {
                   </a>
                 </li>
                 <li>
-                  <a href={docsHref("COMMERCIAL_STRATEGY.md")} target="_blank" rel="noreferrer">
-                    Commercial Strategy
+                  <a href={docsHref("OPEN_CORE_BOUNDARY.md")} target="_blank" rel="noreferrer">
+                    Open Core Boundary
                   </a>
                 </li>
               </ul>

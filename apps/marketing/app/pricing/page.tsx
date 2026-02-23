@@ -133,8 +133,8 @@ export default function PricingPage() {
             </tbody>
           </table>
           <div className="hero-cta" style={{ marginTop: 16 }}>
-            <a className="btn btn-solid" href={resolveDocsUrl("EXTERNAL_RELEASE_PRODUCT_PLAN.md")} target="_blank" rel="noreferrer">
-              Open boundary matrix
+            <a className="btn btn-solid" href={resolveDocsUrl("OPEN_CORE_BOUNDARY.md")} target="_blank" rel="noreferrer">
+              Open boundary spec
             </a>
             <Link className="btn btn-ghost" href="/open-core" data-analytics-event={analyticsEvents.OSS_TO_CLOUD_INTENT}>
               Open model page

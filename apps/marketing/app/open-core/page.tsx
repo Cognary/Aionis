@@ -108,11 +108,11 @@ export default function OpenCorePage() {
             </tbody>
           </table>
           <div className="hero-cta" style={{ marginTop: 16 }}>
-            <a className="btn btn-solid" href={resolveDocsUrl("EXTERNAL_RELEASE_PRODUCT_PLAN.md")} target="_blank" rel="noreferrer">
-              Open boundary matrix
+            <a className="btn btn-solid" href={resolveDocsUrl("OPEN_CORE_BOUNDARY.md")} target="_blank" rel="noreferrer">
+              Open boundary spec
             </a>
-            <a className="btn btn-ghost" href={resolveDocsUrl("COMMERCIAL_STRATEGY.md")} target="_blank" rel="noreferrer">
-              Open strategy source
+            <a className="btn btn-ghost" href={resolveDocsUrl("PACKAGING_PLAN.md")} target="_blank" rel="noreferrer">
+              Open packaging plan
             </a>
           </div>
         </section>
@@ -168,8 +168,8 @@ npm run -s job:consistency-check:scope -- --strict-warnings`}</pre>
             </article>
           </div>
           <div className="hero-cta" style={{ marginTop: 18 }}>
-            <a className="btn btn-solid" href={resolveDocsUrl("COMMERCIAL_STRATEGY.md")} target="_blank" rel="noreferrer">
-              Open commercial strategy doc
+            <a className="btn btn-solid" href={resolveDocsUrl("NARRATIVE_CANON.md")} target="_blank" rel="noreferrer">
+              Open narrative canon
             </a>
             <Link className="btn btn-ghost" href="/pricing" data-analytics-event={analyticsEvents.OSS_TO_CLOUD_INTENT}>
               Compare OSS vs Cloud packages

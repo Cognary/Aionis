@@ -24,6 +24,11 @@ export function normalizeTenantId(raw: string | undefined, fallback: string): st
 export function normalizeScope(raw: string | undefined, fallback: string): string {
   const v = (raw ?? fallback).trim();
   if (!v) badRequest("invalid_scope", "scope must be non-empty");
+  // Reserve internal namespace used by tenant-derived scope keys (prevents cross-tenant scope collisions
+  // when operating in backward-compatible "default tenant uses raw scope" mode).
+  if (v.startsWith("tenant:")) {
+    badRequest("invalid_scope", "scope must not start with reserved prefix 'tenant:'", { scope: v });
+  }
   return v;
 }
 

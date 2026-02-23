@@ -40,7 +40,7 @@ For multi-agent rollout:
 
 Example file:
 
-- `/Users/lucio/Desktop/Aionis/examples/planner_context.json`
+- `examples/planner_context.json`
 
 ## Request Wrapper (Hard Contract)
 
@@ -49,13 +49,13 @@ Example file:
 ```bash
 curl -sS "localhost:${PORT:-3001}/v1/memory/rules/evaluate" \
   -H 'content-type: application/json' \
-  --data-binary "$(jq -c '{scope: (.scope // null), context: ., include_shadow: true, limit: 50} | if .scope == null then del(.scope) else . end' /Users/lucio/Desktop/Aionis/examples/planner_context.json)"
+  --data-binary "$(jq -c '{scope: (.scope // null), context: ., include_shadow: true, limit: 50} | if .scope == null then del(.scope) else . end' examples/planner_context.json)"
 ```
 
-Or run the example script (works from any directory):
+Or run the example script:
 
 ```bash
-/Users/lucio/Desktop/Aionis/examples/rules_evaluate.sh | jq '.applied'
+bash examples/rules_evaluate.sh | jq '.applied'
 ```
 
 ## One-Call Planner Injection (Recall + Rules)
@@ -64,7 +64,7 @@ If your planner already calls `POST /v1/memory/recall_text`, you can avoid a sec
 normalized context in `rules_context`. The response will include a `rules.applied.policy` patch.
 
 ```bash
-/Users/lucio/Desktop/Aionis/examples/recall_text_with_rules.sh "memory graph" | jq '.rules.applied.policy'
+bash examples/recall_text_with_rules.sh "memory graph" | jq '.rules.applied.policy'
 ```
 
 ## Tool Selector (Rules + Candidates)
@@ -73,7 +73,7 @@ Use the same normalized context and pass a candidate tool list. The response inc
 For provenance, pass `run_id` and persist returned `decision.decision_id`.
 
 ```bash
-/Users/lucio/Desktop/Aionis/examples/tools_select.sh psql curl bash | jq '{selected:.selection.selected, ordered:.selection.ordered, policy:.rules.applied.policy.tool}'
+bash examples/tools_select.sh psql curl bash | jq '{selected:.selection.selected, ordered:.selection.ordered, policy:.rules.applied.policy.tool}'
 ```
 
 If you want a more permissive mode (useful in early rollout), set `strict=false`. If the allowlist is too strict and filters out
@@ -111,13 +111,13 @@ After a run, send an explicit outcome to update rule verification stats. This is
 When available, pass `decision_id` from `/v1/memory/tools/select` for exact linkage.
 
 ```bash
-OUTCOME=positive RUN_ID=run_0001 /Users/lucio/Desktop/Aionis/examples/tools_feedback.sh psql curl bash | jq
+OUTCOME=positive RUN_ID=run_0001 bash examples/tools_feedback.sh psql curl bash | jq
 ```
 
 To attribute feedback to SHADOW rules as well (for promotion workflows), set `INCLUDE_SHADOW=true`:
 
 ```bash
-OUTCOME=positive RUN_ID=run_0002 INCLUDE_SHADOW=true /Users/lucio/Desktop/Aionis/examples/tools_feedback.sh psql curl bash | jq
+OUTCOME=positive RUN_ID=run_0002 INCLUDE_SHADOW=true bash examples/tools_feedback.sh psql curl bash | jq
 ```
 
 ## Rule Authoring Tips

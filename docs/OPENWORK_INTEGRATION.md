@@ -23,21 +23,18 @@ Embeddings are **derived artifacts**: the MCP tool will not block on embeddings,
 Build:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run build
 ```
 
 Run (manual smoke):
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 AIONIS_BASE_URL=http://localhost:${PORT:-3001} AIONIS_SCOPE=default node dist/mcp/aionis-mcp.js
 ```
 
 Repo smoke (stdio MCP handshake + tool call):
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 set -a; source .env; set +a
 bash examples/mcp_stdio_smoke.sh
 ```
@@ -53,7 +50,7 @@ Example snippet (adjust path/env):
   "mcp": {
     "aionis": {
       "type": "local",
-      "command": ["node", "/Users/lucio/Desktop/Aionis/dist/mcp/aionis-mcp.js"],
+      "command": ["node", "/path/to/Aionis/dist/mcp/aionis-mcp.js"],
       "enabled": true,
       "environment": {
         "AIONIS_BASE_URL": "http://localhost:3001",

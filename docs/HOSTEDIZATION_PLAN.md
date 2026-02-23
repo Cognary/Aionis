@@ -10,7 +10,7 @@ Hosted implementation has moved to the private repository:
 - `https://github.com/Cognary/aionis-hosted`
 
 Public repo (`Aionis`) keeps Open Core boundaries only:
-- `/Users/lucio/Desktop/Aionis/docs/OPEN_CORE_BOUNDARY.md`
+- `/path/to/Aionis/docs/OPEN_CORE_BOUNDARY.md`
 
 For hosted execution plan details, runbooks, and operational milestones, use:
 - `aionis-hosted/docs/HOSTEDIZATION_PLAN.md`

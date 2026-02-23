@@ -40,7 +40,6 @@ Migration `0017_partition_cutover_prepare.sql` adds:
 ## Apply Migration
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 make db-migrate
 ```
 

@@ -131,7 +131,6 @@ Fast rollback options (no code revert):
 ## Verification Commands
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s build
 
 # optional: apply managed profile first

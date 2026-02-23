@@ -64,7 +64,6 @@ If you set custom headers manually, the SDK will not override existing auth head
 ## Smoke
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 set -a; source .env; set +a
 npm run sdk:smoke
 ```
@@ -72,7 +71,6 @@ npm run sdk:smoke
 ## Build (repo local)
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run sdk:build
 npm run sdk:pack-dry-run
 npm run sdk:release-check

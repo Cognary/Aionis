@@ -99,8 +99,8 @@ export default function ContactPage() {
               Direct email: <a href="mailto:founders@aionis.dev">founders@aionis.dev</a>
             </p>
             <div className="hero-cta" style={{ marginTop: 14 }}>
-              <a className="btn btn-ghost" href={resolveDocsUrl("EXTERNAL_RELEASE_PRODUCT_PLAN.md")} target="_blank" rel="noreferrer">
-                Open product plan
+              <a className="btn btn-ghost" href={resolveDocsUrl("OPEN_CORE_BOUNDARY.md")} target="_blank" rel="noreferrer">
+                Open boundary spec
               </a>
               <Link className="btn btn-ghost" href="/pricing" data-analytics-event={analyticsEvents.OSS_TO_CLOUD_INTENT}>
                 Open pricing model

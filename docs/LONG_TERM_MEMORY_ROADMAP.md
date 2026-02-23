@@ -129,7 +129,6 @@ DoD:
 Use this set after each phase increment:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run build
 npm run test:contract
 npm run job:consistency-check
@@ -138,7 +137,6 @@ npm run job:consistency-check
 If DB migrations were added:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 make db-migrate
 ```
 

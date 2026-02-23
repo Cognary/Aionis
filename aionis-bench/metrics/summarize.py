@@ -65,7 +65,7 @@ def to_markdown(run_id: str, details: Dict[str, Any], summary: Dict[str, Any]) -
     lines.append("## Reproduce")
     lines.append("")
     lines.append("```bash")
-    lines.append("cd /Users/lucio/Desktop/Aionis")
+    lines.append("cd /path/to/Aionis")
     lines.append("npm run -s bench:aionis:v01")
     lines.append("```")
     lines.append("")

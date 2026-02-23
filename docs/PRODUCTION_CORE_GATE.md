@@ -23,7 +23,6 @@ Auxiliary only (non-blocking):
 ## One-command execution
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s gate:core:prod -- \
   --base-url "http://localhost:${PORT:-3001}" \
   --db-runner local \
@@ -91,7 +90,7 @@ Control knobs:
 
 ## CI workflow
 
-- `/Users/lucio/Desktop/Aionis/.github/workflows/core-production-gate.yml`
+- `.github/workflows/core-production-gate.yml`
 
 This workflow is the main branch gate.
 
