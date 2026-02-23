@@ -233,14 +233,14 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
       type: n.type,
       tier: n.tier,
       memory_lane: n.memory_lane,
-      producer_agent_id: n.producer_agent_id,
-      owner_agent_id: n.owner_agent_id,
-      owner_team_id: n.owner_team_id,
-      title: n.title,
-      text_summary: n.text_summary,
+      producer_agent_id: n.producer_agent_id ?? undefined,
+      owner_agent_id: n.owner_agent_id ?? undefined,
+      owner_team_id: n.owner_team_id ?? undefined,
+      title: n.title ?? undefined,
+      text_summary: n.text_summary ?? undefined,
       slots: n.slots ?? {},
-      raw_ref: n.raw_ref,
-      evidence_ref: n.evidence_ref,
+      raw_ref: n.raw_ref ?? undefined,
+      evidence_ref: n.evidence_ref ?? undefined,
       salience: n.salience,
       importance: n.importance,
       confidence: n.confidence,
@@ -325,4 +325,3 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
     embedding_backfill: out.embedding_backfill ?? null,
   };
 }
-

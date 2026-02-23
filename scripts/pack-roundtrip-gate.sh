@@ -22,6 +22,7 @@ PACK_MAX_ROWS="${PACK_MAX_ROWS:-2000}"
 
 API_KEY="${API_KEY:-${PERF_API_KEY:-}}"
 AUTH_BEARER="${AUTH_BEARER:-${PERF_AUTH_BEARER:-}}"
+ADMIN_TOKEN="${ADMIN_TOKEN:-}"
 
 AUTH_ARGS=()
 if [[ -n "${API_KEY}" ]]; then
@@ -30,10 +31,13 @@ fi
 if [[ -n "${AUTH_BEARER}" ]]; then
   AUTH_ARGS+=( -H "Authorization: Bearer ${AUTH_BEARER}" )
 fi
+if [[ -n "${ADMIN_TOKEN}" ]]; then
+  AUTH_ARGS+=( -H "X-Admin-Token: ${ADMIN_TOKEN}" )
+fi
 
 RUN_ID="$(date +%Y%m%d_%H%M%S)"
 CLIENT_ID="pack_gate_evt_${RUN_ID}"
-SUMMARY_FILE="$(mktemp /tmp/aionis_pack_roundtrip_gate_XXXXXX.json)"
+SUMMARY_FILE="$(mktemp -t aionis_pack_roundtrip_gate.XXXXXX)"
 
 emit_fail() {
   local message="$1"
@@ -89,7 +93,7 @@ write_payload="$(
       edges:[]
     }'
 )"
-write_file="$(mktemp /tmp/aionis_pack_write_XXXXXX.json)"
+write_file="$(mktemp -t aionis_pack_write.XXXXXX)"
 write_code="$(post_json "/v1/memory/write" "${write_payload}" "${write_file}")"
 if [[ "${write_code}" != "200" ]]; then
   emit_fail "write failed code=${write_code} body=$(cat "${write_file}")"
@@ -106,7 +110,7 @@ export_payload="$(
     --argjson max_rows "${PACK_MAX_ROWS}" \
     '{tenant_id:$tenant,scope:$scope,max_rows:$max_rows}'
 )"
-export_file="$(mktemp /tmp/aionis_pack_export_XXXXXX.json)"
+export_file="$(mktemp -t aionis_pack_export.XXXXXX)"
 export_code="$(post_json "/v1/memory/packs/export" "${export_payload}" "${export_file}")"
 if [[ "${export_code}" != "200" ]]; then
   emit_fail "pack export failed code=${export_code} body=$(cat "${export_file}")"
@@ -126,7 +130,7 @@ verify_payload="$(
     --argjson pack "${pack_json}" \
     '{tenant_id:$tenant,scope:$scope,verify_only:true,manifest_sha256:$sha,pack:$pack}'
 )"
-verify_file="$(mktemp /tmp/aionis_pack_verify_XXXXXX.json)"
+verify_file="$(mktemp -t aionis_pack_verify.XXXXXX)"
 verify_code="$(post_json "/v1/memory/packs/import" "${verify_payload}" "${verify_file}")"
 if [[ "${verify_code}" != "200" ]]; then
   emit_fail "pack verify failed code=${verify_code} body=$(cat "${verify_file}")"
@@ -143,7 +147,7 @@ import_payload="$(
     --argjson pack "${pack_json}" \
     '{tenant_id:$tenant,scope:$scope,verify_only:false,manifest_sha256:$sha,pack:$pack}'
 )"
-import_file="$(mktemp /tmp/aionis_pack_import_XXXXXX.json)"
+import_file="$(mktemp -t aionis_pack_import.XXXXXX)"
 import_code="$(post_json "/v1/memory/packs/import" "${import_payload}" "${import_file}")"
 if [[ "${import_code}" != "200" ]]; then
   emit_fail "pack import failed code=${import_code} body=$(cat "${import_file}")"
@@ -153,7 +157,7 @@ if [[ "$(jq -r '.imported // false' "${import_file}")" != "true" ]]; then
 fi
 
 # Replay import should still keep deterministic singleton identity by client_id.
-import2_file="$(mktemp /tmp/aionis_pack_import2_XXXXXX.json)"
+import2_file="$(mktemp -t aionis_pack_import2.XXXXXX)"
 import2_code="$(post_json "/v1/memory/packs/import" "${import_payload}" "${import2_file}")"
 if [[ "${import2_code}" != "200" ]]; then
   emit_fail "pack re-import failed code=${import2_code} body=$(cat "${import2_file}")"
@@ -166,7 +170,7 @@ find_payload="$(
     --arg cid "${CLIENT_ID}" \
     '{tenant_id:$tenant,scope:$scope,client_id:$cid,limit:10,offset:0}'
 )"
-find_file="$(mktemp /tmp/aionis_pack_find_XXXXXX.json)"
+find_file="$(mktemp -t aionis_pack_find.XXXXXX)"
 find_code="$(post_json "/v1/memory/find" "${find_payload}" "${find_file}")"
 if [[ "${find_code}" != "200" ]]; then
   emit_fail "find failed code=${find_code} body=$(cat "${find_file}")"
@@ -215,4 +219,3 @@ jq -n \
       commit_hash: (if ($import_commit_hash|length)>0 then $import_commit_hash else null end)
     }
   }' | tee "${SUMMARY_FILE}"
-

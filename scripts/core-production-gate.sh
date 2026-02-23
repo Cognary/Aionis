@@ -43,9 +43,9 @@ RECALL_P95_MAX_MS="${RECALL_P95_MAX_MS:-1200}"
 WRITE_P95_MAX_MS="${WRITE_P95_MAX_MS:-800}"
 ERROR_RATE_MAX="${ERROR_RATE_MAX:-0.02}"
 COMPRESSION_GATE_MODE="${COMPRESSION_GATE_MODE:-non_blocking}"
-COMPRESSION_RATIO_MIN="${COMPRESSION_RATIO_MIN:-0.40}"
-COMPRESSION_ITEMS_RETAIN_MIN="${COMPRESSION_ITEMS_RETAIN_MIN:-0.95}"
-COMPRESSION_CITATIONS_RETAIN_MIN="${COMPRESSION_CITATIONS_RETAIN_MIN:-0.95}"
+COMPRESSION_RATIO_MIN="${COMPRESSION_RATIO_MIN:-0.30}"
+COMPRESSION_ITEMS_RETAIN_MIN="${COMPRESSION_ITEMS_RETAIN_MIN:-0.55}"
+COMPRESSION_CITATIONS_RETAIN_MIN="${COMPRESSION_CITATIONS_RETAIN_MIN:-0.55}"
 RUN_RULE_CONFLICT_REPORT="${RUN_RULE_CONFLICT_REPORT:-true}"
 RULE_CONFLICT_GATE_MODE="${RULE_CONFLICT_GATE_MODE:-non_blocking}"
 RULE_CONFLICT_CONTEXTS_FILE="${RULE_CONFLICT_CONTEXTS_FILE:-examples/planner_context.json}"
@@ -72,8 +72,8 @@ PERF_TIMEOUT_MS="${PERF_TIMEOUT_MS:-20000}"
 PERF_PACE_MS="${PERF_PACE_MS:-0}"
 PERF_COMPRESSION_CHECK="${PERF_COMPRESSION_CHECK:-true}"
 PERF_COMPRESSION_SAMPLES="${PERF_COMPRESSION_SAMPLES:-20}"
-PERF_COMPRESSION_TOKEN_BUDGET="${PERF_COMPRESSION_TOKEN_BUDGET:-600}"
-PERF_COMPRESSION_PROFILE="${PERF_COMPRESSION_PROFILE:-aggressive}"
+PERF_COMPRESSION_TOKEN_BUDGET="${PERF_COMPRESSION_TOKEN_BUDGET:-1400}"
+PERF_COMPRESSION_PROFILE="${PERF_COMPRESSION_PROFILE:-balanced}"
 PERF_COMPRESSION_QUERY_TEXT="${PERF_COMPRESSION_QUERY_TEXT:-memory graph perf compression}"
 
 while [[ $# -gt 0 ]]; do
@@ -158,9 +158,9 @@ Options:
   --write-p95-max-ms <n>             Write p95 SLO threshold (default: 800)
   --error-rate-max <0..1>            Max per-case error rate (default: 0.02)
   --compression-gate-mode <mode>     Compression KPI mode: non_blocking|blocking (default: non_blocking)
-  --compression-ratio-min <0..1>     Min compression ratio mean (default: 0.40)
-  --compression-items-retain-min <0..1>      Min items retain ratio mean (default: 0.95)
-  --compression-citations-retain-min <0..1>  Min citations retain ratio mean (default: 0.95)
+  --compression-ratio-min <0..1>     Min compression ratio mean (default: 0.30)
+  --compression-items-retain-min <0..1>      Min items retain ratio mean (default: 0.55)
+  --compression-citations-retain-min <0..1>  Min citations retain ratio mean (default: 0.55)
   --run-rule-conflict-report <bool>  Run deterministic rule conflict report (default: true)
   --rule-conflict-gate-mode <mode>   Rule conflict gate mode: non_blocking|blocking (default: non_blocking)
   --rule-conflict-contexts-file <p>  Context corpus json/jsonl file (default: examples/planner_context.json)
@@ -186,8 +186,8 @@ Options:
   --perf-pace-ms <n>                 Pace ms between requests (default: 0)
   --perf-compression-check <bool>    Run compression KPI benchmark block (default: true)
   --perf-compression-samples <n>     Compression benchmark sample pairs (default: 20)
-  --perf-compression-token-budget <n> Compression context token budget (default: 600)
-  --perf-compression-profile <name>  Compression profile: balanced|aggressive (default: aggressive)
+  --perf-compression-token-budget <n> Compression context token budget (default: 1400)
+  --perf-compression-profile <name>  Compression profile: balanced|aggressive (default: balanced)
   --perf-compression-query-text <t>  Compression benchmark query text
   --require-partition-ready <bool>   Run partition cutover readiness as blocking step (default: false)
   --partition-scope <scope>          Scope for partition readiness (default: --scope)

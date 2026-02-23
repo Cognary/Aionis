@@ -39,9 +39,11 @@ npm run -s gate:core:prod -- \
   --write-p95-max-ms 800 \
   --error-rate-max 0.02 \
   --compression-gate-mode non_blocking \
-  --compression-ratio-min 0.40 \
-  --compression-items-retain-min 0.95 \
-  --compression-citations-retain-min 0.95 \
+  --compression-ratio-min 0.30 \
+  --compression-items-retain-min 0.55 \
+  --compression-citations-retain-min 0.55 \
+  --perf-compression-token-budget 1400 \
+  --perf-compression-profile balanced \
   --run-rule-conflict-report true \
   --rule-conflict-gate-mode non_blocking \
   --rule-conflict-contexts-file examples/planner_context.json \

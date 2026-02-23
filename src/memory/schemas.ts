@@ -298,22 +298,22 @@ export const MemoryPackImportRequest = z.object({
       .array(
         z.object({
           id: UUID,
-          client_id: z.string().min(1).optional(),
+          client_id: z.string().min(1).nullish(),
           type: NodeType,
           tier: z.enum(["hot", "warm", "cold", "archive"]).optional(),
           memory_lane: z.enum(["private", "shared"]).optional(),
-          producer_agent_id: z.string().min(1).optional(),
-          owner_agent_id: z.string().min(1).optional(),
-          owner_team_id: z.string().min(1).optional(),
-          title: z.string().optional(),
-          text_summary: z.string().optional(),
+          producer_agent_id: z.string().min(1).nullish(),
+          owner_agent_id: z.string().min(1).nullish(),
+          owner_team_id: z.string().min(1).nullish(),
+          title: z.string().nullish(),
+          text_summary: z.string().nullish(),
           slots: z.record(z.any()).optional(),
-          raw_ref: z.string().optional(),
-          evidence_ref: z.string().optional(),
+          raw_ref: z.string().nullish(),
+          evidence_ref: z.string().nullish(),
           salience: z.number().min(0).max(1).optional(),
           importance: z.number().min(0).max(1).optional(),
           confidence: z.number().min(0).max(1).optional(),
-        }),
+        }).passthrough(),
       )
       .default([]),
     edges: z
@@ -323,12 +323,12 @@ export const MemoryPackImportRequest = z.object({
           type: EdgeType,
           src_id: UUID,
           dst_id: UUID,
-          src_client_id: z.string().min(1).optional(),
-          dst_client_id: z.string().min(1).optional(),
+          src_client_id: z.string().min(1).nullish(),
+          dst_client_id: z.string().min(1).nullish(),
           weight: z.number().min(0).max(1).optional(),
           confidence: z.number().min(0).max(1).optional(),
           decay_rate: z.number().min(0).max(1).optional(),
-        }),
+        }).passthrough(),
       )
       .default([]),
     commits: z
@@ -342,10 +342,10 @@ export const MemoryPackImportRequest = z.object({
           prompt_version: z.string().nullable().optional(),
           created_at: z.string().optional(),
           commit_hash: z.string().optional(),
-        }),
+        }).passthrough(),
       )
       .default([]),
-  }),
+  }).passthrough(),
 });
 
 export type MemoryPackImportInput = z.infer<typeof MemoryPackImportRequest>;
