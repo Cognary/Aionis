@@ -243,6 +243,36 @@ Exit codes:
 - `2`: gate failed (consistency/quality thresholds)
 - `1`: runtime or usage error
 
+## Rule Promotion Governance (Offline)
+
+Deterministic preflight checks for lifecycle promotions:
+
+```bash
+npm run -s job:rule-promotion-governance -- \
+  --scope default \
+  --rule-node-id <rule_uuid> \
+  --target-state shadow \
+  --strict
+```
+
+Supported target states:
+
+1. `shadow` (`draft -> shadow` checks)
+2. `active` (`shadow -> active` checks)
+
+## Rule Conflict Report (Offline)
+
+Deterministic conflict artifact with winner/loser deltas against optional baseline:
+
+```bash
+npm run -s job:rule-conflict-report -- \
+  --scope default \
+  --contexts-file examples/planner_context.json \
+  --baseline artifacts/rule_conflicts/previous/summary.json \
+  --max-winner-changes 0 \
+  --strict
+```
+
 ## Embedding Model Backfill (Offline)
 
 Backfill `memory_nodes.embedding_model` for older READY rows that were embedded before the column existed.
@@ -562,3 +592,54 @@ Quick smoke:
 # apply
 ./examples/consolidation_redirect_edges.sh apply
 ```
+
+## Consolidation Health SLO (Gate Artifact)
+
+Evaluate consolidation operability counters for one scope:
+
+```bash
+npm run job:consolidation-health-slo -- --scope default --strict
+```
+
+Checks:
+
+- candidate queue depth (`pair_candidates`)
+- alias apply marker success rate
+- edge redirect completeness for aliased nodes
+- pending incident edges still attached to aliased nodes
+
+Common options:
+
+- `--max-candidate-queue-depth <n>` (default: `200`)
+- `--min-apply-success-rate <0..1>` (default: `0.98`)
+- `--min-redirect-completeness <0..1>` (default: `0.99`)
+- `--max-pending-alias-edges <n>` (default: `0`)
+- `--out <path>` write JSON artifact
+- `--strict` exits `2` when any SLO check fails
+
+## Consolidation Replay Determinism (Gate Artifact)
+
+Generate deterministic replay evidence for consolidation + abstraction snapshots:
+
+```bash
+npm run job:consolidation-replay-determinism -- --scope default --runs 3 --strict
+```
+
+The job fingerprints, per run:
+
+- consolidation merge candidates (`consolidation_candidate_v1`)
+- abstraction compression rollup snapshot
+- abstraction topic linkage snapshot
+- consolidation alias snapshot
+
+Gate pass condition:
+
+- combined fingerprint variants `<= max_fingerprint_variants` (default `1`)
+
+Common options:
+
+- `--runs <n>` (default: `3`)
+- `--sleep-ms <n>` pause between runs (default: `40`)
+- `--max-fingerprint-variants <n>` (default: `1`)
+- `--out <path>` write JSON artifact
+- `--strict` exits `2` when determinism gate fails

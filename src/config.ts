@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const RuntimeModeSchema = z.enum(["local", "service", "cloud"]);
+const AbstractionPolicyProfileSchema = z.enum(["conservative", "balanced", "aggressive"]);
 
 const EnvSchema = z.object({
   AIONIS_MODE: RuntimeModeSchema.default("local"),
@@ -147,6 +148,9 @@ const EnvSchema = z.object({
     .transform((v) => v === "true"),
   MAX_TEXT_LEN: z.coerce.number().int().positive().default(8000),
 
+  // Abstraction policy profile: coarse operating mode for topic clustering + compression rollup defaults.
+  MEMORY_ABSTRACTION_POLICY_PROFILE: AbstractionPolicyProfileSchema.default("balanced"),
+
   TOPIC_SIM_THRESHOLD: z.coerce.number().min(-1).max(1).default(0.78),
   TOPIC_MIN_EVENTS_PER_TOPIC: z.coerce.number().int().positive().default(5),
   TOPIC_CLUSTER_BATCH_SIZE: z.coerce.number().int().positive().max(1000).default(200),
@@ -264,6 +268,42 @@ const MODE_PRESETS: Record<z.infer<typeof RuntimeModeSchema>, Record<string, str
   },
 };
 
+const ABSTRACTION_POLICY_PRESETS: Record<z.infer<typeof AbstractionPolicyProfileSchema>, Record<string, string>> = {
+  conservative: {
+    TOPIC_SIM_THRESHOLD: "0.84",
+    TOPIC_MIN_EVENTS_PER_TOPIC: "6",
+    TOPIC_CLUSTER_BATCH_SIZE: "120",
+    TOPIC_MAX_CANDIDATES_PER_EVENT: "3",
+    MEMORY_COMPRESSION_LOOKBACK_DAYS: "14",
+    MEMORY_COMPRESSION_TOPIC_MIN_EVENTS: "6",
+    MEMORY_COMPRESSION_MAX_TOPICS_PER_RUN: "30",
+    MEMORY_COMPRESSION_MAX_EVENTS_PER_TOPIC: "8",
+    MEMORY_COMPRESSION_MAX_TEXT_LEN: "1400",
+  },
+  balanced: {
+    TOPIC_SIM_THRESHOLD: "0.78",
+    TOPIC_MIN_EVENTS_PER_TOPIC: "5",
+    TOPIC_CLUSTER_BATCH_SIZE: "200",
+    TOPIC_MAX_CANDIDATES_PER_EVENT: "5",
+    MEMORY_COMPRESSION_LOOKBACK_DAYS: "30",
+    MEMORY_COMPRESSION_TOPIC_MIN_EVENTS: "4",
+    MEMORY_COMPRESSION_MAX_TOPICS_PER_RUN: "50",
+    MEMORY_COMPRESSION_MAX_EVENTS_PER_TOPIC: "12",
+    MEMORY_COMPRESSION_MAX_TEXT_LEN: "1800",
+  },
+  aggressive: {
+    TOPIC_SIM_THRESHOLD: "0.72",
+    TOPIC_MIN_EVENTS_PER_TOPIC: "4",
+    TOPIC_CLUSTER_BATCH_SIZE: "400",
+    TOPIC_MAX_CANDIDATES_PER_EVENT: "8",
+    MEMORY_COMPRESSION_LOOKBACK_DAYS: "45",
+    MEMORY_COMPRESSION_TOPIC_MIN_EVENTS: "3",
+    MEMORY_COMPRESSION_MAX_TOPICS_PER_RUN: "100",
+    MEMORY_COMPRESSION_MAX_EVENTS_PER_TOPIC: "20",
+    MEMORY_COMPRESSION_MAX_TEXT_LEN: "2200",
+  },
+};
+
 function withModeDefaults(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = { ...source };
   const modeInput = String(source.AIONIS_MODE ?? "local").trim().toLowerCase();
@@ -280,8 +320,25 @@ function withModeDefaults(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return out;
 }
 
+function withAbstractionPolicyDefaults(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = { ...source };
+  const profileInput = String(source.MEMORY_ABSTRACTION_POLICY_PROFILE ?? "balanced")
+    .trim()
+    .toLowerCase();
+  const parsed = AbstractionPolicyProfileSchema.safeParse(profileInput);
+  if (!parsed.success) return out;
+  out.MEMORY_ABSTRACTION_POLICY_PROFILE = parsed.data;
+  const preset = ABSTRACTION_POLICY_PRESETS[parsed.data];
+  for (const [k, v] of Object.entries(preset)) {
+    const cur = out[k];
+    if (cur === undefined || String(cur).trim().length === 0) out[k] = v;
+  }
+  return out;
+}
+
 export function loadEnv(): Env {
-  const applied = withModeDefaults(process.env);
+  const modeApplied = withModeDefaults(process.env);
+  const applied = withAbstractionPolicyDefaults(modeApplied);
   const parsed = EnvSchema.safeParse(applied);
   if (!parsed.success) {
     const msg = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n");

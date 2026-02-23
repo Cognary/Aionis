@@ -15,6 +15,10 @@ Blocking metrics:
 4. Control-plane input safety (optional): control admin validation smoke
 5. Availability and SLO: recall/write perf benchmark thresholds
 6. Compression KPI (optional blocking): context compression ratio + retain metrics
+7. Abstraction quality counters (non-blocking): clustering + compression signals from health gate
+8. Rule conflict resolution report (optional blocking): winner/loser delta against baseline
+9. Consolidation health SLO (optional blocking): candidate depth + apply/redirect completeness
+10. Replay determinism report (optional blocking): combined consolidation+abstraction fingerprint stability
 
 Auxiliary only (non-blocking):
 1. LongMemEval
@@ -37,7 +41,14 @@ npm run -s gate:core:prod -- \
   --compression-gate-mode non_blocking \
   --compression-ratio-min 0.40 \
   --compression-items-retain-min 0.95 \
-  --compression-citations-retain-min 0.95
+  --compression-citations-retain-min 0.95 \
+  --run-rule-conflict-report true \
+  --rule-conflict-gate-mode non_blocking \
+  --rule-conflict-contexts-file examples/planner_context.json \
+  --run-consolidation-health-slo true \
+  --consolidation-health-gate-mode non_blocking \
+  --run-replay-determinism-report true \
+  --replay-determinism-gate-mode non_blocking
 ```
 
 `--db-runner` notes:
@@ -52,6 +63,8 @@ Artifacts:
 - `artifacts/core_gate/<run_id>/07_consistency_cross_tenant.json`
 - `artifacts/core_gate/<run_id>/07b_pack_roundtrip_gate.json`
 - `artifacts/core_gate/<run_id>/07c_control_admin_validation.log` (when enabled)
+- `artifacts/core_gate/<run_id>/07e_consolidation_health_slo.json`
+- `artifacts/core_gate/<run_id>/07f_replay_determinism.json`
 - `artifacts/core_gate/<run_id>/08_perf_benchmark.json`
 
 Pack gate controls:
@@ -71,6 +84,32 @@ Compression KPI is collected via `job:perf-benchmark` and surfaced in `summary.j
 - `blocking_metrics.compression_kpi.observed`
 - `blocking_metrics.compression_kpi.pass`
 
+Abstraction counters are surfaced from health-gate quality metrics:
+
+- `blocking_metrics.abstraction_quality_counters.profile`
+- `blocking_metrics.abstraction_quality_counters.observed.compression_summaries`
+- `blocking_metrics.abstraction_quality_counters.observed.cluster_cohesion`
+- `blocking_metrics.abstraction_quality_counters.observed.cluster_orphan_rate`
+- `blocking_metrics.abstraction_quality_counters.observed.cluster_merge_rate_30d`
+
+Rule conflict report is surfaced in:
+
+- `blocking_metrics.rule_conflict_resolution.thresholds`
+- `blocking_metrics.rule_conflict_resolution.observed`
+- `blocking_metrics.rule_conflict_resolution.pass`
+
+Consolidation health SLO is surfaced in:
+
+- `blocking_metrics.consolidation_health_slo.thresholds`
+- `blocking_metrics.consolidation_health_slo.observed`
+- `blocking_metrics.consolidation_health_slo.pass`
+
+Replay determinism is surfaced in:
+
+- `blocking_metrics.replay_determinism.thresholds`
+- `blocking_metrics.replay_determinism.observed`
+- `blocking_metrics.replay_determinism.pass`
+
 Modes:
 
 1. `non_blocking` (default): threshold breaches are added to `warn_reasons`, gate can still pass.
@@ -87,6 +126,22 @@ Control knobs:
 - `--perf-compression-samples <n>`
 - `--perf-compression-token-budget <n>`
 - `--perf-compression-profile balanced|aggressive`
+- `--run-rule-conflict-report true|false`
+- `--rule-conflict-gate-mode non_blocking|blocking`
+- `--rule-conflict-contexts-file <json|jsonl>`
+- `--rule-conflict-baseline <summary.json>`
+- `--rule-conflict-rules-limit <n>`
+- `--rule-conflict-max-winner-changes <n>`
+- `--run-consolidation-health-slo true|false`
+- `--consolidation-health-gate-mode non_blocking|blocking`
+- `--consolidation-health-max-candidate-queue-depth <n>`
+- `--consolidation-health-min-apply-success-rate <0..1>`
+- `--consolidation-health-min-redirect-completeness <0..1>`
+- `--consolidation-health-max-pending-alias-edges <n>`
+- `--run-replay-determinism-report true|false`
+- `--replay-determinism-gate-mode non_blocking|blocking`
+- `--replay-determinism-runs <n>`
+- `--replay-determinism-max-fingerprint-variants <n>`
 
 ## CI workflow
 
@@ -96,4 +151,4 @@ This workflow is the main branch gate.
 
 ## Verification Stamp
 
-- Last reviewed: `2026-02-23`
+- Last reviewed: `2026-02-24`

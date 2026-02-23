@@ -19,7 +19,7 @@ type Check = {
 
 type RuleRow = {
   rule_node_id: string;
-  state: "shadow" | "active";
+  state: "draft" | "shadow" | "active";
   summary: string | null;
   commit_id: string | null;
   updated_at: string;
@@ -99,6 +99,10 @@ async function main() {
     1_000_000,
   );
   const minPromoteConfidence = clampNum(Number(argValue("--min-promote-confidence") ?? "0.55"), 0, 1);
+  const minPromoteShadowPositives = clampInt(Number(argValue("--min-promote-shadow-positives") ?? "3"), 0, 1_000_000);
+  const maxPromoteShadowNegatives = clampInt(Number(argValue("--max-promote-shadow-negatives") ?? "0"), 0, 1_000_000);
+  const minPromoteShadowDistinctRuns = clampInt(Number(argValue("--min-promote-shadow-distinct-runs") ?? "3"), 0, 1_000_000);
+  const minPromoteShadowConfidence = clampNum(Number(argValue("--min-promote-shadow-confidence") ?? "0.50"), 0, 1);
 
   const minDisableNegatives = clampInt(Number(argValue("--min-disable-negatives") ?? "5"), 0, 1_000_000);
   const minDisableNegRatio = clampNum(Number(argValue("--min-disable-neg-ratio") ?? "0.6"), 0, 1);
@@ -167,7 +171,7 @@ async function main() {
       LEFT JOIN feedback_recent fr ON fr.rule_node_id = d.rule_node_id
       LEFT JOIN feedback_all fa ON fa.rule_node_id = d.rule_node_id
       WHERE d.scope = $1
-        AND d.state IN ('shadow', 'active')
+        AND d.state IN ('draft', 'shadow', 'active')
       ORDER BY d.updated_at DESC
       LIMIT $3
       `,
@@ -175,6 +179,91 @@ async function main() {
     );
     return r.rows;
   });
+
+  const promoteShadowSuggestions = rows
+    .filter((r) => r.state === "draft")
+    .map((r) => {
+      const score = Number(r.positive_count ?? 0) - Number(r.negative_count ?? 0);
+      const volumeScore = clamp01(r.recent_total / Math.max(canaryMinFeedback, 1));
+      const negativePenalty = clamp01(Number(r.negative_count ?? 0) / Math.max(maxPromoteShadowNegatives + 1, 1));
+      const runsScore = clamp01(r.recent_distinct_runs / Math.max(minPromoteShadowDistinctRuns, 1));
+      const confidence = clamp01(0.45 * volumeScore + 0.35 * runsScore + 0.2 * (1 - negativePenalty));
+      const riskScore = clamp01(1 - confidence);
+
+      const reasons: string[] = [];
+      if (r.positive_count >= minPromoteShadowPositives) reasons.push(`positive_count >= ${minPromoteShadowPositives}`);
+      else reasons.push(`positive_count < ${minPromoteShadowPositives}`);
+      if (r.negative_count <= maxPromoteShadowNegatives) reasons.push(`negative_count <= ${maxPromoteShadowNegatives}`);
+      else reasons.push(`negative_count > ${maxPromoteShadowNegatives}`);
+      if (r.recent_distinct_runs >= minPromoteShadowDistinctRuns)
+        reasons.push(`recent_distinct_runs >= ${minPromoteShadowDistinctRuns}`);
+      else reasons.push(`recent_distinct_runs < ${minPromoteShadowDistinctRuns}`);
+
+      const eligible =
+        r.positive_count >= minPromoteShadowPositives &&
+        r.negative_count <= maxPromoteShadowNegatives &&
+        r.recent_distinct_runs >= minPromoteShadowDistinctRuns &&
+        confidence >= minPromoteShadowConfidence;
+
+      const canaryRecommended = confidence < 0.75 || r.recent_total < canaryMinFeedback;
+
+      return {
+        action: "promote_to_shadow" as const,
+        rule_node_id: r.rule_node_id,
+        current_state: r.state,
+        target_state: "shadow" as const,
+        summary: r.summary,
+        confidence: round(confidence),
+        risk_score: round(riskScore),
+        risk_level: riskLevel(riskScore),
+        canary_recommended: canaryRecommended,
+        metrics: {
+          score,
+          positive_count: r.positive_count,
+          negative_count: r.negative_count,
+          recent_total: r.recent_total,
+          recent_positive: r.recent_positive,
+          recent_negative: r.recent_negative,
+          recent_neutral: r.recent_neutral,
+          recent_distinct_runs: r.recent_distinct_runs,
+          all_positive_runs: r.all_positive_runs,
+          all_negative_runs: r.all_negative_runs,
+        },
+        reasons,
+        trace: {
+          commit_id: r.commit_id,
+          updated_at: r.updated_at,
+          last_evaluated_at: r.last_evaluated_at,
+          recent_last_feedback_at: r.recent_last_feedback_at,
+        },
+        apply: {
+          endpoint: "/v1/memory/rules/state",
+          payload: {
+            scope,
+            rule_node_id: r.rule_node_id,
+            state: "shadow",
+            input_text: "policy adaptation gate: promote draft rule",
+          },
+        },
+        rollback: {
+          endpoint: "/v1/memory/rules/state",
+          payload: {
+            scope,
+            rule_node_id: r.rule_node_id,
+            state: "draft",
+            input_text: "policy adaptation gate: rollback draft promotion",
+          },
+        },
+        ...(includeJson ? { if_json: r.if_json, then_json: r.then_json, exceptions_json: r.exceptions_json } : {}),
+      };
+    })
+    .filter((x) => x.confidence >= minPromoteShadowConfidence)
+    .filter((x) =>
+      x.reasons.includes(`positive_count >= ${minPromoteShadowPositives}`) &&
+      x.reasons.includes(`negative_count <= ${maxPromoteShadowNegatives}`) &&
+      x.reasons.includes(`recent_distinct_runs >= ${minPromoteShadowDistinctRuns}`),
+    )
+    .sort((a, b) => b.confidence - a.confidence || b.metrics.score - a.metrics.score);
 
   const promoteSuggestions = rows
     .filter((r) => r.state === "shadow")
@@ -396,6 +485,12 @@ async function main() {
         min_score: minPromoteScore,
         min_confidence: minPromoteConfidence,
       },
+      promote_to_shadow: {
+        min_positives: minPromoteShadowPositives,
+        max_negatives: maxPromoteShadowNegatives,
+        min_distinct_runs: minPromoteShadowDistinctRuns,
+        min_confidence: minPromoteShadowConfidence,
+      },
       disable: {
         min_negatives: minDisableNegatives,
         min_negative_ratio: minDisableNegRatio,
@@ -413,6 +508,7 @@ async function main() {
     },
     scanned: {
       rules: rows.length,
+      draft_rules: rows.filter((r) => r.state === "draft").length,
       shadow_rules: rows.filter((r) => r.state === "shadow").length,
       active_rules: rows.filter((r) => r.state === "active").length,
     },
@@ -421,12 +517,14 @@ async function main() {
       pass,
       failed_errors: failedErrors,
       failed_warnings: failedWarnings,
+      promote_to_shadow_candidates: promoteShadowSuggestions.length,
       promote_candidates: promoteSuggestions.length,
       disable_candidates: disableSuggestions.length,
       urgent_disable_candidates: urgentDisableCandidates.length,
       canary_disable_candidates: canaryDisableCandidates.length,
     },
     suggestions: {
+      promote_to_shadow: promoteShadowSuggestions,
       promote_to_active: promoteSuggestions,
       disable_active: disableSuggestions,
     },

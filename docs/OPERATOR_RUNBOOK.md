@@ -104,7 +104,17 @@ npm run -s env:throughput:prod
 
 This updates only the managed throughput block in `.env` and keeps existing secrets unchanged.
 
-7. Optional context compaction smoke (`recall_text`):
+7. Abstraction policy profile check/apply:
+
+```bash
+npm run -s env:abstraction:balanced
+```
+
+Use `conservative` when quality drifts, `aggressive` when coverage is insufficient.
+Detailed replay/backfill procedure: `docs/ABSTRACTION_POLICY_RUNBOOK.md`.
+Consolidation rollback/re-run procedure: `docs/CONSOLIDATION_REPLAY_RUNBOOK.md`.
+
+8. Optional context compaction smoke (`recall_text`):
 
 ```bash
 curl -sS localhost:${PORT:-3001}/v1/memory/recall_text \
@@ -113,7 +123,7 @@ curl -sS localhost:${PORT:-3001}/v1/memory/recall_text \
 | jq '{context_chars:(.context.text|length), items:(.context.items|length), citations:(.context.citations|length), compaction:.debug.context_compaction}'
 ```
 
-8. Tenant operability diagnostics (structured recall/outbox observability):
+9. Tenant operability diagnostics (structured recall/outbox observability):
 
 ```bash
 set -a; source .env; set +a
@@ -169,19 +179,40 @@ For release gate:
 npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --strict-warnings
 ```
 
-4. Lifecycle smoke (API + jobs + feedback loop):
+4. Rule promotion governance check before lifecycle transition:
+
+```bash
+npm run -s job:rule-promotion-governance -- \
+  --scope default \
+  --rule-node-id <rule_uuid> \
+  --target-state shadow \
+  --strict
+```
+
+5. Rule conflict resolution artifact (rollout diff):
+
+```bash
+npm run -s job:rule-conflict-report -- \
+  --scope default \
+  --contexts-file examples/planner_context.json \
+  --baseline artifacts/rule_conflicts/previous/summary.json \
+  --max-winner-changes 0 \
+  --strict
+```
+
+6. Lifecycle smoke (API + jobs + feedback loop):
 
 ```bash
 npm run e2e:phase4-smoke
 ```
 
-5. Tenant isolation smoke (Phase C):
+7. Tenant isolation smoke (Phase C):
 
 ```bash
 npm run e2e:phasec-tenant
 ```
 
-6. Auxiliary benchmark regression (non-blocking):
+8. Auxiliary benchmark regression (non-blocking):
 
 ```bash
 npm run -s env:throughput:benchmark
@@ -235,6 +266,11 @@ Use these as default SLO-style boundaries. Tune by scope once traffic stabilizes
   - `RECALL_TEXT_EMBED_CACHE_TTL_MS` / `RECALL_TEXT_EMBED_CACHE_MAX_KEYS` sized for traffic.
 - Temporarily reduce upstream pressure by lowering caller concurrency or increasing repeated-query cache hit ratio.
 
+5. If consolidation health or replay determinism fails:
+- Run `npm run -s job:consolidation-health-slo -- --scope default --strict`.
+- Run `npm run -s job:consolidation-replay-determinism -- --scope default --runs 3 --strict`.
+- Follow `docs/CONSOLIDATION_REPLAY_RUNBOOK.md` for rollback + bounded re-run steps.
+
 ## Release Gate Recommendation
 
 Before production deploy:
@@ -247,6 +283,8 @@ npm run -s gate:core:prod -- \
   --partition-dual-write-enabled true \
   --partition-read-shadow-check true \
   --run-control-admin-validation true \
+  --run-consolidation-health-slo true \
+  --run-replay-determinism-report true \
   --run-perf true \
   --recall-p95-max-ms 1200 \
   --write-p95-max-ms 800 \

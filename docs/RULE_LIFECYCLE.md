@@ -30,6 +30,28 @@ npm run job:rule-promotion-suggest
 
 It does **not** mutate rule state. To promote, call `POST /v1/memory/rules/state`.
 
+## Promotion Governance Gate (Deterministic)
+
+Before calling `/v1/memory/rules/state`, run governance checks for the exact transition:
+
+```bash
+# draft -> shadow
+npm run -s job:rule-promotion-governance -- \
+  --scope default \
+  --rule-node-id <rule_uuid> \
+  --target-state shadow \
+  --strict
+
+# shadow -> active
+npm run -s job:rule-promotion-governance -- \
+  --scope default \
+  --rule-node-id <rule_uuid> \
+  --target-state active \
+  --strict
+```
+
+See `docs/RULE_PROMOTION_GOVERNANCE.md` for thresholds and output fields.
+
 ## Feedback Capture
 
 Write a `memory_rule_feedback` row when:

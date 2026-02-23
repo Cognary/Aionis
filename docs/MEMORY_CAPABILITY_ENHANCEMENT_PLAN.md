@@ -4,7 +4,7 @@ title: "Memory Capability Enhancement Plan"
 
 # Memory Capability Enhancement Plan
 
-Last updated: `2026-02-23`
+Last updated: `2026-02-24`
 
 ## Goal
 
@@ -40,9 +40,9 @@ Exit criteria:
 
 ### Phase 2: Abstraction Policy Hardening
 
-- [ ] Add abstraction policy profile (when to trigger compression/topic abstraction per scope and tier)
-- [ ] Add abstraction quality counters to gate artifacts
-- [ ] Add operator runbook for abstraction backfill and replay
+- [x] Add abstraction policy profile (when to trigger compression/topic abstraction per scope and tier)
+- [x] Add abstraction quality counters to gate artifacts
+- [x] Add operator runbook for abstraction backfill and replay
 
 Exit criteria:
 
@@ -50,9 +50,9 @@ Exit criteria:
 
 ### Phase 3: Strategy Memory Lifecycle Hardening
 
-- [ ] Add governance checks for rule promotion (`draft -> shadow -> active`)
-- [ ] Add deterministic conflict-resolution report artifact (winner/loser deltas per rollout)
-- [ ] Add shadow-to-active recommendation thresholds as documented policy
+- [x] Add governance checks for rule promotion (`draft -> shadow -> active`)
+- [x] Add deterministic conflict-resolution report artifact (winner/loser deltas per rollout)
+- [x] Add shadow-to-active recommendation thresholds as documented policy
 
 Exit criteria:
 
@@ -60,9 +60,9 @@ Exit criteria:
 
 ### Phase 4: Consolidation + Replay Production Gate
 
-- [ ] Add consolidation health SLO (candidate queue depth, apply success, redirect completeness)
-- [ ] Add replay determinism report for consolidation+abstraction combined workloads
-- [ ] Add rollback and re-run checklist for consolidation incidents
+- [x] Add consolidation health SLO (candidate queue depth, apply success, redirect completeness)
+- [x] Add replay determinism report for consolidation+abstraction combined workloads
+- [x] Add rollback and re-run checklist for consolidation incidents
 
 Exit criteria:
 

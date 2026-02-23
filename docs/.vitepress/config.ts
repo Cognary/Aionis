@@ -63,6 +63,8 @@ export default defineConfig({
           { text: "SDK Compatibility", link: "/SDK_COMPATIBILITY_MATRIX" },
           { text: "Planner Context", link: "/PLANNER_CONTEXT" },
           { text: "Rule Lifecycle", link: "/RULE_LIFECYCLE" },
+          { text: "Rule Promotion Governance", link: "/RULE_PROMOTION_GOVERNANCE" },
+          { text: "Rule Conflict Report", link: "/RULE_CONFLICT_REPORT" },
           { text: "Execution Loop Gate", link: "/EXECUTION_LOOP_GATE" },
           { text: "Policy Adaptation Gate", link: "/POLICY_ADAPTATION_GATE" },
         ],
@@ -71,6 +73,8 @@ export default defineConfig({
         text: "Operations",
         items: [
           { text: "Operator Runbook", link: "/OPERATOR_RUNBOOK" },
+          { text: "Abstraction Policy Runbook", link: "/ABSTRACTION_POLICY_RUNBOOK" },
+          { text: "Consolidation Replay Runbook", link: "/CONSOLIDATION_REPLAY_RUNBOOK" },
           { text: "Prod Go-Live Gate", link: "/PROD_GO_LIVE_GATE" },
           { text: "Production Core Gate", link: "/PRODUCTION_CORE_GATE" },
           { text: "E2E Regression", link: "/E2E_REGRESSION" },

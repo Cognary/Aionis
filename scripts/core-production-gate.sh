@@ -46,6 +46,22 @@ COMPRESSION_GATE_MODE="${COMPRESSION_GATE_MODE:-non_blocking}"
 COMPRESSION_RATIO_MIN="${COMPRESSION_RATIO_MIN:-0.40}"
 COMPRESSION_ITEMS_RETAIN_MIN="${COMPRESSION_ITEMS_RETAIN_MIN:-0.95}"
 COMPRESSION_CITATIONS_RETAIN_MIN="${COMPRESSION_CITATIONS_RETAIN_MIN:-0.95}"
+RUN_RULE_CONFLICT_REPORT="${RUN_RULE_CONFLICT_REPORT:-true}"
+RULE_CONFLICT_GATE_MODE="${RULE_CONFLICT_GATE_MODE:-non_blocking}"
+RULE_CONFLICT_CONTEXTS_FILE="${RULE_CONFLICT_CONTEXTS_FILE:-examples/planner_context.json}"
+RULE_CONFLICT_BASELINE="${RULE_CONFLICT_BASELINE:-}"
+RULE_CONFLICT_RULES_LIMIT="${RULE_CONFLICT_RULES_LIMIT:-50}"
+RULE_CONFLICT_MAX_WINNER_CHANGES="${RULE_CONFLICT_MAX_WINNER_CHANGES:-0}"
+RUN_CONSOLIDATION_HEALTH_SLO="${RUN_CONSOLIDATION_HEALTH_SLO:-true}"
+CONSOLIDATION_HEALTH_GATE_MODE="${CONSOLIDATION_HEALTH_GATE_MODE:-non_blocking}"
+CONSOLIDATION_HEALTH_MAX_CANDIDATE_QUEUE_DEPTH="${CONSOLIDATION_HEALTH_MAX_CANDIDATE_QUEUE_DEPTH:-200}"
+CONSOLIDATION_HEALTH_MIN_APPLY_SUCCESS_RATE="${CONSOLIDATION_HEALTH_MIN_APPLY_SUCCESS_RATE:-0.98}"
+CONSOLIDATION_HEALTH_MIN_REDIRECT_COMPLETENESS="${CONSOLIDATION_HEALTH_MIN_REDIRECT_COMPLETENESS:-0.99}"
+CONSOLIDATION_HEALTH_MAX_PENDING_ALIAS_EDGES="${CONSOLIDATION_HEALTH_MAX_PENDING_ALIAS_EDGES:-0}"
+RUN_REPLAY_DETERMINISM_REPORT="${RUN_REPLAY_DETERMINISM_REPORT:-true}"
+REPLAY_DETERMINISM_GATE_MODE="${REPLAY_DETERMINISM_GATE_MODE:-non_blocking}"
+REPLAY_DETERMINISM_RUNS="${REPLAY_DETERMINISM_RUNS:-3}"
+REPLAY_DETERMINISM_MAX_FINGERPRINT_VARIANTS="${REPLAY_DETERMINISM_MAX_FINGERPRINT_VARIANTS:-1}"
 
 PERF_WARMUP="${PERF_WARMUP:-10}"
 PERF_RECALL_REQUESTS="${PERF_RECALL_REQUESTS:-80}"
@@ -79,6 +95,22 @@ while [[ $# -gt 0 ]]; do
     --compression-ratio-min) COMPRESSION_RATIO_MIN="${2:-}"; shift 2 ;;
     --compression-items-retain-min) COMPRESSION_ITEMS_RETAIN_MIN="${2:-}"; shift 2 ;;
     --compression-citations-retain-min) COMPRESSION_CITATIONS_RETAIN_MIN="${2:-}"; shift 2 ;;
+    --run-rule-conflict-report) RUN_RULE_CONFLICT_REPORT="${2:-}"; shift 2 ;;
+    --rule-conflict-gate-mode) RULE_CONFLICT_GATE_MODE="${2:-}"; shift 2 ;;
+    --rule-conflict-contexts-file) RULE_CONFLICT_CONTEXTS_FILE="${2:-}"; shift 2 ;;
+    --rule-conflict-baseline) RULE_CONFLICT_BASELINE="${2:-}"; shift 2 ;;
+    --rule-conflict-rules-limit) RULE_CONFLICT_RULES_LIMIT="${2:-}"; shift 2 ;;
+    --rule-conflict-max-winner-changes) RULE_CONFLICT_MAX_WINNER_CHANGES="${2:-}"; shift 2 ;;
+    --run-consolidation-health-slo) RUN_CONSOLIDATION_HEALTH_SLO="${2:-}"; shift 2 ;;
+    --consolidation-health-gate-mode) CONSOLIDATION_HEALTH_GATE_MODE="${2:-}"; shift 2 ;;
+    --consolidation-health-max-candidate-queue-depth) CONSOLIDATION_HEALTH_MAX_CANDIDATE_QUEUE_DEPTH="${2:-}"; shift 2 ;;
+    --consolidation-health-min-apply-success-rate) CONSOLIDATION_HEALTH_MIN_APPLY_SUCCESS_RATE="${2:-}"; shift 2 ;;
+    --consolidation-health-min-redirect-completeness) CONSOLIDATION_HEALTH_MIN_REDIRECT_COMPLETENESS="${2:-}"; shift 2 ;;
+    --consolidation-health-max-pending-alias-edges) CONSOLIDATION_HEALTH_MAX_PENDING_ALIAS_EDGES="${2:-}"; shift 2 ;;
+    --run-replay-determinism-report) RUN_REPLAY_DETERMINISM_REPORT="${2:-}"; shift 2 ;;
+    --replay-determinism-gate-mode) REPLAY_DETERMINISM_GATE_MODE="${2:-}"; shift 2 ;;
+    --replay-determinism-runs) REPLAY_DETERMINISM_RUNS="${2:-}"; shift 2 ;;
+    --replay-determinism-max-fingerprint-variants) REPLAY_DETERMINISM_MAX_FINGERPRINT_VARIANTS="${2:-}"; shift 2 ;;
     --perf-warmup) PERF_WARMUP="${2:-}"; shift 2 ;;
     --perf-recall-requests) PERF_RECALL_REQUESTS="${2:-}"; shift 2 ;;
     --perf-recall-concurrency) PERF_RECALL_CONCURRENCY="${2:-}"; shift 2 ;;
@@ -107,7 +139,9 @@ Core gate steps:
 2) health-gate(scope strict warnings)
 3) consistency-check(cross-tenant strict warnings)
 4) control admin input validation smoke (optional, disabled by default)
-5) perf-benchmark SLO checks (optional, enabled by default)
+5) consolidation health SLO report (optional, enabled by default)
+6) replay determinism report (optional, enabled by default)
+7) perf-benchmark SLO checks (optional, enabled by default)
 
 Options:
   --base-url <url>                   API base URL (default: http://localhost:$PORT)
@@ -127,6 +161,22 @@ Options:
   --compression-ratio-min <0..1>     Min compression ratio mean (default: 0.40)
   --compression-items-retain-min <0..1>      Min items retain ratio mean (default: 0.95)
   --compression-citations-retain-min <0..1>  Min citations retain ratio mean (default: 0.95)
+  --run-rule-conflict-report <bool>  Run deterministic rule conflict report (default: true)
+  --rule-conflict-gate-mode <mode>   Rule conflict gate mode: non_blocking|blocking (default: non_blocking)
+  --rule-conflict-contexts-file <p>  Context corpus json/jsonl file (default: examples/planner_context.json)
+  --rule-conflict-baseline <p>       Optional baseline summary json for winner/loser delta compare
+  --rule-conflict-rules-limit <n>    Rule scan limit per context (default: 50)
+  --rule-conflict-max-winner-changes <n>  Winner-change threshold against baseline (default: 0)
+  --run-consolidation-health-slo <bool>  Run consolidation health SLO artifact (default: true)
+  --consolidation-health-gate-mode <mode>  Consolidation health mode: non_blocking|blocking (default: non_blocking)
+  --consolidation-health-max-candidate-queue-depth <n>  Max consolidation pair queue depth (default: 200)
+  --consolidation-health-min-apply-success-rate <f>      Min alias apply success rate (default: 0.98)
+  --consolidation-health-min-redirect-completeness <f>   Min alias redirect completeness (default: 0.99)
+  --consolidation-health-max-pending-alias-edges <n>     Max pending alias incident edges (default: 0)
+  --run-replay-determinism-report <bool>  Run consolidation+abstraction replay determinism report (default: true)
+  --replay-determinism-gate-mode <mode>   Replay determinism mode: non_blocking|blocking (default: non_blocking)
+  --replay-determinism-runs <n>           Determinism sampling runs (default: 3)
+  --replay-determinism-max-fingerprint-variants <n>  Max accepted fingerprint variants (default: 1)
   --perf-warmup <n>                  Warmup requests (default: 10)
   --perf-recall-requests <n>         Recall requests (default: 80)
   --perf-recall-concurrency <n>      Recall concurrency (default: 6)
@@ -179,11 +229,65 @@ case "${COMPRESSION_GATE_MODE}" in
     ;;
 esac
 
+case "${RULE_CONFLICT_GATE_MODE}" in
+  blocking|non_blocking)
+    ;;
+  *)
+    echo "invalid --rule-conflict-gate-mode: ${RULE_CONFLICT_GATE_MODE} (expected non_blocking|blocking)" >&2
+    exit 1
+    ;;
+esac
+
+case "${CONSOLIDATION_HEALTH_GATE_MODE}" in
+  blocking|non_blocking)
+    ;;
+  *)
+    echo "invalid --consolidation-health-gate-mode: ${CONSOLIDATION_HEALTH_GATE_MODE} (expected non_blocking|blocking)" >&2
+    exit 1
+    ;;
+esac
+
+case "${REPLAY_DETERMINISM_GATE_MODE}" in
+  blocking|non_blocking)
+    ;;
+  *)
+    echo "invalid --replay-determinism-gate-mode: ${REPLAY_DETERMINISM_GATE_MODE} (expected non_blocking|blocking)" >&2
+    exit 1
+    ;;
+esac
+
 case "${RUN_CONTROL_ADMIN_VALIDATION}" in
   true|false)
     ;;
   *)
     echo "invalid --run-control-admin-validation: ${RUN_CONTROL_ADMIN_VALIDATION} (expected true|false)" >&2
+    exit 1
+    ;;
+esac
+
+case "${RUN_RULE_CONFLICT_REPORT}" in
+  true|false)
+    ;;
+  *)
+    echo "invalid --run-rule-conflict-report: ${RUN_RULE_CONFLICT_REPORT} (expected true|false)" >&2
+    exit 1
+    ;;
+esac
+
+case "${RUN_CONSOLIDATION_HEALTH_SLO}" in
+  true|false)
+    ;;
+  *)
+    echo "invalid --run-consolidation-health-slo: ${RUN_CONSOLIDATION_HEALTH_SLO} (expected true|false)" >&2
+    exit 1
+    ;;
+esac
+
+case "${RUN_REPLAY_DETERMINISM_REPORT}" in
+  true|false)
+    ;;
+  *)
+    echo "invalid --run-replay-determinism-report: ${RUN_REPLAY_DETERMINISM_REPORT} (expected true|false)" >&2
     exit 1
     ;;
 esac
@@ -382,6 +486,9 @@ echo "[core-gate] run_control_admin_validation=${RUN_CONTROL_ADMIN_VALIDATION}"
 echo "[core-gate] require_partition_ready=${CORE_GATE_REQUIRE_PARTITION_READY}"
 echo "[core-gate] db_runner=${DB_RUNNER}"
 echo "[core-gate] compression_gate_mode=${COMPRESSION_GATE_MODE} perf_compression_check=${PERF_COMPRESSION_CHECK}"
+echo "[core-gate] rule_conflict_gate_mode=${RULE_CONFLICT_GATE_MODE} run_rule_conflict_report=${RUN_RULE_CONFLICT_REPORT}"
+echo "[core-gate] consolidation_health_gate_mode=${CONSOLIDATION_HEALTH_GATE_MODE} run_consolidation_health_slo=${RUN_CONSOLIDATION_HEALTH_SLO}"
+echo "[core-gate] replay_determinism_gate_mode=${REPLAY_DETERMINISM_GATE_MODE} run_replay_determinism_report=${RUN_REPLAY_DETERMINISM_REPORT}"
 probe_api_target
 probe_database_connectivity
 
@@ -396,6 +503,144 @@ run_step "health_gate_scope" "${OUT_DIR}/06_health_gate_scope.json" \
 
 run_step "consistency_cross_tenant" "${OUT_DIR}/07_consistency_cross_tenant.json" \
   run_db_command npm run -s job:consistency-check:cross-tenant -- --strict-warnings
+
+rule_conflict_report_path=""
+rule_conflict_enabled=false
+rule_conflict_pass=true
+rule_conflict_total_conflicts="0"
+rule_conflict_winner_changes="0"
+rule_conflict_new_conflicts="0"
+rule_conflict_resolved_conflicts="0"
+rule_conflict_fingerprint=""
+if [[ "${RUN_RULE_CONFLICT_REPORT}" == "true" ]]; then
+  rule_conflict_enabled=true
+  rule_conflict_report_path="${OUT_DIR}/07d_rule_conflict_report.json"
+  rule_conflict_cmd=(run_db_command npm run -s job:rule-conflict-report -- --scope "${SCOPE}" --tenant-id "${TENANT_ID}" --contexts-file "${RULE_CONFLICT_CONTEXTS_FILE}" --rules-limit "${RULE_CONFLICT_RULES_LIMIT}" --max-winner-changes "${RULE_CONFLICT_MAX_WINNER_CHANGES}" --out "${rule_conflict_report_path}")
+  if [[ -n "${RULE_CONFLICT_BASELINE}" ]]; then
+    rule_conflict_cmd+=(--baseline "${RULE_CONFLICT_BASELINE}")
+  fi
+  run_step "rule_conflict_report" "${rule_conflict_report_path}.log" "${rule_conflict_cmd[@]}"
+
+  if [[ -f "${rule_conflict_report_path}" ]] && jq -e . >/dev/null 2>&1 < "${rule_conflict_report_path}"; then
+    rule_conflict_pass="$(jq -r '.summary.gate.pass // false' "${rule_conflict_report_path}")"
+    rule_conflict_total_conflicts="$(to_number_or_zero "$(jq -r '.summary.total_conflicts // 0' "${rule_conflict_report_path}")")"
+    rule_conflict_winner_changes="$(to_number_or_zero "$(jq -r '.summary.delta.winner_changes // 0' "${rule_conflict_report_path}")")"
+    rule_conflict_new_conflicts="$(to_number_or_zero "$(jq -r '.summary.delta.new_conflicts // 0' "${rule_conflict_report_path}")")"
+    rule_conflict_resolved_conflicts="$(to_number_or_zero "$(jq -r '.summary.delta.resolved_conflicts // 0' "${rule_conflict_report_path}")")"
+    rule_conflict_fingerprint="$(jq -r '.summary.fingerprint_sha256 // ""' "${rule_conflict_report_path}")"
+    if [[ "${rule_conflict_pass}" != "true" ]]; then
+      if [[ "${RULE_CONFLICT_GATE_MODE}" == "blocking" ]]; then
+        fail_reasons="$(echo "${fail_reasons}" | jq '. + ["rule_conflict_winner_changes_exceeded"]')"
+      else
+        warn_reasons="$(echo "${warn_reasons}" | jq '. + ["rule_conflict_winner_changes_exceeded"]')"
+      fi
+    fi
+  else
+    rule_conflict_pass=false
+    if [[ "${RULE_CONFLICT_GATE_MODE}" == "blocking" ]]; then
+      fail_reasons="$(echo "${fail_reasons}" | jq '. + ["rule_conflict_report_output_invalid"]')"
+    else
+      warn_reasons="$(echo "${warn_reasons}" | jq '. + ["rule_conflict_report_output_invalid"]')"
+    fi
+  fi
+fi
+
+consolidation_health_report_path=""
+consolidation_health_enabled=false
+consolidation_health_pass=true
+consolidation_health_candidate_queue_depth="0"
+consolidation_health_apply_success_rate="1"
+consolidation_health_redirect_completeness="1"
+consolidation_health_pending_alias_edges="0"
+if [[ "${RUN_CONSOLIDATION_HEALTH_SLO}" == "true" ]]; then
+  consolidation_health_enabled=true
+  consolidation_health_report_path="${OUT_DIR}/07e_consolidation_health_slo.json"
+  run_step "consolidation_health_slo" "${consolidation_health_report_path}.log" \
+    run_db_command npm run -s job:consolidation-health-slo -- \
+      --scope "${SCOPE}" \
+      --tenant-id "${TENANT_ID}" \
+      --max-candidate-queue-depth "${CONSOLIDATION_HEALTH_MAX_CANDIDATE_QUEUE_DEPTH}" \
+      --min-apply-success-rate "${CONSOLIDATION_HEALTH_MIN_APPLY_SUCCESS_RATE}" \
+      --min-redirect-completeness "${CONSOLIDATION_HEALTH_MIN_REDIRECT_COMPLETENESS}" \
+      --max-pending-alias-edges "${CONSOLIDATION_HEALTH_MAX_PENDING_ALIAS_EDGES}" \
+      --out "${consolidation_health_report_path}"
+
+  if [[ -f "${consolidation_health_report_path}" ]] && jq -e . >/dev/null 2>&1 < "${consolidation_health_report_path}"; then
+    consolidation_health_pass="$(jq -r '.summary.pass // false' "${consolidation_health_report_path}")"
+    consolidation_health_candidate_queue_depth="$(to_number_or_zero "$(jq -r '.observed.candidate_queue_depth // 0' "${consolidation_health_report_path}")")"
+    consolidation_health_apply_success_rate="$(to_number_or_zero "$(jq -r '.observed.apply_success_rate // 0' "${consolidation_health_report_path}")")"
+    consolidation_health_redirect_completeness="$(to_number_or_zero "$(jq -r '.observed.redirect_completeness // 0' "${consolidation_health_report_path}")")"
+    consolidation_health_pending_alias_edges="$(to_number_or_zero "$(jq -r '.observed.incident_edges_on_alias_nodes // 0' "${consolidation_health_report_path}")")"
+    if [[ "${consolidation_health_pass}" != "true" ]]; then
+      if [[ "${CONSOLIDATION_HEALTH_GATE_MODE}" == "blocking" ]]; then
+        fail_reasons="$(echo "${fail_reasons}" | jq '. + ["consolidation_health_slo_failed"]')"
+      else
+        warn_reasons="$(echo "${warn_reasons}" | jq '. + ["consolidation_health_slo_failed"]')"
+      fi
+    fi
+  else
+    consolidation_health_pass=false
+    if [[ "${CONSOLIDATION_HEALTH_GATE_MODE}" == "blocking" ]]; then
+      fail_reasons="$(echo "${fail_reasons}" | jq '. + ["consolidation_health_slo_output_invalid"]')"
+    else
+      warn_reasons="$(echo "${warn_reasons}" | jq '. + ["consolidation_health_slo_output_invalid"]')"
+    fi
+  fi
+fi
+
+replay_determinism_report_path=""
+replay_determinism_enabled=false
+replay_determinism_pass=true
+replay_determinism_fingerprint_variants="1"
+replay_determinism_fingerprint=""
+if [[ "${RUN_REPLAY_DETERMINISM_REPORT}" == "true" ]]; then
+  replay_determinism_enabled=true
+  replay_determinism_report_path="${OUT_DIR}/07f_replay_determinism.json"
+  run_step "consolidation_replay_determinism" "${replay_determinism_report_path}.log" \
+    run_db_command npm run -s job:consolidation-replay-determinism -- \
+      --scope "${SCOPE}" \
+      --tenant-id "${TENANT_ID}" \
+      --runs "${REPLAY_DETERMINISM_RUNS}" \
+      --max-fingerprint-variants "${REPLAY_DETERMINISM_MAX_FINGERPRINT_VARIANTS}" \
+      --out "${replay_determinism_report_path}"
+
+  if [[ -f "${replay_determinism_report_path}" ]] && jq -e . >/dev/null 2>&1 < "${replay_determinism_report_path}"; then
+    replay_determinism_pass="$(jq -r '.summary.pass // false' "${replay_determinism_report_path}")"
+    replay_determinism_fingerprint_variants="$(to_number_or_zero "$(jq -r '.summary.combined_fingerprint_variants // 0' "${replay_determinism_report_path}")")"
+    replay_determinism_fingerprint="$(jq -r '.summary.fingerprint_sha256 // ""' "${replay_determinism_report_path}")"
+    if [[ "${replay_determinism_pass}" != "true" ]]; then
+      if [[ "${REPLAY_DETERMINISM_GATE_MODE}" == "blocking" ]]; then
+        fail_reasons="$(echo "${fail_reasons}" | jq '. + ["replay_determinism_failed"]')"
+      else
+        warn_reasons="$(echo "${warn_reasons}" | jq '. + ["replay_determinism_failed"]')"
+      fi
+    fi
+  else
+    replay_determinism_pass=false
+    if [[ "${REPLAY_DETERMINISM_GATE_MODE}" == "blocking" ]]; then
+      fail_reasons="$(echo "${fail_reasons}" | jq '. + ["replay_determinism_output_invalid"]')"
+    else
+      warn_reasons="$(echo "${warn_reasons}" | jq '. + ["replay_determinism_output_invalid"]')"
+    fi
+  fi
+fi
+
+abstraction_profile="${MEMORY_ABSTRACTION_POLICY_PROFILE:-balanced}"
+abstraction_metrics_source_path="${OUT_DIR}/06_health_gate_scope.json"
+abstraction_metrics_present=false
+abstraction_compression_summaries="0"
+abstraction_compression_avg_citations="0"
+abstraction_cluster_cohesion="0"
+abstraction_cluster_orphan_rate="0"
+abstraction_cluster_merge_rate_30d="0"
+if [[ -f "${abstraction_metrics_source_path}" ]] && jq -e . >/dev/null 2>&1 < "${abstraction_metrics_source_path}"; then
+  abstraction_compression_summaries="$(to_number_or_zero "$(jq -r '.quality.abstraction.compression_summaries // 0' "${abstraction_metrics_source_path}")")"
+  abstraction_compression_avg_citations="$(to_number_or_zero "$(jq -r '.quality.abstraction.compression_avg_citations // 0' "${abstraction_metrics_source_path}")")"
+  abstraction_cluster_cohesion="$(to_number_or_zero "$(jq -r '.quality.abstraction.clustering_quality.cohesion // 0' "${abstraction_metrics_source_path}")")"
+  abstraction_cluster_orphan_rate="$(to_number_or_zero "$(jq -r '.quality.abstraction.clustering_quality.drift_orphan_rate // 0' "${abstraction_metrics_source_path}")")"
+  abstraction_cluster_merge_rate_30d="$(to_number_or_zero "$(jq -r '.quality.abstraction.clustering_quality.merge_rate_30d // 0' "${abstraction_metrics_source_path}")")"
+  abstraction_metrics_present=true
+fi
 
 pack_gate_summary_path=""
 pack_gate_ok=true
@@ -602,6 +847,47 @@ jq -n \
   --argjson compression_citations_retain_mean "${compression_citations_retain_mean}" \
   --argjson compression_ok_pairs "${compression_ok_pairs}" \
   --argjson compression_total_pairs "${compression_total_pairs}" \
+  --arg rule_conflict_gate_mode "${RULE_CONFLICT_GATE_MODE}" \
+  --arg rule_conflict_contexts_file "${RULE_CONFLICT_CONTEXTS_FILE}" \
+  --arg rule_conflict_baseline "${RULE_CONFLICT_BASELINE}" \
+  --argjson rule_conflict_rules_limit "${RULE_CONFLICT_RULES_LIMIT}" \
+  --argjson rule_conflict_max_winner_changes "${RULE_CONFLICT_MAX_WINNER_CHANGES}" \
+  --arg rule_conflict_report_path "${rule_conflict_report_path}" \
+  --arg rule_conflict_fingerprint "${rule_conflict_fingerprint}" \
+  --argjson rule_conflict_enabled "$([[ "${rule_conflict_enabled}" == "true" ]] && echo true || echo false)" \
+  --argjson rule_conflict_pass "$([[ "${rule_conflict_pass}" == "true" ]] && echo true || echo false)" \
+  --argjson rule_conflict_total_conflicts "${rule_conflict_total_conflicts}" \
+  --argjson rule_conflict_winner_changes "${rule_conflict_winner_changes}" \
+  --argjson rule_conflict_new_conflicts "${rule_conflict_new_conflicts}" \
+  --argjson rule_conflict_resolved_conflicts "${rule_conflict_resolved_conflicts}" \
+  --arg consolidation_health_gate_mode "${CONSOLIDATION_HEALTH_GATE_MODE}" \
+  --argjson consolidation_health_max_candidate_queue_depth "${CONSOLIDATION_HEALTH_MAX_CANDIDATE_QUEUE_DEPTH}" \
+  --argjson consolidation_health_min_apply_success_rate "${CONSOLIDATION_HEALTH_MIN_APPLY_SUCCESS_RATE}" \
+  --argjson consolidation_health_min_redirect_completeness "${CONSOLIDATION_HEALTH_MIN_REDIRECT_COMPLETENESS}" \
+  --argjson consolidation_health_max_pending_alias_edges "${CONSOLIDATION_HEALTH_MAX_PENDING_ALIAS_EDGES}" \
+  --arg consolidation_health_report_path "${consolidation_health_report_path}" \
+  --argjson consolidation_health_enabled "$([[ "${consolidation_health_enabled}" == "true" ]] && echo true || echo false)" \
+  --argjson consolidation_health_pass "$([[ "${consolidation_health_pass}" == "true" ]] && echo true || echo false)" \
+  --argjson consolidation_health_candidate_queue_depth "${consolidation_health_candidate_queue_depth}" \
+  --argjson consolidation_health_apply_success_rate "${consolidation_health_apply_success_rate}" \
+  --argjson consolidation_health_redirect_completeness "${consolidation_health_redirect_completeness}" \
+  --argjson consolidation_health_pending_alias_edges "${consolidation_health_pending_alias_edges}" \
+  --arg replay_determinism_gate_mode "${REPLAY_DETERMINISM_GATE_MODE}" \
+  --argjson replay_determinism_runs "${REPLAY_DETERMINISM_RUNS}" \
+  --argjson replay_determinism_max_fingerprint_variants "${REPLAY_DETERMINISM_MAX_FINGERPRINT_VARIANTS}" \
+  --arg replay_determinism_report_path "${replay_determinism_report_path}" \
+  --arg replay_determinism_fingerprint "${replay_determinism_fingerprint}" \
+  --argjson replay_determinism_enabled "$([[ "${replay_determinism_enabled}" == "true" ]] && echo true || echo false)" \
+  --argjson replay_determinism_pass "$([[ "${replay_determinism_pass}" == "true" ]] && echo true || echo false)" \
+  --argjson replay_determinism_fingerprint_variants "${replay_determinism_fingerprint_variants}" \
+  --arg abstraction_profile "${abstraction_profile}" \
+  --arg abstraction_metrics_source_path "${abstraction_metrics_source_path}" \
+  --argjson abstraction_metrics_present "$([[ "${abstraction_metrics_present}" == "true" ]] && echo true || echo false)" \
+  --argjson abstraction_compression_summaries "${abstraction_compression_summaries}" \
+  --argjson abstraction_compression_avg_citations "${abstraction_compression_avg_citations}" \
+  --argjson abstraction_cluster_cohesion "${abstraction_cluster_cohesion}" \
+  --argjson abstraction_cluster_orphan_rate "${abstraction_cluster_orphan_rate}" \
+  --argjson abstraction_cluster_merge_rate_30d "${abstraction_cluster_merge_rate_30d}" \
   --argjson require_partition_ready "$([[ "${CORE_GATE_REQUIRE_PARTITION_READY}" == "true" ]] && echo true || echo false)" \
   --arg partition_scope "${CORE_GATE_PARTITION_SCOPE}" \
   --arg partition_tenant_id "${CORE_GATE_PARTITION_TENANT_ID}" \
@@ -689,6 +975,69 @@ jq -n \
           total_pairs: $compression_total_pairs
         },
         pass: $compression_kpi_pass
+      },
+      rule_conflict_resolution: {
+        mode: $rule_conflict_gate_mode,
+        enabled: $rule_conflict_enabled,
+        contexts_file: $rule_conflict_contexts_file,
+        baseline_json: (if ($rule_conflict_baseline|length)>0 then $rule_conflict_baseline else null end),
+        summary_json: (if ($rule_conflict_report_path|length)>0 then $rule_conflict_report_path else null end),
+        thresholds: {
+          max_winner_changes: $rule_conflict_max_winner_changes,
+          rules_limit: $rule_conflict_rules_limit
+        },
+        observed: {
+          total_conflicts: $rule_conflict_total_conflicts,
+          winner_changes: $rule_conflict_winner_changes,
+          new_conflicts: $rule_conflict_new_conflicts,
+          resolved_conflicts: $rule_conflict_resolved_conflicts,
+          fingerprint_sha256: (if ($rule_conflict_fingerprint|length)>0 then $rule_conflict_fingerprint else null end)
+        },
+        pass: $rule_conflict_pass
+      },
+      consolidation_health_slo: {
+        mode: $consolidation_health_gate_mode,
+        enabled: $consolidation_health_enabled,
+        summary_json: (if ($consolidation_health_report_path|length)>0 then $consolidation_health_report_path else null end),
+        thresholds: {
+          max_candidate_queue_depth: $consolidation_health_max_candidate_queue_depth,
+          min_apply_success_rate: $consolidation_health_min_apply_success_rate,
+          min_redirect_completeness: $consolidation_health_min_redirect_completeness,
+          max_pending_alias_edges: $consolidation_health_max_pending_alias_edges
+        },
+        observed: {
+          candidate_queue_depth: $consolidation_health_candidate_queue_depth,
+          apply_success_rate: $consolidation_health_apply_success_rate,
+          redirect_completeness: $consolidation_health_redirect_completeness,
+          pending_alias_edges: $consolidation_health_pending_alias_edges
+        },
+        pass: $consolidation_health_pass
+      },
+      replay_determinism: {
+        mode: $replay_determinism_gate_mode,
+        enabled: $replay_determinism_enabled,
+        summary_json: (if ($replay_determinism_report_path|length)>0 then $replay_determinism_report_path else null end),
+        thresholds: {
+          runs: $replay_determinism_runs,
+          max_fingerprint_variants: $replay_determinism_max_fingerprint_variants
+        },
+        observed: {
+          combined_fingerprint_variants: $replay_determinism_fingerprint_variants,
+          fingerprint_sha256: (if ($replay_determinism_fingerprint|length)>0 then $replay_determinism_fingerprint else null end)
+        },
+        pass: $replay_determinism_pass
+      },
+      abstraction_quality_counters: {
+        profile: $abstraction_profile,
+        source_json: (if ($abstraction_metrics_source_path|length)>0 then $abstraction_metrics_source_path else null end),
+        present: $abstraction_metrics_present,
+        observed: {
+          compression_summaries: $abstraction_compression_summaries,
+          compression_avg_citations: $abstraction_compression_avg_citations,
+          cluster_cohesion: $abstraction_cluster_cohesion,
+          cluster_orphan_rate: $abstraction_cluster_orphan_rate,
+          cluster_merge_rate_30d: $abstraction_cluster_merge_rate_30d
+        }
       }
     },
     aux_regression_only: [

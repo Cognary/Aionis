@@ -4,16 +4,17 @@ title: "Policy Adaptation Gate"
 
 # Policy Adaptation Gate
 
-Last updated: `2026-02-19`
+Last updated: `2026-02-24`
 
 ## Purpose
 
 Phase C guardrail for rule lifecycle operations:
 
-1. Produce reproducible `shadow -> active` suggestions.
-2. Produce reproducible `active -> disabled` suggestions.
-3. Add objective gate checks for urgent disable pressure.
-4. Carry canary recommendation and rollback payloads per suggestion.
+1. Produce reproducible `draft -> shadow` suggestions.
+2. Produce reproducible `shadow -> active` suggestions.
+3. Produce reproducible `active -> disabled` suggestions.
+4. Add objective gate checks for urgent disable pressure.
+5. Carry canary recommendation and rollback payloads per suggestion.
 
 This job is read-only. It does not change rule state.
 
@@ -32,8 +33,12 @@ npm run -s job:policy-adaptation-gate -- --scope default --strict-warnings
 ## Key Options
 
 1. `--window-hours <n>`: feedback window (default `168`)
-2. `--limit <n>`: number of shadow+active rules scanned (default `200`)
+2. `--limit <n>`: number of draft+shadow+active rules scanned (default `200`)
 3. Promote thresholds:
+- `--min-promote-shadow-positives <n>` (default `3`) for `draft -> shadow`
+- `--max-promote-shadow-negatives <n>` (default `0`) for `draft -> shadow`
+- `--min-promote-shadow-distinct-runs <n>` (default `3`) for `draft -> shadow`
+- `--min-promote-shadow-confidence <ratio>` (default `0.50`)
 - `--min-promote-positives <n>` (default `10`)
 - `--min-promote-distinct-runs <n>` (default `3`)
 - `--max-promote-neg-ratio <ratio>` (default `0.1`)
@@ -57,7 +62,8 @@ JSON output includes:
 1. `checks[]` gate checks
 2. `summary` with pass/fail and candidate counts
 3. `suggestions.promote_to_active[]`
-4. `suggestions.disable_active[]`
+4. `suggestions.promote_to_shadow[]`
+5. `suggestions.disable_active[]`
 
 Each suggestion includes:
 

@@ -390,7 +390,13 @@ jq -n \
     quality: {
       pass: $quality_pass,
       summary: ($quality.summary // {}),
-      failed_checks: ($quality.failed_checks // $quality.summary.failed // [])
+      failed_checks: ($quality.failed_checks // $quality.summary.failed // []),
+      metrics: ($quality.metrics // {}),
+      abstraction: {
+        compression_summaries: ($quality.metrics.compression_summaries // 0),
+        compression_avg_citations: ($quality.metrics.compression_avg_citations // 0),
+        clustering_quality: ($quality.metrics.clustering_quality // {})
+      }
     },
     execution_loop: $execution_loop,
     policy_adaptation: $policy_adaptation
