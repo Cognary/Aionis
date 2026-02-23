@@ -42,7 +42,10 @@ async function main() {
       warm: string;
       cold: string;
       archive: string;
-      ready: string;
+      ready_total: string;
+      embedding_eligible_total: string;
+      embedding_expected_total: string;
+      embedding_expected_ready: string;
       fresh_30d: string;
     }>(
       `
@@ -52,7 +55,26 @@ async function main() {
         count(*) FILTER (WHERE tier = 'warm')::text AS warm,
         count(*) FILTER (WHERE tier = 'cold')::text AS cold,
         count(*) FILTER (WHERE tier = 'archive')::text AS archive,
-        count(*) FILTER (WHERE embedding_status = 'ready')::text AS ready,
+        count(*) FILTER (WHERE embedding_status = 'ready')::text AS ready_total,
+        count(*) FILTER (
+          WHERE tier IN ('hot', 'warm')
+            AND type IN ('event', 'entity', 'topic', 'concept', 'procedure', 'self_model')
+            AND coalesce(nullif(btrim(text_summary), ''), nullif(btrim(title), '')) IS NOT NULL
+        )::text AS embedding_eligible_total,
+        count(*) FILTER (
+          WHERE tier IN ('hot', 'warm')
+            AND type IN ('event', 'entity', 'topic', 'concept', 'procedure', 'self_model')
+            AND coalesce(nullif(btrim(text_summary), ''), nullif(btrim(title), '')) IS NOT NULL
+            AND (embedding_model IS NOT NULL OR embedding IS NOT NULL OR embedding_status = 'ready')
+        )::text AS embedding_expected_total,
+        count(*) FILTER (
+          WHERE tier IN ('hot', 'warm')
+            AND type IN ('event', 'entity', 'topic', 'concept', 'procedure', 'self_model')
+            AND coalesce(nullif(btrim(text_summary), ''), nullif(btrim(title), '')) IS NOT NULL
+            AND (embedding_model IS NOT NULL OR embedding IS NOT NULL OR embedding_status = 'ready')
+            AND embedding_status = 'ready'
+            AND embedding IS NOT NULL
+        )::text AS embedding_expected_ready,
         count(*) FILTER (WHERE COALESCE(last_activated, created_at) >= now() - interval '30 days')::text AS fresh_30d
       FROM memory_nodes
       WHERE scope = $1
@@ -155,7 +177,18 @@ async function main() {
       [scope],
     );
 
-    const n = nodeRes.rows[0] ?? { total: "0", hot: "0", warm: "0", cold: "0", archive: "0", ready: "0", fresh_30d: "0" };
+    const n = nodeRes.rows[0] ?? {
+      total: "0",
+      hot: "0",
+      warm: "0",
+      cold: "0",
+      archive: "0",
+      ready_total: "0",
+      embedding_eligible_total: "0",
+      embedding_expected_total: "0",
+      embedding_expected_ready: "0",
+      fresh_30d: "0",
+    };
     const a = aliasRes.rows[0] ?? { aliased: "0", dedupe_total: "0" };
     const e = edgeRes.rows[0] ?? { edges: "0" };
     const c = compressionRes.rows[0] ?? { summaries: "0", avg_citations: "0" };
@@ -168,7 +201,10 @@ async function main() {
     const warm = Number(n.warm ?? "0");
     const cold = Number(n.cold ?? "0");
     const archive = Number(n.archive ?? "0");
-    const ready = Number(n.ready ?? "0");
+    const readyTotal = Number(n.ready_total ?? "0");
+    const embeddingEligibleTotal = Number(n.embedding_eligible_total ?? "0");
+    const embeddingExpectedTotal = Number(n.embedding_expected_total ?? "0");
+    const embeddingExpectedReady = Number(n.embedding_expected_ready ?? "0");
     const fresh30d = Number(n.fresh_30d ?? "0");
     const aliased = Number(a.aliased ?? "0");
     const dedupeTotal = Number(a.dedupe_total ?? "0");
@@ -182,7 +218,7 @@ async function main() {
     const dedupeTotal30d = Number(m30.dedupe_total ?? "0");
     const merged30d = Number(m30.merged_30d ?? "0");
 
-    const readyRatio = total > 0 ? ready / total : 1;
+    const readyRatio = embeddingExpectedTotal > 0 ? embeddingExpectedReady / embeddingExpectedTotal : 1;
     const aliasRate = dedupeTotal > 0 ? aliased / dedupeTotal : 0;
     const archiveRatio = total > 0 ? archive / total : 0;
     const fresh30dRatio = total > 0 ? fresh30d / total : 1;
@@ -228,7 +264,11 @@ async function main() {
       metrics: {
         total_nodes: total,
         tier_counts: { hot, warm, cold, archive },
-        embedding_ready_nodes: ready,
+        embedding_ready_nodes: embeddingExpectedReady,
+        embedding_ready_nodes_total: readyTotal,
+        embedding_eligible_nodes: embeddingEligibleTotal,
+        embedding_expected_nodes: embeddingExpectedTotal,
+        embedding_untracked_nodes: Math.max(0, embeddingEligibleTotal - embeddingExpectedTotal),
         embedding_ready_ratio: round(readyRatio),
         dedupe_candidates_total: dedupeTotal,
         aliased_nodes: aliased,

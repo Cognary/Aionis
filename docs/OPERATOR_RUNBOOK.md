@@ -23,7 +23,11 @@ set -a; source .env; set +a
 npm run job:health-gate
 ```
 
-Note: health gate runs a pre-check `embedding_model` backfill by default to auto-heal historical READY rows.
+Note: health gate is read-only by default. Enable repair explicitly only during maintenance windows:
+
+```bash
+npm run job:health-gate -- --auto-backfill --auto-private-lane-backfill
+```
 
 2. If you want warning-tight mode:
 

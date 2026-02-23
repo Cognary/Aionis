@@ -17,10 +17,10 @@ STRICT_WARNINGS=false
 CONSISTENCY_SAMPLE=20
 CONSISTENCY_CHECK_SET="${HEALTH_GATE_CONSISTENCY_CHECK_SET:-all}"
 QUALITY_ARGS=()
-AUTO_BACKFILL=true
+AUTO_BACKFILL="${HEALTH_GATE_AUTO_BACKFILL:-false}"
 BACKFILL_LIMIT=5000
 BACKFILL_MODEL=""
-AUTO_PRIVATE_LANE_BACKFILL=true
+AUTO_PRIVATE_LANE_BACKFILL="${HEALTH_GATE_AUTO_PRIVATE_LANE_BACKFILL:-false}"
 PRIVATE_LANE_BACKFILL_LIMIT=5000
 PRIVATE_LANE_DEFAULT_OWNER_AGENT=""
 PRIVATE_LANE_DEFAULT_OWNER_TEAM=""
@@ -40,9 +40,11 @@ Options:
   --consistency-sample <n>     Sample size for consistency-check (default: 20)
   --consistency-check-set <set>
                                Check set: all|scope|cross_tenant (default: HEALTH_GATE_CONSISTENCY_CHECK_SET or all)
+  --auto-backfill              Enable pre-gate embedding_model backfill (default: false)
   --skip-backfill              Skip pre-gate embedding_model backfill
   --backfill-limit <n>         Max rows for embedding_model backfill (default: 5000)
   --backfill-model <model>     Force model label for embedding_model backfill
+  --auto-private-lane-backfill Enable pre-gate private-lane owner backfill (default: false)
   --skip-private-lane-backfill Skip pre-gate private-lane owner backfill
   --private-lane-backfill-limit <n>
                                Max rows for private-lane owner backfill (default: 5000)
@@ -85,6 +87,10 @@ while [[ $# -gt 0 ]]; do
       CONSISTENCY_CHECK_SET="${2:-}"
       shift 2
       ;;
+    --auto-backfill)
+      AUTO_BACKFILL=true
+      shift
+      ;;
     --skip-backfill)
       AUTO_BACKFILL=false
       shift
@@ -96,6 +102,10 @@ while [[ $# -gt 0 ]]; do
     --backfill-model)
       BACKFILL_MODEL="${2:-}"
       shift 2
+      ;;
+    --auto-private-lane-backfill)
+      AUTO_PRIVATE_LANE_BACKFILL=true
+      shift
       ;;
     --skip-private-lane-backfill)
       AUTO_PRIVATE_LANE_BACKFILL=false

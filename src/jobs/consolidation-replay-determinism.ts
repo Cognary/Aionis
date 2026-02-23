@@ -1,6 +1,7 @@
 import "dotenv/config";
 import stableStringify from "fast-json-stable-stringify";
 import { writeFileSync } from "node:fs";
+import type pg from "pg";
 import { loadEnv } from "../config.js";
 import { closeDb, createDb, withTx } from "../db.js";
 import { sha256Hex } from "../util/crypto.js";
@@ -57,6 +58,121 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function updateRollingHash(current: string, row: unknown): string {
+  return sha256Hex(`${current}\n${stableStringify(row)}`);
+}
+
+async function hashCompressionSnapshot(
+  client: pg.PoolClient,
+  scope: string,
+  batchSize: number,
+): Promise<{ count: number; fingerprint_sha256: string }> {
+  let cursor: string | null = null;
+  let count = 0;
+  let fp = sha256Hex("snapshot:compression:seed");
+  for (;;) {
+    const res: { rows: CompressionSnapshotRow[] } = await client.query<CompressionSnapshotRow>(
+      `
+      SELECT
+        n.id::text AS id,
+        n.slots->>'source_topic_id' AS source_topic_id,
+        n.slots->>'source_event_hash' AS source_event_hash,
+        n.commit_id::text AS commit_id
+      FROM memory_nodes n
+      WHERE n.scope = $1
+        AND n.type = 'concept'
+        AND n.slots->>'summary_kind' = 'compression_rollup'
+        AND ($2::uuid IS NULL OR n.id > $2::uuid)
+      ORDER BY n.id
+      LIMIT $3
+      `,
+      [scope, cursor, batchSize],
+    );
+    if (res.rows.length === 0) break;
+    for (const row of res.rows) {
+      fp = updateRollingHash(fp, row);
+      count += 1;
+    }
+    cursor = res.rows[res.rows.length - 1].id;
+  }
+  return { count, fingerprint_sha256: fp };
+}
+
+async function hashTopicSnapshot(
+  client: pg.PoolClient,
+  scope: string,
+  batchSize: number,
+): Promise<{ count: number; fingerprint_sha256: string }> {
+  let cursor: string | null = null;
+  let count = 0;
+  let fp = sha256Hex("snapshot:topic:seed");
+  for (;;) {
+    const res: { rows: TopicSnapshotRow[] } = await client.query<TopicSnapshotRow>(
+      `
+      SELECT
+        t.id::text AS id,
+        coalesce(t.slots->>'topic_state', 'active') AS topic_state,
+        coalesce(t.slots->>'member_count', '0') AS member_count,
+        count(e.id)::text AS linked_events
+      FROM memory_nodes t
+      LEFT JOIN memory_edges e
+        ON e.scope = t.scope
+       AND e.type = 'part_of'
+       AND e.dst_id = t.id
+      WHERE t.scope = $1
+        AND t.type = 'topic'
+        AND ($2::uuid IS NULL OR t.id > $2::uuid)
+      GROUP BY t.id, t.slots
+      ORDER BY t.id
+      LIMIT $3
+      `,
+      [scope, cursor, batchSize],
+    );
+    if (res.rows.length === 0) break;
+    for (const row of res.rows) {
+      fp = updateRollingHash(fp, row);
+      count += 1;
+    }
+    cursor = res.rows[res.rows.length - 1].id;
+  }
+  return { count, fingerprint_sha256: fp };
+}
+
+async function hashAliasSnapshot(
+  client: pg.PoolClient,
+  scope: string,
+  batchSize: number,
+): Promise<{ count: number; fingerprint_sha256: string }> {
+  let cursor: string | null = null;
+  let count = 0;
+  let fp = sha256Hex("snapshot:alias:seed");
+  for (;;) {
+    const res: { rows: AliasSnapshotRow[] } = await client.query<AliasSnapshotRow>(
+      `
+      SELECT
+        n.id::text AS id,
+        n.slots->>'alias_of' AS alias_of,
+        n.slots->>'consolidation_pair_key' AS pair_key,
+        n.commit_id::text AS commit_id
+      FROM memory_nodes n
+      WHERE n.scope = $1
+        AND (n.slots ? 'alias_of')
+        AND ($2::uuid IS NULL OR n.id > $2::uuid)
+      ORDER BY n.id
+      LIMIT $3
+      `,
+      [scope, cursor, batchSize],
+    );
+    if (res.rows.length === 0) break;
+    for (const row of res.rows) {
+      fp = updateRollingHash(fp, row);
+      count += 1;
+    }
+    cursor = res.rows[res.rows.length - 1].id;
+  }
+  return { count, fingerprint_sha256: fp };
+}
+
 async function main() {
   const scope = argValue("--scope") ?? env.MEMORY_SCOPE;
   const tenantId = argValue("--tenant-id") ?? env.MEMORY_TENANT_ID;
@@ -64,6 +180,7 @@ async function main() {
   const runs = clampInt(Number(argValue("--runs") ?? "3"), 2, 20);
   const sleepMs = clampInt(Number(argValue("--sleep-ms") ?? "40"), 0, 10_000);
   const maxFingerprintVariants = clampInt(Number(argValue("--max-fingerprint-variants") ?? "1"), 1, 20);
+  const snapshotBatchSize = clampInt(Number(argValue("--snapshot-batch-size") ?? "5000"), 100, 50000);
 
   const types = parseTypes(argValue("--types"));
   const maxAnchors = clampInt(Number(argValue("--max-anchors") ?? String(env.MEMORY_CONSOLIDATION_MAX_ANCHORS)), 1, 2000);
@@ -113,69 +230,16 @@ async function main() {
       const mergeCandidatesV1 = consolidation.suggestions.map((s) => toMergeCandidateV1(s));
       const consolidationFp = sha256Hex(stableStringify(mergeCandidatesV1));
 
-      const compressionRes = await client.query<CompressionSnapshotRow>(
-        `
-        SELECT
-          n.id::text AS id,
-          n.slots->>'source_topic_id' AS source_topic_id,
-          n.slots->>'source_event_hash' AS source_event_hash,
-          n.commit_id::text AS commit_id
-        FROM memory_nodes n
-        WHERE n.scope = $1
-          AND n.type = 'concept'
-          AND n.slots->>'summary_kind' = 'compression_rollup'
-        ORDER BY n.id
-        LIMIT 10000
-        `,
-        [scope],
-      );
-      const compressionFp = sha256Hex(stableStringify(compressionRes.rows));
-
-      const topicRes = await client.query<TopicSnapshotRow>(
-        `
-        SELECT
-          t.id::text AS id,
-          coalesce(t.slots->>'topic_state', 'active') AS topic_state,
-          coalesce(t.slots->>'member_count', '0') AS member_count,
-          count(e.id)::text AS linked_events
-        FROM memory_nodes t
-        LEFT JOIN memory_edges e
-          ON e.scope = t.scope
-         AND e.type = 'part_of'
-         AND e.dst_id = t.id
-        WHERE t.scope = $1
-          AND t.type = 'topic'
-        GROUP BY t.id, t.slots
-        ORDER BY t.id
-        LIMIT 10000
-        `,
-        [scope],
-      );
-      const topicFp = sha256Hex(stableStringify(topicRes.rows));
-
-      const aliasRes = await client.query<AliasSnapshotRow>(
-        `
-        SELECT
-          n.id::text AS id,
-          n.slots->>'alias_of' AS alias_of,
-          n.slots->>'consolidation_pair_key' AS pair_key,
-          n.commit_id::text AS commit_id
-        FROM memory_nodes n
-        WHERE n.scope = $1
-          AND (n.slots ? 'alias_of')
-        ORDER BY n.id
-        LIMIT 10000
-        `,
-        [scope],
-      );
-      const aliasFp = sha256Hex(stableStringify(aliasRes.rows));
+      const compressionSnapshot = await hashCompressionSnapshot(client, scope, snapshotBatchSize);
+      const topicSnapshot = await hashTopicSnapshot(client, scope, snapshotBatchSize);
+      const aliasSnapshot = await hashAliasSnapshot(client, scope, snapshotBatchSize);
 
       const combinedFp = sha256Hex(
         stableStringify({
           consolidation: consolidationFp,
-          abstraction_compression: compressionFp,
-          abstraction_topics: topicFp,
-          consolidation_aliases: aliasFp,
+          abstraction_compression: compressionSnapshot.fingerprint_sha256,
+          abstraction_topics: topicSnapshot.fingerprint_sha256,
+          consolidation_aliases: aliasSnapshot.fingerprint_sha256,
         }),
       );
 
@@ -188,12 +252,12 @@ async function main() {
           fingerprint_sha256: consolidationFp,
         },
         abstraction: {
-          compression_rollups: compressionRes.rows.length,
-          topics: topicRes.rows.length,
-          aliases: aliasRes.rows.length,
-          compression_fingerprint_sha256: compressionFp,
-          topic_fingerprint_sha256: topicFp,
-          alias_fingerprint_sha256: aliasFp,
+          compression_rollups: compressionSnapshot.count,
+          topics: topicSnapshot.count,
+          aliases: aliasSnapshot.count,
+          compression_fingerprint_sha256: compressionSnapshot.fingerprint_sha256,
+          topic_fingerprint_sha256: topicSnapshot.fingerprint_sha256,
+          alias_fingerprint_sha256: aliasSnapshot.fingerprint_sha256,
         },
         combined_fingerprint_sha256: combinedFp,
       };
@@ -231,6 +295,7 @@ async function main() {
       runs,
       max_fingerprint_variants: maxFingerprintVariants,
       sleep_ms: sleepMs,
+      snapshot_batch_size: snapshotBatchSize,
       scan: {
         types,
         max_anchors: maxAnchors,

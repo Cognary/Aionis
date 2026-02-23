@@ -159,6 +159,9 @@ Options:
 - `--min-fresh-30d-ratio <0..1>` (default: `0.2`)
 - `--strict` (exit code `2` if any check fails)
 
+`embedding_ready_ratio` is computed on `embedding_expected_nodes` (hot/warm semantic nodes that have entered embedding pipeline), not raw total node count.
+Use `embedding_untracked_nodes` metric to monitor backlog of eligible nodes that have not entered embedding pipeline yet.
+
 Phase-4 lifecycle smoke (API + jobs together):
 
 ```bash
@@ -179,20 +182,19 @@ Single command to gate deployments with both integrity and quality checks.
 npm run job:health-gate
 ```
 
-Default behavior includes a pre-gate `embedding_model` backfill pass to auto-heal historical READY rows with missing model labels.
-If model/provider cannot be inferred from env, pre-backfill is skipped (and no `unknown:*` label is written).
-It also runs a pre-gate private-lane owner backfill to heal rows where `memory_lane=private` but owner fields are empty.
+Default mode is read-only (no pre-repair writes).
+Enable explicit pre-repair when needed.
 
-Disable pre-backfill:
+Enable embedding-model pre-backfill:
 
 ```bash
-npm run job:health-gate -- --skip-backfill
+npm run job:health-gate -- --auto-backfill
 ```
 
-Disable private-lane owner pre-backfill:
+Enable private-lane owner pre-backfill:
 
 ```bash
-npm run job:health-gate -- --skip-private-lane-backfill
+npm run job:health-gate -- --auto-private-lane-backfill
 ```
 
 Tune private-lane owner pre-backfill:
