@@ -2,6 +2,88 @@ function isPlainObject(v: any): v is Record<string, any> {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
+const MAX_REGEX_PATTERN_CHARS = 256;
+const MAX_REGEX_GROUPS = 32;
+const MAX_REGEX_QUANTIFIERS = 24;
+
+function scrubRegexPattern(pattern: string): string {
+  let out = "";
+  let escaped = false;
+  let inClass = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (escaped) {
+      out += "_";
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      out += "_";
+      escaped = true;
+      continue;
+    }
+    if (inClass) {
+      out += "_";
+      if (ch === "]") inClass = false;
+      continue;
+    }
+    if (ch === "[") {
+      out += "_";
+      inClass = true;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function isQuantifierStart(ch: string | undefined): boolean {
+  return ch === "*" || ch === "+" || ch === "?" || ch === "{";
+}
+
+function hasNestedQuantifier(scrubbed: string): boolean {
+  const groupHasQuantifier: boolean[] = [];
+  for (let i = 0; i < scrubbed.length; i++) {
+    const ch = scrubbed[i];
+    if (ch === "(") {
+      groupHasQuantifier.push(false);
+      continue;
+    }
+    if (ch === ")") {
+      const hadInnerQuantifier = groupHasQuantifier.pop() ?? false;
+      if (hadInnerQuantifier && isQuantifierStart(scrubbed[i + 1])) return true;
+      continue;
+    }
+    if (isQuantifierStart(ch)) {
+      if (groupHasQuantifier.length > 0) groupHasQuantifier[groupHasQuantifier.length - 1] = true;
+      if (ch === "{") {
+        const close = scrubbed.indexOf("}", i + 1);
+        if (close === -1) return true;
+        i = close;
+      }
+    }
+  }
+  return false;
+}
+
+function isSafeRegexPattern(pattern: string): boolean {
+  if (!pattern || pattern.length > MAX_REGEX_PATTERN_CHARS) return false;
+  if (/\\(?:[1-9][0-9]*|k<[^>]+>)/.test(pattern)) return false; // backreferences
+  if (/\(\?(?:=|!|<=|<!)/.test(pattern)) return false; // lookarounds
+
+  const scrubbed = scrubRegexPattern(pattern);
+  const groupCount = (scrubbed.match(/\(/g) ?? []).length;
+  if (groupCount > MAX_REGEX_GROUPS) return false;
+
+  const quantifierCount = (scrubbed.match(/[*+?]|\{[^}]*\}/g) ?? []).length;
+  if (quantifierCount > MAX_REGEX_QUANTIFIERS) return false;
+
+  if (hasNestedQuantifier(scrubbed)) return false;
+  if (/\([^)]*\|[^)]*\)[*+{]/.test(scrubbed)) return false; // quantified alternation groups
+  if (/(\.\*|\.\+).*(\.\*|\.\+)/.test(scrubbed)) return false; // repeated broad wildcards
+  return true;
+}
+
 function getByPath(obj: any, path: string): any {
   if (!path) return undefined;
   const parts = path.split(".");
@@ -56,7 +138,7 @@ function opEval(opObj: Record<string, any>, value: any): boolean {
   if ("$regex" in opObj) {
     if (typeof value !== "string") return false;
     const pat = String(opObj["$regex"] ?? "");
-    if (!pat) return false;
+    if (!isSafeRegexPattern(pat)) return false;
     try {
       const re = new RegExp(pat);
       return re.test(value);
@@ -123,4 +205,3 @@ export function ruleMatchesContext(ifJson: any, exceptionsJson: any, ctx: any): 
 
   return true;
 }
-

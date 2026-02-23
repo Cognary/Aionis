@@ -64,6 +64,22 @@ GTM_PHASE3_GATE_ENFORCE="${GTM_PHASE3_GATE_ENFORCE:-false}"
 GTM_PHASE3_GATE_RUN_PERF="${GTM_PHASE3_GATE_RUN_PERF:-false}"
 GTM_PHASE3_GATE_REQUIRE_SCALE="${GTM_PHASE3_GATE_REQUIRE_SCALE:-}"
 GTM_PHASE3_GATE_REQUIRE_WRITE_CASE="${GTM_PHASE3_GATE_REQUIRE_WRITE_CASE:-false}"
+RUN_CONTROL_ADMIN_VALIDATION="${RUN_CONTROL_ADMIN_VALIDATION:-}"
+
+if [[ -z "${RUN_CONTROL_ADMIN_VALIDATION}" ]]; then
+  if [[ "${APP_ENV}" == "prod" ]]; then
+    RUN_CONTROL_ADMIN_VALIDATION="false"
+  else
+    RUN_CONTROL_ADMIN_VALIDATION="true"
+  fi
+fi
+case "${RUN_CONTROL_ADMIN_VALIDATION}" in
+  true|false) ;;
+  *)
+    echo "RUN_CONTROL_ADMIN_VALIDATION must be true|false, got: ${RUN_CONTROL_ADMIN_VALIDATION}" >&2
+    exit 1
+    ;;
+esac
 
 if [[ -z "${START_SERVICES_IF_NEEDED}" ]]; then
   if [[ "${APP_ENV}" == "prod" ]]; then
@@ -170,6 +186,7 @@ fi
 echo "[regression] gtm phase1 gate: ${GTM_PHASE1_GATE} (enforce=${GTM_PHASE1_GATE_ENFORCE})"
 echo "[regression] gtm phase2 gate: ${GTM_PHASE2_GATE} (enforce=${GTM_PHASE2_GATE_ENFORCE})"
 echo "[regression] gtm phase3 gate: ${GTM_PHASE3_GATE} (enforce=${GTM_PHASE3_GATE_ENFORCE}, run_perf=${GTM_PHASE3_GATE_RUN_PERF})"
+echo "[regression] control admin validation smoke: ${RUN_CONTROL_ADMIN_VALIDATION}"
 
 echo "[1/7] migrate + build + docs + contract"
 if [[ "${SKIP_MIGRATE}" != "true" ]]; then
@@ -245,6 +262,17 @@ if [[ "${AUTO_REPAIR_ALIAS_EDGES}" == "true" ]]; then
     sed -n '1,220p' "${OUT_DIR}/04_alias_repair.log" >&2 || true
     exit 1
   fi
+fi
+
+if [[ "${RUN_CONTROL_ADMIN_VALIDATION}" == "true" ]]; then
+  echo "[4.6/7] control admin validation smoke"
+  if ! npm run -s e2e:control-admin-validation > "${OUT_DIR}/04_control_admin_validation.log" 2>&1; then
+    echo "[regression] control admin validation smoke failed, log follows:" >&2
+    sed -n '1,220p' "${OUT_DIR}/04_control_admin_validation.log" >&2 || true
+    exit 1
+  fi
+else
+  echo "[4.6/7] control admin validation smoke (skipped)"
 fi
 
 echo "[5/7] consistency + health gate"
@@ -454,6 +482,7 @@ jq -n \
   --arg perf_scales "${PERF_SCALES}" \
   --arg perf_profile "${PERF_PROFILE}" \
   --arg perf_report "${perf_report_path}" \
+  --argjson control_admin_validation_enabled "$([[ "${RUN_CONTROL_ADMIN_VALIDATION}" == "true" ]] && echo true || echo false)" \
   --arg gtm_phase1_summary "${gtm_phase1_summary}" \
   --arg gtm_phase2_summary "${gtm_phase2_summary}" \
   --arg gtm_phase3_summary "${gtm_phase3_summary}" \
@@ -483,6 +512,7 @@ jq -n \
     perf_scales: $perf_scales,
     perf_profile: $perf_profile,
     perf_report: $perf_report,
+    control_admin_validation: { enabled: $control_admin_validation_enabled },
     gtm_phase1: {
       enabled: $gtm_phase1_enabled,
       enforced: $gtm_phase1_enforced,

@@ -43,6 +43,8 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
   - HS256 secret: `MEMORY_JWT_HS256_SECRET`
   - claims: `tenant_id` (or `tenant`) required; `agent_id`/`sub`, `team_id`, `role` optional
   - time validation: `exp`/`nbf` with `MEMORY_JWT_CLOCK_SKEW_SEC`
+  - `APP_ENV=prod`: `exp` is required (tokens without `exp` are rejected)
+  - hardening recommendation: include `iss` and `aud` claims and enforce them at your token issuer/gateway policy
 - In `api_key` mode:
   - all `/v1/memory/*` endpoints require `X-Api-Key`
   - request tenant must match key-bound tenant (`401/403` on failure)
@@ -309,6 +311,9 @@ Lane visibility policy matches `find/recall`: shared always visible; private eve
 
 Export a scoped memory snapshot for migration/backup/benchmark replay.
 
+Auth:
+- Requires `X-Admin-Token`.
+
 **Request**
 - `tenant_id?: string`
 - `scope?: string`
@@ -340,6 +345,9 @@ Export a scoped memory snapshot for migration/backup/benchmark replay.
 ### `POST /v1/memory/packs/import`
 
 Import a previously exported pack into the same tenant/scope domain (hash-verified, idempotent mapping).
+
+Auth:
+- Requires `X-Admin-Token`.
 
 **Request**
 - `tenant_id?: string` (must match `pack.tenant_id` if provided)
@@ -530,6 +538,135 @@ Structured operability snapshot for recall pipeline + outbox health.
   - `outbox`:
     - `totals: { pending, retrying, failed, oldest_pending_age_sec }`
     - `by_event_type[]: { event_type, pending, retrying, failed, oldest_pending_age_sec }`
+
+---
+
+### `POST /v1/admin/control/alerts/routes`
+
+Create an alert delivery route.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Request**
+- `tenant_id: string`
+- `channel: "webhook"|"slack_webhook"|"pagerduty_events"`
+- `label?: string|null`
+- `events?: string[]` (default `["*"]`)
+- `status?: "active"|"disabled"` (default `"active"`)
+- `target: string` (required)
+- `secret?: string|null`
+- `headers?: Record<string,string>`
+- `metadata?: Record<string,unknown>`
+
+**Target validation**
+- `target` must be an absolute `https://` URL.
+- URL credentials (`user:pass@`) are rejected.
+- Host must be publicly routable (no loopback/private/reserved/local-internal hosts).
+- Channel-specific host constraints:
+  - `slack_webhook`: `hooks.slack.com` or `hooks.slack-gov.com`
+  - `pagerduty_events`: `events.pagerduty.com` or `events.eu.pagerduty.com`
+
+**Errors**
+- `400 invalid_alert_target`
+
+---
+
+### `GET /v1/admin/control/alerts/routes`
+
+List alert routes.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `tenant_id?: string`
+- `channel?: "webhook"|"slack_webhook"|"pagerduty_events"`
+- `status?: "active"|"disabled"`
+- `limit?: number`
+- `offset?: number`
+
+**Response**
+- `ok: true`
+- `routes: AlertRoute[]`
+
+---
+
+### `POST /v1/admin/control/incident-publish/jobs`
+
+Enqueue one incident bundle publish job.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Request**
+- `tenant_id: string`
+- `run_id: string`
+- `source_dir: string` (required)
+- `target: string` (required)
+- `max_attempts?: number` (`1..100`, default `5`)
+- `metadata?: Record<string,unknown>`
+
+**Input constraints**
+- `source_dir`:
+  - must be an absolute local POSIX path
+  - must not be `/`
+  - must not contain dot segments (`.` / `..`)
+  - must not be a URI
+- `target`:
+  - must be an absolute URI with one of: `https`, `s3`, `gs`, `az`, `abfs`, `oci`, `arn`
+  - local filesystem paths are rejected
+  - `https` targets must use publicly routable hosts
+  - URL credentials are rejected
+
+**Errors**
+- `400 invalid_incident_publish_source_dir`
+- `400 invalid_incident_publish_target`
+
+---
+
+### `GET /v1/admin/control/incident-publish/jobs`
+
+List incident publish jobs.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `tenant_id?: string`
+- `status?: "pending"|"processing"|"succeeded"|"failed"|"dead_letter"`
+- `limit?: number`
+- `offset?: number`
+
+**Response**
+- `ok: true`
+- `jobs: IncidentPublishJob[]`
+
+---
+
+### `POST /v1/admin/control/incident-publish/jobs/replay`
+
+Replay failed/dead-letter incident publish jobs.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Request**
+- `tenant_id?: string`
+- `statuses?: ("failed"|"dead_letter")[]`
+- `ids?: uuid[]`
+- `limit?: number` (`1..200`)
+- `reset_attempts?: boolean`
+- `reason?: string`
+- `dry_run?: boolean`
+- `allow_all_tenants?: boolean` (required when `tenant_id` omitted)
+
+**Response**
+- `ok: true`
+- `dry_run: boolean`
+- `selected_count: number`
+- `updated_count: number`
+- `sample: IncidentPublishJob[]`
 
 ---
 
@@ -824,7 +961,7 @@ verification stats (`positive_count` / `negative_count`) for ordering and govern
 
 ## Verification Stamp
 
-- Last reviewed: `2026-02-16`
+- Last reviewed: `2026-02-23`
 - Verification commands:
   - `npm run test:contract`
   - `npm run docs:check`

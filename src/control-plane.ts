@@ -1,7 +1,10 @@
 import { randomBytes } from "node:crypto";
+import { isIP } from "node:net";
+import { posix as pathPosix } from "node:path";
 import type { Db } from "./db.js";
 import { withClient, withTx } from "./db.js";
 import { sha256Hex } from "./util/crypto.js";
+import { badRequest } from "./util/http.js";
 import { TokenBucketLimiter } from "./util/ratelimit.js";
 
 export type ApiKeyPrincipal = {
@@ -170,6 +173,170 @@ function asStringArray(v: unknown, fallback: string[] = []): string[] {
     out.push(s);
   }
   return out.length > 0 ? out : fallback;
+}
+
+function hasControlChars(input: string): boolean {
+  return /[\u0000-\u001f\u007f]/.test(input);
+}
+
+function isPrivateOrReservedIpv4(host: string): boolean {
+  const parts = host.split(".").map((seg) => Number(seg));
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  const [a, b, c] = parts;
+  if (a === 10 || a === 127 || a === 0) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 192 && b === 0 && c === 0) return true;
+  if (a === 192 && b === 0 && c === 2) return true;
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  if (a === 198 && b === 51 && c === 100) return true;
+  if (a === 203 && b === 0 && c === 113) return true;
+  if (a >= 224) return true;
+  return false;
+}
+
+function isPrivateOrReservedIpv6(host: string): boolean {
+  const h = host.toLowerCase();
+  if (h === "::1" || h === "::") return true;
+  if (h.startsWith("fc") || h.startsWith("fd")) return true; // ULA (fc00::/7)
+  if (h.startsWith("fe8") || h.startsWith("fe9") || h.startsWith("fea") || h.startsWith("feb")) return true; // link-local (fe80::/10)
+  if (h.startsWith("ff")) return true; // multicast (ff00::/8)
+  if (h.startsWith("2001:db8")) return true; // documentation range
+  if (h.startsWith("::ffff:")) {
+    const mapped = h.slice("::ffff:".length);
+    if (isIP(mapped) === 4 && isPrivateOrReservedIpv4(mapped)) return true;
+  }
+  return false;
+}
+
+function isBlockedOutboundHostname(hostnameRaw: string): boolean {
+  const hostname = hostnameRaw.toLowerCase();
+  if (!hostname) return true;
+  // Block non-canonical numeric hostnames (e.g. 2130706433, 127.1) to avoid parser-dependent loopback resolution.
+  if (/^[0-9.]+$/.test(hostname)) return true;
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal")) {
+    return true;
+  }
+  const ipType = isIP(hostname);
+  if (ipType === 4) return isPrivateOrReservedIpv4(hostname);
+  if (ipType === 6) return isPrivateOrReservedIpv6(hostname);
+  return false;
+}
+
+export function normalizeControlAlertRouteTarget(channel: AlertChannel, rawTarget: unknown): string {
+  const target = trimOrNull(rawTarget);
+  if (!target) {
+    badRequest("invalid_alert_target", "target is required");
+  }
+  if (hasControlChars(target)) {
+    badRequest("invalid_alert_target", "target contains invalid control characters");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(target);
+  } catch {
+    badRequest("invalid_alert_target", "target must be a valid absolute URL");
+  }
+  if (parsed.protocol.toLowerCase() !== "https:") {
+    badRequest("invalid_alert_target", "target protocol must be https");
+  }
+  if (!parsed.hostname) {
+    badRequest("invalid_alert_target", "target host is required");
+  }
+  if (parsed.username || parsed.password) {
+    badRequest("invalid_alert_target", "target must not include URL credentials");
+  }
+  if (isBlockedOutboundHostname(parsed.hostname)) {
+    badRequest("invalid_alert_target", "target host must be public and routable");
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (channel === "slack_webhook" && host !== "hooks.slack.com" && host !== "hooks.slack-gov.com") {
+    badRequest("invalid_alert_target", "slack_webhook target host must be hooks.slack.com or hooks.slack-gov.com");
+  }
+  if (channel === "pagerduty_events" && host !== "events.pagerduty.com" && host !== "events.eu.pagerduty.com") {
+    badRequest("invalid_alert_target", "pagerduty_events target host must be events.pagerduty.com or events.eu.pagerduty.com");
+  }
+  return parsed.toString();
+}
+
+export function normalizeControlIncidentPublishSourceDir(rawSourceDir: unknown): string {
+  const sourceDir = trimOrNull(rawSourceDir);
+  if (!sourceDir) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir is required");
+  }
+  if (hasControlChars(sourceDir)) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir contains invalid control characters");
+  }
+  if (sourceDir.includes("\\")) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must use POSIX path separators");
+  }
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(sourceDir)) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must be a local absolute path, not a URI");
+  }
+  if (!sourceDir.startsWith("/")) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must be an absolute path");
+  }
+  const sourceParts = sourceDir.split("/");
+  if (sourceParts.includes(".") || sourceParts.includes("..")) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must not contain dot segments");
+  }
+  const normalized = pathPosix.normalize(sourceDir);
+  if (!normalized.startsWith("/")) {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must be an absolute path");
+  }
+  if (normalized === "/") {
+    badRequest("invalid_incident_publish_source_dir", "source_dir must not be filesystem root");
+  }
+  return normalized.length > 1 && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+}
+
+export function normalizeControlIncidentPublishTarget(rawTarget: unknown): string {
+  const target = trimOrNull(rawTarget);
+  if (!target) {
+    badRequest("invalid_incident_publish_target", "target is required");
+  }
+  if (hasControlChars(target)) {
+    badRequest("invalid_incident_publish_target", "target contains invalid control characters");
+  }
+  if (target.includes("\\")) {
+    badRequest("invalid_incident_publish_target", "target must not contain backslashes");
+  }
+  if (target.startsWith("/") || target.startsWith("./") || target.startsWith("../") || target.startsWith("~")) {
+    badRequest("invalid_incident_publish_target", "target must be a URI, not a local filesystem path");
+  }
+  const schemeMatch = target.match(/^([a-z][a-z0-9+.-]*):/i);
+  if (!schemeMatch) {
+    badRequest("invalid_incident_publish_target", "target must include a URI scheme");
+  }
+  const scheme = schemeMatch[1].toLowerCase();
+  const allowedSchemes = new Set(["https", "s3", "gs", "az", "abfs", "oci", "arn"]);
+  if (!allowedSchemes.has(scheme)) {
+    badRequest("invalid_incident_publish_target", `target scheme ${scheme} is not allowed`);
+  }
+  if (scheme === "arn") return target;
+
+  let parsed: URL | null = null;
+  const shouldParseAsUrl = target.includes("://") || scheme === "https";
+  if (!shouldParseAsUrl) {
+    badRequest("invalid_incident_publish_target", "target must be a valid absolute URI");
+  }
+  try {
+    parsed = new URL(target);
+  } catch {
+    badRequest("invalid_incident_publish_target", "target must be a valid absolute URI");
+  }
+  if (!parsed.hostname) {
+    badRequest("invalid_incident_publish_target", "target host/bucket is required");
+  }
+  if (parsed.username || parsed.password) {
+    badRequest("invalid_incident_publish_target", "target must not include URI credentials");
+  }
+  if (scheme === "https" && isBlockedOutboundHostname(parsed.hostname)) {
+    badRequest("invalid_incident_publish_target", "target host must be public and routable");
+  }
+  return parsed.toString();
 }
 
 function f64(v: unknown, fallback: number): number {
@@ -650,7 +817,7 @@ export async function createControlAlertRoute(db: Db, input: ControlAlertRouteIn
   }
   const label = trimOrNull(input.label);
   const status = input.status ?? "active";
-  const target = trimOrNull(input.target);
+  const target = normalizeControlAlertRouteTarget(channel, input.target);
   const secret = trimOrNull(input.secret);
   const events = asStringArray(input.events, ["*"]);
   const headers = asStringMap(input.headers);
@@ -893,12 +1060,10 @@ export async function findRecentControlAlertDeliveryByDedupe(
 export async function enqueueControlIncidentPublishJob(db: Db, input: ControlIncidentPublishJobInput) {
   const tenantId = trimOrNull(input.tenant_id);
   const runId = trimOrNull(input.run_id);
-  const sourceDir = trimOrNull(input.source_dir);
-  const target = trimOrNull(input.target);
+  const sourceDir = normalizeControlIncidentPublishSourceDir(input.source_dir);
+  const target = normalizeControlIncidentPublishTarget(input.target);
   if (!tenantId) throw new Error("tenant_id is required");
   if (!runId) throw new Error("run_id is required");
-  if (!sourceDir) throw new Error("source_dir is required");
-  if (!target) throw new Error("target is required");
   const maxAttempts = Number.isFinite(input.max_attempts) ? Math.max(1, Math.min(100, Math.trunc(input.max_attempts!))) : 5;
   const metadata = asJson(input.metadata);
 

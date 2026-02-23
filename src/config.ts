@@ -5,6 +5,12 @@ const RuntimeModeSchema = z.enum(["local", "service", "cloud"]);
 const EnvSchema = z.object({
   AIONIS_MODE: RuntimeModeSchema.default("local"),
   APP_ENV: z.enum(["dev", "ci", "prod"]).default("dev"),
+  TRUST_PROXY: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
   DATABASE_URL: z.string().min(1),
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).default(30),
   DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),

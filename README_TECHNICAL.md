@@ -724,6 +724,8 @@ JWT claims used:
 - required: `tenant_id` (or `tenant`)
 - optional: `agent_id` (fallback `sub`), `team_id`, `role`
 - time checks: `exp` / `nbf` (clock skew via `MEMORY_JWT_CLOCK_SKEW_SEC`)
+- `APP_ENV=prod`: `exp` is required (tokens without `exp` are rejected)
+- hardening recommendation: include `iss` and `aud`, and enforce them at your issuer/gateway policy
 
 Example token (local):
 

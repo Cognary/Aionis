@@ -124,8 +124,14 @@ function jwtClaimsToPrincipal(payload: Record<string, unknown>): AuthPrincipal |
   };
 }
 
-function jwtNotExpired(payload: Record<string, unknown>, nowSec: number, skewSec: number): boolean {
+function jwtNotExpired(
+  payload: Record<string, unknown>,
+  nowSec: number,
+  skewSec: number,
+  requireExp: boolean,
+): boolean {
   const exp = typeof payload.exp === "number" ? payload.exp : Number.NaN;
+  if (requireExp && !Number.isFinite(exp)) return false;
   if (Number.isFinite(exp) && nowSec > exp + skewSec) return false;
   const nbf = typeof payload.nbf === "number" ? payload.nbf : Number.NaN;
   if (Number.isFinite(nbf) && nowSec + skewSec < nbf) return false;
@@ -137,12 +143,14 @@ export function createAuthResolver(args: {
   apiKeysJson: string;
   jwtHs256Secret?: string;
   jwtClockSkewSec?: number;
+  jwtRequireExp?: boolean;
 }): AuthResolver {
   const mode = args.mode;
   const apiKeys =
     mode === "api_key" || mode === "api_key_or_jwt" ? parseApiKeys(args.apiKeysJson) : new Map<string, ApiKeyRecord>();
   const jwtSecret = mode === "jwt" || mode === "api_key_or_jwt" ? String(args.jwtHs256Secret ?? "") : "";
   const skewSec = Number.isFinite(args.jwtClockSkewSec) ? Math.max(0, Math.trunc(args.jwtClockSkewSec!)) : 30;
+  const jwtRequireExp = args.jwtRequireExp === true;
 
   const required_header_hint: AuthResolver["required_header_hint"] =
     mode === "off"
@@ -182,7 +190,7 @@ export function createAuthResolver(args: {
         const payload = verifyJwtHs256(token, jwtSecret);
         if (!payload) return null;
         const nowSec = Math.floor(Date.now() / 1000);
-        if (!jwtNotExpired(payload, nowSec, skewSec)) return null;
+        if (!jwtNotExpired(payload, nowSec, skewSec, jwtRequireExp)) return null;
         return jwtClaimsToPrincipal(payload);
       }
 

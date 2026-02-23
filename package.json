@@ -109,6 +109,8 @@
     "job:health-gate": "bash scripts/health-gate.sh",
     "e2e:phase4-smoke": "bash examples/long_term_phase4_smoke.sh",
     "e2e:phasec-tenant": "bash examples/tenant_phasec_e2e.sh",
+    "e2e:pack-admin-auth": "bash examples/pack_admin_auth_smoke.sh",
+    "e2e:control-admin-validation": "bash examples/control_admin_validation_smoke.sh",
     "e2e:phase2-integrations": "bash scripts/gtm/phase2-integration-e2e.sh",
     "docs:check": "bash scripts/docs-check.sh",
     "docs:dev": "npm --prefix docs-site run dev",

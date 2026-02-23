@@ -27,6 +27,7 @@ RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="${OUT_DIR:-${ROOT_DIR}/artifacts/core_gate/${RUN_ID}}"
 RUN_PERF="${RUN_PERF:-true}"
 RUN_PACK_GATE="${RUN_PACK_GATE:-true}"
+RUN_CONTROL_ADMIN_VALIDATION="${RUN_CONTROL_ADMIN_VALIDATION:-false}"
 PACK_GATE_SCOPE="${PACK_GATE_SCOPE:-core_gate_pack_${RUN_ID}}"
 PACK_GATE_MAX_ROWS="${PACK_GATE_MAX_ROWS:-2000}"
 CORE_GATE_DB_RUNNER="${CORE_GATE_DB_RUNNER:-local}"
@@ -67,6 +68,7 @@ while [[ $# -gt 0 ]]; do
     --out-dir) OUT_DIR="${2:-}"; shift 2 ;;
     --run-perf) RUN_PERF="${2:-}"; shift 2 ;;
     --run-pack-gate) RUN_PACK_GATE="${2:-}"; shift 2 ;;
+    --run-control-admin-validation) RUN_CONTROL_ADMIN_VALIDATION="${2:-}"; shift 2 ;;
     --pack-gate-scope) PACK_GATE_SCOPE="${2:-}"; shift 2 ;;
     --pack-gate-max-rows) PACK_GATE_MAX_ROWS="${2:-}"; shift 2 ;;
     --db-runner) CORE_GATE_DB_RUNNER="${2:-}"; shift 2 ;;
@@ -104,7 +106,8 @@ Core gate steps:
 1) Build + contract + docs + sdk release checks
 2) health-gate(scope strict warnings)
 3) consistency-check(cross-tenant strict warnings)
-4) perf-benchmark SLO checks (optional, enabled by default)
+4) control admin input validation smoke (optional, disabled by default)
+5) perf-benchmark SLO checks (optional, enabled by default)
 
 Options:
   --base-url <url>                   API base URL (default: http://localhost:$PORT)
@@ -113,6 +116,7 @@ Options:
   --out-dir <dir>                    Artifact output directory
   --run-perf <true|false>            Run perf benchmark checks (default: true)
   --run-pack-gate <true|false>       Run pack export/import roundtrip gate (default: true)
+  --run-control-admin-validation <true|false>  Run control admin input validation smoke (default: false)
   --pack-gate-scope <scope>          Scope used for pack roundtrip gate (default: core_gate_pack_<run_id>)
   --pack-gate-max-rows <n>           Max rows per section during pack export (default: 2000)
   --db-runner <local|auto>            Runner for DB-backed gate jobs (default: local; auto aliases to local)
@@ -171,6 +175,15 @@ case "${COMPRESSION_GATE_MODE}" in
     ;;
   *)
     echo "invalid --compression-gate-mode: ${COMPRESSION_GATE_MODE} (expected non_blocking|blocking)" >&2
+    exit 1
+    ;;
+esac
+
+case "${RUN_CONTROL_ADMIN_VALIDATION}" in
+  true|false)
+    ;;
+  *)
+    echo "invalid --run-control-admin-validation: ${RUN_CONTROL_ADMIN_VALIDATION} (expected true|false)" >&2
     exit 1
     ;;
 esac
@@ -365,6 +378,7 @@ probe_database_connectivity() {
 echo "[core-gate] out_dir=${OUT_DIR}"
 echo "[core-gate] base_url=${BASE_URL} scope=${SCOPE} tenant_id=${TENANT_ID} run_perf=${RUN_PERF}"
 echo "[core-gate] run_pack_gate=${RUN_PACK_GATE} pack_gate_scope=${PACK_GATE_SCOPE}"
+echo "[core-gate] run_control_admin_validation=${RUN_CONTROL_ADMIN_VALIDATION}"
 echo "[core-gate] require_partition_ready=${CORE_GATE_REQUIRE_PARTITION_READY}"
 echo "[core-gate] db_runner=${DB_RUNNER}"
 echo "[core-gate] compression_gate_mode=${COMPRESSION_GATE_MODE} perf_compression_check=${PERF_COMPRESSION_CHECK}"
@@ -406,6 +420,18 @@ if [[ "${RUN_PACK_GATE}" == "true" ]]; then
     pack_gate_ok=false
     fail_reasons="$(echo "${fail_reasons}" | jq '. + ["pack_roundtrip_output_invalid"]')"
   fi
+fi
+
+control_admin_validation_log_path=""
+control_admin_validation_ok=true
+if [[ "${RUN_CONTROL_ADMIN_VALIDATION}" == "true" ]]; then
+  control_admin_validation_log_path="${OUT_DIR}/07c_control_admin_validation.log"
+  run_step "control_admin_validation" "${control_admin_validation_log_path}" \
+    npm run -s e2e:control-admin-validation
+
+  control_admin_validation_ok="$(
+    echo "${steps_json}" | jq -r '[.[] | select(.name == "control_admin_validation")][-1].ok // false'
+  )"
 fi
 
 partition_cutover_summary_path=""
@@ -558,10 +584,13 @@ jq -n \
   --argjson max_error_rate "${max_error_rate}" \
   --argjson perf_slo_ok "$([[ "${perf_slo_ok}" == "true" ]] && echo true || echo false)" \
   --argjson run_pack_gate "$([[ "${RUN_PACK_GATE}" == "true" ]] && echo true || echo false)" \
+  --argjson run_control_admin_validation "$([[ "${RUN_CONTROL_ADMIN_VALIDATION}" == "true" ]] && echo true || echo false)" \
   --arg pack_gate_scope "${PACK_GATE_SCOPE}" \
   --argjson pack_gate_max_rows "${PACK_GATE_MAX_ROWS}" \
   --arg pack_gate_summary_path "${pack_gate_summary_path}" \
   --argjson pack_gate_ok "$([[ "${pack_gate_ok}" == "true" ]] && echo true || echo false)" \
+  --arg control_admin_validation_log_path "${control_admin_validation_log_path}" \
+  --argjson control_admin_validation_ok "$([[ "${control_admin_validation_ok}" == "true" ]] && echo true || echo false)" \
   --arg compression_gate_mode "${COMPRESSION_GATE_MODE}" \
   --argjson compression_ratio_min "${COMPRESSION_RATIO_MIN}" \
   --argjson compression_items_retain_min "${COMPRESSION_ITEMS_RETAIN_MIN}" \
@@ -638,6 +667,11 @@ jq -n \
         max_rows: $pack_gate_max_rows,
         summary_json: (if ($pack_gate_summary_path|length)>0 then $pack_gate_summary_path else null end),
         pass: (if $run_pack_gate then $pack_gate_ok else true end)
+      },
+      control_admin_validation: {
+        enabled: $run_control_admin_validation,
+        log_file: (if ($control_admin_validation_log_path|length)>0 then $control_admin_validation_log_path else null end),
+        pass: (if $run_control_admin_validation then $control_admin_validation_ok else true end)
       },
       compression_kpi: {
         mode: $compression_gate_mode,

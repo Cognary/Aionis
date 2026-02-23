@@ -56,6 +56,7 @@ import { MemoryRecallRequest, MemoryRecallTextRequest } from "./memory/schemas.j
 import { normalizeText } from "./util/normalize.js";
 import { redactPII } from "./util/redaction.js";
 import { HttpError } from "./util/http.js";
+import { requireAdminTokenHeader } from "./util/admin_auth.js";
 import { sha256Hex } from "./util/crypto.js";
 import { TokenBucketLimiter } from "./util/ratelimit.js";
 import { LruTtlCache } from "./util/lru_ttl_cache.js";
@@ -71,6 +72,7 @@ const authResolver = createAuthResolver({
   apiKeysJson: env.MEMORY_API_KEYS_JSON,
   jwtHs256Secret: env.MEMORY_JWT_HS256_SECRET,
   jwtClockSkewSec: env.MEMORY_JWT_CLOCK_SKEW_SEC,
+  jwtRequireExp: env.APP_ENV === "prod",
 });
 
 function databaseTargetHash(databaseUrl: string): string | null {
@@ -275,8 +277,11 @@ const globalRecallProfileDefaults = RECALL_PROFILE_DEFAULTS[env.MEMORY_RECALL_PR
 const recallProfilePolicy = parseRecallProfilePolicy(env.MEMORY_RECALL_PROFILE_POLICY_JSON);
 
 // Basic CORS support for browser-based playground/developer UIs.
-// Configure with CORS_ALLOW_ORIGINS (comma-separated), default "*".
-const CORS_ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS ?? "*")
+// Configure with CORS_ALLOW_ORIGINS (comma-separated).
+// Defaults:
+// - dev/ci: "*"
+// - prod: disabled unless explicitly configured
+const CORS_ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS ?? (env.APP_ENV === "prod" ? "" : "*"))
   .split(",")
   .map((x) => x.trim())
   .filter(Boolean);
@@ -727,6 +732,7 @@ function inferRecallStrategyFromKnobs(knobs: RecallProfileDefaults): RecallStrat
 const app = Fastify({
   logger: true,
   bodyLimit: 5 * 1024 * 1024,
+  trustProxy: env.TRUST_PROXY,
   genReqId: (req) => {
     const hdr = (req.headers["x-request-id"] ?? req.headers["X-Request-Id"]) as any;
     if (typeof hdr === "string" && hdr.trim().length > 0) return hdr.trim();
@@ -756,6 +762,8 @@ app.log.info(
     embedding_dim: embedder?.dim ?? null,
     scope: env.MEMORY_SCOPE,
     tenant_id: env.MEMORY_TENANT_ID,
+    trust_proxy: env.TRUST_PROXY,
+    cors_allow_origins: CORS_ALLOW_ORIGINS,
     auth_mode: env.MEMORY_AUTH_MODE,
     tenant_quota_enabled: env.TENANT_QUOTA_ENABLED,
     control_tenant_quota_cache_ttl_ms: env.CONTROL_TENANT_QUOTA_CACHE_TTL_MS,
@@ -895,7 +903,7 @@ const ControlAlertRouteSchema = z.object({
   label: z.string().max(256).optional().nullable(),
   events: z.array(z.string().min(1).max(128)).max(64).optional(),
   status: z.enum(["active", "disabled"]).optional(),
-  target: z.string().max(2048).optional().nullable(),
+  target: z.string().min(1).max(2048),
   secret: z.string().max(2048).optional().nullable(),
   headers: z.record(z.string().max(2048)).optional(),
   metadata: z.record(z.unknown()).optional(),
@@ -1609,8 +1617,8 @@ app.get("/v1/memory/sessions/:session_id/events", async (req, reply) => {
 
 // Pack export: scoped snapshot with deterministic payload hash.
 app.post("/v1/memory/packs/export", async (req, reply) => {
-  const principal = await requireMemoryPrincipal(req);
-  const body = withIdentityFromRequest(req, req.body, principal, "find");
+  requireAdminToken(req);
+  const body = req.body ?? {};
   await enforceRateLimit(req, reply, "recall");
   await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
   const gate = await acquireInflightSlot("recall");
@@ -1636,8 +1644,8 @@ app.post("/v1/memory/packs/export", async (req, reply) => {
 
 // Pack import: hash-verified replay into write pipeline with idempotent client_id mapping.
 app.post("/v1/memory/packs/import", async (req, reply) => {
-  const principal = await requireMemoryPrincipal(req);
-  const body = withIdentityFromRequest(req, req.body, principal, "write");
+  requireAdminToken(req);
+  const body = req.body ?? {};
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
   const gate = await acquireInflightSlot("write");
@@ -2357,14 +2365,7 @@ async function emitControlAudit(
 }
 
 function requireAdminToken(req: any) {
-  const configured = String(env.ADMIN_TOKEN ?? "").trim();
-  if (!configured) {
-    throw new HttpError(503, "admin_not_configured", "ADMIN_TOKEN is not configured");
-  }
-  const provided = String(req?.headers?.["x-admin-token"] ?? "").trim();
-  if (!provided || provided !== configured) {
-    throw new HttpError(401, "unauthorized_admin", "valid X-Admin-Token is required");
-  }
+  requireAdminTokenHeader(req?.headers ?? {}, env.ADMIN_TOKEN);
 }
 
 async function requireMemoryPrincipal(req: any): Promise<AuthPrincipal | null> {

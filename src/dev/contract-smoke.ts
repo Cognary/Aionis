@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { MemoryRecallRequest, ToolsFeedbackRequest, ToolsSelectRequest } from "../memory/schemas.js";
 import { HttpError } from "../util/http.js";
+import { requireAdminTokenHeader } from "../util/admin_auth.js";
+import {
+  normalizeControlAlertRouteTarget,
+  normalizeControlIncidentPublishSourceDir,
+  normalizeControlIncidentPublishTarget,
+} from "../control-plane.js";
 import { memoryRecallParsed, type RecallAuth } from "../memory/recall.js";
 import { ruleMatchesContext } from "../memory/rule-engine.js";
 import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
@@ -280,6 +286,121 @@ async function run() {
   assert.equal(ruleMatchesContext({ provider: { $in: ["openai", "minimax"] } }, [], { provider: "minimax" }), true);
   assert.equal(ruleMatchesContext({ provider: { $in: ["openai"] } }, [], { provider: "minimax" }), false);
   assert.equal(ruleMatchesContext({ intent: "json" }, [{ user: "lucio" }], { intent: "json", user: "lucio" }), false);
+  assert.equal(ruleMatchesContext({ intent: { $regex: "j.*n" } }, [], { intent: "json" }), true);
+  assert.equal(ruleMatchesContext({ intent: { $regex: "(a+)+$" } }, [], { intent: "aaaaaaaaaaaa!" }), false);
+  assert.equal(ruleMatchesContext({ intent: { $regex: "(?=json).*" } }, [], { intent: "json" }), false);
+  assert.equal(ruleMatchesContext({ intent: { $regex: "(a)\\1" } }, [], { intent: "aa" }), false);
+
+  // Admin token guard contract.
+  assert.throws(
+    () => requireAdminTokenHeader({}, ""),
+    (err: any) => err instanceof HttpError && err.statusCode === 503 && err.code === "admin_not_configured",
+  );
+  assert.throws(
+    () => requireAdminTokenHeader({}, "admin-secret"),
+    (err: any) => err instanceof HttpError && err.statusCode === 401 && err.code === "unauthorized_admin",
+  );
+  assert.throws(
+    () => requireAdminTokenHeader({ "x-admin-token": "wrong" }, "admin-secret"),
+    (err: any) => err instanceof HttpError && err.statusCode === 401 && err.code === "unauthorized_admin",
+  );
+  assert.doesNotThrow(() => requireAdminTokenHeader({ "x-admin-token": "admin-secret" }, "admin-secret"));
+
+  // Control alert route target hardening (HTTPS + SSRF guard + channel host constraints).
+  assert.equal(
+    normalizeControlAlertRouteTarget("webhook", "https://alerts.example.com/hooks/aionis"),
+    "https://alerts.example.com/hooks/aionis",
+  );
+  assert.throws(
+    () => normalizeControlAlertRouteTarget("webhook", "http://alerts.example.com/hooks/aionis"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_alert_target",
+  );
+  assert.throws(
+    () => normalizeControlAlertRouteTarget("webhook", "https://127.0.0.1:8443/hooks/aionis"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_alert_target",
+  );
+  assert.throws(
+    () => normalizeControlAlertRouteTarget("webhook", "https://2130706433/hooks/aionis"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_alert_target",
+  );
+  assert.throws(
+    () => normalizeControlAlertRouteTarget("webhook", "https://localhost/hooks/aionis"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_alert_target",
+  );
+  assert.throws(
+    () => normalizeControlAlertRouteTarget("webhook", "https://user:pass@alerts.example.com/hooks/aionis"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_alert_target",
+  );
+  assert.equal(
+    normalizeControlAlertRouteTarget("slack_webhook", "https://hooks.slack.com/services/T000/B000/XXXX"),
+    "https://hooks.slack.com/services/T000/B000/XXXX",
+  );
+  assert.throws(
+    () => normalizeControlAlertRouteTarget("slack_webhook", "https://api.slack.com/services/T000/B000/XXXX"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_alert_target",
+  );
+  assert.equal(
+    normalizeControlAlertRouteTarget("pagerduty_events", "https://events.pagerduty.com/v2/enqueue"),
+    "https://events.pagerduty.com/v2/enqueue",
+  );
+  assert.throws(
+    () => normalizeControlAlertRouteTarget("pagerduty_events", "https://pagerduty.com/v2/enqueue"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_alert_target",
+  );
+
+  // Incident publish job input hardening.
+  assert.equal(
+    normalizeControlIncidentPublishSourceDir("/var/lib/aionis/incidents/run-42/"),
+    "/var/lib/aionis/incidents/run-42",
+  );
+  assert.throws(
+    () => normalizeControlIncidentPublishSourceDir("var/lib/aionis/incidents/run-42"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_incident_publish_source_dir",
+  );
+  assert.throws(
+    () => normalizeControlIncidentPublishSourceDir("/var/lib/aionis/../secrets"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_incident_publish_source_dir",
+  );
+  assert.throws(
+    () => normalizeControlIncidentPublishSourceDir("https://example.com/incidents/run-42"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_incident_publish_source_dir",
+  );
+  assert.equal(
+    normalizeControlIncidentPublishTarget("https://uploads.example.com/aionis/run-42"),
+    "https://uploads.example.com/aionis/run-42",
+  );
+  assert.equal(
+    normalizeControlIncidentPublishTarget("s3://aionis-artifacts/incidents/run-42"),
+    "s3://aionis-artifacts/incidents/run-42",
+  );
+  assert.equal(
+    normalizeControlIncidentPublishTarget("arn:aws:s3:::aionis-artifacts/incidents/run-42"),
+    "arn:aws:s3:::aionis-artifacts/incidents/run-42",
+  );
+  assert.throws(
+    () => normalizeControlIncidentPublishTarget("ftp://uploads.example.com/aionis/run-42"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_incident_publish_target",
+  );
+  assert.throws(
+    () => normalizeControlIncidentPublishTarget("http://uploads.example.com/aionis/run-42"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_incident_publish_target",
+  );
+  assert.throws(
+    () => normalizeControlIncidentPublishTarget("s3:///incidents/run-42"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_incident_publish_target",
+  );
+  assert.throws(
+    () => normalizeControlIncidentPublishTarget("file:///tmp/aionis/run-42"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_incident_publish_target",
+  );
+  assert.throws(
+    () => normalizeControlIncidentPublishTarget("/tmp/aionis/run-42"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_incident_publish_target",
+  );
+  assert.throws(
+    () => normalizeControlIncidentPublishTarget("https://127.0.0.1/aionis/run-42"),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "invalid_incident_publish_target",
+  );
 
   // Policy patch schema + merging.
   const p1 = parsePolicyPatch({ output: { format: "json", strict: true }, tool: { allow: ["psql"] } });
