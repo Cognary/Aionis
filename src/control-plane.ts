@@ -1360,6 +1360,187 @@ function tenantScopeCondition(args: unknown[], tenantId: string, defaultTenantId
   return { sql: `scope LIKE $${args.length}`, args };
 }
 
+function tenantScopeConditionForColumn(
+  args: unknown[],
+  tenantId: string,
+  defaultTenantId: string,
+  columnSql: string,
+): { sql: string; args: unknown[] } {
+  if (tenantId === defaultTenantId) {
+    return { sql: `${columnSql} NOT LIKE 'tenant:%'`, args };
+  }
+  args.push(`tenant:${tenantId}::scope:%`);
+  return { sql: `${columnSql} LIKE $${args.length}`, args };
+}
+
+function tenantScopeKey(scope: string, tenantId: string, defaultTenantId: string): string {
+  return tenantId === defaultTenantId ? scope : `tenant:${tenantId}::scope:${scope}`;
+}
+
+export async function getTenantOperabilityDiagnostics(
+  db: Db,
+  args: { tenant_id: string; default_tenant_id: string; scope?: string; window_minutes?: number },
+) {
+  const tenantId = trimOrNull(args.tenant_id);
+  const defaultTenantId = trimOrNull(args.default_tenant_id) ?? "default";
+  const scope = trimOrNull(args.scope);
+  const windowMinutes = Number.isFinite(args.window_minutes)
+    ? Math.max(5, Math.min(24 * 60, Math.trunc(args.window_minutes!)))
+    : 60;
+  if (!tenantId) throw new Error("tenant_id is required");
+
+  const telemetryArgs: unknown[] = [tenantId];
+  let scopeFilterTelemetry = scope
+    ? (() => {
+        telemetryArgs.push(tenantScopeKey(scope, tenantId, defaultTenantId));
+        return { sql: `t.scope = $${telemetryArgs.length}`, args: telemetryArgs };
+      })()
+    : tenantScopeConditionForColumn(telemetryArgs, tenantId, defaultTenantId, "t.scope");
+
+  const memoryArgs: unknown[] = [];
+  let scopeFilterMemory = scope
+    ? (() => {
+        memoryArgs.push(tenantScopeKey(scope, tenantId, defaultTenantId));
+        return { sql: `scope = $${memoryArgs.length}`, args: memoryArgs };
+      })()
+    : tenantScopeCondition(memoryArgs, tenantId, defaultTenantId);
+
+  const out: Record<string, unknown> = {
+    tenant_id: tenantId,
+    default_tenant_id: defaultTenantId,
+    scope: scope ?? null,
+    window_minutes: windowMinutes,
+    generated_at: nowIso(),
+  };
+
+  try {
+    await withClient(db, async (client) => {
+      const requestTelemetry = await client.query(
+        `
+        SELECT
+          t.endpoint,
+          COUNT(*)::bigint AS total,
+          COUNT(*) FILTER (WHERE t.status_code >= 400)::bigint AS errors,
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY t.latency_ms) AS latency_p50_ms,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY t.latency_ms) AS latency_p95_ms,
+          percentile_cont(0.99) WITHIN GROUP (ORDER BY t.latency_ms) AS latency_p99_ms
+        FROM memory_request_telemetry t
+        WHERE t.tenant_id = $1
+          AND ${scopeFilterTelemetry.sql}
+          AND t.created_at >= now() - (($${scopeFilterTelemetry.args.length + 1}::text || ' minutes')::interval)
+        GROUP BY t.endpoint
+        ORDER BY t.endpoint ASC
+        `,
+        [...scopeFilterTelemetry.args, windowMinutes],
+      );
+
+      const recallAudit = await client.query(
+        `
+        SELECT
+          COUNT(*)::bigint AS total,
+          COUNT(*) FILTER (WHERE seed_count = 0)::bigint AS empty_seed,
+          COUNT(*) FILTER (WHERE node_count = 0)::bigint AS empty_nodes,
+          COUNT(*) FILTER (WHERE edge_count = 0)::bigint AS empty_edges,
+          AVG(seed_count)::double precision AS seed_avg,
+          AVG(node_count)::double precision AS node_avg,
+          AVG(edge_count)::double precision AS edge_avg
+        FROM memory_recall_audit
+        WHERE ${scopeFilterMemory.sql}
+          AND created_at >= now() - (($${scopeFilterMemory.args.length + 1}::text || ' minutes')::interval)
+        `,
+        [...scopeFilterMemory.args, windowMinutes],
+      );
+
+      const outboxByType = await client.query(
+        `
+        SELECT
+          event_type,
+          COUNT(*) FILTER (WHERE published_at IS NULL)::bigint AS pending,
+          COUNT(*) FILTER (WHERE published_at IS NULL AND attempts > 0)::bigint AS retrying,
+          COUNT(*) FILTER (WHERE failed_at IS NOT NULL)::bigint AS failed,
+          MAX(
+            CASE
+              WHEN published_at IS NULL THEN EXTRACT(EPOCH FROM (now() - created_at))
+              ELSE NULL
+            END
+          )::double precision AS oldest_pending_age_sec
+        FROM memory_outbox
+        WHERE ${scopeFilterMemory.sql}
+        GROUP BY event_type
+        ORDER BY event_type ASC
+        `,
+        scopeFilterMemory.args,
+      );
+
+      const endpointRows = requestTelemetry.rows.map((r: any) => {
+        const total = Number(r.total ?? 0);
+        const errors = Number(r.errors ?? 0);
+        return {
+          endpoint: String(r.endpoint ?? "unknown"),
+          total,
+          errors,
+          error_rate: total > 0 ? round(errors / total) : 0,
+          latency_p50_ms: round(Number(r.latency_p50_ms ?? 0)),
+          latency_p95_ms: round(Number(r.latency_p95_ms ?? 0)),
+          latency_p99_ms: round(Number(r.latency_p99_ms ?? 0)),
+        };
+      });
+
+      const recallRow = recallAudit.rows[0] ?? {};
+      const recallTotal = Number(recallRow.total ?? 0);
+      const emptySeed = Number(recallRow.empty_seed ?? 0);
+      const emptyNodes = Number(recallRow.empty_nodes ?? 0);
+      const emptyEdges = Number(recallRow.empty_edges ?? 0);
+
+      const outboxRows = outboxByType.rows.map((r: any) => ({
+        event_type: String(r.event_type ?? "unknown"),
+        pending: Number(r.pending ?? 0),
+        retrying: Number(r.retrying ?? 0),
+        failed: Number(r.failed ?? 0),
+        oldest_pending_age_sec: round(Number(r.oldest_pending_age_sec ?? 0)),
+      }));
+      const outboxTotals = outboxRows.reduce(
+        (acc, r) => {
+          acc.pending += r.pending;
+          acc.retrying += r.retrying;
+          acc.failed += r.failed;
+          acc.oldest_pending_age_sec = Math.max(acc.oldest_pending_age_sec, r.oldest_pending_age_sec);
+          return acc;
+        },
+        { pending: 0, retrying: 0, failed: 0, oldest_pending_age_sec: 0 },
+      );
+
+      out.request_telemetry = {
+        endpoints: endpointRows,
+      };
+      out.recall_pipeline = {
+        total: recallTotal,
+        empty_seed: emptySeed,
+        empty_nodes: emptyNodes,
+        empty_edges: emptyEdges,
+        empty_seed_rate: recallTotal > 0 ? round(emptySeed / recallTotal) : 0,
+        empty_node_rate: recallTotal > 0 ? round(emptyNodes / recallTotal) : 0,
+        empty_edge_rate: recallTotal > 0 ? round(emptyEdges / recallTotal) : 0,
+        seed_avg: round(Number(recallRow.seed_avg ?? 0)),
+        node_avg: round(Number(recallRow.node_avg ?? 0)),
+        edge_avg: round(Number(recallRow.edge_avg ?? 0)),
+      };
+      out.outbox = {
+        totals: outboxTotals,
+        by_event_type: outboxRows,
+      };
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      out.warning = "schema_not_ready_for_operability_diagnostics";
+      return out;
+    }
+    throw err;
+  }
+
+  return out;
+}
+
 export async function getTenantDashboardSummary(db: Db, args: { tenant_id: string; default_tenant_id: string }) {
   const tenantId = trimOrNull(args.tenant_id);
   const defaultTenantId = trimOrNull(args.default_tenant_id) ?? "default";

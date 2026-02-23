@@ -1,0 +1,2 @@
+{"case_id":"GMB-003","name":"topic_draft_trace","events":2,"min_events_per_topic":5,"expected":{"created_topics_min":1,"promoted":0,"topic_state":"draft","derived_from_edges_min":1}}
+{"case_id":"GMB-004","name":"graph_budget_advantage","query_mode":"recall_embedding","baseline":{"hops":1,"min_edge_weight":0.95,"min_edge_confidence":0.95},"graph":{"hops":2,"min_edge_weight":0.05,"min_edge_confidence":0.05},"expected":{"baseline_target_hits":0,"graph_target_hits_min":1}}

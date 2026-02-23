@@ -27,6 +27,7 @@ Narrative docs:
 
 - [Narrative Canon](docs/NARRATIVE_CANON.md)
 - [Packaging Plan](docs/PACKAGING_PLAN.md)
+- [OpenViking Borrow Plan](docs/OPENVIKING_BORROW_PLAN.md)
 - [Commercial Strategy](docs/COMMERCIAL_STRATEGY.md)
 - [Release Narrative Template](docs/RELEASE_NARRATIVE_TEMPLATE.md)
 - [Technical Release Material](docs/RELEASE_MATERIAL_TECHNICAL.md)
@@ -149,7 +150,13 @@ docker run --rm -it \
 
 1. `GET /health`
 2. `POST /v1/memory/write`
-3. `POST /v1/memory/recall_text`
+3. `POST /v1/memory/sessions`
+4. `POST /v1/memory/events`
+5. `GET /v1/memory/sessions/:session_id/events`
+6. `POST /v1/memory/packs/export`
+7. `POST /v1/memory/packs/import`
+8. `POST /v1/memory/find`
+9. `POST /v1/memory/recall_text`
 
 Full contract:
 
@@ -192,12 +199,11 @@ Docs:
 
 Use these before public traffic:
 
-1. `APP_ENV=prod`
-2. `MEMORY_AUTH_MODE=api_key` (or `jwt`)
-3. `RATE_LIMIT_BYPASS_LOOPBACK=false`
-4. real embedding provider (`minimax` or `openai`)
-5. set recall policy (`MEMORY_RECALL_PROFILE=strict_edges`) and optionally layer by tenant/endpoint via `MEMORY_RECALL_PROFILE_POLICY_JSON`
-6. enable adaptive queue-pressure downgrade if needed (`MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED=true`)
+1. set `AIONIS_MODE=service` (or `AIONIS_MODE=cloud`)
+2. configure auth credentials (`MEMORY_API_KEYS_JSON` and/or JWT secret depending on mode)
+3. real embedding provider (`minimax` or `openai`)
+4. set recall policy (`MEMORY_RECALL_PROFILE=strict_edges`) and optionally layer by tenant/endpoint via `MEMORY_RECALL_PROFILE_POLICY_JSON`
+5. enable adaptive queue-pressure downgrade if needed (`MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED=true`)
 
 Operator docs:
 

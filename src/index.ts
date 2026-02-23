@@ -15,6 +15,7 @@ import {
   getTenantQuotaProfile,
   getTenantApiKeyUsageReport,
   getTenantDashboardSummary,
+  getTenantOperabilityDiagnostics,
   getTenantIncidentPublishRollup,
   getTenantIncidentPublishSloReport,
   getTenantRequestTimeseries,
@@ -39,6 +40,9 @@ import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } fro
 import { rehydrateArchiveNodes } from "./memory/rehydrate.js";
 import { activateMemoryNodes } from "./memory/nodes-activate.js";
 import { type RecallAuth, memoryRecallParsed } from "./memory/recall.js";
+import { memoryFind } from "./memory/find.js";
+import { createSession, listSessionEvents, writeSessionEvent } from "./memory/sessions.js";
+import { exportMemoryPack, importMemoryPack } from "./memory/packs.js";
 import { ruleFeedback } from "./memory/feedback.js";
 import { updateRuleState } from "./memory/rules.js";
 import { evaluateRules } from "./memory/rules-evaluate.js";
@@ -189,6 +193,7 @@ type RecallProfileDefaults = {
 
 type RecallProfileName = "legacy" | "strict_edges" | "quality_first";
 type RecallEndpoint = "recall" | "recall_text";
+type RecallStrategyName = "local" | "balanced" | "global";
 
 const RECALL_PROFILE_DEFAULTS: Record<RecallProfileName, RecallProfileDefaults> = {
   legacy: {
@@ -220,6 +225,20 @@ const RECALL_PROFILE_DEFAULTS: Record<RecallProfileName, RecallProfileDefaults> 
   },
 };
 
+const RECALL_STRATEGY_DEFAULTS: Record<RecallStrategyName, RecallProfileDefaults> = {
+  local: {
+    limit: 16,
+    neighborhood_hops: 1,
+    max_nodes: 32,
+    max_edges: 40,
+    ranked_limit: 80,
+    min_edge_weight: 0.2,
+    min_edge_confidence: 0.2,
+  },
+  balanced: RECALL_PROFILE_DEFAULTS.strict_edges,
+  global: RECALL_PROFILE_DEFAULTS.quality_first,
+};
+
 type RecallProfilePolicy = {
   endpoint: Partial<Record<RecallEndpoint, RecallProfileName>>;
   tenant_default: Record<string, RecallProfileName>;
@@ -237,6 +256,13 @@ type RecallAdaptiveResolution = {
   defaults: RecallProfileDefaults;
   applied: boolean;
   reason: "disabled" | "explicit_knobs" | "wait_below_threshold" | "already_target_profile" | "queue_pressure";
+};
+
+type RecallStrategyResolution = {
+  strategy: RecallStrategyName;
+  defaults: RecallProfileDefaults;
+  applied: boolean;
+  reason: "no_strategy" | "explicit_knobs" | "applied";
 };
 
 type RecallHardCapResolution = {
@@ -258,6 +284,11 @@ const CORS_ALLOW_HEADERS = "content-type,x-api-key,x-tenant-id,authorization,x-r
 const CORS_ALLOW_METHODS = "GET,POST,OPTIONS";
 const TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT = new Map<string, "write" | "recall" | "recall_text">([
   ["/v1/memory/write", "write"],
+  ["/v1/memory/sessions", "write"],
+  ["/v1/memory/events", "write"],
+  ["/v1/memory/packs/import", "write"],
+  ["/v1/memory/find", "recall"],
+  ["/v1/memory/packs/export", "recall"],
   ["/v1/memory/recall", "recall"],
   ["/v1/memory/recall_text", "recall_text"],
 ]);
@@ -464,6 +495,21 @@ function hasExplicitRecallKnobs(body: unknown): boolean {
   return false;
 }
 
+function resolveRecallStrategy(body: unknown, hasExplicitKnobs: boolean): RecallStrategyResolution {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { strategy: "balanced", defaults: RECALL_STRATEGY_DEFAULTS.balanced, applied: false, reason: "no_strategy" };
+  }
+  const raw = (body as Record<string, unknown>).recall_strategy;
+  if (raw !== "local" && raw !== "balanced" && raw !== "global") {
+    return { strategy: "balanced", defaults: RECALL_STRATEGY_DEFAULTS.balanced, applied: false, reason: "no_strategy" };
+  }
+  const strategy = raw as RecallStrategyName;
+  if (hasExplicitKnobs) {
+    return { strategy, defaults: RECALL_STRATEGY_DEFAULTS[strategy], applied: false, reason: "explicit_knobs" };
+  }
+  return { strategy, defaults: RECALL_STRATEGY_DEFAULTS[strategy], applied: true, reason: "applied" };
+}
+
 function resolveAdaptiveRecallProfile(baseProfile: RecallProfileName, gateWaitMs: number, hasExplicitKnobs: boolean): RecallAdaptiveResolution {
   if (!env.MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED) {
     return { profile: baseProfile, defaults: RECALL_PROFILE_DEFAULTS[baseProfile], applied: false, reason: "disabled" };
@@ -518,6 +564,166 @@ function resolveAdaptiveRecallHardCap(
   return { defaults: capped, applied: true, reason: "queue_pressure_hard_cap" };
 }
 
+function buildRecallTrajectory(args: {
+  strategy: RecallStrategyName;
+  limit: number;
+  neighborhood_hops: number;
+  max_nodes: number;
+  max_edges: number;
+  ranked_limit: number;
+  min_edge_weight: number;
+  min_edge_confidence: number;
+  seeds: number;
+  nodes: number;
+  edges: number;
+  context_chars: number;
+  timings: Record<string, number>;
+  neighborhood_counts?: { nodes?: number; edges?: number } | null;
+  stage1?: {
+    mode?: "ann" | "exact_fallback";
+    ann_seed_count?: number;
+    final_seed_count?: number;
+    exact_fallback_enabled?: boolean;
+    exact_fallback_attempted?: boolean;
+  } | null;
+}) {
+  const stage1Ms = (args.timings["stage1_candidates_ann"] ?? 0) + (args.timings["stage1_candidates_exact_fallback"] ?? 0);
+  const stage2Ms = (args.timings["stage2_edges"] ?? 0) + (args.timings["stage2_nodes"] ?? 0) + (args.timings["stage2_spread"] ?? 0);
+  const stage3Ms = args.timings["stage3_context"] ?? 0;
+  const stage1AnnSeeds = Number.isFinite(args.stage1?.ann_seed_count) ? Number(args.stage1?.ann_seed_count) : args.seeds;
+  const stage1FinalSeeds = Number.isFinite(args.stage1?.final_seed_count) ? Number(args.stage1?.final_seed_count) : args.seeds;
+  const neighborhoodNodeCandidates = Number.isFinite(args.neighborhood_counts?.nodes)
+    ? Number(args.neighborhood_counts?.nodes)
+    : args.nodes;
+  const neighborhoodEdgeCandidates = Number.isFinite(args.neighborhood_counts?.edges)
+    ? Number(args.neighborhood_counts?.edges)
+    : args.edges;
+  const droppedNodes = Math.max(0, neighborhoodNodeCandidates - args.nodes);
+  const droppedEdges = Math.max(0, neighborhoodEdgeCandidates - args.edges);
+
+  const stage0Reasons: string[] = [];
+  if (stage1FinalSeeds === 0) stage0Reasons.push("seed_empty");
+  if (args.stage1?.exact_fallback_attempted && stage1FinalSeeds === 0) stage0Reasons.push("exact_fallback_empty");
+  if (args.stage1?.mode === "exact_fallback" && stage1AnnSeeds === 0 && stage1FinalSeeds > 0) {
+    stage0Reasons.push("ann_empty_recovered_by_exact_fallback");
+  }
+
+  const stage1Reasons: string[] = [];
+  if (droppedNodes > 0 && args.nodes >= args.max_nodes) stage1Reasons.push("max_nodes_cap");
+  if (droppedEdges > 0 && args.edges >= args.max_edges) stage1Reasons.push("max_edges_cap");
+  if (args.min_edge_weight > 0 || args.min_edge_confidence > 0) stage1Reasons.push("edge_quality_thresholds_active");
+  if (args.nodes === 0 && stage1FinalSeeds > 0) stage1Reasons.push("seed_visibility_or_state_filtered");
+
+  const stage2Reasons: string[] = [];
+  if (args.context_chars === 0 && args.nodes === 0) stage2Reasons.push("context_empty_no_nodes");
+  if (args.context_chars === 0 && args.nodes > 0) stage2Reasons.push("context_empty_after_compaction_or_missing_text");
+
+  const pruned_reasons = Array.from(new Set([...stage0Reasons, ...stage1Reasons, ...stage2Reasons]));
+
+  return {
+    strategy: args.strategy,
+    layers: [
+      {
+        level: "L0",
+        name: "seed_candidates",
+        hits: stage1FinalSeeds,
+        ann_seed_candidates: stage1AnnSeeds,
+        mode: args.stage1?.mode ?? "ann",
+        exact_fallback_attempted: args.stage1?.exact_fallback_attempted ?? false,
+        duration_ms: stage1Ms,
+        pruned_reasons: stage0Reasons,
+      },
+      {
+        level: "L1",
+        name: "graph_expansion",
+        hits: args.nodes,
+        edges: args.edges,
+        candidate_nodes: neighborhoodNodeCandidates,
+        candidate_edges: neighborhoodEdgeCandidates,
+        dropped_nodes: droppedNodes,
+        dropped_edges: droppedEdges,
+        duration_ms: stage2Ms,
+        pruned_reasons: stage1Reasons,
+      },
+      {
+        level: "L2",
+        name: "context_assembly",
+        context_chars: args.context_chars,
+        duration_ms: stage3Ms,
+        pruned_reasons: stage2Reasons,
+      },
+    ],
+    budgets: {
+      limit: args.limit,
+      neighborhood_hops: args.neighborhood_hops,
+      max_nodes: args.max_nodes,
+      max_edges: args.max_edges,
+      ranked_limit: args.ranked_limit,
+      min_edge_weight: args.min_edge_weight,
+      min_edge_confidence: args.min_edge_confidence,
+    },
+    pruned_reasons,
+  };
+}
+
+function buildRecallObservability(args: {
+  timings: Record<string, number>;
+  inflight_wait_ms: number;
+  adaptive_profile: { profile: string; applied: boolean; reason: string };
+  adaptive_hard_cap: { applied: boolean; reason: string };
+  stage1?: {
+    mode?: "ann" | "exact_fallback";
+    ann_seed_count?: number;
+    final_seed_count?: number;
+    exact_fallback_enabled?: boolean;
+    exact_fallback_attempted?: boolean;
+  } | null;
+  neighborhood_counts?: { nodes?: number; edges?: number } | null;
+}) {
+  const stageTimings = {
+    stage1_candidates_ann_ms: args.timings["stage1_candidates_ann"] ?? 0,
+    stage1_candidates_exact_fallback_ms: args.timings["stage1_candidates_exact_fallback"] ?? 0,
+    stage2_edges_ms: args.timings["stage2_edges"] ?? 0,
+    stage2_nodes_ms: args.timings["stage2_nodes"] ?? 0,
+    stage2_spread_ms: args.timings["stage2_spread"] ?? 0,
+    stage3_context_ms: args.timings["stage3_context"] ?? 0,
+    rule_defs_ms: args.timings["rule_defs"] ?? 0,
+    audit_insert_ms: args.timings["audit_insert"] ?? 0,
+    debug_embeddings_ms: args.timings["debug_embeddings"] ?? 0,
+  };
+  return {
+    stage_timings_ms: stageTimings,
+    inflight_wait_ms: args.inflight_wait_ms,
+    adaptive: {
+      profile: {
+        profile: args.adaptive_profile.profile,
+        applied: args.adaptive_profile.applied,
+        reason: args.adaptive_profile.reason,
+      },
+      hard_cap: {
+        applied: args.adaptive_hard_cap.applied,
+        reason: args.adaptive_hard_cap.reason,
+      },
+    },
+    stage1: args.stage1 ?? null,
+    neighborhood_counts: args.neighborhood_counts ?? null,
+  };
+}
+
+function inferRecallStrategyFromKnobs(knobs: RecallProfileDefaults): RecallStrategyName {
+  const isSame = (a: RecallProfileDefaults, b: RecallProfileDefaults) =>
+    a.limit === b.limit &&
+    a.neighborhood_hops === b.neighborhood_hops &&
+    a.max_nodes === b.max_nodes &&
+    a.max_edges === b.max_edges &&
+    a.ranked_limit === b.ranked_limit &&
+    a.min_edge_weight === b.min_edge_weight &&
+    a.min_edge_confidence === b.min_edge_confidence;
+  if (isSame(knobs, RECALL_STRATEGY_DEFAULTS.local)) return "local";
+  if (isSame(knobs, RECALL_STRATEGY_DEFAULTS.global)) return "global";
+  return "balanced";
+}
+
 const app = Fastify({
   logger: true,
   bodyLimit: 5 * 1024 * 1024,
@@ -544,6 +750,7 @@ app.setErrorHandler((err, req, reply) => {
 
 app.log.info(
   {
+    aionis_mode: env.AIONIS_MODE,
     app_env: env.APP_ENV,
     embedding_provider: embedder?.name ?? "none",
     embedding_dim: embedder?.dim ?? null,
@@ -716,6 +923,11 @@ const ControlIncidentPublishReplaySchema = z.object({
   reason: z.string().min(1).max(256).optional(),
   dry_run: z.boolean().optional(),
   allow_all_tenants: z.boolean().optional(),
+});
+
+const ControlTenantDiagnosticsQuerySchema = z.object({
+  scope: z.string().min(1).max(256).optional(),
+  window_minutes: z.coerce.number().int().min(5).max(24 * 60).optional(),
 });
 
 function summarizeIncidentPublishReplayRows(rows: any[], sampleLimit = 20) {
@@ -1056,6 +1268,20 @@ app.get("/v1/admin/control/dashboard/tenant/:tenant_id", async (req, reply) => {
   return reply.code(200).send({ ok: true, dashboard });
 });
 
+app.get("/v1/admin/control/diagnostics/tenant/:tenant_id", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const q = ControlTenantDiagnosticsQuerySchema.parse(req.query ?? {});
+  const diagnostics = await getTenantOperabilityDiagnostics(db, {
+    tenant_id: tenantId,
+    default_tenant_id: env.MEMORY_TENANT_ID,
+    scope: q.scope,
+    window_minutes: q.window_minutes,
+  });
+  return reply.code(200).send({ ok: true, diagnostics });
+});
+
 app.get("/v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup", async (req, reply) => {
   requireAdminToken(req);
   const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
@@ -1296,6 +1522,163 @@ app.post("/v1/memory/nodes/activate", async (req, reply) => {
   return reply.code(200).send(out);
 });
 
+// Session-first API: create/update a session envelope while preserving commit-chain write semantics.
+app.post("/v1/memory/sessions", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "write");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await withTx(db, (client) =>
+      createSession(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        maxTextLen: env.MAX_TEXT_LEN,
+        piiRedaction: env.PII_REDACTION,
+        allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+        shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+        shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        embedder,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+// Session-first API: append one event into a session stream and link via graph edge part_of.
+app.post("/v1/memory/events", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "write");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await withTx(db, (client) =>
+      writeSessionEvent(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        maxTextLen: env.MAX_TEXT_LEN,
+        piiRedaction: env.PII_REDACTION,
+        allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+        shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+        shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        embedder,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+// Session-first API: list events belonging to one session, with tenant/lane controls.
+app.get("/v1/memory/sessions/:session_id/events", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const params = req.params as any;
+  const query = req.query as any;
+  const input = withIdentityFromRequest(
+    req,
+    {
+      ...(query && typeof query === "object" ? query : {}),
+      session_id: String(params?.session_id ?? ""),
+    },
+    principal,
+    "find",
+  );
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(input));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await withClient(db, (client) =>
+      listSessionEvents(client, input, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+// Pack export: scoped snapshot with deterministic payload hash.
+app.post("/v1/memory/packs/export", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "find");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await withClient(db, (client) =>
+      exportMemoryPack(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        maxTextLen: env.MAX_TEXT_LEN,
+        piiRedaction: env.PII_REDACTION,
+        allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+        shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+        shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        embedder,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+// Pack import: hash-verified replay into write pipeline with idempotent client_id mapping.
+app.post("/v1/memory/packs/import", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "write");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await withTx(db, (client) =>
+      importMemoryPack(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        maxTextLen: env.MAX_TEXT_LEN,
+        piiRedaction: env.PII_REDACTION,
+        allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+        shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+        shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        embedder,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+// Exact retrieval channel: deterministic memory lookup by URI/id/attributes.
+app.post("/v1/memory/find", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "find");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await withClient(db, async (client) => {
+      return await memoryFind(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID);
+    });
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
 app.post("/v1/memory/recall", async (req, reply) => {
   const t0 = performance.now();
   const timings: Record<string, number> = {};
@@ -1303,7 +1686,15 @@ app.post("/v1/memory/recall", async (req, reply) => {
   const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall");
   const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
   const baseProfile = resolveRecallProfile("recall", tenantFromBody(bodyRaw));
-  const body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
+  let body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
+  const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs);
+  if (strategyResolution.applied) {
+    body = {
+      ...body,
+      ...strategyResolution.defaults,
+      recall_strategy: strategyResolution.strategy,
+    };
+  }
   let parsed = MemoryRecallRequest.parse(body);
   const wantDebugEmbeddings = parsed.return_debug && parsed.include_embeddings;
   await enforceRateLimit(req, reply, "recall");
@@ -1423,7 +1814,49 @@ app.post("/v1/memory/recall", async (req, reply) => {
     },
     "memory recall",
   );
-  return reply.code(200).send(out);
+  const trajectory = buildRecallTrajectory({
+    strategy:
+      parsed.recall_strategy ??
+      inferRecallStrategyFromKnobs({
+        limit: parsed.limit,
+        neighborhood_hops: parsed.neighborhood_hops as 1 | 2,
+        max_nodes: parsed.max_nodes,
+        max_edges: parsed.max_edges,
+        ranked_limit: parsed.ranked_limit,
+        min_edge_weight: parsed.min_edge_weight,
+        min_edge_confidence: parsed.min_edge_confidence,
+      }),
+    limit: parsed.limit,
+    neighborhood_hops: parsed.neighborhood_hops,
+    max_nodes: parsed.max_nodes,
+    max_edges: parsed.max_edges,
+    ranked_limit: parsed.ranked_limit,
+    min_edge_weight: parsed.min_edge_weight,
+    min_edge_confidence: parsed.min_edge_confidence,
+    seeds: out.seeds.length,
+    nodes: out.subgraph.nodes.length,
+    edges: out.subgraph.edges.length,
+    context_chars: contextChars,
+    timings,
+    neighborhood_counts: (out as any)?.debug?.neighborhood_counts ?? null,
+    stage1: (out as any)?.debug?.stage1 ?? null,
+  });
+  const observability = buildRecallObservability({
+    timings,
+    inflight_wait_ms: gate.wait_ms,
+    adaptive_profile: {
+      profile: adaptiveProfile.profile,
+      applied: adaptiveProfile.applied,
+      reason: adaptiveProfile.reason,
+    },
+    adaptive_hard_cap: {
+      applied: adaptiveHardCap.applied,
+      reason: adaptiveHardCap.reason,
+    },
+    stage1: (out as any)?.debug?.stage1 ?? null,
+    neighborhood_counts: (out as any)?.debug?.neighborhood_counts ?? null,
+  });
+  return reply.code(200).send({ ...out, trajectory, observability });
 });
 
 app.post("/v1/memory/recall_text", async (req, reply) => {
@@ -1437,7 +1870,15 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
   const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall_text");
   const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
   const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
-  const body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
+  let body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
+  const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs);
+  if (strategyResolution.applied) {
+    body = {
+      ...body,
+      ...strategyResolution.defaults,
+      recall_strategy: strategyResolution.strategy,
+    };
+  }
   let parsed = MemoryRecallTextRequest.parse(body);
   let contextBudgetDefaultApplied = false;
   if (parsed.context_token_budget === undefined && parsed.context_char_budget === undefined && env.MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT > 0) {
@@ -1518,6 +1959,7 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
     recallParsed = MemoryRecallRequest.parse({
       tenant_id: parsed.tenant_id,
       scope,
+      recall_strategy: parsed.recall_strategy,
       query_embedding: vec,
       consumer_agent_id: parsed.consumer_agent_id,
       consumer_team_id: parsed.consumer_team_id,
@@ -1640,7 +2082,49 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
     },
     "memory recall_text",
   );
-  return reply.code(200).send({ ...out, query: { text: q, embedding_provider: embedder.name } });
+  const trajectory = buildRecallTrajectory({
+    strategy:
+      recallParsed.recall_strategy ??
+      inferRecallStrategyFromKnobs({
+        limit: recallParsed.limit,
+        neighborhood_hops: recallParsed.neighborhood_hops as 1 | 2,
+        max_nodes: recallParsed.max_nodes,
+        max_edges: recallParsed.max_edges,
+        ranked_limit: recallParsed.ranked_limit,
+        min_edge_weight: recallParsed.min_edge_weight,
+        min_edge_confidence: recallParsed.min_edge_confidence,
+      }),
+    limit: recallParsed.limit,
+    neighborhood_hops: recallParsed.neighborhood_hops,
+    max_nodes: recallParsed.max_nodes,
+    max_edges: recallParsed.max_edges,
+    ranked_limit: recallParsed.ranked_limit,
+    min_edge_weight: recallParsed.min_edge_weight,
+    min_edge_confidence: recallParsed.min_edge_confidence,
+    seeds: out.seeds.length,
+    nodes: out.subgraph.nodes.length,
+    edges: out.subgraph.edges.length,
+    context_chars: contextChars,
+    timings,
+    neighborhood_counts: (out as any)?.debug?.neighborhood_counts ?? null,
+    stage1: (out as any)?.debug?.stage1 ?? null,
+  });
+  const observability = buildRecallObservability({
+    timings,
+    inflight_wait_ms: gate.wait_ms,
+    adaptive_profile: {
+      profile: adaptiveProfile.profile,
+      applied: adaptiveProfile.applied,
+      reason: adaptiveProfile.reason,
+    },
+    adaptive_hard_cap: {
+      applied: adaptiveHardCap.applied,
+      reason: adaptiveHardCap.reason,
+    },
+    stage1: (out as any)?.debug?.stage1 ?? null,
+    neighborhood_counts: (out as any)?.debug?.neighborhood_counts ?? null,
+  });
+  return reply.code(200).send({ ...out, query: { text: q, embedding_provider: embedder.name }, trajectory, observability });
 });
 
 app.post("/v1/memory/feedback", async (req, reply) => {
@@ -1936,6 +2420,7 @@ function withIdentityFromRequest(
     | "write"
     | "rehydrate"
     | "activate"
+    | "find"
     | "recall"
     | "recall_text"
     | "feedback"
@@ -1966,7 +2451,7 @@ function withIdentityFromRequest(
     (req as any).aionis_scope = obj.scope.trim();
   }
 
-  if (principal && (kind === "recall" || kind === "recall_text")) {
+  if (principal && (kind === "find" || kind === "recall" || kind === "recall_text")) {
     const reqAgent = typeof obj.consumer_agent_id === "string" ? obj.consumer_agent_id.trim() : null;
     const reqTeam = typeof obj.consumer_team_id === "string" ? obj.consumer_team_id.trim() : null;
     assertIdentityMatch("consumer_agent_id", reqAgent, principal.agent_id);

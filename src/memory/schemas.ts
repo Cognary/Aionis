@@ -85,6 +85,7 @@ export const MemoryRecallRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   query_embedding: z.array(z.number()),
+  recall_strategy: z.enum(["local", "balanced", "global"]).optional(),
   consumer_agent_id: z.string().min(1).optional(),
   consumer_team_id: z.string().min(1).optional(),
   limit: z.number().int().positive().max(200).default(30),
@@ -120,6 +121,7 @@ export const MemoryRecallTextRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   query_text: z.string().min(1),
+  recall_strategy: z.enum(["local", "balanced", "global"]).optional(),
   consumer_agent_id: z.string().min(1).optional(),
   consumer_team_id: z.string().min(1).optional(),
   limit: z.number().int().positive().max(200).default(30),
@@ -151,6 +153,168 @@ export const MemoryRecallTextRequest = z.object({
 export type MemoryRecallInput = z.infer<typeof MemoryRecallRequest>;
 export type MemoryRecallTextInput = z.infer<typeof MemoryRecallTextRequest>;
 export type MemoryWriteInput = z.infer<typeof MemoryWriteRequest>;
+
+export const MemoryFindRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  // Canonical object locator: aionis://tenant/scope/type/id
+  uri: z.string().min(1).optional(),
+  id: UUID.optional(),
+  client_id: z.string().min(1).optional(),
+  type: NodeType.optional(),
+  title_contains: z.string().min(1).optional(),
+  text_contains: z.string().min(1).optional(),
+  memory_lane: z.enum(["private", "shared"]).optional(),
+  slots_contains: z.record(z.any()).optional(),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  include_meta: z.boolean().default(false),
+  include_slots: z.boolean().default(false),
+  include_slots_preview: z.boolean().default(false),
+  slots_preview_keys: z.number().int().positive().max(50).default(10),
+  limit: z.number().int().positive().max(200).default(20),
+  offset: z.number().int().min(0).max(200000).default(0),
+});
+
+export type MemoryFindInput = z.infer<typeof MemoryFindRequest>;
+
+export const MemorySessionCreateRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  session_id: z.string().min(1).max(128),
+  title: z.string().min(1).max(512).optional(),
+  text_summary: z.string().min(1).max(4000).optional(),
+  input_text: z.string().min(1).optional(),
+  metadata: z.record(z.any()).optional(),
+  auto_embed: z.boolean().optional(),
+  memory_lane: z.enum(["private", "shared"]).optional(),
+  producer_agent_id: z.string().min(1).optional(),
+  owner_agent_id: z.string().min(1).optional(),
+  owner_team_id: z.string().min(1).optional(),
+});
+
+export type MemorySessionCreateInput = z.infer<typeof MemorySessionCreateRequest>;
+
+export const MemoryEventWriteRequest = z
+  .object({
+    tenant_id: z.string().min(1).optional(),
+    scope: z.string().min(1).optional(),
+    actor: z.string().min(1).optional(),
+    session_id: z.string().min(1).max(128),
+    event_id: z.string().min(1).max(128).optional(),
+    title: z.string().min(1).max(512).optional(),
+    text_summary: z.string().min(1).max(4000).optional(),
+    input_text: z.string().min(1).optional(),
+    metadata: z.record(z.any()).optional(),
+    auto_embed: z.boolean().optional(),
+    memory_lane: z.enum(["private", "shared"]).optional(),
+    producer_agent_id: z.string().min(1).optional(),
+    owner_agent_id: z.string().min(1).optional(),
+    owner_team_id: z.string().min(1).optional(),
+    edge_weight: z.number().min(0).max(1).optional(),
+    edge_confidence: z.number().min(0).max(1).optional(),
+  })
+  .refine((v) => !!v.text_summary || !!v.title || !!v.input_text, {
+    message: "must set text_summary, title, or input_text",
+  });
+
+export type MemoryEventWriteInput = z.infer<typeof MemoryEventWriteRequest>;
+
+export const MemorySessionEventsListRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  session_id: z.string().min(1).max(128),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  include_meta: z.coerce.boolean().default(false),
+  include_slots: z.coerce.boolean().default(false),
+  include_slots_preview: z.coerce.boolean().default(false),
+  slots_preview_keys: z.coerce.number().int().positive().max(50).default(10),
+  limit: z.coerce.number().int().positive().max(200).default(20),
+  offset: z.coerce.number().int().min(0).max(200000).default(0),
+});
+
+export type MemorySessionEventsListInput = z.infer<typeof MemorySessionEventsListRequest>;
+
+export const MemoryPackExportRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  include_nodes: z.boolean().default(true),
+  include_edges: z.boolean().default(true),
+  include_commits: z.boolean().default(true),
+  include_meta: z.boolean().default(true),
+  max_rows: z.number().int().positive().max(50000).default(5000),
+});
+
+export type MemoryPackExportInput = z.infer<typeof MemoryPackExportRequest>;
+
+export const MemoryPackImportRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  verify_only: z.boolean().default(false),
+  auto_embed: z.boolean().default(false),
+  manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  pack: z.object({
+    version: z.literal("aionis_pack_v1"),
+    tenant_id: z.string().min(1),
+    scope: z.string().min(1),
+    nodes: z
+      .array(
+        z.object({
+          id: UUID,
+          client_id: z.string().min(1).optional(),
+          type: NodeType,
+          tier: z.enum(["hot", "warm", "cold", "archive"]).optional(),
+          memory_lane: z.enum(["private", "shared"]).optional(),
+          producer_agent_id: z.string().min(1).optional(),
+          owner_agent_id: z.string().min(1).optional(),
+          owner_team_id: z.string().min(1).optional(),
+          title: z.string().optional(),
+          text_summary: z.string().optional(),
+          slots: z.record(z.any()).optional(),
+          raw_ref: z.string().optional(),
+          evidence_ref: z.string().optional(),
+          salience: z.number().min(0).max(1).optional(),
+          importance: z.number().min(0).max(1).optional(),
+          confidence: z.number().min(0).max(1).optional(),
+        }),
+      )
+      .default([]),
+    edges: z
+      .array(
+        z.object({
+          id: UUID,
+          type: EdgeType,
+          src_id: UUID,
+          dst_id: UUID,
+          src_client_id: z.string().min(1).optional(),
+          dst_client_id: z.string().min(1).optional(),
+          weight: z.number().min(0).max(1).optional(),
+          confidence: z.number().min(0).max(1).optional(),
+          decay_rate: z.number().min(0).max(1).optional(),
+        }),
+      )
+      .default([]),
+    commits: z
+      .array(
+        z.object({
+          id: UUID,
+          parent_id: UUID.nullable().optional(),
+          input_sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+          actor: z.string().optional(),
+          model_version: z.string().nullable().optional(),
+          prompt_version: z.string().nullable().optional(),
+          created_at: z.string().optional(),
+          commit_hash: z.string().optional(),
+        }),
+      )
+      .default([]),
+  }),
+});
+
+export type MemoryPackImportInput = z.infer<typeof MemoryPackImportRequest>;
 
 export const MemoryArchiveRehydrateRequest = z
   .object({

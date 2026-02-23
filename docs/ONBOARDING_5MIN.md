@@ -216,10 +216,11 @@ make stack-down
 
 Before external production usage, set:
 
-1. `APP_ENV=prod`
-2. `MEMORY_AUTH_MODE=api_key` (or `jwt`)
-3. `RATE_LIMIT_BYPASS_LOOPBACK=false` (must stay false in production)
-4. real embedding provider (`minimax` or `openai`)
+1. `AIONIS_MODE=service` (or `AIONIS_MODE=cloud`)
+2. configure auth credentials required by the mode:
+   - `service`: `MEMORY_API_KEYS_JSON` with at least one key
+   - `cloud`: `MEMORY_API_KEYS_JSON` and/or `MEMORY_JWT_HS256_SECRET`
+3. real embedding provider (`minimax` or `openai`)
 
 Hard safety rules:
 

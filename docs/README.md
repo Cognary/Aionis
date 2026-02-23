@@ -16,6 +16,7 @@ This is the public documentation index for Aionis Open Core.
 - [API Contract](./API_CONTRACT.md)
 - [SDK Guide](./SDK.md)
 - [Packaging Plan](./PACKAGING_PLAN.md)
+- [OpenViking Borrow Plan](./OPENVIKING_BORROW_PLAN.md)
 
 ### Operations / Reliability
 
@@ -24,6 +25,7 @@ This is the public documentation index for Aionis Open Core.
 - [E2E Regression Checklist](./E2E_REGRESSION.md)
 - [Performance Baseline](./PERFORMANCE_BASELINE.md)
 - [Recall Tail Latency Plan](./RECALL_TAIL_LATENCY_PLAN.md)
+- [AionisBench v0.1](./AIONIS_BENCH_V01.md)
 - [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
 - [Docker Release Runbook](./DOCKER_RELEASE.md)
 
@@ -36,6 +38,7 @@ This is the public documentation index for Aionis Open Core.
 
 - [Narrative Canon](./NARRATIVE_CANON.md)
 - [Packaging Plan](./PACKAGING_PLAN.md)
+- [OpenViking Borrow Plan](./OPENVIKING_BORROW_PLAN.md)
 - [Release Narrative Template](./RELEASE_NARRATIVE_TEMPLATE.md)
 - [Technical Release Material](./RELEASE_MATERIAL_TECHNICAL.md)
 - [Product Release Material](./RELEASE_MATERIAL_PRODUCT.md)

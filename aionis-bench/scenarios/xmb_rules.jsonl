@@ -1,0 +1,1 @@
+{"case_id":"XMB-005","name":"active_vs_shadow_tool_policy","candidates":["bash","curl"],"context":{"run.id":"${run_id}"},"active_rule":{"prefer":["curl"],"deny":["bash"]},"shadow_rule":{"prefer":["bash"],"deny":["curl"]},"expected":{"selected":"curl","denied_contains":["bash"],"explain_required":true}}

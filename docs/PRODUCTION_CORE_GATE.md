@@ -11,8 +11,9 @@ This is the blocking release gate for production go-live decisions.
 Blocking metrics:
 1. Integrity: scope health gate (`strict_warnings`) + cross-tenant consistency (`strict_warnings`)
 2. Operability: build/contract/docs/sdk release checks
-3. Availability and SLO: recall/write perf benchmark thresholds
-4. Compression KPI (optional blocking): context compression ratio + retain metrics
+3. Pack roundtrip: export -> verify import -> import -> re-import singleton check
+4. Availability and SLO: recall/write perf benchmark thresholds
+5. Compression KPI (optional blocking): context compression ratio + retain metrics
 
 Auxiliary only (non-blocking):
 1. LongMemEval
@@ -26,6 +27,8 @@ npm run -s gate:core:prod -- \
   --base-url "http://localhost:${PORT:-3001}" \
   --db-runner local \
   --scope default \
+  --run-pack-gate true \
+  --pack-gate-max-rows 2000 \
   --run-perf true \
   --recall-p95-max-ms 1200 \
   --write-p95-max-ms 800 \
@@ -46,7 +49,13 @@ Artifacts:
 - `artifacts/core_gate/<run_id>/summary.json`
 - `artifacts/core_gate/<run_id>/06_health_gate_scope.json`
 - `artifacts/core_gate/<run_id>/07_consistency_cross_tenant.json`
+- `artifacts/core_gate/<run_id>/07b_pack_roundtrip_gate.json`
 - `artifacts/core_gate/<run_id>/08_perf_benchmark.json`
+
+Pack gate controls:
+- `--run-pack-gate true|false`
+- `--pack-gate-scope <scope>`
+- `--pack-gate-max-rows <n>`
 
 ## Compression KPI Gate
 

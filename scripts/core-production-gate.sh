@@ -26,6 +26,9 @@ TENANT_ID="${TENANT_ID:-${MEMORY_TENANT_ID:-default}}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="${OUT_DIR:-${ROOT_DIR}/artifacts/core_gate/${RUN_ID}}"
 RUN_PERF="${RUN_PERF:-true}"
+RUN_PACK_GATE="${RUN_PACK_GATE:-true}"
+PACK_GATE_SCOPE="${PACK_GATE_SCOPE:-core_gate_pack_${RUN_ID}}"
+PACK_GATE_MAX_ROWS="${PACK_GATE_MAX_ROWS:-2000}"
 CORE_GATE_DB_RUNNER="${CORE_GATE_DB_RUNNER:-local}"
 CORE_GATE_REQUIRE_PARTITION_READY="${CORE_GATE_REQUIRE_PARTITION_READY:-false}"
 CORE_GATE_PARTITION_SCOPE="${CORE_GATE_PARTITION_SCOPE:-}"
@@ -63,6 +66,9 @@ while [[ $# -gt 0 ]]; do
     --tenant-id) TENANT_ID="${2:-}"; shift 2 ;;
     --out-dir) OUT_DIR="${2:-}"; shift 2 ;;
     --run-perf) RUN_PERF="${2:-}"; shift 2 ;;
+    --run-pack-gate) RUN_PACK_GATE="${2:-}"; shift 2 ;;
+    --pack-gate-scope) PACK_GATE_SCOPE="${2:-}"; shift 2 ;;
+    --pack-gate-max-rows) PACK_GATE_MAX_ROWS="${2:-}"; shift 2 ;;
     --db-runner) CORE_GATE_DB_RUNNER="${2:-}"; shift 2 ;;
     --recall-p95-max-ms) RECALL_P95_MAX_MS="${2:-}"; shift 2 ;;
     --write-p95-max-ms) WRITE_P95_MAX_MS="${2:-}"; shift 2 ;;
@@ -106,6 +112,9 @@ Options:
   --tenant-id <tenant>               Tenant id (default: MEMORY_TENANT_ID or default)
   --out-dir <dir>                    Artifact output directory
   --run-perf <true|false>            Run perf benchmark checks (default: true)
+  --run-pack-gate <true|false>       Run pack export/import roundtrip gate (default: true)
+  --pack-gate-scope <scope>          Scope used for pack roundtrip gate (default: core_gate_pack_<run_id>)
+  --pack-gate-max-rows <n>           Max rows per section during pack export (default: 2000)
   --db-runner <local|auto>            Runner for DB-backed gate jobs (default: local; auto aliases to local)
   --recall-p95-max-ms <n>            Recall p95 SLO threshold (default: 1200)
   --write-p95-max-ms <n>             Write p95 SLO threshold (default: 800)
@@ -355,6 +364,7 @@ probe_database_connectivity() {
 
 echo "[core-gate] out_dir=${OUT_DIR}"
 echo "[core-gate] base_url=${BASE_URL} scope=${SCOPE} tenant_id=${TENANT_ID} run_perf=${RUN_PERF}"
+echo "[core-gate] run_pack_gate=${RUN_PACK_GATE} pack_gate_scope=${PACK_GATE_SCOPE}"
 echo "[core-gate] require_partition_ready=${CORE_GATE_REQUIRE_PARTITION_READY}"
 echo "[core-gate] db_runner=${DB_RUNNER}"
 echo "[core-gate] compression_gate_mode=${COMPRESSION_GATE_MODE} perf_compression_check=${PERF_COMPRESSION_CHECK}"
@@ -372,6 +382,31 @@ run_step "health_gate_scope" "${OUT_DIR}/06_health_gate_scope.json" \
 
 run_step "consistency_cross_tenant" "${OUT_DIR}/07_consistency_cross_tenant.json" \
   run_db_command npm run -s job:consistency-check:cross-tenant -- --strict-warnings
+
+pack_gate_summary_path=""
+pack_gate_ok=true
+if [[ "${RUN_PACK_GATE}" == "true" ]]; then
+  pack_gate_summary_path="${OUT_DIR}/07b_pack_roundtrip_gate.json"
+  run_step "pack_roundtrip_gate" "${pack_gate_summary_path}" \
+    env \
+      BASE_URL="${BASE_URL}" \
+      TENANT_ID="${TENANT_ID}" \
+      SCOPE="${PACK_GATE_SCOPE}" \
+      PACK_MAX_ROWS="${PACK_GATE_MAX_ROWS}" \
+      API_KEY="${API_KEY:-${PERF_API_KEY:-}}" \
+      AUTH_BEARER="${AUTH_BEARER:-${PERF_AUTH_BEARER:-}}" \
+      npm run -s job:pack-roundtrip-gate
+
+  if [[ -f "${pack_gate_summary_path}" ]] && jq -e . >/dev/null 2>&1 < "${pack_gate_summary_path}"; then
+    pack_gate_ok="$(jq -r '.ok // false' "${pack_gate_summary_path}")"
+    if [[ "${pack_gate_ok}" != "true" ]]; then
+      fail_reasons="$(echo "${fail_reasons}" | jq '. + ["pack_roundtrip_failed"]')"
+    fi
+  else
+    pack_gate_ok=false
+    fail_reasons="$(echo "${fail_reasons}" | jq '. + ["pack_roundtrip_output_invalid"]')"
+  fi
+fi
 
 partition_cutover_summary_path=""
 if [[ "${CORE_GATE_REQUIRE_PARTITION_READY}" == "true" ]]; then
@@ -522,6 +557,11 @@ jq -n \
   --argjson write_p95 "${write_p95}" \
   --argjson max_error_rate "${max_error_rate}" \
   --argjson perf_slo_ok "$([[ "${perf_slo_ok}" == "true" ]] && echo true || echo false)" \
+  --argjson run_pack_gate "$([[ "${RUN_PACK_GATE}" == "true" ]] && echo true || echo false)" \
+  --arg pack_gate_scope "${PACK_GATE_SCOPE}" \
+  --argjson pack_gate_max_rows "${PACK_GATE_MAX_ROWS}" \
+  --arg pack_gate_summary_path "${pack_gate_summary_path}" \
+  --argjson pack_gate_ok "$([[ "${pack_gate_ok}" == "true" ]] && echo true || echo false)" \
   --arg compression_gate_mode "${COMPRESSION_GATE_MODE}" \
   --argjson compression_ratio_min "${COMPRESSION_RATIO_MIN}" \
   --argjson compression_items_retain_min "${COMPRESSION_ITEMS_RETAIN_MIN}" \
@@ -591,6 +631,13 @@ jq -n \
           max_error_rate: $max_error_rate
         },
         pass: $perf_slo_ok
+      },
+      pack_roundtrip: {
+        enabled: $run_pack_gate,
+        scope: $pack_gate_scope,
+        max_rows: $pack_gate_max_rows,
+        summary_json: (if ($pack_gate_summary_path|length)>0 then $pack_gate_summary_path else null end),
+        pass: (if $run_pack_gate then $pack_gate_ok else true end)
       },
       compression_kpi: {
         mode: $compression_gate_mode,

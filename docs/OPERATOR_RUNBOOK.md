@@ -106,6 +106,20 @@ curl -sS localhost:${PORT:-3001}/v1/memory/recall_text \
 | jq '{context_chars:(.context.text|length), items:(.context.items|length), citations:(.context.citations|length), compaction:.debug.context_compaction}'
 ```
 
+8. Tenant operability diagnostics (structured recall/outbox observability):
+
+```bash
+set -a; source /Users/lucio/Desktop/Aionis/.env; set +a
+curl -sS localhost:${PORT:-3001}/v1/admin/control/diagnostics/tenant/default?window_minutes=60 \
+  -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+| jq '.diagnostics | {request_telemetry, recall_pipeline, outbox}'
+```
+
+Use this to quickly locate:
+- empty-seed / empty-node spikes
+- endpoint p95/p99 latency regressions
+- outbox pending/retrying/failed backlog by event type
+
 ## Weekly
 
 1. Long-horizon drift snapshot:
@@ -167,6 +181,12 @@ npm run e2e:phasec-tenant
 npm run -s env:throughput:benchmark
 npm run -s bench:longmemeval:gate
 npm run -s bench:locomo -- --sample-limit 1 --qa-limit 20
+
+# optional: override benchmark LLM adapter explicitly
+npm run -s bench:locomo -- \
+  --sample-limit 1 --qa-limit 20 \
+  --llm-provider gemini \
+  --llm-model gemini-3-flash-preview
 ```
 
 Do not use benchmark failures above as release blockers. Treat them as auxiliary drift signals.

@@ -32,6 +32,11 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
 
 ## Auth Identity Mapping (Phase C MVP)
 
+- Runtime mode presets:
+  - `AIONIS_MODE=local` => defaults to dev-safe local settings (`APP_ENV=dev`, `MEMORY_AUTH_MODE=off`)
+  - `AIONIS_MODE=service` => defaults to service production baseline (`APP_ENV=prod`, `MEMORY_AUTH_MODE=api_key`)
+  - `AIONIS_MODE=cloud` => defaults to cloud production baseline (`APP_ENV=prod`, `MEMORY_AUTH_MODE=api_key_or_jwt`)
+  - explicit env vars always override mode defaults
 - Optional global mode: `MEMORY_AUTH_MODE=api_key`
 - Key registry: `MEMORY_API_KEYS_JSON` (`{ "<api-key>": { tenant_id, agent_id?, team_id?, role? } }`)
 - JWT mode: `MEMORY_AUTH_MODE=jwt` (or `api_key_or_jwt`) with `Authorization: Bearer <jwt>`
@@ -66,6 +71,213 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
 
 ## Endpoints
 
+### `POST /v1/memory/find`
+
+Deterministic lookup channel for exact object retrieval and attribute filters.  
+Use this endpoint when you need precise object targeting (URI/id/client_id/type), and use `recall/recall_text` for semantic retrieval.
+
+**Request**
+- `tenant_id?: string`
+- `scope?: string`
+- `uri?: string` (`aionis://tenant/scope/type/id`)
+- `id?: string` (uuid)
+- `client_id?: string`
+- `type?: "event"|"entity"|"topic"|"rule"|"evidence"|"concept"|"procedure"|"self_model"`
+- `title_contains?: string`
+- `text_contains?: string`
+- `memory_lane?: "private"|"shared"`
+- `slots_contains?: object` (jsonb containment filter)
+- `consumer_agent_id?: string` (optional lane visibility enforcement)
+- `consumer_team_id?: string` (optional lane visibility enforcement)
+- `include_meta?: boolean` (default false)
+- `include_slots?: boolean` (default false)
+- `include_slots_preview?: boolean` (default false)
+- `slots_preview_keys?: number` (default 10, max 50)
+- `limit?: number` (default 20, max 200)
+- `offset?: number` (default 0, max 200000)
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `mode: "find"`
+- `filters: { uri,id,client_id,type,title_contains,text_contains,memory_lane,slots_contains,consumer_agent_id,consumer_team_id }`
+- `nodes: NodeDTO[]` where each node includes:
+  - always: `uri`, `id`, `client_id`, `type`, `title`, `text_summary`
+  - topic extras: `topic_state?`, `member_count?`
+  - optional by flags: `slots`, `slots_preview`, meta fields (same meta policy as recall DTOs)
+- `page: { limit, offset, returned, has_more }`
+
+### `POST /v1/memory/sessions`
+
+Session-first write API. This endpoint creates or updates a session envelope while still using the same commit-chain memory write path.
+
+**Request**
+- `tenant_id?: string`
+- `scope?: string`
+- `actor?: string`
+- `session_id: string` (required)
+- `title?: string`
+- `text_summary?: string`
+- `input_text?: string`
+- `metadata?: object`
+- `auto_embed?: boolean`
+- `memory_lane?: "private"|"shared"`
+- `producer_agent_id?: string`
+- `owner_agent_id?: string`
+- `owner_team_id?: string`
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `session_id: string`
+- `session_node_id: string|null`
+- `session_uri: string|null` (`aionis://tenant/scope/topic/<id>`)
+- `commit_id: string`
+- `commit_hash: string`
+- `nodes: { id, client_id?, type }[]`
+- `edges: { id, type, src_id, dst_id }[]`
+- `embedding_backfill?: { enqueued: true, pending_nodes: number }|null`
+
+### `POST /v1/memory/events`
+
+Session-first event ingestion API. This endpoint writes one event node and links it to the session with `part_of`.
+
+**Request**
+- `tenant_id?: string`
+- `scope?: string`
+- `actor?: string`
+- `session_id: string` (required)
+- `event_id?: string` (optional idempotency key; generated if omitted)
+- `title?: string`
+- `text_summary?: string`
+- `input_text?: string`
+- `metadata?: object`
+- `auto_embed?: boolean`
+- `memory_lane?: "private"|"shared"`
+- `producer_agent_id?: string`
+- `owner_agent_id?: string`
+- `owner_team_id?: string`
+- `edge_weight?: number` (`0..1`)
+- `edge_confidence?: number` (`0..1`)
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `session_id: string`
+- `event_id: string`
+- `event_node_id: string|null`
+- `session_node_id: string|null`
+- `event_uri: string|null` (`aionis://tenant/scope/event/<id>`)
+- `session_uri: string|null` (`aionis://tenant/scope/topic/<id>`)
+- `commit_id: string`
+- `commit_hash: string`
+- `nodes: { id, client_id?, type }[]`
+- `edges: { id, type, src_id, dst_id }[]`
+- `embedding_backfill?: { enqueued: true, pending_nodes: number }|null`
+
+### `GET /v1/memory/sessions/:session_id/events`
+
+List events in one session using deterministic graph linkage (`event --part_of--> session-topic`).
+
+**Query**
+- `tenant_id?: string`
+- `scope?: string`
+- `consumer_agent_id?: string`
+- `consumer_team_id?: string`
+- `include_meta?: boolean` (default false)
+- `include_slots?: boolean` (default false)
+- `include_slots_preview?: boolean` (default false)
+- `slots_preview_keys?: number` (default 10, max 50)
+- `limit?: number` (default 20, max 200)
+- `offset?: number` (default 0)
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `session: { session_id, node_id, title, text_summary, uri } | null`
+- `events: EventDTO[]`
+- `page: { limit, offset, returned, has_more }`
+
+`EventDTO` always includes:
+- `uri`, `id`, `client_id`, `event_id`, `type`, `title`, `text_summary`, `edge_weight`, `edge_confidence`
+
+Optional by flags:
+- `slots` or `slots_preview`
+- same meta-family fields as other node DTOs when `include_meta=true`
+
+### `POST /v1/memory/packs/export`
+
+Export a scoped memory snapshot for migration/backup/benchmark replay.
+
+**Request**
+- `tenant_id?: string`
+- `scope?: string`
+- `include_nodes?: boolean` (default true)
+- `include_edges?: boolean` (default true)
+- `include_commits?: boolean` (default true)
+- `include_meta?: boolean` (default true)
+- `max_rows?: number` (default 5000, max 50000; applied per section)
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `manifest:`
+  - `version: "aionis_pack_manifest_v1"`
+  - `pack_version: "aionis_pack_v1"`
+  - `sha256: string` (hash over `pack` payload)
+  - `generated_at: string`
+  - `counts: { nodes, edges, commits }`
+  - `truncated: { nodes, edges, commits }`
+  - `max_rows: number`
+- `pack:`
+  - `version: "aionis_pack_v1"`
+  - `tenant_id: string`
+  - `scope: string`
+  - `nodes: [...]`
+  - `edges: [...]`
+  - `commits: [...]`
+
+### `POST /v1/memory/packs/import`
+
+Import a previously exported pack into the same tenant/scope domain (hash-verified, idempotent mapping).
+
+**Request**
+- `tenant_id?: string` (must match `pack.tenant_id` if provided)
+- `scope?: string` (must match `pack.scope` if provided)
+- `actor?: string`
+- `verify_only?: boolean` (default false)
+- `auto_embed?: boolean` (default false)
+- `manifest_sha256?: string` (optional; when provided must equal hash of `pack`)
+- `pack:`
+  - `version: "aionis_pack_v1"`
+  - `tenant_id: string`
+  - `scope: string`
+  - `nodes: NodePackDTO[]`
+  - `edges: EdgePackDTO[]`
+  - `commits: CommitPackDTO[]` (optional for import execution; retained for audit context)
+
+**Response (`verify_only=true`)**
+- `ok: true`
+- `verified: true`
+- `imported: false`
+- `tenant_id: string`
+- `scope: string`
+- `pack_sha256: string`
+- `planned: { nodes, edges, commits_in_pack }`
+
+**Response (`verify_only=false`)**
+- `ok: true`
+- `verified: true`
+- `imported: true`
+- `tenant_id: string`
+- `scope: string`
+- `pack_sha256: string`
+- `commit_id: string`
+- `commit_hash: string`
+- `nodes: number`
+- `edges: number`
+- `embedding_backfill?: { enqueued: true, pending_nodes: number } | null`
+
 ### `POST /v1/memory/recall`
 
 Default recall knobs are profile-driven:
@@ -99,6 +311,7 @@ Profiles:
 - `query_embedding: number[]` (required, dim=1536)
 - `tenant_id?: string`
 - `scope?: string`
+- `recall_strategy?: "local"|"balanced"|"global"` (optional high-level retrieval preset; ignored when explicit recall knobs are provided)
 - `consumer_agent_id?: string` (optional; enables lane-based visibility and read-side audit)
 - `consumer_team_id?: string` (optional; used with team-private lane and team-scoped rules)
 - `limit?: number` (default from recall profile, max 200)
@@ -131,6 +344,24 @@ Profiles:
 - `context: { text: string, items: any[], citations: any[] }`
 - `rules?: { scope, considered, matched, skipped_invalid_then, invalid_then_sample, applied }` (only when `rules_context` is provided)
 - `debug?: { neighborhood_counts: { nodes:number, edges:number }, embeddings?: DebugEmbeddingDTO[], context_compaction?: { profile, token_budget, char_budget, applied, before_chars, after_chars, before_est_tokens, after_est_tokens, dropped_lines, dropped_by_section } }` (only when `return_debug=true`)
+- `trajectory?: { strategy, layers, budgets, pruned_reasons }` (stage-level explain block for L0/L1/L2 flow)
+  - `observability?: { stage_timings_ms, inflight_wait_ms, adaptive, stage1, neighborhood_counts }`
+    - `stage_timings_ms` includes per-stage timing slices (`stage1_candidates_ann_ms`, `stage2_edges_ms`, `stage3_context_ms`, etc.)
+    - `adaptive.profile` / `adaptive.hard_cap` expose queue-pressure downgrade decisions
+    - `stage1` includes ANN vs exact-fallback mode and seed counters when available
+  - `layers[0]` (`L0`): `{ hits, ann_seed_candidates, mode, exact_fallback_attempted, duration_ms, pruned_reasons[] }`
+  - `layers[1]` (`L1`): `{ hits, edges, candidate_nodes, candidate_edges, dropped_nodes, dropped_edges, duration_ms, pruned_reasons[] }`
+  - `layers[2]` (`L2`): `{ context_chars, duration_ms, pruned_reasons[] }`
+  - common `pruned_reasons` include (when applicable):
+    - `seed_empty`
+    - `exact_fallback_empty`
+    - `ann_empty_recovered_by_exact_fallback`
+    - `max_nodes_cap`
+    - `max_edges_cap`
+    - `edge_quality_thresholds_active`
+    - `seed_visibility_or_state_filtered`
+    - `context_empty_no_nodes`
+    - `context_empty_after_compaction_or_missing_text`
 
 **NodeDTO (whitelist)**
 - Always: `id`, `type`, `title`, `text_summary`
@@ -157,18 +388,48 @@ This includes the same profile policy, adaptive downgrade, and adaptive hard-cap
 **Request**
 - Same fields as `/recall`, except:
   - `query_text: string` (required)
+  - `recall_strategy?: "local"|"balanced"|"global"` (same semantics as `/recall`)
   - server can apply default `context_token_budget` when request omits both compaction fields:
     - `MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT` (`0` disables)
 
 **Response**
 - Same as `/recall`, plus:
   - `query: { text: string, embedding_provider: string }`
+- `trajectory?: { strategy, layers, budgets, pruned_reasons }` (same shape and semantics as `/recall`)
+- `observability?: { stage_timings_ms, inflight_wait_ms, adaptive, stage1, neighborhood_counts }` (same shape as `/recall`)
 
 **Upstream embedding failure mapping (`/recall_text`)**
 - provider throttled / rate limited: `429 upstream_embedding_rate_limited` (+ `retry-after`)
 - provider timeout / unavailable: `503 upstream_embedding_unavailable` (+ `retry-after`)
 - provider malformed response: `502 upstream_embedding_bad_response`
 - server should not expose generic `500` for known upstream embedding failures
+
+---
+
+### `GET /v1/admin/control/diagnostics/tenant/:tenant_id`
+
+Structured operability snapshot for recall pipeline + outbox health.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `scope?: string` (optional; narrow diagnostics to one logical scope)
+- `window_minutes?: number` (optional; default `60`, min `5`, max `1440`)
+
+**Response**
+- `ok: true`
+- `diagnostics: { ... }`
+  - `tenant_id`, `scope`, `window_minutes`, `generated_at`
+  - `request_telemetry.endpoints[]`:
+    - `endpoint`, `total`, `errors`, `error_rate`, `latency_p50_ms`, `latency_p95_ms`, `latency_p99_ms`
+  - `recall_pipeline`:
+    - `total`, `empty_seed`, `empty_nodes`, `empty_edges`
+    - `empty_seed_rate`, `empty_node_rate`, `empty_edge_rate`
+    - `seed_avg`, `node_avg`, `edge_avg`
+  - `outbox`:
+    - `totals: { pending, retrying, failed, oldest_pending_age_sec }`
+    - `by_event_type[]: { event_type, pending, retrying, failed, oldest_pending_age_sec }`
 
 ---
 

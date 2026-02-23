@@ -608,6 +608,37 @@ Expected:
 
 1. All above checks have `count=0`.
 
+## 18) Session/Event API Smoke
+
+Run session-first API smoke:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+examples/session_event_smoke.sh
+```
+
+Expected:
+
+1. Session create returns `session_node_id` and `session_uri`.
+2. Event append returns `event_node_id` with stable `event_id`.
+3. Session event list returns non-empty `events[]` and matching `event_id` values.
+
+## 19) Pack Export/Import Smoke
+
+Run pack smoke:
+
+```bash
+cd /Users/lucio/Desktop/Aionis
+examples/pack_smoke.sh
+```
+
+Expected:
+
+1. Export returns `manifest.sha256` and non-empty `pack` sections.
+2. Import verify-only succeeds with `verified=true` and `imported=false`.
+3. Import execute succeeds with `imported=true` and returns commit metadata.
+4. Subsequent `find` by seeded `client_id` still returns deterministic single node identity.
+
 ## Verification Stamp
 
 - Last reviewed: `2026-02-18`

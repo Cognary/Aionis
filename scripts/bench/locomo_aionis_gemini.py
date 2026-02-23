@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-LoCoMo baseline runner for Aionis + MiniMax chat model.
+LoCoMo baseline runner for Aionis + pluggable LLM adapter.
 
 Flow per sample:
 1) Ingest LoCoMo conversation sessions into Aionis (isolated scope per sample).
 2) Optionally run outbox worker to accelerate embedding readiness.
-3) For each QA item in the sample, run recall + MiniMax answer generation.
+3) For each QA item in the sample, run recall + LLM answer generation.
 4) Report LoCoMo-style category-aware scores and latency stats.
 """
 
@@ -25,7 +25,12 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
-from urllib.parse import urlencode, urlparse, parse_qsl, urlunparse
+
+THIS_DIR = Path(__file__).resolve().parent
+if str(THIS_DIR) not in sys.path:
+    sys.path.append(str(THIS_DIR))
+
+from llm_adapter import build_llm_adapter, build_llm_payload, extract_llm_text, resolve_api_key
 
 
 DEFAULT_DATASET_URL = "https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json"
@@ -189,38 +194,6 @@ def build_auth_headers(api_key: str, bearer: str) -> Dict[str, str]:
     return headers
 
 
-def with_query(url: str, extra: Dict[str, str]) -> str:
-    parsed = urlparse(url)
-    q = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    for k, v in extra.items():
-        if v and k not in q:
-            q[k] = v
-    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, urlencode(q), parsed.fragment))
-
-
-def extract_message_text(choice: Dict[str, Any]) -> str:
-    message = choice.get("message") or {}
-    content = message.get("content")
-    if isinstance(content, str) and content.strip():
-        return content.strip()
-    if isinstance(content, list):
-        parts: List[str] = []
-        for c in content:
-            if isinstance(c, str):
-                parts.append(c)
-            elif isinstance(c, dict):
-                txt = c.get("text") or c.get("content") or ""
-                if isinstance(txt, str) and txt:
-                    parts.append(txt)
-        joined = "\n".join(p for p in parts if p).strip()
-        if joined:
-            return joined
-    reasoning = message.get("reasoning_content")
-    if isinstance(reasoning, str) and reasoning.strip():
-        return reasoning.strip()
-    return ""
-
-
 def build_answer_prompt(question: str, context_text: str, category: int, style: str) -> str:
     q = question
     if category == 2:
@@ -277,7 +250,7 @@ def session_to_text(session_n: int, date_text: str, turns: List[Any], max_chars:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run LoCoMo benchmark on Aionis + MiniMax")
+    parser = argparse.ArgumentParser(description="Run LoCoMo benchmark on Aionis + configurable LLM adapter")
     parser.add_argument("--base-url", default="", help="Aionis API base URL (default from PORT/.env)")
     parser.add_argument("--dataset", default=DEFAULT_DATASET_PATH, help="Local LoCoMo json path")
     parser.add_argument("--dataset-url", default=DEFAULT_DATASET_URL, help="Download URL if --dataset missing")
@@ -306,15 +279,46 @@ def main() -> int:
     parser.add_argument("--recall-retry-on-empty", type=int, default=2, help="If seeds are empty, retry recall this many times")
     parser.add_argument("--recall-retry-sleep-ms", type=int, default=250, help="Sleep between empty-seed recall retries")
 
-    parser.add_argument("--minimax-base-url", default=os.getenv("MINIMAX_CHAT_BASE_URL", "https://api.minimax.io/v1"))
     parser.add_argument(
-        "--minimax-endpoint",
-        default=os.getenv("MINIMAX_CHAT_ENDPOINT", ""),
-        help="Override full chat endpoint URL (e.g. https://api.minimax.chat/v1/text/chatcompletion_v2)",
+        "--llm-provider",
+        choices=["gemini", "openai_compat"],
+        default=os.getenv("LLM_PROVIDER", "gemini"),
+        help="LLM provider adapter type",
     )
-    parser.add_argument("--minimax-model", default=os.getenv("MINIMAX_CHAT_MODEL", "MiniMax-M2.1"))
-    parser.add_argument("--minimax-max-tokens", type=int, default=int(os.getenv("MINIMAX_CHAT_MAX_TOKENS", "128")))
-    parser.add_argument("--minimax-temperature", type=float, default=float(os.getenv("MINIMAX_CHAT_TEMPERATURE", "0")))
+    parser.add_argument(
+        "--llm-base-url",
+        "--gemini-base-url",
+        dest="llm_base_url",
+        default=os.getenv("LLM_BASE_URL", os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")),
+        help="Base URL for LLM endpoint resolution",
+    )
+    parser.add_argument(
+        "--llm-endpoint",
+        "--gemini-endpoint",
+        dest="llm_endpoint",
+        default=os.getenv("LLM_ENDPOINT", os.getenv("GEMINI_CHAT_ENDPOINT", "")),
+        help="Override full LLM endpoint URL",
+    )
+    parser.add_argument("--llm-model", "--gemini-model", dest="llm_model", default=os.getenv("LLM_MODEL", os.getenv("GEMINI_CHAT_MODEL", "gemini-3-flash-preview")))
+    parser.add_argument(
+        "--llm-max-tokens",
+        "--gemini-max-output-tokens",
+        dest="llm_max_tokens",
+        type=int,
+        default=int(os.getenv("LLM_MAX_TOKENS", os.getenv("GEMINI_CHAT_MAX_OUTPUT_TOKENS", "256"))),
+    )
+    parser.add_argument(
+        "--llm-temperature",
+        "--gemini-temperature",
+        dest="llm_temperature",
+        type=float,
+        default=float(os.getenv("LLM_TEMPERATURE", os.getenv("GEMINI_CHAT_TEMPERATURE", "0"))),
+    )
+    parser.add_argument(
+        "--llm-api-key-env",
+        default=os.getenv("LLM_API_KEY_ENV", ""),
+        help="Optional env var name that stores LLM API key (checked after LLM_API_KEY)",
+    )
     parser.add_argument("--prompt-style", choices=["default", "extractive"], default="extractive")
     parser.add_argument("--out-dir", default="", help="Output directory (default artifacts/locomo/runs/<run_id>)")
     args = parser.parse_args()
@@ -338,15 +342,28 @@ def main() -> int:
     auth_bearer = os.getenv("AIONIS_AUTH_BEARER", os.getenv("AUTH_BEARER", os.getenv("PERF_AUTH_BEARER", ""))).strip()
     aionis_headers = build_auth_headers(api_key, auth_bearer)
 
-    minimax_key = os.getenv("MINIMAX_CHAT_API_KEY", os.getenv("MINIMAX_API_KEY", "")).strip()
-    minimax_group_id = os.getenv("MINIMAX_GROUP_ID", "").strip()
-    if not minimax_key:
-        print("missing MINIMAX_CHAT_API_KEY/MINIMAX_API_KEY", file=sys.stderr)
+    llm_explicit_key = os.getenv("LLM_API_KEY", "").strip()
+    llm_key_candidates: List[str] = []
+    if args.llm_api_key_env:
+        llm_key_candidates.append(args.llm_api_key_env)
+    if args.llm_provider == "gemini":
+        llm_key_candidates.extend(["GEMINI_API_KEY", "GOOGLE_API_KEY"])
+    else:
+        llm_key_candidates.extend(["MINIMAX_CHAT_API_KEY", "MINIMAX_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY"])
+    llm_key, llm_key_source = resolve_api_key(llm_explicit_key, llm_key_candidates)
+    if not llm_key:
+        print(f"missing llm api key (checked: {', '.join(llm_key_candidates)})", file=sys.stderr)
         return 1
-    minimax_headers = {"Authorization": f"Bearer {minimax_key}"}
-    minimax_endpoint = args.minimax_endpoint.strip() or f"{args.minimax_base_url.rstrip('/')}/chat/completions"
-    if "chatcompletion_v2" in minimax_endpoint and minimax_group_id:
-        minimax_endpoint = with_query(minimax_endpoint, {"GroupId": minimax_group_id})
+    llm = build_llm_adapter(
+        provider=args.llm_provider,
+        model=args.llm_model,
+        endpoint=args.llm_endpoint,
+        base_url=args.llm_base_url,
+        api_key=llm_key,
+        max_tokens=args.llm_max_tokens,
+        temperature=args.llm_temperature,
+        api_key_source=llm_key_source,
+    )
 
     dataset_path = (root / args.dataset).resolve()
     data = ensure_dataset(dataset_path, args.dataset_url)
@@ -379,7 +396,7 @@ def main() -> int:
     details: List[Dict[str, Any]] = []
 
     print(
-        f"run_id={run_id} samples={len(selected)} base_url={base_url} model={args.minimax_model} "
+        f"run_id={run_id} samples={len(selected)} base_url={base_url} model={llm.model} provider={llm.provider} "
         f"sample_offset={args.sample_offset} qa_offset={args.qa_offset} qa_limit={args.qa_limit or 'all'}"
     )
     with predictions_path.open("w", encoding="utf-8") as pred_f:
@@ -535,25 +552,19 @@ def main() -> int:
                         prompt = build_answer_prompt(question, context_text, category, args.prompt_style)
 
                         t2 = time.perf_counter()
-                        chat_payload = {
-                            "model": args.minimax_model,
-                            "messages": [{"role": "user", "content": prompt}],
-                            "temperature": args.minimax_temperature,
-                            "max_tokens": args.minimax_max_tokens,
-                        }
+                        llm_payload = build_llm_payload(llm, prompt)
                         llm_resp, llm_status = http_json(
-                            minimax_endpoint,
-                            chat_payload,
-                            minimax_headers,
+                            llm.endpoint,
+                            llm_payload,
+                            llm.headers,
                             args.http_timeout,
                         )
                         llm_ms = (time.perf_counter() - t2) * 1000
                         totals["llm_ms"].append(llm_ms)
                         if llm_status != 200:
-                            raise RuntimeError(f"minimax chat failed status={llm_status} body={json.dumps(llm_resp)[:500]}")
+                            raise RuntimeError(f"{llm.provider} chat failed status={llm_status} body={json.dumps(llm_resp)[:500]}")
 
-                        choice0 = (llm_resp.get("choices") or [{}])[0]
-                        hypothesis = extract_message_text(choice0)
+                        hypothesis = extract_llm_text(llm, llm_resp)
                         if not hypothesis:
                             hypothesis = "I don't know."
 
@@ -699,9 +710,11 @@ def main() -> int:
             "recall_min_edge_weight": args.recall_min_edge_weight,
             "recall_min_edge_confidence": args.recall_min_edge_confidence,
             "recall_return_debug": bool(args.recall_return_debug),
-            "minimax_base_url": args.minimax_base_url,
-            "minimax_endpoint": minimax_endpoint,
-            "minimax_model": args.minimax_model,
+            "llm_provider": llm.provider,
+            "llm_base_url": args.llm_base_url,
+            "llm_endpoint": llm.endpoint,
+            "llm_model": llm.model,
+            "llm_api_key_source": llm.api_key_source,
             "prompt_style": args.prompt_style,
             "worker_once_cmd": args.worker_once_cmd,
             "worker_runs_per_trigger": args.worker_runs_per_trigger,

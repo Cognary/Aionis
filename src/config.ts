@@ -1,6 +1,9 @@
 import { z } from "zod";
 
+const RuntimeModeSchema = z.enum(["local", "service", "cloud"]);
+
 const EnvSchema = z.object({
+  AIONIS_MODE: RuntimeModeSchema.default("local"),
   APP_ENV: z.enum(["dev", "ci", "prod"]).default("dev"),
   DATABASE_URL: z.string().min(1),
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).default(30),
@@ -228,8 +231,52 @@ const EnvSchema = z.object({
 
 export type Env = z.infer<typeof EnvSchema>;
 
+const MODE_PRESETS: Record<z.infer<typeof RuntimeModeSchema>, Record<string, string>> = {
+  local: {
+    APP_ENV: "dev",
+    MEMORY_AUTH_MODE: "off",
+    RATE_LIMIT_ENABLED: "true",
+    RATE_LIMIT_BYPASS_LOOPBACK: "true",
+    TENANT_QUOTA_ENABLED: "true",
+    MEMORY_RECALL_PROFILE: "strict_edges",
+  },
+  service: {
+    APP_ENV: "prod",
+    MEMORY_AUTH_MODE: "api_key",
+    RATE_LIMIT_ENABLED: "true",
+    RATE_LIMIT_BYPASS_LOOPBACK: "false",
+    TENANT_QUOTA_ENABLED: "true",
+    MEMORY_RECALL_PROFILE: "strict_edges",
+  },
+  cloud: {
+    APP_ENV: "prod",
+    MEMORY_AUTH_MODE: "api_key_or_jwt",
+    RATE_LIMIT_ENABLED: "true",
+    RATE_LIMIT_BYPASS_LOOPBACK: "false",
+    TENANT_QUOTA_ENABLED: "true",
+    MEMORY_RECALL_PROFILE: "strict_edges",
+  },
+};
+
+function withModeDefaults(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = { ...source };
+  const modeInput = String(source.AIONIS_MODE ?? "local").trim().toLowerCase();
+  const modeParsed = RuntimeModeSchema.safeParse(modeInput);
+  if (!modeParsed.success) {
+    return out;
+  }
+  out.AIONIS_MODE = modeParsed.data;
+  const preset = MODE_PRESETS[modeParsed.data];
+  for (const [k, v] of Object.entries(preset)) {
+    const cur = out[k];
+    if (cur === undefined || String(cur).trim().length === 0) out[k] = v;
+  }
+  return out;
+}
+
 export function loadEnv(): Env {
-  const parsed = EnvSchema.safeParse(process.env);
+  const applied = withModeDefaults(process.env);
+  const parsed = EnvSchema.safeParse(applied);
   if (!parsed.success) {
     const msg = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment:\n${msg}`);
