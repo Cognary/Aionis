@@ -71,6 +71,99 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
 
 ## Endpoints
 
+### `POST /v1/memory/write`
+
+Source-of-record write endpoint.  
+Writes nodes/edges into commit chain; embedding/topic processing can run asynchronously and must not block core write success.
+
+**Request**
+- `tenant_id?: string`
+- `scope?: string`
+- `actor?: string`
+- `parent_commit_id?: string(uuid)`
+- `input_text?: string`
+- `input_sha256?: string(64 hex)` (required with `input_text` fallback rule below)
+- `model_version?: string`
+- `prompt_version?: string`
+- `auto_embed?: boolean`
+- `force_reembed?: boolean`
+- `memory_lane?: "private"|"shared"`
+- `producer_agent_id?: string`
+- `owner_agent_id?: string`
+- `owner_team_id?: string`
+- `trigger_topic_cluster?: boolean`
+- `topic_cluster_async?: boolean`
+- `nodes?: WriteNode[]`
+- `edges?: WriteEdge[]`
+
+Validation hard rules:
+- must provide `input_text` or `input_sha256`
+- private lane `rule` nodes require `owner_agent_id` or `owner_team_id`
+- edge refs must resolve by `id` or `client_id`
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `commit_id: string`
+- `commit_hash: string`
+- `nodes: { id, client_id?, type }[]`
+- `edges: { id, type, src_id, dst_id }[]`
+- `embedding_backfill?: { enqueued: true, pending_nodes: number }`
+- `topic_cluster?: { ... } | { enqueued: true }`
+- `shadow_dual_write?: { enabled, strict, mirrored, copied?, error? }`
+
+### `POST /v1/memory/feedback`
+
+Rule feedback endpoint (execution outcome loop).  
+Records one feedback event and updates aggregate rule counters in same scope.
+
+**Request**
+- `tenant_id?: string`
+- `scope?: string`
+- `actor?: string`
+- `rule_node_id: string(uuid)`
+- `run_id?: string`
+- `outcome: "positive"|"negative"|"neutral"`
+- `note?: string`
+- `input_text?: string`
+- `input_sha256?: string(64 hex)`
+
+Validation hard rules:
+- must provide `input_text` or `input_sha256`
+- `rule_node_id` must exist as `type='rule'` in same `(tenant_id, scope)`
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `commit_id: string`
+- `commit_hash: string`
+- `feedback_id: string`
+
+### `POST /v1/memory/rules/state`
+
+Rule lifecycle state transition endpoint.  
+Updates one rule definition state (`draft/shadow/active/disabled`) under strict scope isolation.
+
+**Request**
+- `tenant_id?: string`
+- `scope?: string`
+- `actor?: string`
+- `rule_node_id: string(uuid)`
+- `state: "draft"|"shadow"|"active"|"disabled"`
+- `input_text?: string`
+- `input_sha256?: string(64 hex)`
+
+Validation hard rules:
+- must provide `input_text` or `input_sha256`
+- `rule_node_id` must exist as `type='rule'` in same `(tenant_id, scope)`
+- promotion into `shadow/active` validates rule payload shape and required scoped targets
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `commit_id: string`
+- `commit_hash: string`
+
 ### `POST /v1/memory/find`
 
 Deterministic lookup channel for exact object retrieval and attribute filters.  

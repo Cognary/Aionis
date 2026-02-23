@@ -34,10 +34,11 @@ features:
   - PyPI: [aionis-sdk](https://pypi.org/project/aionis-sdk/)
   - Docker: [ghcr.io/cognary/aionis](https://github.com/orgs/cognary/packages/container/package/aionis)
 - Current release baseline:
-  - Core: `v0.1.2`
-  - TypeScript SDK: `0.1.4`
-  - Python SDK: `0.1.4`
-  - Standalone Docker line: `standalone-v0.1.8`
+  - Core: `v0.1.2` (latest tagged release)
+  - TypeScript SDK: `0.1.5`
+  - Python SDK: `0.1.5`
+  - Docker main: `v0.1.9`
+  - Standalone Docker line: `standalone-v0.1.9`
 - Hosted/internal execution docs live in private repo:
   - [cognary/aionis-hosted](https://github.com/Cognary/aionis-hosted)
 

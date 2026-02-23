@@ -4,7 +4,7 @@ title: "Docker Release Runbook"
 
 # Docker Release Runbook
 
-Last updated: `2026-02-21`
+Last updated: `2026-02-23`
 
 ## Scope
 
@@ -50,7 +50,7 @@ Standalone image dry run:
 
 ```bash
 cd /Users/lucio/Desktop/Aionis
-TAG=standalone-v0.1.8 npm run docker:publish:standalone:ghcr:dry-run
+TAG=standalone-v0.1.9 npm run docker:publish:standalone:ghcr:dry-run
 ```
 
 Main image push:
@@ -60,7 +60,7 @@ cd /Users/lucio/Desktop/Aionis
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
 IMAGE_REPO=ghcr.io/<owner>/aionis \
-TAG=v0.1.8 \
+TAG=v0.1.9 \
 PLATFORMS=linux/amd64,linux/arm64 \
 PUBLISH_LATEST=true \
 npm run docker:publish:ghcr
@@ -73,7 +73,7 @@ cd /Users/lucio/Desktop/Aionis
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
 IMAGE_REPO=ghcr.io/<owner>/aionis \
-TAG=standalone-v0.1.8 \
+TAG=standalone-v0.1.9 \
 PLATFORMS=linux/amd64,linux/arm64 \
 PUBLISH_LATEST=true \
 npm run docker:publish:standalone:ghcr
@@ -84,15 +84,15 @@ npm run docker:publish:standalone:ghcr
 Main lane auto trigger:
 
 ```bash
-git tag docker-v0.1.8
-git push origin docker-v0.1.8
+git tag docker-v0.1.9
+git push origin docker-v0.1.9
 ```
 
 Standalone lane auto trigger:
 
 ```bash
-git tag standalone-v0.1.8
-git push origin standalone-v0.1.8
+git tag standalone-v0.1.9
+git push origin standalone-v0.1.9
 ```
 
 You can also run each workflow via `workflow_dispatch`.
@@ -108,17 +108,17 @@ Credential behavior in both workflows:
 Main image:
 
 ```bash
-docker pull ghcr.io/cognary/aionis:v0.1.8
+docker pull ghcr.io/cognary/aionis:v0.1.9
 docker pull ghcr.io/cognary/aionis:latest
-docker manifest inspect ghcr.io/cognary/aionis:v0.1.8 | head
+docker manifest inspect ghcr.io/cognary/aionis:v0.1.9 | head
 ```
 
 Standalone image:
 
 ```bash
-docker pull ghcr.io/cognary/aionis:standalone-v0.1.8
+docker pull ghcr.io/cognary/aionis:standalone-v0.1.9
 docker pull ghcr.io/cognary/aionis:standalone-latest
-docker manifest inspect ghcr.io/cognary/aionis:standalone-v0.1.8 | head
+docker manifest inspect ghcr.io/cognary/aionis:standalone-v0.1.9 | head
 ```
 
 ## Rollback
