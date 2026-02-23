@@ -1455,12 +1455,12 @@ export async function getTenantOperabilityDiagnostics(
         `
         SELECT
           event_type,
-          COUNT(*) FILTER (WHERE published_at IS NULL)::bigint AS pending,
-          COUNT(*) FILTER (WHERE published_at IS NULL AND attempts > 0)::bigint AS retrying,
+          COUNT(*) FILTER (WHERE published_at IS NULL AND failed_at IS NULL)::bigint AS pending,
+          COUNT(*) FILTER (WHERE published_at IS NULL AND failed_at IS NULL AND attempts > 0)::bigint AS retrying,
           COUNT(*) FILTER (WHERE failed_at IS NOT NULL)::bigint AS failed,
           MAX(
             CASE
-              WHEN published_at IS NULL THEN EXTRACT(EPOCH FROM (now() - created_at))
+              WHEN published_at IS NULL AND failed_at IS NULL THEN EXTRACT(EPOCH FROM (now() - created_at))
               ELSE NULL
             END
           )::double precision AS oldest_pending_age_sec

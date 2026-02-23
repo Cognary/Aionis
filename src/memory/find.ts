@@ -199,15 +199,15 @@ export async function memoryFind(client: pg.PoolClient, body: unknown, defaultSc
   if (input.memory_lane) where.push(`n.memory_lane::text = ${pushArg(input.memory_lane)}`);
   if (input.slots_contains) where.push(`n.slots @> ${pushArg(JSON.stringify(input.slots_contains))}::jsonb`);
 
-  if (input.consumer_agent_id || input.consumer_team_id) {
-    const agentArg = pushArg(input.consumer_agent_id ?? null);
-    const teamArg = pushArg(input.consumer_team_id ?? null);
-    where.push(`(
-      n.memory_lane = 'shared'::memory_lane
-      OR (n.memory_lane = 'private'::memory_lane AND n.owner_agent_id = ${agentArg}::text)
-      OR (${teamArg}::text IS NOT NULL AND n.memory_lane = 'private'::memory_lane AND n.owner_team_id = ${teamArg}::text)
-    )`);
-  }
+  // Keep lane visibility semantics aligned with recall:
+  // shared is always readable; private requires owner match.
+  const agentArg = pushArg(input.consumer_agent_id ?? null);
+  const teamArg = pushArg(input.consumer_team_id ?? null);
+  where.push(`(
+    n.memory_lane = 'shared'::memory_lane
+    OR (n.memory_lane = 'private'::memory_lane AND n.owner_agent_id = ${agentArg}::text)
+    OR (${teamArg}::text IS NOT NULL AND n.memory_lane = 'private'::memory_lane AND n.owner_team_id = ${teamArg}::text)
+  )`);
 
   const fetchLimit = input.limit + 1;
   const limitArg = pushArg(fetchLimit);
@@ -275,4 +275,3 @@ export async function memoryFind(client: pg.PoolClient, body: unknown, defaultSc
     },
   };
 }
-

@@ -320,13 +320,11 @@ export async function listSessionEvents(client: pg.PoolClient, input: unknown, o
     };
   }
 
-  const whereLane = parsed.consumer_agent_id || parsed.consumer_team_id
-    ? `AND (
-        e.memory_lane = 'shared'::memory_lane
-        OR (e.memory_lane = 'private'::memory_lane AND e.owner_agent_id = $5::text)
-        OR ($6::text IS NOT NULL AND e.memory_lane = 'private'::memory_lane AND e.owner_team_id = $6::text)
-      )`
-    : "";
+  const whereLane = `AND (
+      e.memory_lane = 'shared'::memory_lane
+      OR (e.memory_lane = 'private'::memory_lane AND e.owner_agent_id = $5::text)
+      OR ($6::text IS NOT NULL AND e.memory_lane = 'private'::memory_lane AND e.owner_team_id = $6::text)
+    )`;
 
   const rr = await client.query<EventRow>(
     `
@@ -441,4 +439,3 @@ export async function listSessionEvents(client: pg.PoolClient, input: unknown, o
     },
   };
 }
-

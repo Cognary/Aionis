@@ -87,8 +87,8 @@ Use this endpoint when you need precise object targeting (URI/id/client_id/type)
 - `text_contains?: string`
 - `memory_lane?: "private"|"shared"`
 - `slots_contains?: object` (jsonb containment filter)
-- `consumer_agent_id?: string` (optional lane visibility enforcement)
-- `consumer_team_id?: string` (optional lane visibility enforcement)
+- `consumer_agent_id?: string` (optional, required to read agent-owned private lane)
+- `consumer_team_id?: string` (optional, required to read team-owned private lane)
 - `include_meta?: boolean` (default false)
 - `include_slots?: boolean` (default false)
 - `include_slots_preview?: boolean` (default false)
@@ -106,6 +106,11 @@ Use this endpoint when you need precise object targeting (URI/id/client_id/type)
   - topic extras: `topic_state?`, `member_count?`
   - optional by flags: `slots`, `slots_preview`, meta fields (same meta policy as recall DTOs)
 - `page: { limit, offset, returned, has_more }`
+
+Lane visibility policy (same as recall):
+- always visible: `memory_lane="shared"`
+- conditionally visible: `memory_lane="private"` with owner match (`owner_agent_id == consumer_agent_id` or `owner_team_id == consumer_team_id`)
+- if `consumer_agent_id`/`consumer_team_id` are omitted, private nodes are filtered out
 
 ### `POST /v1/memory/sessions`
 
@@ -204,6 +209,8 @@ List events in one session using deterministic graph linkage (`event --part_of--
 Optional by flags:
 - `slots` or `slots_preview`
 - same meta-family fields as other node DTOs when `include_meta=true`
+
+Lane visibility policy matches `find/recall`: shared always visible; private events require owner match via `consumer_agent_id`/`consumer_team_id`.
 
 ### `POST /v1/memory/packs/export`
 
