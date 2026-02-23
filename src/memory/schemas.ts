@@ -154,6 +154,40 @@ export type MemoryRecallInput = z.infer<typeof MemoryRecallRequest>;
 export type MemoryRecallTextInput = z.infer<typeof MemoryRecallTextRequest>;
 export type MemoryWriteInput = z.infer<typeof MemoryWriteRequest>;
 
+export const PlanningContextRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  query_text: z.string().min(1),
+  recall_strategy: z.enum(["local", "balanced", "global"]).optional(),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  // Planner/runtime execution context used by rules + tool selection.
+  context: z.any(),
+  include_shadow: z.boolean().default(false),
+  rules_limit: z.number().int().positive().max(200).default(50),
+  run_id: z.string().min(1).optional(),
+  tool_candidates: z.array(z.string().min(1)).max(200).optional(),
+  tool_strict: z.boolean().default(true),
+  limit: z.number().int().positive().max(200).default(30),
+  neighborhood_hops: z.number().int().min(1).max(2).default(2),
+  return_debug: z.boolean().default(false),
+  include_embeddings: z.boolean().default(false),
+  include_meta: z.boolean().default(false),
+  include_slots: z.boolean().default(false),
+  include_slots_preview: z.boolean().default(false),
+  slots_preview_keys: z.number().int().positive().max(50).default(10),
+  max_nodes: z.number().int().positive().max(200).default(50),
+  max_edges: z.number().int().positive().max(100).default(100),
+  ranked_limit: z.number().int().positive().max(500).default(100),
+  min_edge_weight: z.number().min(0).max(1).default(0),
+  min_edge_confidence: z.number().min(0).max(1).default(0),
+  context_token_budget: z.number().int().positive().max(256000).optional(),
+  context_char_budget: z.number().int().positive().max(1000000).optional(),
+  context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
+});
+
+export type PlanningContextInput = z.infer<typeof PlanningContextRequest>;
+
 export const MemoryFindRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),

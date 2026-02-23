@@ -7,6 +7,7 @@ title: "Planner Context (Recommended Shape)"
 This document defines a **recommended, stable JSON shape** for the execution system (planner/tool selector) to send into:
 
 - `POST /v1/memory/rules/evaluate`
+- `POST /v1/memory/planning/context`
 
 The endpoint currently accepts any JSON (`context: any`) for flexibility, but **standardizing early** prevents drift across SDKs/UIs/agents.
 
@@ -65,6 +66,20 @@ normalized context in `rules_context`. The response will include a `rules.applie
 
 ```bash
 bash examples/recall_text_with_rules.sh "memory graph" | jq '.rules.applied.policy'
+```
+
+## One-Call Planner Surface (Recall + Rules + Optional Tools)
+
+If you want one endpoint for planner context assembly, call `POST /v1/memory/planning/context`.
+It performs:
+
+1. semantic recall from `query_text`
+2. rule evaluation against the same `context`
+3. optional tool selection when `tool_candidates` is provided
+
+```bash
+bash examples/planning_context.sh "memory graph" psql curl bash \
+  | jq '{selected_tool:(.tools.selection.selected // null), rules_matched:.rules.matched, recall_nodes:(.recall.subgraph.nodes|length)}'
 ```
 
 ## Tool Selector (Rules + Candidates)

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { MemoryRecallRequest, ToolsFeedbackRequest, ToolsSelectRequest } from "../memory/schemas.js";
+import { MemoryRecallRequest, PlanningContextRequest, ToolsFeedbackRequest, ToolsSelectRequest } from "../memory/schemas.js";
 import { HttpError } from "../util/http.js";
 import { requireAdminTokenHeader } from "../util/admin_auth.js";
 import { resolveTenantScope } from "../memory/tenant.js";
@@ -90,6 +90,15 @@ async function run() {
     ToolsSelectRequest.parse({ context: { x: 1 }, candidates: ["curl"], run_id: "run_demo_1" }).run_id,
     "run_demo_1",
   );
+  const planningReq = PlanningContextRequest.parse({
+    query_text: "memory graph",
+    context: { run: { id: "run_1" }, agent: { id: "agent_a", team_id: "team_a" } },
+    tool_candidates: ["psql", "curl", "psql"],
+  });
+  assert.equal(planningReq.include_shadow, false);
+  assert.equal(planningReq.rules_limit, 50);
+  assert.equal(planningReq.tool_strict, true);
+  assert.equal(planningReq.limit, 30);
   assert.throws(
     () =>
       ToolsFeedbackRequest.parse({

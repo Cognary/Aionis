@@ -52,7 +52,7 @@ import { estimateTokenCountFromText } from "./memory/context.js";
 import { createEmbeddingProviderFromEnv } from "./embeddings/index.js";
 import { EmbedHttpError } from "./embeddings/http.js";
 import { runTopicClusterForEventIds } from "./jobs/topicClusterLib.js";
-import { MemoryRecallRequest, MemoryRecallTextRequest } from "./memory/schemas.js";
+import { MemoryRecallRequest, MemoryRecallTextRequest, PlanningContextRequest } from "./memory/schemas.js";
 import { normalizeText } from "./util/normalize.js";
 import { redactPII } from "./util/redaction.js";
 import { HttpError } from "./util/http.js";
@@ -296,6 +296,7 @@ const TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT = new Map<string, "write" | "recall" | 
   ["/v1/memory/packs/export", "recall"],
   ["/v1/memory/recall", "recall"],
   ["/v1/memory/recall_text", "recall_text"],
+  ["/v1/memory/planning/context", "recall"],
 ]);
 
 function resolveCorsAllowOrigin(origin: string | null): string | null {
@@ -2135,6 +2136,283 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
   return reply.code(200).send({ ...out, query: { text: q, embedding_provider: embedder.name }, trajectory, observability });
 });
 
+// Planner helper: one-call context assembly (recall + rules + optional tool selection).
+app.post("/v1/memory/planning/context", async (req, reply) => {
+  if (!embedder) {
+    return reply.code(400).send({ error: "no_embedding_provider", message: "Configure EMBEDDING_PROVIDER to use planning context." });
+  }
+
+  const t0 = performance.now();
+  const timings: Record<string, number> = {};
+  const principal = await requireMemoryPrincipal(req);
+  const bodyRaw = withIdentityFromRequest(req, req.body, principal, "planning_context");
+  const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
+  const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
+  let body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
+  const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs);
+  if (strategyResolution.applied) {
+    body = {
+      ...body,
+      ...strategyResolution.defaults,
+      recall_strategy: strategyResolution.strategy,
+    };
+  }
+  let parsed = PlanningContextRequest.parse(body);
+  let contextBudgetDefaultApplied = false;
+  if (
+    parsed.context_token_budget === undefined &&
+    parsed.context_char_budget === undefined &&
+    env.MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT > 0
+  ) {
+    parsed = PlanningContextRequest.parse({
+      ...(parsed as any),
+      context_token_budget: env.MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT,
+    });
+    contextBudgetDefaultApplied = true;
+  }
+
+  const wantDebugEmbeddings = parsed.return_debug && parsed.include_embeddings;
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
+  if (wantDebugEmbeddings) await enforceRateLimit(req, reply, "debug_embeddings");
+  if (wantDebugEmbeddings) await enforceTenantQuota(req, reply, "debug_embeddings", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
+  await enforceRecallTextEmbedQuota(req, reply, parsed.tenant_id ?? env.MEMORY_TENANT_ID);
+
+  const scope = parsed.scope ?? env.MEMORY_SCOPE;
+  const qNorm = normalizeText(parsed.query_text, env.MAX_TEXT_LEN);
+  const q = env.PII_REDACTION ? redactPII(qNorm).text : qNorm;
+
+  let embedMs = 0;
+  let embedCacheHit = false;
+  let embedSingleflightJoin = false;
+  let embedQueueWaitMs = 0;
+  let embedBatchSize = 1;
+  let recallParsed: any;
+  const gate = await acquireInflightSlot("recall");
+  const adaptiveProfile = resolveAdaptiveRecallProfile(baseProfile.profile, gate.wait_ms, explicitRecallKnobs);
+  if (adaptiveProfile.applied) {
+    parsed = PlanningContextRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
+  }
+  const adaptiveHardCap = resolveAdaptiveRecallHardCap(
+    {
+      limit: parsed.limit,
+      neighborhood_hops: parsed.neighborhood_hops as 1 | 2,
+      max_nodes: parsed.max_nodes,
+      max_edges: parsed.max_edges,
+      ranked_limit: parsed.ranked_limit,
+      min_edge_weight: parsed.min_edge_weight,
+      min_edge_confidence: parsed.min_edge_confidence,
+    },
+    gate.wait_ms,
+    explicitRecallKnobs,
+  );
+  if (adaptiveHardCap.applied) {
+    parsed = PlanningContextRequest.parse({ ...(parsed as any), ...adaptiveHardCap.defaults });
+  }
+
+  let out: any;
+  try {
+    let vec: number[];
+    try {
+      const emb = await embedRecallTextQuery(embedder, q);
+      vec = emb.vec;
+      embedMs = emb.ms;
+      embedCacheHit = emb.cache_hit;
+      embedSingleflightJoin = emb.singleflight_join;
+      embedQueueWaitMs = emb.queue_wait_ms;
+      embedBatchSize = emb.batch_size;
+    } catch (err: any) {
+      const mapped = mapRecallTextEmbeddingError(err);
+      if (mapped.retry_after_sec) reply.header("retry-after", mapped.retry_after_sec);
+      req.log.warn(
+        {
+          planning_context: {
+            scope,
+            tenant_id: parsed.tenant_id ?? env.MEMORY_TENANT_ID,
+            embedding_provider: embedder.name,
+            query_len: q.length,
+            mapped_error: mapped.code,
+            mapped_status: mapped.statusCode,
+            err_message: String(err?.message ?? err),
+          },
+        },
+        "planning_context embedding failed",
+      );
+      throw new HttpError(mapped.statusCode, mapped.code, mapped.message, mapped.details);
+    }
+
+    recallParsed = MemoryRecallRequest.parse({
+      tenant_id: parsed.tenant_id,
+      scope,
+      recall_strategy: parsed.recall_strategy,
+      query_embedding: vec,
+      consumer_agent_id: parsed.consumer_agent_id,
+      consumer_team_id: parsed.consumer_team_id,
+      limit: parsed.limit,
+      neighborhood_hops: parsed.neighborhood_hops,
+      return_debug: parsed.return_debug,
+      include_embeddings: parsed.include_embeddings,
+      include_meta: parsed.include_meta,
+      include_slots: parsed.include_slots,
+      include_slots_preview: parsed.include_slots_preview,
+      slots_preview_keys: parsed.slots_preview_keys,
+      max_nodes: parsed.max_nodes,
+      max_edges: parsed.max_edges,
+      ranked_limit: parsed.ranked_limit,
+      min_edge_weight: parsed.min_edge_weight,
+      min_edge_confidence: parsed.min_edge_confidence,
+      context_token_budget: parsed.context_token_budget,
+      context_char_budget: parsed.context_char_budget,
+      context_compaction_profile: parsed.context_compaction_profile,
+    });
+    const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
+
+    out = await withClient(db, async (client) => {
+      const recall = await memoryRecallParsed(
+        client,
+        recallParsed,
+        env.MEMORY_SCOPE,
+        env.MEMORY_TENANT_ID,
+        auth,
+        {
+          timing: (stage, ms) => {
+            timings[stage] = (timings[stage] ?? 0) + ms;
+          },
+        },
+        "recall_text",
+        { stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY },
+      );
+
+      const rules = await evaluateRules(
+        client,
+        {
+          scope: recallParsed.scope ?? env.MEMORY_SCOPE,
+          tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+          context: parsed.context,
+          include_shadow: parsed.include_shadow,
+          limit: parsed.rules_limit,
+        },
+        env.MEMORY_SCOPE,
+        env.MEMORY_TENANT_ID,
+      );
+
+      let tools: any = null;
+      if (Array.isArray(parsed.tool_candidates) && parsed.tool_candidates.length > 0) {
+        tools = await selectTools(
+          client,
+          {
+            scope: recallParsed.scope ?? env.MEMORY_SCOPE,
+            tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+            run_id: parsed.run_id,
+            context: parsed.context,
+            candidates: parsed.tool_candidates,
+            include_shadow: parsed.include_shadow,
+            rules_limit: parsed.rules_limit,
+            strict: parsed.tool_strict,
+          },
+          env.MEMORY_SCOPE,
+          env.MEMORY_TENANT_ID,
+        );
+      }
+
+      return { recall, rules, tools };
+    });
+  } finally {
+    gate.release();
+  }
+
+  const ms = performance.now() - t0;
+  const recallOut = out.recall as any;
+  const contextText = typeof recallOut?.context?.text === "string" ? recallOut.context.text : "";
+  const contextChars = contextText.length;
+  const contextEstTokens = estimateTokenCountFromText(contextText);
+  const trajectory = buildRecallTrajectory({
+    strategy:
+      recallParsed.recall_strategy ??
+      inferRecallStrategyFromKnobs({
+        limit: recallParsed.limit,
+        neighborhood_hops: recallParsed.neighborhood_hops as 1 | 2,
+        max_nodes: recallParsed.max_nodes,
+        max_edges: recallParsed.max_edges,
+        ranked_limit: recallParsed.ranked_limit,
+        min_edge_weight: recallParsed.min_edge_weight,
+        min_edge_confidence: recallParsed.min_edge_confidence,
+      }),
+    limit: recallParsed.limit,
+    neighborhood_hops: recallParsed.neighborhood_hops,
+    max_nodes: recallParsed.max_nodes,
+    max_edges: recallParsed.max_edges,
+    ranked_limit: recallParsed.ranked_limit,
+    min_edge_weight: recallParsed.min_edge_weight,
+    min_edge_confidence: recallParsed.min_edge_confidence,
+    seeds: recallOut.seeds.length,
+    nodes: recallOut.subgraph.nodes.length,
+    edges: recallOut.subgraph.edges.length,
+    context_chars: contextChars,
+    timings,
+    neighborhood_counts: recallOut?.debug?.neighborhood_counts ?? null,
+    stage1: recallOut?.debug?.stage1 ?? null,
+  });
+  const observability = buildRecallObservability({
+    timings,
+    inflight_wait_ms: gate.wait_ms,
+    adaptive_profile: {
+      profile: adaptiveProfile.profile,
+      applied: adaptiveProfile.applied,
+      reason: adaptiveProfile.reason,
+    },
+    adaptive_hard_cap: {
+      applied: adaptiveHardCap.applied,
+      reason: adaptiveHardCap.reason,
+    },
+    stage1: recallOut?.debug?.stage1 ?? null,
+    neighborhood_counts: recallOut?.debug?.neighborhood_counts ?? null,
+  });
+
+  req.log.info(
+    {
+      planning_context: {
+        scope: recallOut.scope,
+        tenant_id: recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+        has_tool_candidates: Array.isArray(parsed.tool_candidates) && parsed.tool_candidates.length > 0,
+        tool_candidates: parsed.tool_candidates?.length ?? 0,
+        include_shadow: parsed.include_shadow,
+        rules_limit: parsed.rules_limit,
+        embed_ms: embedMs,
+        embed_cache_hit: embedCacheHit,
+        embed_singleflight_join: embedSingleflightJoin,
+        embed_queue_wait_ms: embedQueueWaitMs,
+        embed_batch_size: embedBatchSize,
+        context_chars: contextChars,
+        context_est_tokens: contextEstTokens,
+        context_token_budget: recallParsed.context_token_budget ?? null,
+        context_char_budget: recallParsed.context_char_budget ?? null,
+        context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
+        context_budget_default_applied: contextBudgetDefaultApplied,
+        rules_considered: out.rules?.considered ?? 0,
+        rules_matched: out.rules?.matched ?? 0,
+        tools_selected: out.tools?.selection?.selected ?? null,
+        ms,
+        timings_ms: timings,
+      },
+    },
+    "memory planning_context",
+  );
+
+  return reply.code(200).send({
+    tenant_id: recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+    scope: recallOut.scope,
+    query: { text: q, embedding_provider: embedder.name },
+    recall: {
+      ...recallOut,
+      trajectory,
+      observability,
+    },
+    rules: out.rules,
+    tools: out.tools ?? undefined,
+  });
+});
+
 app.post("/v1/memory/feedback", async (req, reply) => {
   const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "feedback");
@@ -2424,6 +2702,7 @@ function withIdentityFromRequest(
     | "find"
     | "recall"
     | "recall_text"
+    | "planning_context"
     | "feedback"
     | "rules_state"
     | "rules_evaluate"
@@ -2452,7 +2731,7 @@ function withIdentityFromRequest(
     (req as any).aionis_scope = obj.scope.trim();
   }
 
-  if (principal && (kind === "find" || kind === "recall" || kind === "recall_text")) {
+  if (principal && (kind === "find" || kind === "recall" || kind === "recall_text" || kind === "planning_context")) {
     const reqAgent = typeof obj.consumer_agent_id === "string" ? obj.consumer_agent_id.trim() : null;
     const reqTeam = typeof obj.consumer_team_id === "string" ? obj.consumer_team_id.trim() : null;
     assertIdentityMatch("consumer_agent_id", reqAgent, principal.agent_id);
@@ -2475,7 +2754,10 @@ function withIdentityFromRequest(
     }
   }
 
-  if (principal && (kind === "rules_evaluate" || kind === "tools_select" || kind === "tools_feedback")) {
+  if (
+    principal &&
+    (kind === "rules_evaluate" || kind === "tools_select" || kind === "tools_feedback" || kind === "planning_context")
+  ) {
     const ctx = obj.context && typeof obj.context === "object" && !Array.isArray(obj.context) ? { ...obj.context } : {};
     const agent = ctx.agent && typeof ctx.agent === "object" && !Array.isArray(ctx.agent) ? { ...ctx.agent } : {};
     const reqCtxAgent = typeof agent.id === "string" ? agent.id.trim() : typeof ctx.agent_id === "string" ? ctx.agent_id.trim() : null;

@@ -517,6 +517,56 @@ This includes the same profile policy, adaptive downgrade, and adaptive hard-cap
 
 ---
 
+### `POST /v1/memory/planning/context`
+
+One-call planner surface that composes:
+
+1. semantic recall from `query_text`
+2. rule evaluation on the same `context`
+3. optional tool selection when `tool_candidates` is supplied
+
+This endpoint is designed for planner/executor integration where you want one request for memory context + policy + tool decision.
+
+**Request**
+- `query_text: string` (required)
+- `context: any` (required; recommended normalized planner context)
+- `tenant_id?: string`
+- `scope?: string`
+- `recall_strategy?: "local"|"balanced"|"global"`
+- `consumer_agent_id?: string`
+- `consumer_team_id?: string`
+- `include_shadow?: boolean` (default `false`)
+- `rules_limit?: number` (default `50`, max `200`)
+- `run_id?: string` (optional tool-decision provenance id)
+- `tool_candidates?: string[]` (optional; if omitted, tool selection is skipped)
+- `tool_strict?: boolean` (default `true`; only used when `tool_candidates` is provided)
+- recall knobs and response flags (same semantics as `/recall_text`):
+  - `limit`, `neighborhood_hops`, `max_nodes`, `max_edges`, `ranked_limit`
+  - `min_edge_weight`, `min_edge_confidence`
+  - `return_debug`, `include_embeddings`, `include_meta`, `include_slots`, `include_slots_preview`, `slots_preview_keys`
+  - `context_token_budget`, `context_char_budget`, `context_compaction_profile`
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `query: { text: string, embedding_provider: string }`
+- `recall: RecallResponse`
+  - same structure as `/recall_text`, plus `trajectory` and `observability`
+- `rules: RulesEvaluateResponse`
+  - same structure as `/v1/memory/rules/evaluate`
+- `tools?: ToolsSelectResponse`
+  - present only when request includes `tool_candidates`
+  - same structure as `/v1/memory/tools/select`
+
+Notes:
+- Embedding error mapping follows `/recall_text`.
+- Rate limiting / tenant quota / inflight gate class is `recall`.
+- Identity enforcement:
+  - `consumer_agent_id` / `consumer_team_id` are checked against authenticated principal
+  - `context.agent.id` / `context.agent.team_id` are also checked/injected when auth is enabled
+
+---
+
 ### `GET /v1/admin/control/diagnostics/tenant/:tenant_id`
 
 Structured operability snapshot for recall pipeline + outbox health.
