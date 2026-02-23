@@ -96,7 +96,6 @@ client.tools_feedback(feedback_payload)
 ## Smoke
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 set -a; source .env; set +a
 npm run sdk:py:smoke
 ```
@@ -104,7 +103,6 @@ npm run sdk:py:smoke
 ## Build check (repo local)
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run sdk:py:compile
 npm run sdk:py:release-check
 ```

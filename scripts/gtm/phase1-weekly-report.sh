@@ -302,9 +302,9 @@ cat > "${OUT_DIR}/WEEKLY_STATUS.md" <<EOF
 
 ## 7) Evidence Links
 
-1. Regression summary: latest under \`/Users/lucio/Desktop/Aionis/artifacts/regression\`
-2. Preflight summary: latest under \`/Users/lucio/Desktop/Aionis/artifacts/preflight\`
-3. Performance report: latest under \`/Users/lucio/Desktop/Aionis/artifacts/regression/*/perf/PERFORMANCE_REPORT_V1.md\`
+1. Regression summary: latest under \`${ROOT_DIR}/artifacts/regression\`
+2. Preflight summary: latest under \`${ROOT_DIR}/artifacts/preflight\`
+3. Performance report: latest under \`${ROOT_DIR}/artifacts/regression/*/perf/PERFORMANCE_REPORT_V1.md\`
 4. Gate checklist summary: \`${summary_json}\`
 
 EOF

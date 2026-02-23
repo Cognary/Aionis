@@ -67,11 +67,18 @@ const defaultPayloads: Record<ActionId, string> = {
   ),
   rules_evaluate: JSON.stringify(
     {
-      planner_context: {
-        run_id: "run_playground_001",
-        query: "Need deployment script and rollback checklist",
-        candidate_tools: ["bash", "kubectl", "terraform"],
+      context: {
+        version: 1,
+        run: { id: "run_playground_001", mode: "playground" },
+        intent: "json",
+        provider: "minimax",
+        tool: { name: "psql" },
+        agent: { id: "agent_a", team_id: "team_default" },
+        input: { content_type: "text", pii_redaction_enabled: true },
+        tags: ["playground"],
       },
+      include_shadow: true,
+      limit: 50,
     },
     null,
     2,

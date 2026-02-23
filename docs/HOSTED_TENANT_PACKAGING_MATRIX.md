@@ -10,4 +10,4 @@ Hosted packaging matrix moved to private repository:
 - `https://github.com/Cognary/aionis-hosted`
 
 Open Core boundary reference:
-- `/Users/lucio/Desktop/Aionis/docs/OPEN_CORE_BOUNDARY.md`
+- `/path/to/Aionis/docs/OPEN_CORE_BOUNDARY.md`

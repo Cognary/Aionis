@@ -12,13 +12,12 @@ This is a pragmatic, repeatable checklist for verifying the end-to-end loop:
 - idempotency and dead-letter/replay are safe
 
 Assumptions:
-- You are in the repo root: `/Users/lucio/Desktop/Aionis`
+- You are in the repo root
 - Postgres is running locally and `DATABASE_URL` in `.env` is correct
 
 ## 0) Load Env
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 set -a; source .env; set +a
 echo "$DATABASE_URL"
 ```
@@ -37,13 +36,11 @@ Expected:
 
 Terminal A (API):
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run dev
 ```
 
 Terminal B (Worker):
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run job:outbox-worker
 ```
 
@@ -350,7 +347,6 @@ Note: this labels existing vectors with the **currently configured** provider/mo
 One-command smoke:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 ./examples/long_term_phase4_smoke.sh
 ```
 
@@ -397,7 +393,6 @@ Expected:
 ## 14) CI Health Gate (Consistency + Quality)
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run job:health-gate
 ```
 
@@ -446,7 +441,6 @@ jq '.debug.neighborhood_counts // null' /tmp/recall.json
 Prereq:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 make db-migrate
 ```
 
@@ -539,9 +533,8 @@ curl -sS localhost:${PORT:-3001}/v1/memory/tools/select \
 SDK-based demo entry (replacing direct curl for common flows):
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
-/Users/lucio/Desktop/Aionis/examples/rules_evaluate.sh | jq '{matched, active_n:(.active|length), shadow_n:(.shadow|length)}'
-/Users/lucio/Desktop/Aionis/examples/tools_select.sh psql curl bash | jq '{selected:.selection.selected, ordered:.selection.ordered}'
+bash examples/rules_evaluate.sh | jq '{matched, active_n:(.active|length), shadow_n:(.shadow|length)}'
+bash examples/tools_select.sh psql curl bash | jq '{selected:.selection.selected, ordered:.selection.ordered}'
 ```
 
 Expected:
@@ -555,7 +548,6 @@ Expected:
 Dry-run existing legacy rows (if any):
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run job:private-rule-owner-backfill -- --dry-run --limit 5000
 ```
 
@@ -586,7 +578,6 @@ npm run job:private-rule-owner-backfill -- --limit 5000 --no-shared-fallback
 Run strict tenant e2e:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run e2e:phasec-tenant
 ```
 
@@ -613,8 +604,7 @@ Expected:
 Run session-first API smoke:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
-examples/session_event_smoke.sh
+bash examples/session_event_smoke.sh
 ```
 
 Expected:
@@ -628,8 +618,7 @@ Expected:
 Run pack smoke:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
-examples/pack_smoke.sh
+bash examples/pack_smoke.sh
 ```
 
 Expected:

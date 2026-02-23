@@ -22,8 +22,8 @@ Last updated: `2026-02-23`
 
 | SDK | SDK version | API contract baseline | Core methods | Error model | Retry + request_id | Status |
 |---|---|---|---|---|---|---|
-| `@aionis/sdk` (TypeScript) | `0.1.5` (`0.1.x`) | `/Users/lucio/Desktop/Aionis/docs/API_CONTRACT.md` (2026-02-23) | `write/recall/recallText/find/createSession/writeEvent/listSessionEvents/packExport/packImport/rulesEvaluate/toolsSelect/toolsFeedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
-| `aionis-sdk` (Python) | `0.1.5` (`0.1.x`) | `/Users/lucio/Desktop/Aionis/docs/API_CONTRACT.md` (2026-02-23) | `write/recall/recall_text/find/create_session/write_event/list_session_events/pack_export/pack_import/rules_evaluate/tools_select/tools_feedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
+| `@aionis/sdk` (TypeScript) | `0.1.5` (`0.1.x`) | `docs/API_CONTRACT.md` (2026-02-23) | `write/recall/recallText/find/createSession/writeEvent/listSessionEvents/packExport/packImport/rulesEvaluate/toolsSelect/toolsFeedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
+| `aionis-sdk` (Python) | `0.1.5` (`0.1.x`) | `docs/API_CONTRACT.md` (2026-02-23) | `write/recall/recall_text/find/create_session/write_event/list_session_events/pack_export/pack_import/rules_evaluate/tools_select/tools_feedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
 
 ## Backward compatibility notes
 
@@ -42,6 +42,6 @@ Last updated: `2026-02-23`
 7. `npm run sdk:tools-feedback-smoke`
 8. `npm run sdk:py:smoke`
 9. Update:
-   - `/Users/lucio/Desktop/Aionis/packages/sdk/CHANGELOG.md`
-   - `/Users/lucio/Desktop/Aionis/packages/python-sdk/CHANGELOG.md`
-   - `/Users/lucio/Desktop/Aionis/docs/SDK_COMPATIBILITY_MATRIX.md`
+   - `packages/sdk/CHANGELOG.md`
+   - `packages/python-sdk/CHANGELOG.md`
+   - `docs/SDK_COMPATIBILITY_MATRIX.md`

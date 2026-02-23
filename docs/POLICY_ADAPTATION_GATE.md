@@ -20,7 +20,6 @@ This job is read-only. It does not change rule state.
 ## Command
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s job:policy-adaptation-gate -- --scope default
 ```
 

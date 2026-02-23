@@ -6,74 +6,70 @@ title: "Docs Index"
 
 This is the public documentation index for Aionis Open Core.
 
-## Public Docs (External)
-
-### Start Here
+## Getting Started
 
 - [Documentation Home](./index.md)
 - [5-Minute Developer Onboarding](./ONBOARDING_5MIN.md)
 - [Architecture](./ARCHITECTURE.md)
+- [Open Core Boundary](./OPEN_CORE_BOUNDARY.md)
+
+## API & SDK
+
 - [API Contract](./API_CONTRACT.md)
 - [SDK Guide](./SDK.md)
-- [Packaging Plan](./PACKAGING_PLAN.md)
-- [OpenViking Borrow Plan](./OPENVIKING_BORROW_PLAN.md)
+- [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)
+- [Planner Context](./PLANNER_CONTEXT.md)
+- [Rule Lifecycle](./RULE_LIFECYCLE.md)
+- [Execution Loop Gate](./EXECUTION_LOOP_GATE.md)
+- [Policy Adaptation Gate](./POLICY_ADAPTATION_GATE.md)
 
-### Operations / Reliability
+## Deploy & Ops
 
 - [Operator Runbook](./OPERATOR_RUNBOOK.md)
+- [Prod Go-Live Gate](./PROD_GO_LIVE_GATE.md)
 - [Production Core Gate](./PRODUCTION_CORE_GATE.md)
+- [Two-Phase Migrations](./MIGRATIONS_TWO_PHASE.md)
+- [Docker Release Runbook](./DOCKER_RELEASE.md)
 - [E2E Regression Checklist](./E2E_REGRESSION.md)
+
+## Performance & Evidence
+
 - [Performance Baseline](./PERFORMANCE_BASELINE.md)
 - [Recall Tail Latency Plan](./RECALL_TAIL_LATENCY_PLAN.md)
-- [AionisBench v0.1](./AIONIS_BENCH_V01.md)
 - [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
-- [Docker Release Runbook](./DOCKER_RELEASE.md)
+- [AionisBench v0.1](./AIONIS_BENCH_V01.md)
 
-### Integrations
+## Integrations
 
-- [OpenWork Integration](./OPENWORK_INTEGRATION.md)
-- [LangGraph Integration](./LANGGRAPH_INTEGRATION.md)
+- [OpenWork (MCP)](./OPENWORK_INTEGRATION.md)
+- [LangGraph](./LANGGRAPH_INTEGRATION.md)
 
-### Narrative / Positioning
+## Narrative (Optional)
 
 - [Narrative Canon](./NARRATIVE_CANON.md)
 - [Packaging Plan](./PACKAGING_PLAN.md)
-- [OpenViking Borrow Plan](./OPENVIKING_BORROW_PLAN.md)
 - [Release Narrative Template](./RELEASE_NARRATIVE_TEMPLATE.md)
 - [Technical Release Material](./RELEASE_MATERIAL_TECHNICAL.md)
 - [Product Release Material](./RELEASE_MATERIAL_PRODUCT.md)
 - [Business Release Material](./RELEASE_MATERIAL_BUSINESS.md)
 
-### Compression Evidence
+## Scope Notes
 
-- [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
-- [Performance Baseline](./PERFORMANCE_BASELINE.md)
-- [Production Core Gate](./PRODUCTION_CORE_GATE.md)
-
-### Boundary
-
-- [Open Core Boundary](./OPEN_CORE_BOUNDARY.md)
-
-## Internal Docs (Private)
-
-Internal GTM/product execution/hosted operator docs are no longer maintained publicly.
-
-Private repository:
-- `https://github.com/Cognary/aionis-hosted`
+This documentation set covers the Open Core surface (kernel, API/SDK contracts, and public operations/evidence gates).
+Managed/hosted control-plane runbooks and GTM execution docs are intentionally not published here.
 
 ## Maintenance
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm --prefix docs-site run dev
 npm run docs:check
 ```
 
 ## Docs Website (GitHub Pages)
 
-- Publish workflow: `/Users/lucio/Desktop/Aionis/.github/workflows/docs-pages.yml`
-- VitePress config: `/Users/lucio/Desktop/Aionis/docs/.vitepress/config.ts`
-- Theme override: `/Users/lucio/Desktop/Aionis/docs/.vitepress/theme/custom.css`
+- Publish workflow: `.github/workflows/docs-pages.yml`
+- VitePress config: `docs/.vitepress/config.ts`
+- Theme override: `docs/.vitepress/theme/custom.css`
 - URL: `https://doc.aionisos.com/`
 
 ## Public Release Baseline

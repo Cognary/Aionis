@@ -12,4 +12,4 @@ Hosted automation jobs and runbooks moved to private repository:
 Public repository keeps Open Core only; hosted automation is no longer implemented here.
 
 Open Core boundary reference:
-- `/Users/lucio/Desktop/Aionis/docs/OPEN_CORE_BOUNDARY.md`
+- `/path/to/Aionis/docs/OPEN_CORE_BOUNDARY.md`

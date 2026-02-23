@@ -9,6 +9,17 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   srcExclude: [
+    "**/COMMERCIAL_STRATEGY.md",
+    "**/EXTERNAL_RELEASE_PRODUCT_PLAN.md",
+    "**/GO_TO_MARKET_*.md",
+    "**/GTM_*.md",
+    "**/HOSTED_*.md",
+    "**/PERFORMANCE_REPORT_V1_TEMPLATE.md",
+    "**/PROD_ORCHESTRATION_PARTITION_PLAN.md",
+    "**/PRODUCT_SCALE_COGNITION_PRIORITY_PLAN.md",
+    "**/THREE_GAPS_PRIORITY_PLAN.md",
+    "**/ULTRA_SCALE_ROUTING_MATRIX.md",
+    "**/WEBSITE_NEXTJS_HEROUI_SKELETON.md",
     "**/_site/**",
     "**/_layouts/**",
     "_config.yml",
@@ -26,24 +37,26 @@ export default defineConfig({
     logo: "/logo.svg",
     nav: [
       { text: "Start", link: "/ONBOARDING_5MIN" },
-      { text: "API & SDK", link: "/API_CONTRACT" },
+      { text: "Concepts", link: "/ARCHITECTURE" },
+      { text: "API", link: "/API_CONTRACT" },
+      { text: "SDK", link: "/SDK" },
       { text: "Ops", link: "/OPERATOR_RUNBOOK" },
-      { text: "Narrative", link: "/NARRATIVE_CANON" },
+      { text: "Integrations", link: "/OPENWORK_INTEGRATION" },
       { text: "GitHub", link: "https://github.com/Cognary/Aionis" },
     ],
     sidebar: [
       {
-        text: "Get Started",
+        text: "Start",
         items: [
           { text: "Docs Home", link: "/index" },
-          { text: "Docs Index", link: "/README" },
           { text: "5-Minute Onboarding", link: "/ONBOARDING_5MIN" },
           { text: "Architecture", link: "/ARCHITECTURE" },
           { text: "Open Core Boundary", link: "/OPEN_CORE_BOUNDARY" },
+          { text: "Docs Index", link: "/README" },
         ],
       },
       {
-        text: "Developer Contract",
+        text: "API & SDK",
         items: [
           { text: "API Contract", link: "/API_CONTRACT" },
           { text: "SDK Guide", link: "/SDK" },
@@ -58,8 +71,10 @@ export default defineConfig({
         text: "Operations",
         items: [
           { text: "Operator Runbook", link: "/OPERATOR_RUNBOOK" },
+          { text: "Prod Go-Live Gate", link: "/PROD_GO_LIVE_GATE" },
           { text: "Production Core Gate", link: "/PRODUCTION_CORE_GATE" },
           { text: "E2E Regression", link: "/E2E_REGRESSION" },
+          { text: "Two-Phase Migrations", link: "/MIGRATIONS_TWO_PHASE" },
           { text: "Performance Baseline", link: "/PERFORMANCE_BASELINE" },
           { text: "Recall Tail Latency Plan", link: "/RECALL_TAIL_LATENCY_PLAN" },
           { text: "AionisBench v0.1", link: "/AIONIS_BENCH_V01" },
@@ -69,7 +84,7 @@ export default defineConfig({
         ],
       },
       {
-        text: "Narrative",
+        text: "Narrative (Optional)",
         items: [
           { text: "Narrative Canon", link: "/NARRATIVE_CANON" },
           { text: "Packaging Plan", link: "/PACKAGING_PLAN" },

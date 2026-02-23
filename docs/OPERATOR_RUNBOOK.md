@@ -6,12 +6,20 @@ title: "Operator Runbook"
 
 This runbook defines a practical cadence and thresholds for operating Aionis in production.
 
+## Conventions
+
+- Commands assume you run from the repo root.
+- When needed, load `.env` into the current shell:
+
+```bash
+set -a; source .env; set +a
+```
+
 ## Daily
 
 1. Health gate (deployment and runtime guard):
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run job:health-gate
 ```
 
@@ -44,7 +52,7 @@ npm run job:consistency-check:cross-tenant -- --strict-warnings
 3. Lane visibility quick check (rules evaluate):
 
 ```bash
-set -a; source /Users/lucio/Desktop/Aionis/.env; set +a
+set -a; source .env; set +a
 curl -sS localhost:${PORT:-3001}/v1/memory/rules/evaluate \
   -H 'content-type: application/json' \
   -d '{
@@ -58,7 +66,7 @@ curl -sS localhost:${PORT:-3001}/v1/memory/rules/evaluate \
 4. Lane visibility quick check (tool selector):
 
 ```bash
-set -a; source /Users/lucio/Desktop/Aionis/.env; set +a
+set -a; source .env; set +a
 curl -sS localhost:${PORT:-3001}/v1/memory/tools/select \
   -H 'content-type: application/json' \
   -d '{
@@ -79,7 +87,7 @@ Expected (steady state):
 5. Recall default profile check:
 
 ```bash
-set -a; source /Users/lucio/Desktop/Aionis/.env; set +a
+set -a; source .env; set +a
 echo "MEMORY_RECALL_PROFILE=${MEMORY_RECALL_PROFILE:-strict_edges}"
 echo "MEMORY_RECALL_PROFILE_POLICY_JSON=${MEMORY_RECALL_PROFILE_POLICY_JSON:-{}}"
 echo "MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED=${MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED:-true}"
@@ -91,7 +99,6 @@ echo "MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT=${MEMORY_RECALL_TEXT_CONTE
 6. Throughput profile check/apply:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s env:throughput:prod
 ```
 
@@ -109,7 +116,7 @@ curl -sS localhost:${PORT:-3001}/v1/memory/recall_text \
 8. Tenant operability diagnostics (structured recall/outbox observability):
 
 ```bash
-set -a; source /Users/lucio/Desktop/Aionis/.env; set +a
+set -a; source .env; set +a
 curl -sS localhost:${PORT:-3001}/v1/admin/control/diagnostics/tenant/default?window_minutes=60 \
   -H "X-Admin-Token: ${ADMIN_TOKEN}" \
 | jq '.diagnostics | {request_telemetry, recall_pipeline, outbox}'
@@ -125,7 +132,6 @@ Use this to quickly locate:
 1. Long-horizon drift snapshot:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run job:quality-eval -- --strict
 ```
 
@@ -234,7 +240,6 @@ Use these as default SLO-style boundaries. Tune by scope once traffic stabilizes
 Before production deploy:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s gate:core:prod -- \
   --base-url "http://localhost:${PORT:-3001}" \
   --scope default \

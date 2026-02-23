@@ -11,3 +11,9 @@ dist
 artifacts
 .tmp
 pgdata
+
+# Python build artifacts
+*.egg-info
+*.egg-info/
+build
+build/

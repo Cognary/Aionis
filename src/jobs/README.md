@@ -442,7 +442,7 @@ Output includes:
 Aggregate matrix artifacts to markdown report:
 
 ```bash
-npm run job:perf-report -- --dir /Users/lucio/Desktop/Aionis/artifacts/perf/<run_id> --output /Users/lucio/Desktop/Aionis/artifacts/perf/<run_id>/PERFORMANCE_REPORT_V1.md
+npm run job:perf-report -- --dir /path/to/Aionis/artifacts/perf/<run_id> --output /path/to/Aionis/artifacts/perf/<run_id>/PERFORMANCE_REPORT_V1.md
 ```
 
 ### One-Command Matrix Runner
@@ -459,7 +459,7 @@ Useful env overrides:
 - `BASE_URL=http://localhost:3001`
 - `SCOPE_PREFIX=perf_d`
 - `TENANT_ID=default`
-- `OUT_DIR=/Users/lucio/Desktop/Aionis/artifacts/perf/custom_run`
+- `OUT_DIR=/path/to/Aionis/artifacts/perf/custom_run`
 
 ## Consolidation Candidates (Offline, Shadow Mode)
 

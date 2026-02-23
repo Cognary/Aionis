@@ -6,9 +6,7 @@ Aionis gives your agents durable memory with real APIs, operational guardrails, 
 
 ## Open Core Boundary
 
-No new GitHub repo is required now.
-
-`/Users/lucio/Desktop/Aionis` remains the Open Core public repo, and hosted moat capabilities are separated by boundary:
+This repository is the Open Core public repo, and hosted capabilities are separated by an explicit boundary:
 
 1. Public: kernel, API/SDK contracts, derived async baseline, rules baseline, runbooks/specs
 2. Private: hosted control-plane implementation, billing/metering internals, enterprise IAM/compliance internals, managed ops internals
@@ -28,7 +26,6 @@ Narrative docs:
 - [Narrative Canon](docs/NARRATIVE_CANON.md)
 - [Packaging Plan](docs/PACKAGING_PLAN.md)
 - [OpenViking Borrow Plan](docs/OPENVIKING_BORROW_PLAN.md)
-- [Commercial Strategy](docs/COMMERCIAL_STRATEGY.md)
 - [Release Narrative Template](docs/RELEASE_NARRATIVE_TEMPLATE.md)
 - [Technical Release Material](docs/RELEASE_MATERIAL_TECHNICAL.md)
 - [Product Release Material](docs/RELEASE_MATERIAL_PRODUCT.md)
@@ -84,7 +81,8 @@ References:
 ## 3-Minute Demo
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
+git clone https://github.com/Cognary/Aionis
+cd Aionis
 make quickstart
 ```
 
@@ -111,7 +109,6 @@ Onboarding guide:
 ### B) Self-host in minutes
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 cp .env.example .env
 make stack-up
 curl -fsS http://localhost:3001/health
@@ -123,7 +120,6 @@ curl -fsS http://localhost:3001/health
 It is ideal for local agent use, demos, and CI smoke; do not treat it as production HA.
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s docker:build:standalone
 npm run -s docker:run:standalone
 ```
@@ -210,19 +206,13 @@ Use these before public traffic:
 Operator docs:
 
 - [Operator Runbook](docs/OPERATOR_RUNBOOK.md)
-- [Hostedization Execution Plan](docs/HOSTEDIZATION_PLAN.md)
-- [Hosted Tenant Packaging Matrix](docs/HOSTED_TENANT_PACKAGING_MATRIX.md)
-- [Hosted Release Evidence Bundle Template](docs/HOSTED_RELEASE_EVIDENCE_BUNDLE_TEMPLATE.md)
-- [Hosted Control Plane API (MVP)](docs/HOSTED_CONTROL_PLANE_API.md)
-- [Hosted Operator Checklist](docs/HOSTED_OPERATOR_CHECKLIST.md)
-- [Hosted Automation Runbook](docs/HOSTED_AUTOMATION_RUNBOOK.md)
+- [Prod Go-Live Gate](docs/PROD_GO_LIVE_GATE.md)
+- [Production Core Gate](docs/PRODUCTION_CORE_GATE.md)
 - [E2E Regression](docs/E2E_REGRESSION.md)
 - [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
 - [LongMemEval Gate](docs/LONGMEMEVAL_GATE.md)
 
-Hosted operations and automation implementation now live in private repo:
-
-- [aionis-hosted](https://github.com/Cognary/aionis-hosted)
+Hosted operations and managed control-plane automation are intentionally not part of this Open Core repository.
 
 ## Documentation Hub
 

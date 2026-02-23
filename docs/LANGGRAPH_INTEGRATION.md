@@ -24,7 +24,6 @@ This document provides a minimal integration pattern for LangGraph-style agent f
 ## Smoke Command
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 set -a; source .env; set +a
 bash examples/langgraph_adapter_smoke.sh
 ```
@@ -37,5 +36,5 @@ Expected output (JSON):
 
 ## Reference Script
 
-1. `/Users/lucio/Desktop/Aionis/examples/langgraph_adapter_smoke.sh`
-2. `/Users/lucio/Desktop/Aionis/src/dev/langgraph-adapter-smoke.py`
+1. `examples/langgraph_adapter_smoke.sh`
+2. `src/dev/langgraph-adapter-smoke.py`

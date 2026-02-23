@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { MemoryRecallRequest, ToolsFeedbackRequest, ToolsSelectRequest } from "../memory/schemas.js";
 import { HttpError } from "../util/http.js";
 import { requireAdminTokenHeader } from "../util/admin_auth.js";
+import { resolveTenantScope } from "../memory/tenant.js";
 import {
   normalizeControlAlertRouteTarget,
   normalizeControlIncidentPublishSourceDir,
@@ -74,6 +75,17 @@ async function run() {
     () => MemoryRecallRequest.parse({ query_embedding: [0], max_edges: 101 }),
     /less than or equal to 100/i,
   );
+
+  // Tenant/scope namespace safety: prevent default-tenant scope collisions with tenant-derived scope keys.
+  assert.throws(
+    () =>
+      resolveTenantScope(
+        { tenant_id: "default", scope: "tenant:evil::scope:default" },
+        { defaultScope: "default", defaultTenantId: "default" },
+      ),
+    (err: any) => err instanceof HttpError && err.code === "invalid_scope",
+  );
+
   assert.equal(
     ToolsSelectRequest.parse({ context: { x: 1 }, candidates: ["curl"], run_id: "run_demo_1" }).run_id,
     "run_demo_1",

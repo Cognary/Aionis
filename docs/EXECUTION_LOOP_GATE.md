@@ -22,7 +22,6 @@ The gate focuses on:
 ## Command
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s job:execution-loop-gate -- --scope default
 ```
 

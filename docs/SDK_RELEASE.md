@@ -8,16 +8,15 @@ Last updated: `2026-02-22`
 
 ## Release prerequisites
 
-1. TypeScript SDK version updated in `/Users/lucio/Desktop/Aionis/packages/sdk/package.json`.
-2. Python SDK version updated in `/Users/lucio/Desktop/Aionis/packages/python-sdk/pyproject.toml`.
+1. TypeScript SDK version updated in `packages/sdk/package.json`.
+2. Python SDK version updated in `packages/python-sdk/pyproject.toml`.
 3. Matching changelog entries exist in:
-   - `/Users/lucio/Desktop/Aionis/packages/sdk/CHANGELOG.md`
-   - `/Users/lucio/Desktop/Aionis/packages/python-sdk/CHANGELOG.md`
-4. Compatibility matrix updated in `/Users/lucio/Desktop/Aionis/docs/SDK_COMPATIBILITY_MATRIX.md`.
+   - `packages/sdk/CHANGELOG.md`
+   - `packages/python-sdk/CHANGELOG.md`
+4. Compatibility matrix updated in `docs/SDK_COMPATIBILITY_MATRIX.md`.
 5. Local checks pass:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run sdk:build
 npm run sdk:release-check
 npm run sdk:pack-dry-run
@@ -30,13 +29,13 @@ npm run sdk:py:smoke
 
 ## CI workflows
 
-1. `SDK CI` (`/Users/lucio/Desktop/Aionis/.github/workflows/sdk-ci.yml`)
+1. `SDK CI` (`.github/workflows/sdk-ci.yml`)
    - runs on SDK-related PR/push changes
    - validates build/release-check/pack/docs
-2. `SDK Publish` (`/Users/lucio/Desktop/Aionis/.github/workflows/sdk-publish.yml`) - TypeScript package
+2. `SDK Publish` (`.github/workflows/sdk-publish.yml`) - TypeScript package
    - automatic publish on tag `sdk-v*`
    - manual trigger with optional `dry_run`
-3. `Python SDK Publish` (`/Users/lucio/Desktop/Aionis/.github/workflows/sdk-py-publish.yml`) - Python package
+3. `Python SDK Publish` (`.github/workflows/sdk-py-publish.yml`) - Python package
    - automatic publish on tag `py-sdk-v*`
    - manual trigger with optional `dry_run`
 

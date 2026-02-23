@@ -14,7 +14,6 @@ This document is the reproducible baseline kit for:
 ## 1) Preconditions
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 set -a; source .env; set +a
 make db-migrate
 ```
@@ -60,7 +59,7 @@ npm run job:perf-seed -- \
 Alternative SQL seed (legacy path):
 
 ```bash
-psql "$DATABASE_URL" -v src_scope='default' -v scope='perf' -v n='50000' -f /Users/lucio/Desktop/Aionis/sql/seed_perf_dataset.sql
+psql "$DATABASE_URL" -v src_scope='default' -v scope='perf' -v n='50000' -f sql/seed_perf_dataset.sql
 ```
 
 ## 4) API Latency Benchmark
@@ -136,7 +135,7 @@ PERF_PROFILE=compression_slo SCALES=100000 npm run perf:phase-d-matrix
 
 Artifacts default path:
 
-- `/Users/lucio/Desktop/Aionis/artifacts/perf/<timestamp>/`
+- `artifacts/perf/<timestamp>/`
 - includes `seed_*.json`, `benchmark_*.json`, `benchmark_adapt_*.json`, `explain_*.txt`, `worker_baseline.json`, `PERFORMANCE_REPORT_V1.md`
 
 Profile behavior summary:
@@ -163,13 +162,13 @@ Output fields:
 ## 6) Planner Baseline (EXPLAIN ANALYZE)
 
 ```bash
-psql "$DATABASE_URL" -v scope='perf' -v lim='30' -f /Users/lucio/Desktop/Aionis/sql/explain_baseline.sql
+psql "$DATABASE_URL" -v scope='perf' -v lim='30' -f sql/explain_baseline.sql
 ```
 
 Force-index sanity check:
 
 ```bash
-psql "$DATABASE_URL" -v scope='perf' -v lim='30' -v force_index=1 -f /Users/lucio/Desktop/Aionis/sql/explain_baseline.sql
+psql "$DATABASE_URL" -v scope='perf' -v lim='30' -v force_index=1 -f sql/explain_baseline.sql
 ```
 
 Expected:
@@ -181,7 +180,7 @@ Expected:
 
 Template file:
 
-- `/Users/lucio/Desktop/Aionis/docs/PERFORMANCE_REPORT_V1_TEMPLATE.md`
+- `docs/PERFORMANCE_REPORT_V1_TEMPLATE.md`
 
 ### Run Metadata
 
@@ -233,4 +232,4 @@ Template file:
   - `npm run job:perf-seed -- --scope perf --events 50000 --topics 500 --reset`
   - `npm run job:perf-benchmark -- --scope perf --mode all`
   - `npm run job:perf-worker-benchmark -- --scope default --iterations 5`
-  - `psql \"$DATABASE_URL\" -v scope='perf' -v lim='30' -f /Users/lucio/Desktop/Aionis/sql/explain_baseline.sql`
+  - `psql \"$DATABASE_URL\" -v scope='perf' -v lim='30' -f sql/explain_baseline.sql`

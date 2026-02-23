@@ -6,11 +6,11 @@
     <string>com.aionis.memory.api</string>
 
     <key>WorkingDirectory</key>
-    <string>/Users/lucio/Desktop/Aionis</string>
+    <string>__AIONIS_ROOT__</string>
 
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/lucio/Desktop/Aionis/scripts/daemon/run-api.sh</string>
+      <string>__AIONIS_ROOT__/scripts/daemon/run-api.sh</string>
     </array>
 
     <key>RunAtLoad</key>
@@ -26,4 +26,3 @@
     <string>/tmp/aionis-memory-api.err.log</string>
   </dict>
 </plist>
-

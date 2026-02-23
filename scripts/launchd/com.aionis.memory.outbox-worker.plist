@@ -6,11 +6,11 @@
     <string>com.aionis.memory.outbox-worker</string>
 
     <key>WorkingDirectory</key>
-    <string>/Users/lucio/Desktop/Aionis</string>
+    <string>__AIONIS_ROOT__</string>
 
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/lucio/Desktop/Aionis/scripts/daemon/run-outbox-worker.sh</string>
+      <string>__AIONIS_ROOT__/scripts/daemon/run-outbox-worker.sh</string>
     </array>
 
     <key>RunAtLoad</key>
@@ -26,4 +26,3 @@
     <string>/tmp/aionis-memory-outbox-worker.err.log</string>
   </dict>
 </plist>
-

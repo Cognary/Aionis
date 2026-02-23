@@ -16,7 +16,7 @@ Status in release policy:
 ## Profiles (Frozen)
 
 Source of truth:
-- `/Users/lucio/Desktop/Aionis/scripts/bench/longmemeval_profiles_production.json`
+- `scripts/bench/longmemeval_profiles_production.json`
 
 `strict_edges`:
 - `limit=24`
@@ -39,7 +39,6 @@ Source of truth:
 ## Local Gate Command
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
 npm run -s env:throughput:benchmark
 npm run -s bench:longmemeval:gate
 ```
@@ -62,7 +61,7 @@ Artifacts:
 
 ## CI Workflow
 
-- Workflow file: `/Users/lucio/Desktop/Aionis/.github/workflows/longmemeval-gate.yml`
+- Workflow file: `.github/workflows/longmemeval-gate.yml`
 - CI env setup uses `npm run -s env:throughput:benchmark` before stack startup.
 - Trigger policy: `workflow_dispatch` + weekly schedule only (not on `main` push).
 - Required GitHub Actions secrets:

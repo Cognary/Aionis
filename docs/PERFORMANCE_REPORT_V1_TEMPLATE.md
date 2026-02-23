@@ -8,7 +8,7 @@ Use this template for publishable benchmark snapshots.
 For local auto-generation, prefer:
 
 ```bash
-npm run job:perf-report -- --dir /Users/lucio/Desktop/Aionis/artifacts/perf/<run_id> --output /Users/lucio/Desktop/Aionis/artifacts/perf/<run_id>/PERFORMANCE_REPORT_V1.md
+npm run job:perf-report -- --dir /path/to/Aionis/artifacts/perf/<run_id> --output /path/to/Aionis/artifacts/perf/<run_id>/PERFORMANCE_REPORT_V1.md
 ```
 
 ## 1. Run Metadata
