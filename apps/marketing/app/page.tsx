@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CtaBand } from "@/components/marketing/cta-band";
+import { ArchitectureDiagram } from "@/components/marketing/architecture-diagram";
 import { FeatureGrid } from "@/components/marketing/feature-grid";
 import { Hero } from "@/components/marketing/hero";
 import { KernelInteractiveLab } from "@/components/marketing/kernel-interactive-lab";
@@ -71,6 +72,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <ArchitectureDiagram />
 
       {/* ── Operating Model — horizontal row ── */}
       <section className="section">
