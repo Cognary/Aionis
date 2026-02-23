@@ -11,10 +11,8 @@ export function CtaBand({ title, copy, primary, secondary }: Props) {
   return (
     <section className="section">
       <div className="container cta-band">
-        <div>
-          <h2>{title}</h2>
-          <p>{copy}</p>
-        </div>
+        <h2>{title}</h2>
+        <p>{copy}</p>
         <div className="hero-cta">
           <Link className="btn btn-solid" href={primary.href} data-analytics-event={primary.event}>
             {primary.label}

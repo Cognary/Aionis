@@ -3,9 +3,21 @@ import type {
   AionisClientOptions,
   AionisResponse,
   ApiErrorPayload,
+  MemoryEventWriteInput,
+  MemoryEventWriteResponse,
+  MemoryFindInput,
+  MemoryFindResponse,
+  MemoryPackExportInput,
+  MemoryPackExportResponse,
+  MemoryPackImportInput,
+  MemoryPackImportResponse,
   MemoryRecallInput,
   MemoryRecallResponse,
   MemoryRecallTextInput,
+  MemorySessionCreateInput,
+  MemorySessionCreateResponse,
+  MemorySessionEventsListInput,
+  MemorySessionEventsListResponse,
   MemoryWriteInput,
   MemoryWriteResponse,
   RequestOptions,
@@ -88,6 +100,24 @@ function joinUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 }
 
+function buildQueryString(query: Record<string, unknown> | undefined): string {
+  if (!query) return "";
+  const qp = new URLSearchParams();
+  for (const [k, raw] of Object.entries(query)) {
+    if (raw === undefined || raw === null) continue;
+    if (Array.isArray(raw)) {
+      for (const item of raw) {
+        if (item === undefined || item === null) continue;
+        qp.append(k, String(item));
+      }
+      continue;
+    }
+    qp.append(k, String(raw));
+  }
+  const s = qp.toString();
+  return s.length > 0 ? `?${s}` : "";
+}
+
 async function parseBody(res: Response): Promise<unknown> {
   const ct = (res.headers.get("content-type") ?? "").toLowerCase();
   if (ct.includes("application/json")) {
@@ -122,34 +152,79 @@ export class AionisClient {
   }
 
   async write(input: MemoryWriteInput, opts?: RequestOptions): Promise<AionisResponse<MemoryWriteResponse>> {
-    return this.request<MemoryWriteInput, MemoryWriteResponse>("/v1/memory/write", input, opts);
+    return this.requestPost<MemoryWriteInput, MemoryWriteResponse>("/v1/memory/write", input, opts);
   }
 
   async recall(input: MemoryRecallInput, opts?: RequestOptions): Promise<AionisResponse<MemoryRecallResponse>> {
-    return this.request<MemoryRecallInput, MemoryRecallResponse>("/v1/memory/recall", input, opts);
+    return this.requestPost<MemoryRecallInput, MemoryRecallResponse>("/v1/memory/recall", input, opts);
   }
 
   async recallText(input: MemoryRecallTextInput, opts?: RequestOptions): Promise<AionisResponse<MemoryRecallResponse>> {
-    return this.request<MemoryRecallTextInput, MemoryRecallResponse>("/v1/memory/recall_text", input, opts);
+    return this.requestPost<MemoryRecallTextInput, MemoryRecallResponse>("/v1/memory/recall_text", input, opts);
+  }
+
+  async find(input: MemoryFindInput, opts?: RequestOptions): Promise<AionisResponse<MemoryFindResponse>> {
+    return this.requestPost<MemoryFindInput, MemoryFindResponse>("/v1/memory/find", input, opts);
+  }
+
+  async createSession(input: MemorySessionCreateInput, opts?: RequestOptions): Promise<AionisResponse<MemorySessionCreateResponse>> {
+    return this.requestPost<MemorySessionCreateInput, MemorySessionCreateResponse>("/v1/memory/sessions", input, opts);
+  }
+
+  async writeEvent(input: MemoryEventWriteInput, opts?: RequestOptions): Promise<AionisResponse<MemoryEventWriteResponse>> {
+    return this.requestPost<MemoryEventWriteInput, MemoryEventWriteResponse>("/v1/memory/events", input, opts);
+  }
+
+  async listSessionEvents(
+    sessionId: string,
+    input?: MemorySessionEventsListInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<MemorySessionEventsListResponse>> {
+    const sid = String(sessionId ?? "").trim();
+    if (!sid) throw new Error("sessionId is required");
+    const path = `/v1/memory/sessions/${encodeURIComponent(sid)}/events`;
+    return this.requestGet<MemorySessionEventsListResponse>(path, input ?? {}, opts);
+  }
+
+  async packExport(input: MemoryPackExportInput, opts?: RequestOptions): Promise<AionisResponse<MemoryPackExportResponse>> {
+    return this.requestPost<MemoryPackExportInput, MemoryPackExportResponse>("/v1/memory/packs/export", input, opts);
+  }
+
+  async packImport(input: MemoryPackImportInput, opts?: RequestOptions): Promise<AionisResponse<MemoryPackImportResponse>> {
+    return this.requestPost<MemoryPackImportInput, MemoryPackImportResponse>("/v1/memory/packs/import", input, opts);
   }
 
   async rulesEvaluate(input: RulesEvaluateInput, opts?: RequestOptions): Promise<AionisResponse<RulesEvaluateResponse>> {
-    return this.request<RulesEvaluateInput, RulesEvaluateResponse>("/v1/memory/rules/evaluate", input, opts);
+    return this.requestPost<RulesEvaluateInput, RulesEvaluateResponse>("/v1/memory/rules/evaluate", input, opts);
   }
 
   async toolsSelect(input: ToolsSelectInput, opts?: RequestOptions): Promise<AionisResponse<ToolsSelectResponse>> {
-    return this.request<ToolsSelectInput, ToolsSelectResponse>("/v1/memory/tools/select", input, opts);
+    return this.requestPost<ToolsSelectInput, ToolsSelectResponse>("/v1/memory/tools/select", input, opts);
   }
 
   async toolsFeedback(input: ToolsFeedbackInput, opts?: RequestOptions): Promise<AionisResponse<ToolsFeedbackResponse>> {
-    return this.request<ToolsFeedbackInput, ToolsFeedbackResponse>("/v1/memory/tools/feedback", input, opts);
+    return this.requestPost<ToolsFeedbackInput, ToolsFeedbackResponse>("/v1/memory/tools/feedback", input, opts);
   }
 
-  private async request<TReq, TRes>(path: string, body: TReq, opts?: RequestOptions): Promise<AionisResponse<TRes>> {
+  private async requestPost<TReq, TRes>(path: string, body: TReq, opts?: RequestOptions): Promise<AionisResponse<TRes>> {
+    return this.request<TRes>("POST", path, opts, body, undefined);
+  }
+
+  private async requestGet<TRes>(path: string, query?: Record<string, unknown>, opts?: RequestOptions): Promise<AionisResponse<TRes>> {
+    return this.request<TRes>("GET", path, opts, undefined, query);
+  }
+
+  private async request<TRes>(
+    method: "GET" | "POST",
+    path: string,
+    opts?: RequestOptions,
+    body?: unknown,
+    query?: Record<string, unknown>,
+  ): Promise<AionisResponse<TRes>> {
     const requestId = opts?.request_id ?? randomUUID();
     const perReqRetry = clampRetryPolicy(mergeRetryPolicy(this.retry, opts?.retry));
     const timeoutMs = opts?.timeout_ms ?? this.timeoutMs;
-    const url = joinUrl(this.baseUrl, path);
+    const url = `${joinUrl(this.baseUrl, path)}${buildQueryString(query)}`;
 
     const headers: Record<string, string> = {
       "content-type": "application/json",
@@ -175,9 +250,9 @@ export class AionisClient {
       const timer = setTimeout(() => abort.abort(), timeoutMs);
       try {
         const res = await fetch(url, {
-          method: "POST",
+          method,
           headers,
-          body: JSON.stringify(body),
+          body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
           signal: abort.signal,
         });
         clearTimeout(timer);
@@ -228,7 +303,7 @@ export class AionisClient {
 
     if (lastError instanceof AionisApiError) throw lastError;
     throw new AionisNetworkError(
-      `network request failed for ${path}: ${String((lastError as any)?.message ?? lastError ?? "unknown error")}`,
+      `network request failed for ${method} ${path}: ${String((lastError as any)?.message ?? lastError ?? "unknown error")}`,
       requestId,
     );
   }

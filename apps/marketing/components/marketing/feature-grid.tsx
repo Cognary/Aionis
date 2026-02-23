@@ -6,9 +6,13 @@ export function FeatureGrid() {
       <div className="container">
         <p className="eyebrow">Core capabilities</p>
         <h2>From memory writes to production recall</h2>
-        <div className="grid-cards">
-          {productHighlights.map((item) => (
-            <article key={item.title} className="card">
+        <div className="bento-grid">
+          {productHighlights.map((item, i) => (
+            <article
+              key={item.title}
+              className={`card ${i === 0 ? "bento-hero card-accent" : ""}`}
+            >
+              <span className="card-number">{String(i + 1).padStart(2, "0")}</span>
               <h3>{item.title}</h3>
               <p>{item.desc}</p>
             </article>

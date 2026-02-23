@@ -4,6 +4,20 @@ All notable changes to `@aionis/sdk` will be documented in this file.
 
 The format is based on Keep a Changelog and this package follows SemVer.
 
+## [0.1.5] - 2026-02-23
+
+### Added
+
+1. Added `find(...)` for deterministic object lookup (`POST /v1/memory/find`) including URI-based addressing filters.
+2. Added session/event APIs:
+   - `createSession(...)` -> `POST /v1/memory/sessions`
+   - `writeEvent(...)` -> `POST /v1/memory/events`
+   - `listSessionEvents(...)` -> `GET /v1/memory/sessions/:session_id/events`
+3. Added pack APIs:
+   - `packExport(...)` -> `POST /v1/memory/packs/export`
+   - `packImport(...)` -> `POST /v1/memory/packs/import`
+4. Added typed request/response surfaces for `find`, `sessions/events`, and `packs`.
+
 ## [0.1.4] - 2026-02-19
 
 ### Changed

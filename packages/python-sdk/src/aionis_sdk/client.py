@@ -6,12 +6,19 @@ import time
 import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Mapping, MutableMapping, Optional
+from urllib.parse import quote, urlencode
 from urllib import error, request
 
 if TYPE_CHECKING:
     from .types import (
+        MemoryEventWriteInput,
+        MemoryFindInput,
+        MemoryPackExportInput,
+        MemoryPackImportInput,
         MemoryRecallInput,
         MemoryRecallTextInput,
+        MemorySessionCreateInput,
+        MemorySessionEventsListInput,
         MemoryWriteInput,
         RulesEvaluateInput,
         ToolsFeedbackInput,
@@ -141,6 +148,33 @@ class AionisClient:
     def recall_text(self, payload: "MemoryRecallTextInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/recall_text", payload, request_options)
 
+    def find(self, payload: "MemoryFindInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/find", payload, request_options)
+
+    def create_session(self, payload: "MemorySessionCreateInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/sessions", payload, request_options)
+
+    def write_event(self, payload: "MemoryEventWriteInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/events", payload, request_options)
+
+    def list_session_events(
+        self,
+        session_id: str,
+        query: Optional["MemorySessionEventsListInput"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(session_id or "").strip()
+        if not sid:
+            raise ValueError("session_id is required")
+        path = f"/v1/memory/sessions/{quote(sid, safe='')}/events"
+        return self._request(path, query or {}, request_options, method="GET")
+
+    def pack_export(self, payload: "MemoryPackExportInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/packs/export", payload, request_options)
+
+    def pack_import(self, payload: "MemoryPackImportInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/packs/import", payload, request_options)
+
     def rules_evaluate(self, payload: "RulesEvaluateInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/rules/evaluate", payload, request_options)
 
@@ -150,7 +184,14 @@ class AionisClient:
     def tools_feedback(self, payload: "ToolsFeedbackInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/tools/feedback", payload, request_options)
 
-    def _request(self, path: str, payload: Mapping[str, Any], request_options: Mapping[str, Any]) -> Dict[str, Any]:
+    def _request(
+        self,
+        path: str,
+        payload: Mapping[str, Any],
+        request_options: Mapping[str, Any],
+        *,
+        method: str = "POST",
+    ) -> Dict[str, Any]:
         request_id = str(request_options.get("request_id") or uuid.uuid4())
         timeout_s = float(request_options.get("timeout_s", self.timeout_s))
         timeout_s = max(0.001, timeout_s)
@@ -176,13 +217,27 @@ class AionisClient:
         if admin_token and not _has_header(headers, "x-admin-token"):
             headers["x-admin-token"] = str(admin_token)
 
-        body = json.dumps(payload).encode("utf-8")
+        req_method = method.upper()
         url = _join_url(self.base_url, path)
+        body: Optional[bytes] = None
+        if req_method == "GET":
+            qp: Dict[str, Any] = {}
+            for k, v in payload.items():
+                if v is None:
+                    continue
+                if isinstance(v, bool):
+                    qp[k] = "true" if v else "false"
+                else:
+                    qp[k] = str(v)
+            if qp:
+                url = f"{url}?{urlencode(qp)}"
+        else:
+            body = json.dumps(payload).encode("utf-8")
 
         last_exc: Optional[BaseException] = None
 
         for attempt in range(retry.max_retries + 1):
-            req = request.Request(url=url, data=body, headers=dict(headers), method="POST")
+            req = request.Request(url=url, data=body, headers=dict(headers), method=req_method)
             try:
                 with request.urlopen(req, timeout=timeout_s) as resp:
                     raw = resp.read()
@@ -252,6 +307,6 @@ class AionisClient:
                 break
 
         raise AionisNetworkError(
-            f"network request failed for {path}: {str(last_exc) if last_exc else 'unknown error'}",
+            f"network request failed for {req_method} {path}: {str(last_exc) if last_exc else 'unknown error'}",
             request_id=request_id,
         )

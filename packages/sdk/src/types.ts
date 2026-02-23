@@ -154,6 +154,102 @@ export type MemoryRecallTextInput = Omit<MemoryRecallInput, "query_embedding"> &
   query_text: string;
 };
 
+export type MemoryFindInput = {
+  tenant_id?: string;
+  scope?: string;
+  uri?: string;
+  id?: string;
+  client_id?: string;
+  type?: "event" | "entity" | "topic" | "rule" | "evidence" | "concept" | "procedure" | "self_model";
+  title_contains?: string;
+  text_contains?: string;
+  memory_lane?: "private" | "shared";
+  slots_contains?: Record<string, unknown>;
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
+  include_meta?: boolean;
+  include_slots?: boolean;
+  include_slots_preview?: boolean;
+  slots_preview_keys?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type MemorySessionCreateInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  session_id: string;
+  title?: string;
+  text_summary?: string;
+  input_text?: string;
+  metadata?: Record<string, unknown>;
+  auto_embed?: boolean;
+  memory_lane?: "private" | "shared";
+  producer_agent_id?: string;
+  owner_agent_id?: string;
+  owner_team_id?: string;
+};
+
+export type MemoryEventWriteInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  session_id: string;
+  event_id?: string;
+  title?: string;
+  text_summary?: string;
+  input_text?: string;
+  metadata?: Record<string, unknown>;
+  auto_embed?: boolean;
+  memory_lane?: "private" | "shared";
+  producer_agent_id?: string;
+  owner_agent_id?: string;
+  owner_team_id?: string;
+  edge_weight?: number;
+  edge_confidence?: number;
+};
+
+export type MemorySessionEventsListInput = {
+  tenant_id?: string;
+  scope?: string;
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
+  include_meta?: boolean;
+  include_slots?: boolean;
+  include_slots_preview?: boolean;
+  slots_preview_keys?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export type MemoryPackExportInput = {
+  tenant_id?: string;
+  scope?: string;
+  include_nodes?: boolean;
+  include_edges?: boolean;
+  include_commits?: boolean;
+  include_meta?: boolean;
+  max_rows?: number;
+};
+
+export type MemoryPackImportInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  verify_only?: boolean;
+  auto_embed?: boolean;
+  manifest_sha256?: string;
+  pack: {
+    version: "aionis_pack_v1";
+    tenant_id: string;
+    scope: string;
+    nodes?: Array<Record<string, unknown>>;
+    edges?: Array<Record<string, unknown>>;
+    commits?: Array<Record<string, unknown>>;
+  };
+};
+
 export type RulesEvaluateInput = {
   tenant_id?: string;
   scope?: string;
@@ -220,6 +316,119 @@ export type MemoryRecallResponse = {
   debug?: Record<string, unknown>;
   rules?: Record<string, unknown>;
   query?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
+export type MemoryFindResponse = {
+  tenant_id: string;
+  scope: string;
+  mode: "find";
+  filters: Record<string, unknown>;
+  nodes: Array<Record<string, unknown>>;
+  page: {
+    limit: number;
+    offset: number;
+    returned: number;
+    has_more: boolean;
+  };
+  [k: string]: unknown;
+};
+
+export type MemorySessionCreateResponse = {
+  tenant_id: string;
+  scope: string;
+  session_id: string;
+  session_node_id: string | null;
+  session_uri: string | null;
+  commit_id: string;
+  commit_hash: string;
+  nodes: Array<{ id: string; client_id?: string; type: string }>;
+  edges: Array<Record<string, unknown>>;
+  embedding_backfill?: { enqueued: true; pending_nodes: number } | null;
+  [k: string]: unknown;
+};
+
+export type MemoryEventWriteResponse = {
+  tenant_id: string;
+  scope: string;
+  session_id: string;
+  event_id: string;
+  event_node_id: string | null;
+  session_node_id: string | null;
+  event_uri: string | null;
+  session_uri: string | null;
+  commit_id: string;
+  commit_hash: string;
+  nodes: Array<{ id: string; client_id?: string; type: string }>;
+  edges: Array<Record<string, unknown>>;
+  embedding_backfill?: { enqueued: true; pending_nodes: number } | null;
+  [k: string]: unknown;
+};
+
+export type MemorySessionEventsListResponse = {
+  tenant_id: string;
+  scope: string;
+  session: {
+    session_id: string;
+    node_id: string;
+    title: string | null;
+    text_summary: string | null;
+    uri: string;
+  } | null;
+  events: Array<Record<string, unknown>>;
+  page: {
+    limit: number;
+    offset: number;
+    returned: number;
+    has_more: boolean;
+  };
+  [k: string]: unknown;
+};
+
+export type MemoryPackExportResponse = {
+  tenant_id: string;
+  scope: string;
+  manifest: {
+    version: string;
+    pack_version: string;
+    sha256: string;
+    generated_at: string;
+    counts: {
+      nodes: number;
+      edges: number;
+      commits: number;
+    };
+    truncated: {
+      nodes: boolean;
+      edges: boolean;
+      commits: boolean;
+    };
+    max_rows: number;
+  };
+  pack: {
+    version: "aionis_pack_v1";
+    tenant_id: string;
+    scope: string;
+    nodes: Array<Record<string, unknown>>;
+    edges: Array<Record<string, unknown>>;
+    commits: Array<Record<string, unknown>>;
+  };
+  [k: string]: unknown;
+};
+
+export type MemoryPackImportResponse = {
+  ok: boolean;
+  verified: boolean;
+  imported: boolean;
+  tenant_id: string;
+  scope: string;
+  pack_sha256: string;
+  commit_id?: string;
+  commit_hash?: string;
+  nodes?: number;
+  edges?: number;
+  embedding_backfill?: { enqueued: true; pending_nodes: number } | null;
+  planned?: { nodes: number; edges: number; commits_in_pack: number };
   [k: string]: unknown;
 };
 

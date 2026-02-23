@@ -46,9 +46,15 @@ If you set custom headers manually, the SDK will not override existing auth head
 1. `write`
 2. `recall`
 3. `recallText`
-4. `rulesEvaluate`
-5. `toolsSelect`
-6. `toolsFeedback`
+4. `find`
+5. `createSession`
+6. `writeEvent`
+7. `listSessionEvents`
+8. `packExport`
+9. `packImport`
+10. `rulesEvaluate`
+11. `toolsSelect`
+12. `toolsFeedback`
 
 ## Error model
 

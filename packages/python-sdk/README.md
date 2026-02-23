@@ -37,7 +37,7 @@ print(out["status"], out["request_id"], out["data"]["commit_id"])
 
 ## Typed payloads
 
-`0.1.4+` exports `TypedDict` API payloads from `aionis_sdk.types`:
+`0.1.5+` exports `TypedDict` API payloads from `aionis_sdk.types`:
 
 ```python
 from aionis_sdk import AionisClient
@@ -78,9 +78,15 @@ client.tools_feedback(feedback_payload)
 1. `write`
 2. `recall`
 3. `recall_text`
-4. `rules_evaluate`
-5. `tools_select`
-6. `tools_feedback`
+4. `find`
+5. `create_session`
+6. `write_event`
+7. `list_session_events`
+8. `pack_export`
+9. `pack_import`
+10. `rules_evaluate`
+11. `tools_select`
+12. `tools_feedback`
 
 ## Error model
 

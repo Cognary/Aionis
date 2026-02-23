@@ -4,7 +4,6 @@ import { FeatureGrid } from "@/components/marketing/feature-grid";
 import { Hero } from "@/components/marketing/hero";
 import { KernelInteractiveLab } from "@/components/marketing/kernel-interactive-lab";
 import { SectionLead } from "@/components/marketing/section-lead";
-import { StatStrip } from "@/components/marketing/stat-strip";
 import { analyticsEvents } from "@/lib/analytics";
 import { siteConfig } from "@/lib/site";
 
@@ -14,16 +13,101 @@ export default function HomePage() {
   return (
     <>
       <Hero />
-      <StatStrip />
       <FeatureGrid />
 
+      {/* ── Problem — numbered list, no cards ── */}
+      <section className="section">
+        <div className="container">
+          <SectionLead
+            eyebrow="Problem"
+            title="Why memory systems fail in production"
+            copy="Most teams can demo retrieval, but struggle to keep memory auditable, available, and controllable under real traffic."
+          />
+          <div className="numbered-list">
+            <div className="numbered-item">
+              <span className="numbered-index">01</span>
+              <div>
+                <h3>Audit gaps</h3>
+                <p>Vector-only flows make it hard to trace what was written, when it changed, and why a recall result appeared.</p>
+              </div>
+            </div>
+            <div className="numbered-item">
+              <span className="numbered-index">02</span>
+              <div>
+                <h3>Operational coupling</h3>
+                <p>When embedding pipelines fail, write paths often degrade and break user-facing product behavior.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Architecture — asymmetric 60/40 split ── */}
+      <section className="section">
+        <div className="container">
+          <SectionLead
+            eyebrow="Architecture principles"
+            title="Three kernel pillars"
+            copy="Aionis standardizes memory around audit-first source records, derived async processing, and memory to policy execution."
+          />
+          <div className="split-60-40">
+            <article className="card card-accent">
+              <span className="card-number">01</span>
+              <h3>Audit-first</h3>
+              <p>Persist facts as nodes, edges, and commits so every change is replayable and verifiable. The commit-chain model guarantees a full lineage for every write.</p>
+            </article>
+            <div className="split-stack">
+              <article className="card">
+                <span className="card-number">02</span>
+                <h3>Derived async</h3>
+                <p>Outbox workers handle embedding backfill and derivation jobs without blocking write availability.</p>
+              </article>
+              <article className="card">
+                <span className="card-number">03</span>
+                <h3>Memory → Policy</h3>
+                <p>Rules and feedback flows convert memory into actionable planner and tool-routing policy.</p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Operating Model — horizontal row ── */}
+      <section className="section">
+        <div className="container">
+          <SectionLead
+            eyebrow="Operating model"
+            title="Three-layer release motion"
+            copy="OSS for kernel standards, Cloud for revenue and governance depth, Platform for execution-memory control."
+          />
+          <div className="hscroll-row">
+            <article className="card">
+              <span className="card-number">L1</span>
+              <h3>OSS Kernel</h3>
+              <p>Open commit-chain, graph memory, recall, and baseline rules to drive adoption and standards.</p>
+            </article>
+            <article className="card">
+              <span className="card-number">L2</span>
+              <h3>Cloud</h3>
+              <p>Managed tenancy, reliability, governance, and compliance controls for production teams.</p>
+            </article>
+            <article className="card">
+              <span className="card-number">L3</span>
+              <h3>Platform</h3>
+              <p>Execution-memory substrate for policy-governed multi-agent operations and verifiable execution history.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Quick Start + Deployment — two-col ── */}
       <section className="section">
         <div className="container two-col">
           <div className="card">
             <SectionLead
               eyebrow="3-minute path"
               title="From zero to first recall in minutes"
-              copy="Use the OSS path to run write -> recall_text without custom orchestration. Keep your focus on agent value, not memory plumbing."
+              copy="Use the OSS path to run write → recall_text without custom orchestration."
             />
             <div className="chip-row">
               <span className="chip">Single command startup</span>
@@ -33,7 +117,7 @@ export default function HomePage() {
             <pre className="code-block">{`git clone https://github.com/Cognary/Aionis
 cd Aionis
 make quickstart`}</pre>
-            <div className="hero-cta" style={{ marginTop: 24 }}>
+            <div className="hero-cta" style={{ marginTop: 20 }}>
               <Link className="btn btn-ghost" href="/playground" data-analytics-event={analyticsEvents.CTA_OPEN_PLAYGROUND_CLICK}>
                 Open Playground
               </Link>
@@ -44,30 +128,18 @@ make quickstart`}</pre>
             <SectionLead
               eyebrow="Open deployment model"
               title="Public OSS lane + managed Cloud lane"
-              copy="OSS is open now for immediate shipping. Cloud focuses on governance depth, rollout controls, and organizational adoption."
+              copy="OSS is open now for immediate shipping. Cloud focuses on governance depth and organizational adoption."
             />
             <table className="compare-table">
               <thead>
-                <tr>
-                  <th>Track</th>
-                  <th>Access</th>
-                  <th>Primary outcome</th>
-                </tr>
+                <tr><th>Track</th><th>Access</th><th>Primary outcome</th></tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>OSS</td>
-                  <td>Self-serve</td>
-                  <td>Fast time-to-value</td>
-                </tr>
-                <tr>
-                  <td>Cloud</td>
-                  <td>Sales-led</td>
-                  <td>Production governance</td>
-                </tr>
+                <tr><td>OSS</td><td>Self-serve</td><td>Fast time-to-value</td></tr>
+                <tr><td>Cloud</td><td>Sales-led</td><td>Production governance</td></tr>
               </tbody>
             </table>
-            <div className="hero-cta" style={{ marginTop: 32 }}>
+            <div className="hero-cta" style={{ marginTop: 24 }}>
               <Link className="btn btn-solid" href="/product/personal" data-analytics-event={analyticsEvents.CTA_START_OSS_CLICK}>
                 Start OSS
               </Link>
@@ -79,76 +151,9 @@ make quickstart`}</pre>
         </div>
       </section>
 
-      <section className="section">
-        <div className="container">
-          <SectionLead
-            eyebrow="Problem"
-            title="Why memory systems fail in production"
-            copy="Most teams can demo retrieval, but struggle to keep memory auditable, available, and controllable under real traffic."
-          />
-          <div className="grid-cards">
-            <article className="card">
-              <h3>Audit gaps</h3>
-              <p>Vector-only flows make it hard to trace what was written, when it changed, and why a recall result appeared.</p>
-            </article>
-            <article className="card">
-              <h3>Operational coupling</h3>
-              <p>When embedding pipelines fail, write paths often degrade and break user-facing product behavior.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="container">
-          <SectionLead
-            eyebrow="Architecture principles"
-            title="Three kernel pillars"
-            copy="Aionis standardizes memory around Audit-first source records, Derived async processing, and Memory to Policy execution."
-          />
-          <div className="grid-cards-3">
-            <article className="card">
-              <h3>Audit-first</h3>
-              <p>Persist facts as nodes, edges, and commits so every change is replayable and verifiable.</p>
-            </article>
-            <article className="card">
-              <h3>Derived async</h3>
-              <p>Outbox workers handle embedding backfill and derivation jobs without blocking write availability.</p>
-            </article>
-            <article className="card">
-              <h3>Memory -&gt; Policy</h3>
-              <p>Rules and feedback flows convert memory into actionable planner and tool-routing policy.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="container">
-          <SectionLead
-            eyebrow="Operating model"
-            title="Three-layer release motion"
-            copy="Aionis ships one consistent model: OSS for kernel standards, Cloud for revenue and governance depth, and Platform for execution-memory control."
-          />
-          <div className="grid-cards-3">
-            <article className="card">
-              <h3>Layer 1: OSS Kernel</h3>
-              <p>Open commit-chain, graph memory, recall, and baseline rules to drive adoption and standards.</p>
-            </article>
-            <article className="card">
-              <h3>Layer 2: Cloud</h3>
-              <p>Managed tenancy, reliability, governance, and compliance controls for production teams.</p>
-            </article>
-            <article className="card">
-              <h3>Layer 3: Platform</h3>
-              <p>Execution-memory substrate for policy-governed multi-agent operations and verifiable execution history.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
       <KernelInteractiveLab />
 
+      {/* ── Evidence — compact two-col + full-width code ── */}
       <section className="section">
         <div className="container">
           <SectionLead
@@ -203,6 +208,7 @@ make quickstart`}</pre>
         </div>
       </section>
 
+      {/* ── Boundaries — numbered list ── */}
       <section className="section">
         <div className="container">
           <SectionLead
@@ -210,15 +216,21 @@ make quickstart`}</pre>
             title="What Aionis is and is not"
             copy="Aionis is memory infrastructure for agents. It is not an app orchestrator and it does not replace product-level evaluation design."
           />
-          <div className="grid-cards">
-            <article className="card">
-              <h3>Kernel scope</h3>
-              <p>Use Aionis for durable memory writes, recall context, and policy execution surfaces.</p>
-            </article>
-            <article className="card">
-              <h3>Application scope</h3>
-              <p>Product teams still define prompts, business metrics, and user experience logic on top.</p>
-            </article>
+          <div className="numbered-list">
+            <div className="numbered-item">
+              <span className="numbered-index">IN</span>
+              <div>
+                <h3>Kernel scope</h3>
+                <p>Use Aionis for durable memory writes, recall context, and policy execution surfaces.</p>
+              </div>
+            </div>
+            <div className="numbered-item">
+              <span className="numbered-index">OUT</span>
+              <div>
+                <h3>Application scope</h3>
+                <p>Product teams still define prompts, business metrics, and user experience logic on top.</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>

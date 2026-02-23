@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 src/aionis_sdk/__init__.py
 src/aionis_sdk/client.py
+src/aionis_sdk/types.py
 src/aionis_sdk.egg-info/PKG-INFO
 src/aionis_sdk.egg-info/SOURCES.txt
 src/aionis_sdk.egg-info/dependency_links.txt

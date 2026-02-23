@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: aionis-sdk
-Version: 0.1.3
+Version: 0.1.5
 Summary: Python SDK for Aionis Memory Graph API
 Author: Aionis Core
 License: UNLICENSED
@@ -52,6 +52,38 @@ out = client.write(
 print(out["status"], out["request_id"], out["data"]["commit_id"])
 ```
 
+## Typed payloads
+
+`0.1.5+` exports `TypedDict` API payloads from `aionis_sdk.types`:
+
+```python
+from aionis_sdk import AionisClient
+from aionis_sdk.types import ToolsFeedbackInput, ToolsSelectInput
+
+client = AionisClient(base_url="http://localhost:3001")
+
+select_payload: ToolsSelectInput = {
+    "scope": "default",
+    "run_id": "run_001",
+    "context": {"intent": "json", "provider": "minimax", "tool": {"name": "curl"}},
+    "candidates": ["curl", "bash"],
+    "strict": True,
+}
+select_out = client.tools_select(select_payload)
+decision_id = (select_out.get("data") or {}).get("decision", {}).get("decision_id")
+
+feedback_payload: ToolsFeedbackInput = {
+    "scope": "default",
+    "run_id": "run_001",
+    "decision_id": decision_id,
+    "outcome": "positive",
+    "context": {"intent": "json", "provider": "minimax", "tool": {"name": "curl"}},
+    "candidates": ["curl", "bash"],
+    "selected_tool": "curl",
+}
+client.tools_feedback(feedback_payload)
+```
+
 ## Auth Options
 
 1. `api_key`: sends `X-Api-Key`.
@@ -63,9 +95,15 @@ print(out["status"], out["request_id"], out["data"]["commit_id"])
 1. `write`
 2. `recall`
 3. `recall_text`
-4. `rules_evaluate`
-5. `tools_select`
-6. `tools_feedback`
+4. `find`
+5. `create_session`
+6. `write_event`
+7. `list_session_events`
+8. `pack_export`
+9. `pack_import`
+10. `rules_evaluate`
+11. `tools_select`
+12. `tools_feedback`
 
 ## Error model
 
