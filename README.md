@@ -158,6 +158,8 @@ docker run --rm -it \
 8. `POST /v1/memory/find`
 9. `POST /v1/memory/recall_text`
 
+Note: `POST /v1/memory/packs/export` and `POST /v1/memory/packs/import` are operator/admin endpoints and require `X-Admin-Token`.
+
 Full contract:
 
 - [API Contract](docs/API_CONTRACT.md)

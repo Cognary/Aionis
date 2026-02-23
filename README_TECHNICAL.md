@@ -378,6 +378,17 @@ Optional disable alias-edge auto-repair step:
 AUTO_REPAIR_ALIAS_EDGES=false npm run regression:oneclick
 ```
 
+Optional control-admin validation step toggle:
+
+```bash
+RUN_CONTROL_ADMIN_VALIDATION=true npm run regression:oneclick
+RUN_CONTROL_ADMIN_VALIDATION=false npm run regression:oneclick
+```
+
+Defaults:
+- `APP_ENV=prod` -> `RUN_CONTROL_ADMIN_VALIDATION=false`
+- `APP_ENV=dev|ci` -> `RUN_CONTROL_ADMIN_VALIDATION=true`
+
 Optional run GTM Phase 1 gate at the end of regression:
 
 ```bash
@@ -430,6 +441,13 @@ Avoid worker contention during perf:
 
 ```bash
 PERF_REQUIRE_IDLE_WORKER=true npm run regression:oneclick
+```
+
+### Admin Surface Security Smokes
+
+```bash
+npm run e2e:pack-admin-auth
+npm run e2e:control-admin-validation
 ```
 
 ### GTM Phase 1 Gate A Check

@@ -241,6 +241,7 @@ npm run -s gate:core:prod -- \
   --require-partition-ready true \
   --partition-dual-write-enabled true \
   --partition-read-shadow-check true \
+  --run-control-admin-validation true \
   --run-perf true \
   --recall-p95-max-ms 1200 \
   --write-p95-max-ms 800 \
@@ -249,10 +250,11 @@ npm run -s gate:core:prod -- \
 
 Only deploy when the core gate passes.
 If you are pre-cutover or running rehearsal only, set `--require-partition-ready false`.
+If release scope includes control-plane route/publish changes, keep `--run-control-admin-validation true`.
 
 ## Verification Stamp
 
-- Last reviewed: `2026-02-18`
+- Last reviewed: `2026-02-23`
 - Verification commands:
   - `npm run docs:check`
   - `npm run job:health-gate -- --strict-warnings --consistency-check-set scope`

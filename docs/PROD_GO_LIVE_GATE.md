@@ -4,7 +4,7 @@ title: "Production Go-Live Gate"
 
 # Production Go-Live Gate
 
-Last updated: `2026-02-18`
+Last updated: `2026-02-23`
 
 This document is the release gate for deciding whether Aionis can go to production traffic.
 
@@ -25,6 +25,8 @@ Auxiliary benchmarks (`LongMemEval` / `LoCoMo`) are non-blocking regression evid
 - `RATE_LIMIT_ENABLED=true`
 - `TENANT_QUOTA_ENABLED=true`
 - `RATE_LIMIT_BYPASS_LOOPBACK=false`
+- If deployed behind reverse proxy/load-balancer, set `TRUST_PROXY=true` and verify real client IP attribution.
+- Set `CORS_ALLOW_ORIGINS` to explicit production allowlist (do not rely on wildcard behavior).
 
 2. Build and contract
 - `npm run -s build`
@@ -79,6 +81,7 @@ cd /Users/lucio/Desktop/Aionis
 npm run -s gate:core:prod -- \
   --base-url "http://localhost:${PORT:-3001}" \
   --scope default \
+  --run-control-admin-validation true \
   --run-perf true \
   --recall-p95-max-ms 1200 \
   --write-p95-max-ms 800 \

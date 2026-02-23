@@ -12,8 +12,9 @@ Blocking metrics:
 1. Integrity: scope health gate (`strict_warnings`) + cross-tenant consistency (`strict_warnings`)
 2. Operability: build/contract/docs/sdk release checks
 3. Pack roundtrip: export -> verify import -> import -> re-import singleton check
-4. Availability and SLO: recall/write perf benchmark thresholds
-5. Compression KPI (optional blocking): context compression ratio + retain metrics
+4. Control-plane input safety (optional): control admin validation smoke
+5. Availability and SLO: recall/write perf benchmark thresholds
+6. Compression KPI (optional blocking): context compression ratio + retain metrics
 
 Auxiliary only (non-blocking):
 1. LongMemEval
@@ -28,6 +29,7 @@ npm run -s gate:core:prod -- \
   --db-runner local \
   --scope default \
   --run-pack-gate true \
+  --run-control-admin-validation false \
   --pack-gate-max-rows 2000 \
   --run-perf true \
   --recall-p95-max-ms 1200 \
@@ -50,12 +52,17 @@ Artifacts:
 - `artifacts/core_gate/<run_id>/06_health_gate_scope.json`
 - `artifacts/core_gate/<run_id>/07_consistency_cross_tenant.json`
 - `artifacts/core_gate/<run_id>/07b_pack_roundtrip_gate.json`
+- `artifacts/core_gate/<run_id>/07c_control_admin_validation.log` (when enabled)
 - `artifacts/core_gate/<run_id>/08_perf_benchmark.json`
 
 Pack gate controls:
 - `--run-pack-gate true|false`
 - `--pack-gate-scope <scope>`
 - `--pack-gate-max-rows <n>`
+
+Control admin validation controls:
+- `--run-control-admin-validation true|false` (default `false`)
+- when enabled, gate runs `npm run -s e2e:control-admin-validation`
 
 ## Compression KPI Gate
 
@@ -90,4 +97,4 @@ This workflow is the main branch gate.
 
 ## Verification Stamp
 
-- Last reviewed: `2026-02-18`
+- Last reviewed: `2026-02-23`

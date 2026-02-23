@@ -870,6 +870,7 @@ Notes:
     - visible: `private` + owner match (`owner_agent_id` / `owner_team_id`)
     - `private` + no owner fields is treated as non-visible (legacy data defect); detected count is surfaced in `lane.legacy_unowned_private_detected`
   - when no agent/team context is provided, lane filter is not enforced (`lane.applied=false`, `reason=missing_agent_context`).
+- `$regex` conditions are safety-guarded (length/complexity limits); unsafe or invalid patterns fail closed as non-match.
 
 **PolicyPatch (then_json)**
 - `output?: { format?: "json"|"text"|"markdown", strict?: boolean }`

@@ -84,6 +84,8 @@ Acceptance:
 - 2026-02-23: Non-prod JWT compatibility retained (`exp` required only when `APP_ENV=prod`).
 - 2026-02-23: Control alert route creation now enforces HTTPS/public-routable targets with channel-specific host rules (Slack/PagerDuty) and contract smoke coverage.
 - 2026-02-23: Incident publish enqueue input now validates `source_dir` (absolute local path, no dot-segments) and `target` URI (allowlist schemes `https/s3/gs/az/abfs/oci/arn`; rejects local path / unsafe schemes / private hosts), with contract smoke coverage.
+- 2026-02-23: Added HTTP smoke `e2e:pack-admin-auth` to assert pack export/import reject missing or invalid `X-Admin-Token` (`401 unauthorized_admin`).
 - 2026-02-23: Added HTTP smoke `e2e:control-admin-validation` to assert control alert/incident invalid inputs return expected `400` error codes.
 - 2026-02-23: `regression:oneclick` now includes optional `e2e:control-admin-validation` step (`RUN_CONTROL_ADMIN_VALIDATION`, default true on dev/ci and false on prod).
 - 2026-02-23: `core-production-gate` now supports optional control admin validation smoke (`--run-control-admin-validation true|false`, default false) and reports result in gate summary.
+- 2026-02-23: Updated production runbooks to include proxy/CORS hardening requirements and control-admin validation gate switch.
