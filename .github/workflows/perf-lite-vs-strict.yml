@@ -23,6 +23,11 @@ on:
         required: false
         default: "8"
         type: string
+      sample_runs:
+        description: "Compare samples (1-9). Median gate used when >1."
+        required: false
+        default: "1"
+        type: string
       max_recall_p95_regression_pct:
         description: "Gate: max lite p95 regression percentage"
         required: false
@@ -128,6 +133,7 @@ jobs:
           TOPICS_INPUT="${{ github.event.inputs.topics || '200' }}"
           RECALL_REQUESTS_INPUT="${{ github.event.inputs.recall_requests || '220' }}"
           RECALL_CONCURRENCY_INPUT="${{ github.event.inputs.recall_concurrency || '8' }}"
+          SAMPLE_RUNS_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sample_runs || '3' }}"
           MAX_RECALL_P95_REGRESSION_PCT_INPUT="${{ github.event.inputs.max_recall_p95_regression_pct || '15' }}"
           MAX_RECALL_P99_REGRESSION_PCT_INPUT="${{ github.event.inputs.max_recall_p99_regression_pct || '' }}"
           MAX_RECALL_FAIL_RATE_REGRESSION_ABS_INPUT="${{ github.event.inputs.max_recall_fail_rate_regression_abs || '0.01' }}"
@@ -137,6 +143,7 @@ jobs:
           TOPICS="${TOPICS_INPUT}" \
           RECALL_REQUESTS="${RECALL_REQUESTS_INPUT}" \
           RECALL_CONCURRENCY="${RECALL_CONCURRENCY_INPUT}" \
+          SAMPLE_RUNS="${SAMPLE_RUNS_INPUT}" \
           MAX_RECALL_P95_REGRESSION_PCT="${MAX_RECALL_P95_REGRESSION_PCT_INPUT}" \
           MAX_RECALL_P99_REGRESSION_PCT="${MAX_RECALL_P99_REGRESSION_PCT_INPUT}" \
           MAX_RECALL_FAIL_RATE_REGRESSION_ABS="${MAX_RECALL_FAIL_RATE_REGRESSION_ABS_INPUT}" \
@@ -154,7 +161,7 @@ jobs:
             echo "artifact dir: \`${LITE_VS_STRICT_OUT_DIR}\`"
             echo
             if [[ -f "${compare_json}" ]]; then
-              jq '{ok, recall_gate, baseline: .baseline.label, candidate: .candidate.label}' "${compare_json}"
+              jq '{ok, recall_gate, aggregation: (.aggregation // null), baseline: .baseline.label, candidate: .candidate.label}' "${compare_json}"
             else
               echo "compare report json not found: ${compare_json}"
             fi

@@ -530,6 +530,15 @@ npm run job:perf-profile-compare -- \
 
 `--max-recall-p99-regression-pct` is optional; omit it to disable p99 gate.
 
+Aggregate multiple compare runs (median gate):
+
+```bash
+npm run job:perf-profile-aggregate -- \
+  --dir /path/to/perf_dir \
+  --max-recall-p95-regression-pct 10 \
+  --max-recall-p99-regression-pct 10
+```
+
 ### One-Command Matrix Runner
 
 Run multi-scale seed + benchmark + explain + report:
@@ -564,6 +573,7 @@ Useful env overrides:
 - `TOPICS=200`
 - `RECALL_REQUESTS=220`
 - `RECALL_CONCURRENCY=8`
+- `SAMPLE_RUNS=3` (median gate across run1..runN compare artifacts)
 - `MAX_RECALL_P95_REGRESSION_PCT=10`
 - `MAX_RECALL_P99_REGRESSION_PCT=15` (optional, unset to disable)
 - `OUT_DIR=/path/to/Aionis/artifacts/perf/lite_vs_strict_custom`

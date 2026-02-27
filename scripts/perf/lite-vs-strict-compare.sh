@@ -29,6 +29,7 @@ RECALL_REQUESTS="${RECALL_REQUESTS:-220}"
 RECALL_CONCURRENCY="${RECALL_CONCURRENCY:-8}"
 PACE_MS="${PACE_MS:-0}"
 TIMEOUT_MS="${TIMEOUT_MS:-15000}"
+SAMPLE_RUNS="${SAMPLE_RUNS:-1}"
 
 MAX_RECALL_P95_REGRESSION_PCT="${MAX_RECALL_P95_REGRESSION_PCT:-15}"
 MAX_RECALL_P99_REGRESSION_PCT="${MAX_RECALL_P99_REGRESSION_PCT:-}"
@@ -43,7 +44,13 @@ echo "[lite-vs-strict] base url: ${BASE_URL}"
 echo "[lite-vs-strict] scope: ${SCOPE} tenant: ${TENANT_ID}"
 echo "[lite-vs-strict] seed events=${EVENTS} topics=${TOPICS} reset=${RESET}"
 echo "[lite-vs-strict] benchmark recall_requests=${RECALL_REQUESTS} recall_concurrency=${RECALL_CONCURRENCY} warmup=${WARMUP}"
+echo "[lite-vs-strict] sample runs=${SAMPLE_RUNS}"
 echo "[lite-vs-strict] gates p95<=${MAX_RECALL_P95_REGRESSION_PCT}% fail_rate_abs<=${MAX_RECALL_FAIL_RATE_REGRESSION_ABS} p99<=${MAX_RECALL_P99_REGRESSION_PCT:-disabled}"
+
+if ! [[ "${SAMPLE_RUNS}" =~ ^[0-9]+$ ]] || [[ "${SAMPLE_RUNS}" -lt 1 ]] || [[ "${SAMPLE_RUNS}" -gt 9 ]]; then
+  echo "invalid SAMPLE_RUNS=${SAMPLE_RUNS}; expected integer in [1,9]" >&2
+  exit 1
+fi
 
 curl_headers=(-H "content-type: application/json")
 if [[ -n "${PERF_API_KEY}" ]]; then
@@ -106,70 +113,139 @@ if [[ "${RESET}" == "true" ]]; then
 fi
 "${seed_cmd[@]}" | tee "${OUT_DIR}/seed.json"
 
-strict_file="${OUT_DIR}/benchmark_strict_edges.json"
-lite_file="${OUT_DIR}/benchmark_lite.json"
 compare_md="${OUT_DIR}/LITE_VS_STRICT_COMPARE.md"
 compare_json="${OUT_DIR}/LITE_VS_STRICT_COMPARE.json"
+compare_statuses=()
 
-echo "[lite-vs-strict] run strict_edges benchmark"
-npm run -s job:perf-benchmark -- \
-  --base-url "${BASE_URL}" \
-  --scope "${SCOPE}" \
-  --tenant-id "${TENANT_ID}" \
-  --mode recall \
-  --warmup "${WARMUP}" \
-  --recall-requests "${RECALL_REQUESTS}" \
-  --recall-concurrency "${RECALL_CONCURRENCY}" \
-  --pace-ms "${PACE_MS}" \
-  --timeout-ms "${TIMEOUT_MS}" \
-  --recall-profile strict_edges > "${strict_file}"
+run_profile_benchmark() {
+  local profile="$1"
+  local out_file="$2"
+  npm run -s job:perf-benchmark -- \
+    --base-url "${BASE_URL}" \
+    --scope "${SCOPE}" \
+    --tenant-id "${TENANT_ID}" \
+    --mode recall \
+    --warmup "${WARMUP}" \
+    --recall-requests "${RECALL_REQUESTS}" \
+    --recall-concurrency "${RECALL_CONCURRENCY}" \
+    --pace-ms "${PACE_MS}" \
+    --timeout-ms "${TIMEOUT_MS}" \
+    --recall-profile "${profile}" > "${out_file}"
+}
 
-echo "[lite-vs-strict] run lite benchmark"
-npm run -s job:perf-benchmark -- \
-  --base-url "${BASE_URL}" \
-  --scope "${SCOPE}" \
-  --tenant-id "${TENANT_ID}" \
-  --mode recall \
-  --warmup "${WARMUP}" \
-  --recall-requests "${RECALL_REQUESTS}" \
-  --recall-concurrency "${RECALL_CONCURRENCY}" \
-  --pace-ms "${PACE_MS}" \
-  --timeout-ms "${TIMEOUT_MS}" \
-  --recall-profile lite > "${lite_file}"
+run_compare_once() {
+  local strict_file="$1"
+  local lite_file="$2"
+  local out_md="$3"
+  local out_json="$4"
+  local out_stdout="$5"
 
-echo "[lite-vs-strict] generate comparison report"
-compare_cmd=(
-  npm
-  run
-  -s
-  job:perf-profile-compare
-  --
-  --baseline
-  "${strict_file}"
-  --candidate
-  "${lite_file}"
-  --baseline-label
-  strict_edges
-  --candidate-label
-  lite
-  --max-recall-p95-regression-pct
-  "${MAX_RECALL_P95_REGRESSION_PCT}"
-  --max-recall-fail-rate-regression-abs
-  "${MAX_RECALL_FAIL_RATE_REGRESSION_ABS}"
-)
-if [[ -n "${MAX_RECALL_P99_REGRESSION_PCT}" ]]; then
-  compare_cmd+=(--max-recall-p99-regression-pct "${MAX_RECALL_P99_REGRESSION_PCT}")
+  local compare_cmd=(
+    npm
+    run
+    -s
+    job:perf-profile-compare
+    --
+    --baseline
+    "${strict_file}"
+    --candidate
+    "${lite_file}"
+    --baseline-label
+    strict_edges
+    --candidate-label
+    lite
+    --max-recall-p95-regression-pct
+    "${MAX_RECALL_P95_REGRESSION_PCT}"
+    --max-recall-fail-rate-regression-abs
+    "${MAX_RECALL_FAIL_RATE_REGRESSION_ABS}"
+  )
+  if [[ -n "${MAX_RECALL_P99_REGRESSION_PCT}" ]]; then
+    compare_cmd+=(--max-recall-p99-regression-pct "${MAX_RECALL_P99_REGRESSION_PCT}")
+  fi
+  compare_cmd+=(
+    --output
+    "${out_md}"
+    --output-json
+    "${out_json}"
+  )
+
+  set +e
+  "${compare_cmd[@]}" | tee "${out_stdout}"
+  local st=$?
+  set -e
+  return "${st}"
+}
+
+if [[ "${SAMPLE_RUNS}" -eq 1 ]]; then
+  strict_file="${OUT_DIR}/benchmark_strict_edges.json"
+  lite_file="${OUT_DIR}/benchmark_lite.json"
+  echo "[lite-vs-strict] run strict_edges benchmark"
+  run_profile_benchmark strict_edges "${strict_file}"
+  echo "[lite-vs-strict] run lite benchmark"
+  run_profile_benchmark lite "${lite_file}"
+  echo "[lite-vs-strict] generate comparison report"
+  if run_compare_once "${strict_file}" "${lite_file}" "${compare_md}" "${compare_json}" "${OUT_DIR}/compare_stdout.json"; then
+    compare_statuses+=(0)
+  else
+    compare_statuses+=($?)
+  fi
+else
+  for run_idx in $(seq 1 "${SAMPLE_RUNS}"); do
+    strict_file="${OUT_DIR}/benchmark_strict_edges_run${run_idx}.json"
+    lite_file="${OUT_DIR}/benchmark_lite_run${run_idx}.json"
+    run_md="${OUT_DIR}/LITE_VS_STRICT_COMPARE_run${run_idx}.md"
+    run_json="${OUT_DIR}/LITE_VS_STRICT_COMPARE_run${run_idx}.json"
+    run_stdout="${OUT_DIR}/compare_run${run_idx}_stdout.json"
+
+    echo "[lite-vs-strict] run #${run_idx}/${SAMPLE_RUNS}: strict_edges benchmark"
+    run_profile_benchmark strict_edges "${strict_file}"
+    echo "[lite-vs-strict] run #${run_idx}/${SAMPLE_RUNS}: lite benchmark"
+    run_profile_benchmark lite "${lite_file}"
+
+    cp "${strict_file}" "${OUT_DIR}/benchmark_strict_edges.json"
+    cp "${lite_file}" "${OUT_DIR}/benchmark_lite.json"
+
+    echo "[lite-vs-strict] run #${run_idx}/${SAMPLE_RUNS}: comparison"
+    if run_compare_once "${strict_file}" "${lite_file}" "${run_md}" "${run_json}" "${run_stdout}"; then
+      compare_statuses+=(0)
+    else
+      compare_statuses+=($?)
+    fi
+  done
+
+  echo "[lite-vs-strict] aggregate ${SAMPLE_RUNS} compare runs (median gate)"
+  aggregate_cmd=(
+    npm
+    run
+    -s
+    job:perf-profile-aggregate
+    --
+    --dir
+    "${OUT_DIR}"
+    --baseline-label
+    strict_edges
+    --candidate-label
+    lite
+    --max-recall-p95-regression-pct
+    "${MAX_RECALL_P95_REGRESSION_PCT}"
+    --max-recall-fail-rate-regression-abs
+    "${MAX_RECALL_FAIL_RATE_REGRESSION_ABS}"
+    --output
+    "${compare_md}"
+    --output-json
+    "${compare_json}"
+  )
+  if [[ -n "${MAX_RECALL_P99_REGRESSION_PCT}" ]]; then
+    aggregate_cmd+=(--max-recall-p99-regression-pct "${MAX_RECALL_P99_REGRESSION_PCT}")
+  fi
+  "${aggregate_cmd[@]}" | tee "${OUT_DIR}/compare_stdout.json"
 fi
-compare_cmd+=(
-  --output
-  "${compare_md}"
-  --output-json
-  "${compare_json}"
-)
-"${compare_cmd[@]}" | tee "${OUT_DIR}/compare_stdout.json"
+
+if [[ "${SAMPLE_RUNS}" -eq 1 ]] && [[ "${compare_statuses[0]}" -ne 0 ]]; then
+  exit "${compare_statuses[0]}"
+fi
 
 echo "[lite-vs-strict] done"
-echo "[lite-vs-strict] strict: ${strict_file}"
-echo "[lite-vs-strict] lite: ${lite_file}"
+echo "[lite-vs-strict] sample_runs: ${SAMPLE_RUNS}"
 echo "[lite-vs-strict] report: ${compare_md}"
 echo "[lite-vs-strict] report json: ${compare_json}"
