@@ -243,6 +243,107 @@ jobs:
 
           node -e '
             const fs = require("fs");
+            const health = JSON.parse(fs.readFileSync("/tmp/backend_parity_health_after.json", "utf8"));
+            const featureCaps = health.memory_store_feature_capabilities || {};
+            const contract = health.memory_store_capability_contract || {};
+            const base = `http://127.0.0.1:${process.env.PORT}`;
+            const adminToken = process.env.ADMIN_TOKEN;
+            const ensure = (cond, msg) => { if (!cond) throw new Error(msg); };
+
+            async function postJson(path, payload) {
+              const res = await fetch(`${base}${path}`, {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  "x-admin-token": adminToken,
+                },
+                body: JSON.stringify(payload),
+              });
+              let body = null;
+              try {
+                body = await res.json();
+              } catch {
+                throw new Error(`${path} must return JSON body`);
+              }
+              return { status: res.status, body };
+            }
+
+            function assertCapabilityUnsupported(capability, status, body) {
+              ensure(status === 501, `${capability} disabled path must return 501`);
+              ensure(body && body.error === "backend_capability_unsupported", `${capability} disabled path must return backend_capability_unsupported`);
+              ensure(body.details && body.details.capability === capability, `${capability} disabled path must include details.capability`);
+              const expectedFailureMode = contract?.[capability]?.failure_mode;
+              ensure(
+                typeof expectedFailureMode === "string" && body.details.failure_mode === expectedFailureMode,
+                `${capability} disabled path must include details.failure_mode from capability contract`,
+              );
+              ensure(body.details.degraded_mode === "feature_disabled", `${capability} disabled path must include degraded_mode=feature_disabled`);
+              ensure(body.details.fallback_applied === false, `${capability} disabled path must include fallback_applied=false`);
+            }
+
+            (async () => {
+              const sessionProbe = await postJson("/v1/memory/sessions", {
+                scope: "backend_parity_smoke",
+                actor: "ci",
+                session_id: `backend_parity_session_${Date.now()}`,
+                input_text: "backend parity session probe",
+                auto_embed: false,
+                memory_lane: "shared",
+              });
+              if (featureCaps.sessions_graph === true) {
+                ensure(sessionProbe.status === 200, `sessions_graph enabled path must return 200 (got ${sessionProbe.status})`);
+                ensure(typeof sessionProbe.body?.session_id === "string", "sessions_graph enabled path must include session_id");
+              } else {
+                assertCapabilityUnsupported("sessions_graph", sessionProbe.status, sessionProbe.body);
+              }
+
+              const exportProbe = await postJson("/v1/memory/packs/export", {
+                scope: "backend_parity_smoke",
+                include_nodes: false,
+                include_edges: false,
+                include_commits: false,
+                include_meta: false,
+                max_rows: 1,
+              });
+              if (featureCaps.packs_export === true) {
+                ensure(exportProbe.status === 200, `packs_export enabled path must return 200 (got ${exportProbe.status})`);
+                ensure(
+                  typeof exportProbe.body?.manifest?.sha256 === "string" && exportProbe.body.manifest.sha256.length > 0,
+                  "packs_export enabled path must include manifest.sha256",
+                );
+              } else {
+                assertCapabilityUnsupported("packs_export", exportProbe.status, exportProbe.body);
+              }
+
+              const importProbe = await postJson("/v1/memory/packs/import", {
+                scope: "backend_parity_smoke",
+                actor: "ci",
+                verify_only: true,
+                auto_embed: false,
+                pack: {
+                  version: "aionis_pack_v1",
+                  tenant_id: "default",
+                  scope: "backend_parity_smoke",
+                  nodes: [],
+                  edges: [],
+                  commits: [],
+                },
+              });
+              if (featureCaps.packs_import === true) {
+                ensure(importProbe.status === 200, `packs_import enabled path must return 200 (got ${importProbe.status})`);
+                ensure(importProbe.body?.verified === true, "packs_import enabled path must include verified=true");
+                ensure(importProbe.body?.imported === false, "packs_import enabled verify_only path must include imported=false");
+              } else {
+                assertCapabilityUnsupported("packs_import", importProbe.status, importProbe.body);
+              }
+            })().catch((err) => {
+              console.error(err && err.message ? err.message : String(err));
+              process.exit(1);
+            });
+          '
+
+          node -e '
+            const fs = require("fs");
             const before = JSON.parse(fs.readFileSync("/tmp/backend_parity_health.json", "utf8"));
             const after = JSON.parse(fs.readFileSync("/tmp/backend_parity_health_after.json", "utf8"));
             const tsOut = JSON.parse(fs.readFileSync("/tmp/backend_parity_sdk_smoke.json", "utf8"));
