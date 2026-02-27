@@ -69,7 +69,7 @@ jobs:
       - name: Contract smoke
         run: npm run -s test:contract
 
-      - name: Startup health smoke
+      - name: Startup health + API parity smoke
         run: |
           node dist/index.js >/tmp/backend_parity_api.log 2>&1 &
           API_PID=$!
@@ -96,6 +96,66 @@ jobs:
             if (p.memory_store_backend !== expected) throw new Error(`backend mismatch: ${p.memory_store_backend} != ${expected}`);
             if (typeof p.recall_store_access_capability_version !== "number") throw new Error("missing recall capability version");
             if (typeof p.write_store_access_capability_version !== "number") throw new Error("missing write capability version");
+          '
+
+          # Deterministic parity case: write one shared node with ready embedding, then recall with same query embedding.
+          node -e '
+            const fs = require("fs");
+            const vec = Array.from({ length: 1536 }, () => 0);
+            const writePayload = {
+              tenant_id: "parity",
+              scope: "backend_parity_smoke",
+              actor: "ci",
+              input_text: "backend parity smoke write",
+              auto_embed: false,
+              memory_lane: "shared",
+              nodes: [
+                {
+                  client_id: "parity-node-1",
+                  type: "event",
+                  title: "Parity Event",
+                  text_summary: "Backend parity smoke event",
+                  embedding: vec
+                }
+              ],
+              edges: []
+            };
+            const recallPayload = {
+              tenant_id: "parity",
+              scope: "backend_parity_smoke",
+              query_embedding: vec,
+              limit: 5,
+              neighborhood_hops: 1
+            };
+            fs.writeFileSync("/tmp/backend_parity_write.json", JSON.stringify(writePayload));
+            fs.writeFileSync("/tmp/backend_parity_recall.json", JSON.stringify(recallPayload));
+          '
+
+          curl -fsS -X POST "http://127.0.0.1:${PORT}/v1/memory/write" \
+            -H "content-type: application/json" \
+            --data-binary "@/tmp/backend_parity_write.json" >/tmp/backend_parity_write_out.json
+
+          curl -fsS -X POST "http://127.0.0.1:${PORT}/v1/memory/recall" \
+            -H "content-type: application/json" \
+            --data-binary "@/tmp/backend_parity_recall.json" >/tmp/backend_parity_recall_out.json
+
+          node -e '
+            const fs = require("fs");
+            const writeOut = JSON.parse(fs.readFileSync("/tmp/backend_parity_write_out.json", "utf8"));
+            const recallOut = JSON.parse(fs.readFileSync("/tmp/backend_parity_recall_out.json", "utf8"));
+            if (typeof writeOut.commit_id !== "string" || writeOut.commit_id.length === 0) {
+              throw new Error("write response missing commit_id");
+            }
+            if (!Array.isArray(writeOut.nodes) || writeOut.nodes.length < 1) {
+              throw new Error("write response nodes should be non-empty");
+            }
+            if (!Array.isArray(recallOut.seeds)) throw new Error("recall seeds missing");
+            if (!recallOut.subgraph || !Array.isArray(recallOut.subgraph.nodes)) {
+              throw new Error("recall subgraph nodes missing");
+            }
+            if (recallOut.seeds.length < 1) {
+              throw new Error("recall returned no seeds for parity case");
+            }
           '
 
           kill "${API_PID}" || true
