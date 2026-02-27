@@ -103,6 +103,9 @@ echo "MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT=${MEMORY_RECALL_TEXT_CONTE
 6. Throughput profile check/apply:
 
 ```bash
+# local-first lightweight profile
+npm run -s env:throughput:lite
+# production profile
 npm run -s env:throughput:prod
 ```
 

@@ -193,7 +193,7 @@ type RecallProfileDefaults = {
   min_edge_confidence: number;
 };
 
-type RecallProfileName = "legacy" | "strict_edges" | "quality_first";
+type RecallProfileName = "legacy" | "strict_edges" | "quality_first" | "lite";
 type RecallEndpoint = "recall" | "recall_text";
 type RecallStrategyName = "local" | "balanced" | "global";
 
@@ -224,6 +224,15 @@ const RECALL_PROFILE_DEFAULTS: Record<RecallProfileName, RecallProfileDefaults> 
     ranked_limit: 180,
     min_edge_weight: 0.05,
     min_edge_confidence: 0.05,
+  },
+  lite: {
+    limit: 12,
+    neighborhood_hops: 1,
+    max_nodes: 24,
+    max_edges: 24,
+    ranked_limit: 48,
+    min_edge_weight: 0.25,
+    min_edge_confidence: 0.25,
   },
 };
 

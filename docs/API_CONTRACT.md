@@ -415,6 +415,7 @@ Default recall knobs are profile-driven:
   - hard-cap also applies only when request did **not** explicitly pin recall knobs
 
 Profiles:
+- `lite`: `limit=12`, `hops=1`, `max_nodes=24`, `max_edges=24`, `ranked_limit=48`, `min_edge_weight=0.25`, `min_edge_confidence=0.25`
 - `strict_edges` (default): `limit=24`, `hops=2`, `max_nodes=60`, `max_edges=80`, `ranked_limit=140`, `min_edge_weight=0.2`, `min_edge_confidence=0.2`
 - `quality_first`: `limit=30`, `hops=2`, `max_nodes=80`, `max_edges=100`, `ranked_limit=180`, `min_edge_weight=0.05`, `min_edge_confidence=0.05`
 - `legacy`: historical defaults (`30/2/50/100/100/0/0`)
