@@ -1,6 +1,7 @@
 import type pg from "pg";
 import { performance } from "node:perf_hooks";
 import { assertDim, toVectorLiteral } from "../util/pgvector.js";
+import { createPostgresRecallStoreAccess, type RecallCandidate, type RecallStoreAccess } from "../store/recall-access.js";
 import { MemoryRecallRequest, type MemoryRecallInput } from "./schemas.js";
 import { buildContext } from "./context.js";
 import { sha256Hex } from "../util/crypto.js";
@@ -15,15 +16,9 @@ export type RecallTelemetry = {
   timing?: (stage: string, ms: number) => void;
 };
 
-type Candidate = {
-  id: string;
-  type: string;
-  title: string | null;
-  text_summary: string | null;
-  tier: string;
-  salience: number;
-  confidence: number;
-  similarity: number;
+export type MemoryRecallOptions = {
+  stage1_exact_fallback_on_empty?: boolean;
+  recall_access?: RecallStoreAccess;
 };
 
 type NodeRow = {
@@ -134,7 +129,7 @@ type EdgeDTO = {
 };
 
 // Very small spreading-activation MVP: 1-2 iterations, bounded by the neighborhood we fetched.
-function spreadActivation(seeds: Candidate[], nodes: Map<string, NodeRow>, edges: EdgeRow[], hops: number) {
+function spreadActivation(seeds: RecallCandidate[], nodes: Map<string, NodeRow>, edges: EdgeRow[], hops: number) {
   const act = new Map<string, number>();
   for (const s of seeds) {
     // similarity in [0,1], salience in [0,1]
@@ -197,7 +192,7 @@ export async function memoryRecallParsed(
   auth: RecallAuth,
   telemetry?: RecallTelemetry,
   endpoint: "recall" | "recall_text" = "recall",
-  options?: { stage1_exact_fallback_on_empty?: boolean },
+  options?: MemoryRecallOptions,
 ) {
   const tenancy = resolveTenantScope(
     { scope: parsed.scope, tenant_id: parsed.tenant_id },
@@ -222,149 +217,37 @@ export async function memoryRecallParsed(
   }
 
   const oversample = Math.max(parsed.limit, Math.min(1000, parsed.limit * 5));
-  const stage1Params = [toVectorLiteral(parsed.query_embedding), scope, oversample, parsed.limit, consumerAgentId, consumerTeamId];
+  const recallAccess = options?.recall_access ?? createPostgresRecallStoreAccess(client);
 
   // Stage 1 (primary): ANN kNN candidate fetch (fast path).
   const stage1Ann = await timed("stage1_candidates_ann", () =>
-    client.query<Candidate>(
-      `
-      WITH knn AS (
-        -- Performance-first: do ANN kNN on the broadest safe subset to encourage HNSW usage,
-        -- then apply additional type/state filters in the outer query.
-        SELECT
-          n.id,
-          n.type::text AS type,
-          n.title,
-          n.text_summary,
-          n.tier::text AS tier,
-          n.salience,
-          n.confidence,
-          (n.embedding <=> $1::vector(1536)) AS distance
-        FROM memory_nodes n
-        WHERE n.scope = $2
-          AND n.tier IN ('hot', 'warm')
-          AND n.embedding IS NOT NULL
-          AND n.embedding_status = 'ready'
-          AND (
-            n.memory_lane = 'shared'::memory_lane
-            OR (n.memory_lane = 'private'::memory_lane AND n.owner_agent_id = $5::text)
-            OR ($6::text IS NOT NULL AND n.memory_lane = 'private'::memory_lane AND n.owner_team_id = $6::text)
-          )
-        ORDER BY n.embedding <=> $1::vector(1536)
-        LIMIT $3
-      )
-      SELECT
-        k.id,
-        k.type,
-        k.title,
-        k.text_summary,
-        k.tier,
-        k.salience,
-        k.confidence,
-        1.0 - k.distance AS similarity
-      FROM knn k
-      WHERE k.type IN ('event', 'topic', 'concept', 'entity', 'rule')
-        AND (
-          k.type <> 'topic'
-          OR EXISTS (
-            SELECT 1
-            FROM memory_nodes t
-            WHERE t.id = k.id
-              AND COALESCE(t.slots->>'topic_state', 'active') = 'active'
-          )
-        )
-        AND (
-          k.type <> 'rule'
-          OR EXISTS (
-            SELECT 1
-            FROM memory_rule_defs d
-            WHERE d.scope = $2
-              AND d.rule_node_id = k.id
-              AND d.state IN ('shadow', 'active')
-          )
-        )
-      ORDER BY k.distance ASC
-      LIMIT $4
-      `,
-      stage1Params,
-    ),
+    recallAccess.stage1CandidatesAnn({
+      queryEmbedding: parsed.query_embedding,
+      scope,
+      oversample,
+      limit: parsed.limit,
+      consumerAgentId,
+      consumerTeamId,
+    }),
   );
 
-  let seeds = stage1Ann.rows;
+  let seeds = stage1Ann;
   const stage1AnnSeedCount = seeds.length;
   const stage1ExactFallbackAttempted = stage1AnnSeedCount === 0 && stage1ExactFallbackOnEmpty;
   let stage1Mode: "ann" | "exact_fallback" = "ann";
 
   if (stage1ExactFallbackAttempted) {
     const stage1Exact = await timed("stage1_candidates_exact_fallback", () =>
-      client.query<Candidate>(
-        `
-        WITH ranked AS (
-          -- Exact fallback: compute distance first and order by derived scalar distance.
-          -- This avoids ANN false-empty long-tail misses under strict filters.
-          SELECT
-            n.id,
-            n.type::text AS type,
-            n.title,
-            n.text_summary,
-            n.tier::text AS tier,
-            n.salience,
-            n.confidence,
-            ((n.embedding <=> $1::vector(1536))::double precision + 0.0) AS distance
-          FROM memory_nodes n
-          WHERE n.scope = $2
-            AND n.tier IN ('hot', 'warm')
-            AND n.embedding IS NOT NULL
-            AND n.embedding_status = 'ready'
-            AND (
-              n.memory_lane = 'shared'::memory_lane
-              OR (n.memory_lane = 'private'::memory_lane AND n.owner_agent_id = $5::text)
-              OR ($6::text IS NOT NULL AND n.memory_lane = 'private'::memory_lane AND n.owner_team_id = $6::text)
-            )
-        ),
-        knn AS (
-          SELECT *
-          FROM ranked
-          ORDER BY distance ASC
-          LIMIT $3
-        )
-        SELECT
-          k.id,
-          k.type,
-          k.title,
-          k.text_summary,
-          k.tier,
-          k.salience,
-          k.confidence,
-          1.0 - k.distance AS similarity
-        FROM knn k
-        WHERE k.type IN ('event', 'topic', 'concept', 'entity', 'rule')
-          AND (
-            k.type <> 'topic'
-            OR EXISTS (
-              SELECT 1
-              FROM memory_nodes t
-              WHERE t.id = k.id
-                AND COALESCE(t.slots->>'topic_state', 'active') = 'active'
-            )
-          )
-          AND (
-            k.type <> 'rule'
-            OR EXISTS (
-              SELECT 1
-              FROM memory_rule_defs d
-              WHERE d.scope = $2
-                AND d.rule_node_id = k.id
-                AND d.state IN ('shadow', 'active')
-            )
-          )
-        ORDER BY k.distance ASC
-        LIMIT $4
-        `,
-        stage1Params,
-      ),
+      recallAccess.stage1CandidatesExactFallback({
+        queryEmbedding: parsed.query_embedding,
+        scope,
+        oversample,
+        limit: parsed.limit,
+        consumerAgentId,
+        consumerTeamId,
+      }),
     );
-    seeds = stage1Exact.rows;
+    seeds = stage1Exact;
     stage1Mode = "exact_fallback";
   }
 

@@ -5,7 +5,7 @@ title: "Memory Store Adapter Plan"
 # Memory Store Adapter Plan
 
 Last updated: `2026-02-27`  
-Status: `phase_p0_in_progress`
+Status: `phase_p1_in_progress`
 
 ## Objective
 
@@ -34,10 +34,12 @@ Completed in this phase:
 2. `src/index.ts` switched from direct `withClient/withTx` calls to `store.withClient/withTx`.
 3. `MEMORY_STORE_BACKEND=postgres` added to env schema and `.env.example`.
 4. Health/config logs now expose `memory_store_backend`.
+5. `src/store/recall-access.ts` added and covers Stage1 ANN + exact-fallback candidate queries for Postgres.
+6. `memoryRecallParsed(...)` now supports injectable `recall_access` while preserving default Postgres behavior.
+7. Recall call sites (`/v1/memory/recall`, `/v1/memory/recall_text`, `/v1/planning/context`) now pass store access explicitly.
 
 ## Next Steps
 
-1. Expand adapter interface from lifecycle-only to capability methods (`append_commit`, `vector_candidates`, `get_nodes`, `get_edges`).
-2. Move core recall/write queries behind capability methods incrementally.
-3. Add `embedded` experimental adapter behind explicit feature flag.
-
+1. Extend recall access beyond Stage1 (`stage2_edges`, `stage2_nodes`, `rule_defs`, `debug_embeddings`, `audit_insert`).
+2. Start write-path extraction (`append_commit` + minimal node/edge fetch capabilities), keeping Postgres as reference.
+3. Add `embedded` experimental adapter behind explicit feature flag after read/write capability seams are stable.

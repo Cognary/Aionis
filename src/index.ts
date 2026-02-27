@@ -5,6 +5,7 @@ import { performance } from "node:perf_hooks";
 import { ZodError, z } from "zod";
 import { loadEnv } from "./config.js";
 import { asPostgresMemoryStore, createMemoryStore } from "./store/memory-store.js";
+import { createPostgresRecallStoreAccess } from "./store/recall-access.js";
 import {
   createControlAlertRoute,
   enqueueControlIncidentPublishJob,
@@ -1780,7 +1781,10 @@ app.post("/v1/memory/recall", async (req, reply) => {
           },
         },
         "recall",
-        { stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY },
+        {
+          stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
+          recall_access: createPostgresRecallStoreAccess(client),
+        },
       );
 
       if (parsed.rules_context !== undefined && parsed.rules_context !== null) {
@@ -2040,7 +2044,10 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
           },
         },
         "recall_text",
-        { stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY },
+        {
+          stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
+          recall_access: createPostgresRecallStoreAccess(client),
+        },
       );
 
       if (recallParsed.rules_context !== undefined && recallParsed.rules_context !== null) {
@@ -2313,7 +2320,10 @@ app.post("/v1/memory/planning/context", async (req, reply) => {
           },
         },
         "recall_text",
-        { stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY },
+        {
+          stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
+          recall_access: createPostgresRecallStoreAccess(client),
+        },
       );
 
       const rules = await evaluateRules(
