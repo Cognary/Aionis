@@ -476,6 +476,12 @@ export async function memoryRecallParsed(
   // - include sha256 of full vector string for integrity checks
   let embedding_debug: any = undefined;
   if (parsed.return_debug && parsed.include_embeddings) {
+    if (!recallAccess.capabilities.debug_embeddings) {
+      badRequest(
+        "debug_embeddings_backend_unsupported",
+        "include_embeddings is not supported by current backend capability (debug_embeddings=false)",
+      );
+    }
     const MAX_EMBED_NODES = 5;
     const PREVIEW_DIMS = 16;
     const ids = seedIds.slice(0, MAX_EMBED_NODES);

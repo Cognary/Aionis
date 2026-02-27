@@ -10,6 +10,7 @@ import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   assertRecallStoreAccessContract,
   createPostgresRecallStoreAccess,
+  type RecallStoreCapabilities,
 } from "./store/recall-access.js";
 import {
   WRITE_STORE_ACCESS_CAPABILITY_VERSION,
@@ -93,6 +94,7 @@ const embeddedRuntime =
         snapshotStrictMaxBytes: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES,
         snapshotCompactionEnabled: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED,
         snapshotCompactionMaxRounds: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS,
+        recallDebugEmbeddingsEnabled: env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED,
       })
     : null;
 if (embeddedRuntime) {
@@ -124,9 +126,15 @@ function databaseTargetHash(databaseUrl: string): string | null {
 
 const healthDatabaseTargetHash = databaseTargetHash(env.DATABASE_URL);
 
+const recallStoreCapabilities: RecallStoreCapabilities = {
+  debug_embeddings: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED,
+};
+
 function recallAccessForClient(client: any) {
   if (embeddedRuntime) return embeddedRuntime.createRecallAccess();
-  return createPostgresRecallStoreAccess(client);
+  return createPostgresRecallStoreAccess(client, {
+    capabilities: recallStoreCapabilities,
+  });
 }
 
 const writeStoreCapabilities: WriteStoreCapabilities = {
@@ -830,6 +838,10 @@ app.log.info(
     memory_store_embedded_snapshot_compaction_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED : null,
     memory_store_embedded_snapshot_compaction_max_rounds: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS : null,
     memory_store_embedded_shadow_mirror_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED : null,
+    memory_store_embedded_recall_debug_embeddings_enabled: embeddedRuntime
+      ? env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED
+      : null,
+    memory_store_recall_capabilities: recallStoreCapabilities,
     memory_store_write_capabilities: writeStoreCapabilities,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
@@ -952,7 +964,11 @@ app.get("/health", async () => ({
   memory_store_embedded_snapshot_compaction_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED : null,
   memory_store_embedded_snapshot_compaction_max_rounds: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS : null,
   memory_store_embedded_shadow_mirror_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED : null,
+  memory_store_embedded_recall_debug_embeddings_enabled: embeddedRuntime
+    ? env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED
+    : null,
   memory_store_embedded_snapshot_metrics: embeddedRuntime ? embeddedRuntime.getSnapshotMetrics() : null,
+  memory_store_recall_capabilities: recallStoreCapabilities,
   memory_store_write_capabilities: writeStoreCapabilities,
   recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
@@ -2618,7 +2634,7 @@ app.addHook("onClose", async () => {
 });
 
 await store.withClient(async (client) => {
-  assertRecallStoreAccessContract(createPostgresRecallStoreAccess(client));
+  assertRecallStoreAccessContract(recallAccessForClient(client));
   assertWriteStoreAccessContract(writeAccessForClient(client));
 });
 

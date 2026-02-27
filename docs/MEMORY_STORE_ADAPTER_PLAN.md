@@ -56,9 +56,10 @@ Completed in this phase:
 24. Added snapshot compaction policy + operator-visible metrics (tiered payload trimming, edge/node pruning fallback, `/health` metrics exposure, contract smoke coverage).
 25. Added backend parity CI observability for embedded snapshot compaction (health metrics presence checks, post-write metric delta assertions, and node-drop guardrail threshold).
 26. Added write-side capability negotiation flag `shadow_mirror_v2` with backend-specific declaration, strict-mode env guardrails, `/health` exposure, and CI/contract assertions.
+27. Extended capability negotiation to recall path with `debug_embeddings` declaration (backend toggle, runtime enforcement, `/health` exposure, and CI/contract coverage).
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
-2. Extend capability negotiation beyond write shadow mirror (e.g. recall/debug or pack/session backend feature flags).
+2. Extend capability negotiation to additional backend feature flags (e.g. audit write semantics, pack export/import constraints, session graph semantics).
 3. Add runtime compaction telemetry export for long-run trend analysis (artifact timeline + alert thresholds), beyond smoke-level CI assertions.

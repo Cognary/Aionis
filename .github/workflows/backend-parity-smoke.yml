@@ -29,6 +29,7 @@ jobs:
       MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED: "true"
       MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS: "8"
       MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED: "false"
+      MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED: "false"
       EMBEDDED_SNAPSHOT_MAX_DROPPED_NODES_GUARD: "32"
 
     steps:
@@ -56,6 +57,7 @@ jobs:
             echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED=${MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED}"
             echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS=${MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS}"
             echo "MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED=${MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED=${MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED}"
           } >> .env
 
       - name: Start db
@@ -105,6 +107,13 @@ jobs:
             if (p.memory_store_backend !== expected) throw new Error(`backend mismatch: ${p.memory_store_backend} != ${expected}`);
             if (typeof p.recall_store_access_capability_version !== "number") throw new Error("missing recall capability version");
             if (typeof p.write_store_access_capability_version !== "number") throw new Error("missing write capability version");
+            const recallCaps = p.memory_store_recall_capabilities;
+            if (!recallCaps || typeof recallCaps !== "object") throw new Error("missing recall capability object");
+            if (typeof recallCaps.debug_embeddings !== "boolean") throw new Error("missing recall capability debug_embeddings");
+            const expectedDebugEmbeddings = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED || "false") === "true";
+            if (recallCaps.debug_embeddings !== expectedDebugEmbeddings) {
+              throw new Error(`recall capability mismatch debug_embeddings: ${recallCaps.debug_embeddings} != ${expectedDebugEmbeddings}`);
+            }
             const writeCaps = p.memory_store_write_capabilities;
             if (!writeCaps || typeof writeCaps !== "object") throw new Error("missing write capability object");
             if (typeof writeCaps.shadow_mirror_v2 !== "boolean") throw new Error("missing write capability shadow_mirror_v2");

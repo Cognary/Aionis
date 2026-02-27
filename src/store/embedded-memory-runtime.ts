@@ -10,6 +10,7 @@ import {
   type RecallStage1Params,
   type RecallStage2EdgesParams,
   type RecallStage2NodesParams,
+  type RecallStoreCapabilities,
   type RecallStoreAccess,
 } from "./recall-access.js";
 import { toVectorLiteral } from "../util/pgvector.js";
@@ -138,6 +139,7 @@ type EmbeddedRuntimeOptions = {
   snapshotStrictMaxBytes?: boolean;
   snapshotCompactionEnabled?: boolean;
   snapshotCompactionMaxRounds?: number;
+  recallDebugEmbeddingsEnabled?: boolean;
 };
 
 type EmbeddedSnapshotCompactionReport = {
@@ -262,6 +264,7 @@ export class EmbeddedMemoryRuntime {
   private readonly snapshotStrictMaxBytes: boolean;
   private readonly snapshotCompactionEnabled: boolean;
   private readonly snapshotCompactionMaxRounds: number;
+  private readonly recallCapabilities: RecallStoreCapabilities;
   private readonly snapshotMetrics: EmbeddedSnapshotMetricsState;
 
   constructor(opts: EmbeddedRuntimeOptions = {}) {
@@ -274,6 +277,9 @@ export class EmbeddedMemoryRuntime {
     this.snapshotCompactionMaxRounds = Number.isFinite(opts.snapshotCompactionMaxRounds as number)
       ? Math.max(1, Math.trunc(opts.snapshotCompactionMaxRounds as number))
       : 8;
+    this.recallCapabilities = {
+      debug_embeddings: opts.recallDebugEmbeddingsEnabled ?? false,
+    };
     this.snapshotMetrics = {
       persist_total: 0,
       persist_failures_total: 0,
@@ -295,6 +301,7 @@ export class EmbeddedMemoryRuntime {
     };
     this.recallAccess = {
       capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
+      capabilities: this.recallCapabilities,
       stage1CandidatesAnn: async (params) => this.stage1Candidates(params),
       stage1CandidatesExactFallback: async (params) => this.stage1Candidates(params),
       stage2Edges: async (params) => this.stage2Edges(params),
@@ -792,6 +799,9 @@ export class EmbeddedMemoryRuntime {
   }
 
   private async debugEmbeddings(scope: string, ids: string[]): Promise<RecallDebugEmbeddingRow[]> {
+    if (!this.recallCapabilities.debug_embeddings) {
+      throw new Error("recall capability unsupported: debug_embeddings");
+    }
     const idSet = new Set(ids);
     const out: RecallDebugEmbeddingRow[] = [];
     for (const n of this.nodes.values()) {

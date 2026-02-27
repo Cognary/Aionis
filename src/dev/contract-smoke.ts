@@ -479,6 +479,7 @@ async function run() {
 
   const recallAccessOk = {
     capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
+    capabilities: { debug_embeddings: true },
     stage1CandidatesAnn: async () => [],
     stage1CandidatesExactFallback: async () => [],
     stage2Edges: async () => [],
@@ -499,6 +500,14 @@ async function run() {
   assert.throws(
     () => assertRecallStoreAccessContract({ capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION } as any),
     /missing required method/,
+  );
+  assert.throws(
+    () =>
+      assertRecallStoreAccessContract({
+        ...recallAccessOk,
+        capabilities: {},
+      } as any),
+    /debug_embeddings must be boolean/,
   );
 
   const writeAccessOk = {
@@ -559,6 +568,11 @@ async function run() {
   const recallAccessFixture = new RecallAccessFixturePgClient();
   const recallAdapter = createPostgresRecallStoreAccess(recallAccessFixture as any);
   assert.doesNotThrow(() => assertRecallStoreAccessContract(recallAdapter));
+  assert.equal(recallAdapter.capabilities.debug_embeddings, true);
+  const recallAdapterNoDebug = createPostgresRecallStoreAccess(recallAccessFixture as any, {
+    capabilities: { debug_embeddings: false },
+  });
+  assert.equal(recallAdapterNoDebug.capabilities.debug_embeddings, false);
   const annRows = await recallAdapter.stage1CandidatesAnn({
     queryEmbedding: [0.1, 0.2],
     scope: "default",
@@ -601,6 +615,10 @@ async function run() {
   assert.equal(ruleRows.length, 1);
   const debugRows = await recallAdapter.debugEmbeddings("default", ["00000000-0000-0000-0000-000000000901"]);
   assert.equal(debugRows.length, 1);
+  await assert.rejects(
+    () => recallAdapterNoDebug.debugEmbeddings("default", ["00000000-0000-0000-0000-000000000901"]),
+    /recall capability unsupported: debug_embeddings/i,
+  );
   await recallAdapter.insertRecallAudit({
     scope: "default",
     endpoint: "recall",
@@ -1234,6 +1252,15 @@ async function run() {
   assert.ok(Array.isArray(outDbgAny.debug.embeddings));
   assert.ok(outDbgAny.debug.embeddings.length <= 5);
   assert.ok(outDbgAny.debug.embeddings[0].preview.length <= 16);
+  await assert.rejects(
+    () =>
+      memoryRecallParsed(fake as any, wantDbg, "default", "default", allow, undefined, "recall", {
+        recall_access: createPostgresRecallStoreAccess(fake as any, {
+          capabilities: { debug_embeddings: false },
+        }),
+      }),
+    (err: any) => err instanceof HttpError && err.code === "debug_embeddings_backend_unsupported",
+  );
 
   // limit>20 should be rejected in debug embeddings mode.
   const badLimit = MemoryRecallRequest.parse({ ...baseReq, limit: 21, return_debug: true, include_embeddings: true });

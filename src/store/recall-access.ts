@@ -1,7 +1,7 @@
 import type pg from "pg";
 import { toVectorLiteral } from "../util/pgvector.js";
 
-export const RECALL_STORE_ACCESS_CAPABILITY_VERSION = 1 as const;
+export const RECALL_STORE_ACCESS_CAPABILITY_VERSION = 2 as const;
 
 export type RecallCandidate = {
   id: string;
@@ -112,8 +112,17 @@ export type RecallAuditInsertParams = {
   edgeCount: number;
 };
 
+export type RecallStoreCapabilities = {
+  debug_embeddings: boolean;
+};
+
+type CreatePostgresRecallStoreAccessOptions = {
+  capabilities?: Partial<RecallStoreCapabilities>;
+};
+
 export interface RecallStoreAccess {
   readonly capability_version: typeof RECALL_STORE_ACCESS_CAPABILITY_VERSION;
+  readonly capabilities: RecallStoreCapabilities;
   stage1CandidatesAnn(params: RecallStage1Params): Promise<RecallCandidate[]>;
   stage1CandidatesExactFallback(params: RecallStage1Params): Promise<RecallCandidate[]>;
   stage2Edges(params: RecallStage2EdgesParams): Promise<RecallEdgeRow[]>;
@@ -134,9 +143,20 @@ function stage1QueryParams(params: RecallStage1Params) {
   ];
 }
 
-export function createPostgresRecallStoreAccess(client: pg.PoolClient): RecallStoreAccess {
+function resolveRecallStoreCapabilities(partial?: Partial<RecallStoreCapabilities>): RecallStoreCapabilities {
+  return {
+    debug_embeddings: partial?.debug_embeddings ?? true,
+  };
+}
+
+export function createPostgresRecallStoreAccess(
+  client: pg.PoolClient,
+  opts: CreatePostgresRecallStoreAccessOptions = {},
+): RecallStoreAccess {
+  const capabilities = resolveRecallStoreCapabilities(opts.capabilities);
   return {
     capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
+    capabilities,
     async stage1CandidatesAnn(params: RecallStage1Params): Promise<RecallCandidate[]> {
       const out = await client.query<RecallCandidate>(
         `
@@ -467,6 +487,9 @@ export function createPostgresRecallStoreAccess(client: pg.PoolClient): RecallSt
     },
 
     async debugEmbeddings(scope: string, ids: string[]): Promise<RecallDebugEmbeddingRow[]> {
+      if (!capabilities.debug_embeddings) {
+        throw new Error("recall capability unsupported: debug_embeddings");
+      }
       const out = await client.query<RecallDebugEmbeddingRow>(
         `SELECT id, embedding::text AS embedding_text
          FROM memory_nodes
@@ -520,5 +543,12 @@ export function assertRecallStoreAccessContract(access: RecallStoreAccess): void
     if (typeof (access as any)[method] !== "function") {
       throw new Error(`recall access missing required method: ${method}`);
     }
+  }
+  const capabilities = (access as any).capabilities;
+  if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities)) {
+    throw new Error("recall access missing required capabilities object");
+  }
+  if (typeof capabilities.debug_embeddings !== "boolean") {
+    throw new Error("recall access capabilities.debug_embeddings must be boolean");
   }
 }
