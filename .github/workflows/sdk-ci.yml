@@ -12,6 +12,7 @@ on:
       - "scripts/sdk-release-check.sh"
       - "scripts/sdk-python-release-check.sh"
       - "scripts/docs-check.sh"
+      - "scripts/ci/capability-api-probes.sh"
       - "docs/README.md"
       - "docs/SDK*.md"
       - ".github/workflows/sdk-ci.yml"
@@ -30,6 +31,7 @@ on:
       - "scripts/sdk-release-check.sh"
       - "scripts/sdk-python-release-check.sh"
       - "scripts/docs-check.sh"
+      - "scripts/ci/capability-api-probes.sh"
       - "docs/README.md"
       - "docs/SDK*.md"
       - ".github/workflows/sdk-ci.yml"
@@ -333,8 +335,6 @@ jobs:
 
           node -e '
             const fs = require("fs");
-            const port = process.env.PORT;
-            const adminToken = process.env.ADMIN_TOKEN;
             const tsOut = JSON.parse(fs.readFileSync("/tmp/sdk_ci_smoke_ts.json", "utf8"));
             const pyOut = JSON.parse(fs.readFileSync("/tmp/sdk_ci_smoke_py.json", "utf8"));
             const ensure = (cond, msg) => { if (!cond) throw new Error(msg); };
@@ -399,57 +399,13 @@ jobs:
               tsOut.calls.health.write_capabilities.shadow_mirror_v2 === pyOut.calls.health.write_capabilities.shadow_mirror_v2,
               "ts/py write capability mismatch: shadow_mirror_v2",
             );
-
-            async function probeWriteSoftDegrade() {
-              const payload = {
-                scope: "default",
-                actor: "ci",
-                input_text: "sdk-ci shadow dual-write soft-degrade probe",
-                auto_embed: false,
-                nodes: [
-                  {
-                    client_id: `sdk_ci_shadow_soft_${Date.now()}`,
-                    type: "event",
-                    text_summary: "sdk ci shadow soft degrade",
-                  },
-                ],
-                edges: [],
-              };
-              const res = await fetch(`http://127.0.0.1:${port}/v1/memory/write`, {
-                method: "POST",
-                headers: {
-                  "content-type": "application/json",
-                  "x-admin-token": adminToken,
-                },
-                body: JSON.stringify(payload),
-              });
-              let parsed = {};
-              try {
-                parsed = await res.json();
-              } catch {
-                throw new Error("shadow soft-degrade probe must return json");
-              }
-              ensure(res.status === 200, "shadow soft-degrade probe must return 200");
-              const sdw = parsed.shadow_dual_write;
-              ensure(sdw && typeof sdw === "object", "shadow soft-degrade probe must include shadow_dual_write");
-              ensure(sdw.enabled === true, "shadow soft-degrade enabled must be true");
-              ensure(sdw.strict === false, "shadow soft-degrade strict must be false");
-              ensure(sdw.mirrored === false, "shadow soft-degrade mirrored must be false");
-              ensure(sdw.capability === "shadow_mirror_v2", "shadow soft-degrade capability must be shadow_mirror_v2");
-              ensure(sdw.failure_mode === "soft_degrade", "shadow soft-degrade failure_mode must be soft_degrade");
-              ensure(sdw.degraded_mode === "capability_unsupported", "shadow soft-degrade degraded_mode must be capability_unsupported");
-              ensure(sdw.fallback_applied === true, "shadow soft-degrade fallback_applied must be true");
-            }
-
-            (async () => {
-              if (tsBackend !== "embedded") return;
-              if (tsOut.calls.health.write_capabilities.shadow_mirror_v2 !== false) return;
-              await probeWriteSoftDegrade();
-            })().catch((err) => {
-              console.error(err && err.message ? err.message : String(err));
-              process.exit(1);
-            });
           '
+
+          AIONIS_BASE_URL="http://127.0.0.1:${PORT}" \
+          CAPABILITY_PROBE_SCOPE="default" \
+          CAPABILITY_PROBE_TENANT_ID="default" \
+          CAPABILITY_PROBE_INCLUDE_SHADOW_SOFT_DEGRADE="auto" \
+          bash scripts/ci/capability-api-probes.sh >/tmp/sdk_ci_capability_api_probe.json
 
           kill "${API_PID}" || true
           wait "${API_PID}" || true
@@ -466,6 +422,7 @@ jobs:
           sed -n '1,220p' /tmp/sdk_ci_api.log || true
           cat /tmp/sdk_ci_smoke_ts.json || true
           cat /tmp/sdk_ci_smoke_py.json || true
+          cat /tmp/sdk_ci_capability_api_probe.json || true
 
       - name: Cleanup
         if: always()

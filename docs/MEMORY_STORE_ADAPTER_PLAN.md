@@ -77,6 +77,7 @@ Completed in this phase:
 45. Upgraded `backend-parity-smoke` matrix to capability profiles (`postgres`, `embedded_capability_off`, `embedded_feature_enabled`) and removed embedded runtime env overrides so parity checks always validate declared capability state directly.
 46. Refactored `backend-parity-smoke` runtime assertions to be `/health`-driven (capability + contract + SDK smoke behavior consistency), removing backend/env-derived expectation branches and aligning embedded metrics guards with health-exposed runtime values.
 47. Added direct API-level capability probes in `backend-parity-smoke` for `sessions_graph` / `packs_export` / `packs_import`, validating both enabled-success and disabled-typed-error paths against `/health.memory_store_capability_contract`.
+48. Extracted shared API capability probe script (`scripts/ci/capability-api-probes.sh`) and reused it in both `sdk-ci` and `backend-parity-smoke` (including optional shadow soft-degrade probe), reducing duplicated inline workflow logic.
 
 ## Next Steps
 
