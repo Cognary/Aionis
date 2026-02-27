@@ -42,6 +42,12 @@ const EnvSchema = z.object({
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
   MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS: z.coerce.number().int().min(1).max(32).default(8),
+  MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).default(30),
   DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   DB_POOL_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
@@ -384,6 +390,16 @@ export function loadEnv(): Env {
   }
   if (parsed.data.MEMORY_STORE_BACKEND === "embedded" && !parsed.data.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED) {
     throw new Error("MEMORY_STORE_BACKEND=embedded requires MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED=true");
+  }
+  if (
+    parsed.data.MEMORY_STORE_BACKEND === "embedded" &&
+    parsed.data.MEMORY_SHADOW_DUAL_WRITE_ENABLED &&
+    parsed.data.MEMORY_SHADOW_DUAL_WRITE_STRICT &&
+    !parsed.data.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED
+  ) {
+    throw new Error(
+      "MEMORY_SHADOW_DUAL_WRITE_STRICT=true requires MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED=true when MEMORY_STORE_BACKEND=embedded",
+    );
   }
   {
     let policy: unknown;

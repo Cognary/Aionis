@@ -17,6 +17,7 @@ type PackOptions = {
   allowCrossScopeEdges: boolean;
   shadowDualWriteEnabled: boolean;
   shadowDualWriteStrict: boolean;
+  writeAccessShadowMirrorV2: boolean;
   embedder: EmbeddingProvider | null;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
 };
@@ -312,7 +313,9 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
     allowCrossScopeEdges: opts.allowCrossScopeEdges,
     shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
-    write_access: createPostgresWriteStoreAccess(client),
+    write_access: createPostgresWriteStoreAccess(client, {
+      capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
+    }),
   });
   if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
 

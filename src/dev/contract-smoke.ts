@@ -433,11 +433,32 @@ async function run() {
       DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
       MEMORY_STORE_BACKEND: "embedded",
       MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: "true",
+      MEMORY_SHADOW_DUAL_WRITE_ENABLED: "true",
+      MEMORY_SHADOW_DUAL_WRITE_STRICT: "true",
+      MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED: "false",
+    },
+    async () => {
+      assert.throws(
+        () => loadEnv(),
+        /MEMORY_SHADOW_DUAL_WRITE_STRICT=true requires MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED=true/,
+      );
+    },
+  );
+  await withEnv(
+    {
+      APP_ENV: "dev",
+      DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+      MEMORY_STORE_BACKEND: "embedded",
+      MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: "true",
+      MEMORY_SHADOW_DUAL_WRITE_ENABLED: "true",
+      MEMORY_SHADOW_DUAL_WRITE_STRICT: "true",
+      MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED: "true",
     },
     async () => {
       const env = loadEnv();
       assert.equal(env.MEMORY_STORE_BACKEND, "embedded");
       assert.equal(env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED, true);
+      assert.equal(env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED, true);
     },
   );
   await withEnv(
@@ -482,6 +503,7 @@ async function run() {
 
   const writeAccessOk = {
     capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+    capabilities: { shadow_mirror_v2: true },
     nodeScopesByIds: async () => new Map<string, string>(),
     parentCommitHash: async () => null,
     insertCommit: async () => "00000000-0000-0000-0000-000000000001",
@@ -505,6 +527,14 @@ async function run() {
   assert.throws(
     () => assertWriteStoreAccessContract({ capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION } as any),
     /missing required method/,
+  );
+  assert.throws(
+    () =>
+      assertWriteStoreAccessContract({
+        ...writeAccessOk,
+        capabilities: {},
+      } as any),
+    /shadow_mirror_v2 must be boolean/,
   );
 
   assert.throws(
@@ -589,6 +619,11 @@ async function run() {
   const writeAccessFixture = new WriteAccessFixturePgClient({ throwEnsureScope: true });
   const writeAdapter = createPostgresWriteStoreAccess(writeAccessFixture as any);
   assert.doesNotThrow(() => assertWriteStoreAccessContract(writeAdapter));
+  assert.equal(writeAdapter.capabilities.shadow_mirror_v2, true);
+  const writeAdapterNoMirror = createPostgresWriteStoreAccess(writeAccessFixture as any, {
+    capabilities: { shadow_mirror_v2: false },
+  });
+  assert.equal(writeAdapterNoMirror.capabilities.shadow_mirror_v2, false);
   const nodeScopeMap = await writeAdapter.nodeScopesByIds([
     "00000000-0000-0000-0000-000000000911",
     "00000000-0000-0000-0000-000000000912",
@@ -669,6 +704,10 @@ async function run() {
   await writeAdapter.appendAfterTopicClusterEventIds("default", commitId, `["00000000-0000-0000-0000-000000000911"]`);
   const copied = await writeAdapter.mirrorCommitArtifactsToShadowV2("default", commitId);
   assert.deepEqual(copied, { commits: 1, nodes: 2, edges: 3, outbox: 4 });
+  await assert.rejects(
+    () => writeAdapterNoMirror.mirrorCommitArtifactsToShadowV2("default", commitId),
+    /write capability unsupported: shadow_mirror_v2/i,
+  );
   assert.ok(
     writeAccessFixture.queries.some((q) => q.sql.includes("aionis_partition_ensure_scope")),
     "write adapter should attempt scope ensure before v2 mirror copy",
@@ -1413,6 +1452,7 @@ async function run() {
           allowCrossScopeEdges: false,
           shadowDualWriteEnabled: false,
           shadowDualWriteStrict: false,
+          writeAccessShadowMirrorV2: true,
           embedder: null,
         },
       ),

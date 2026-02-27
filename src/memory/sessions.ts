@@ -24,6 +24,7 @@ type SessionWriteOptions = {
   allowCrossScopeEdges: boolean;
   shadowDualWriteEnabled: boolean;
   shadowDualWriteStrict: boolean;
+  writeAccessShadowMirrorV2: boolean;
   embedder: EmbeddingProvider | null;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
 };
@@ -181,7 +182,9 @@ export async function createSession(client: pg.PoolClient, body: unknown, opts: 
     allowCrossScopeEdges: opts.allowCrossScopeEdges,
     shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
-    write_access: createPostgresWriteStoreAccess(client),
+    write_access: createPostgresWriteStoreAccess(client, {
+      capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
+    }),
   });
   if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
 
@@ -316,7 +319,9 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
     allowCrossScopeEdges: opts.allowCrossScopeEdges,
     shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
-    write_access: createPostgresWriteStoreAccess(client),
+    write_access: createPostgresWriteStoreAccess(client, {
+      capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
+    }),
   });
   if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
 

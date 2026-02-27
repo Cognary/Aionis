@@ -1,6 +1,6 @@
 import type pg from "pg";
 
-export const WRITE_STORE_ACCESS_CAPABILITY_VERSION = 1 as const;
+export const WRITE_STORE_ACCESS_CAPABILITY_VERSION = 2 as const;
 
 export type WriteCommitInsertArgs = {
   scope: string;
@@ -79,8 +79,17 @@ export type WriteShadowMirrorCopied = {
   outbox: number;
 };
 
+export type WriteStoreCapabilities = {
+  shadow_mirror_v2: boolean;
+};
+
+type CreatePostgresWriteStoreAccessOptions = {
+  capabilities?: Partial<WriteStoreCapabilities>;
+};
+
 export interface WriteStoreAccess {
   readonly capability_version: typeof WRITE_STORE_ACCESS_CAPABILITY_VERSION;
+  readonly capabilities: WriteStoreCapabilities;
   nodeScopesByIds(ids: string[]): Promise<Map<string, string>>;
   parentCommitHash(scope: string, parentCommitId: string): Promise<string | null>;
   insertCommit(args: WriteCommitInsertArgs): Promise<string>;
@@ -93,9 +102,20 @@ export interface WriteStoreAccess {
   mirrorCommitArtifactsToShadowV2(scope: string, commitId: string): Promise<WriteShadowMirrorCopied>;
 }
 
-export function createPostgresWriteStoreAccess(client: pg.PoolClient): WriteStoreAccess {
+function resolveWriteStoreCapabilities(partial?: Partial<WriteStoreCapabilities>): WriteStoreCapabilities {
+  return {
+    shadow_mirror_v2: partial?.shadow_mirror_v2 ?? true,
+  };
+}
+
+export function createPostgresWriteStoreAccess(
+  client: pg.PoolClient,
+  opts: CreatePostgresWriteStoreAccessOptions = {},
+): WriteStoreAccess {
+  const capabilities = resolveWriteStoreCapabilities(opts.capabilities);
   return {
     capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+    capabilities,
     async nodeScopesByIds(ids: string[]): Promise<Map<string, string>> {
       if (ids.length === 0) return new Map();
       const out = await client.query<{ id: string; scope: string }>(
@@ -248,6 +268,9 @@ export function createPostgresWriteStoreAccess(client: pg.PoolClient): WriteStor
     },
 
     async mirrorCommitArtifactsToShadowV2(scope: string, commitId: string): Promise<WriteShadowMirrorCopied> {
+      if (!capabilities.shadow_mirror_v2) {
+        throw new Error("write capability unsupported: shadow_mirror_v2");
+      }
       // Best effort: create scope partitions if scaffold function exists.
       try {
         await client.query("SELECT aionis_partition_ensure_scope($1)", [scope]);
@@ -337,5 +360,12 @@ export function assertWriteStoreAccessContract(access: WriteStoreAccess): void {
     if (typeof (access as any)[method] !== "function") {
       throw new Error(`write access missing required method: ${method}`);
     }
+  }
+  const capabilities = (access as any).capabilities;
+  if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities)) {
+    throw new Error("write access missing required capabilities object");
+  }
+  if (typeof capabilities.shadow_mirror_v2 !== "boolean") {
+    throw new Error("write access capabilities.shadow_mirror_v2 must be boolean");
   }
 }

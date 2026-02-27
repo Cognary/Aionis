@@ -15,6 +15,7 @@ import {
   WRITE_STORE_ACCESS_CAPABILITY_VERSION,
   assertWriteStoreAccessContract,
   createPostgresWriteStoreAccess,
+  type WriteStoreCapabilities,
 } from "./store/write-access.js";
 import {
   createControlAlertRoute,
@@ -126,6 +127,16 @@ const healthDatabaseTargetHash = databaseTargetHash(env.DATABASE_URL);
 function recallAccessForClient(client: any) {
   if (embeddedRuntime) return embeddedRuntime.createRecallAccess();
   return createPostgresRecallStoreAccess(client);
+}
+
+const writeStoreCapabilities: WriteStoreCapabilities = {
+  shadow_mirror_v2: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED,
+};
+
+function writeAccessForClient(client: any) {
+  return createPostgresWriteStoreAccess(client, {
+    capabilities: writeStoreCapabilities,
+  });
 }
 
 const recallLimiter = env.RATE_LIMIT_ENABLED
@@ -818,6 +829,8 @@ app.log.info(
     memory_store_embedded_snapshot_strict_max_bytes: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES : null,
     memory_store_embedded_snapshot_compaction_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED : null,
     memory_store_embedded_snapshot_compaction_max_rounds: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS : null,
+    memory_store_embedded_shadow_mirror_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED : null,
+    memory_store_write_capabilities: writeStoreCapabilities,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     trust_proxy: env.TRUST_PROXY,
@@ -938,7 +951,9 @@ app.get("/health", async () => ({
   memory_store_embedded_snapshot_strict_max_bytes: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES : null,
   memory_store_embedded_snapshot_compaction_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED : null,
   memory_store_embedded_snapshot_compaction_max_rounds: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS : null,
+  memory_store_embedded_shadow_mirror_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED : null,
   memory_store_embedded_snapshot_metrics: embeddedRuntime ? embeddedRuntime.getSnapshotMetrics() : null,
+  memory_store_write_capabilities: writeStoreCapabilities,
   recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
 }));
@@ -1541,7 +1556,7 @@ app.post("/v1/memory/write", async (req, reply) => {
         allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
-        write_access: createPostgresWriteStoreAccess(client),
+        write_access: writeAccessForClient(client),
       });
 
       // Optional synchronous topic clustering (if requested and not async).
@@ -1641,6 +1656,7 @@ app.post("/v1/memory/sessions", async (req, reply) => {
         allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
         embedder,
         embeddedRuntime,
       }),
@@ -1669,6 +1685,7 @@ app.post("/v1/memory/events", async (req, reply) => {
         allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
         embedder,
         embeddedRuntime,
       }),
@@ -1728,6 +1745,7 @@ app.post("/v1/memory/packs/export", async (req, reply) => {
         allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
         embedder,
         embeddedRuntime,
       }),
@@ -1756,6 +1774,7 @@ app.post("/v1/memory/packs/import", async (req, reply) => {
         allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
         embedder,
       }),
     );
@@ -2600,7 +2619,7 @@ app.addHook("onClose", async () => {
 
 await store.withClient(async (client) => {
   assertRecallStoreAccessContract(createPostgresRecallStoreAccess(client));
-  assertWriteStoreAccessContract(createPostgresWriteStoreAccess(client));
+  assertWriteStoreAccessContract(writeAccessForClient(client));
 });
 
 await app.listen({ port: env.PORT, host: "0.0.0.0" });

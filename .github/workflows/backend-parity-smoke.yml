@@ -28,6 +28,7 @@ jobs:
       MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES: ${{ matrix.backend == 'embedded' && '12000' || '52428800' }}
       MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED: "true"
       MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS: "8"
+      MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED: "false"
       EMBEDDED_SNAPSHOT_MAX_DROPPED_NODES_GUARD: "32"
 
     steps:
@@ -54,6 +55,7 @@ jobs:
             echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES=${MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES}"
             echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED=${MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED}"
             echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS=${MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS}"
+            echo "MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED=${MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED}"
           } >> .env
 
       - name: Start db
@@ -103,6 +105,13 @@ jobs:
             if (p.memory_store_backend !== expected) throw new Error(`backend mismatch: ${p.memory_store_backend} != ${expected}`);
             if (typeof p.recall_store_access_capability_version !== "number") throw new Error("missing recall capability version");
             if (typeof p.write_store_access_capability_version !== "number") throw new Error("missing write capability version");
+            const writeCaps = p.memory_store_write_capabilities;
+            if (!writeCaps || typeof writeCaps !== "object") throw new Error("missing write capability object");
+            if (typeof writeCaps.shadow_mirror_v2 !== "boolean") throw new Error("missing write capability shadow_mirror_v2");
+            const expectedShadowMirror = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED || "false") === "true";
+            if (writeCaps.shadow_mirror_v2 !== expectedShadowMirror) {
+              throw new Error(`write capability mismatch shadow_mirror_v2: ${writeCaps.shadow_mirror_v2} != ${expectedShadowMirror}`);
+            }
             if (expected === "embedded") {
               if (typeof p.memory_store_embedded_snapshot_max_bytes !== "number") throw new Error("embedded health missing snapshot max bytes");
               if (!p.memory_store_embedded_snapshot_metrics || typeof p.memory_store_embedded_snapshot_metrics !== "object") {

@@ -596,6 +596,19 @@ export async function applyMemoryWrite(
   }
 
   if (opts.shadowDualWriteEnabled) {
+    if (!writeAccess.capabilities.shadow_mirror_v2) {
+      const msg = "shadow dual-write unsupported by backend capability: shadow_mirror_v2";
+      result.shadow_dual_write = {
+        enabled: true,
+        strict: opts.shadowDualWriteStrict,
+        mirrored: false,
+        error: msg,
+      };
+      if (opts.shadowDualWriteStrict) {
+        throw new Error(msg);
+      }
+      return result;
+    }
     try {
       const copied = await writeAccess.mirrorCommitArtifactsToShadowV2(scope, commit_id);
       result.shadow_dual_write = {
