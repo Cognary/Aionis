@@ -74,6 +74,7 @@ jobs:
             echo "APP_ENV=ci"
             echo "PORT=3001"
             echo "MEMORY_AUTH_MODE=off"
+            echo "ADMIN_TOKEN=ci-admin-token"
             echo "DATABASE_URL=postgres://aionis:aionis@127.0.0.1:5432/aionis_memory"
             echo "EMBEDDING_PROVIDER=fake"
             echo "RATE_LIMIT_BYPASS_LOOPBACK=false"

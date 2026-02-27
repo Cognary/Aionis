@@ -78,6 +78,7 @@ Completed in this phase:
 46. Refactored `backend-parity-smoke` runtime assertions to be `/health`-driven (capability + contract + SDK smoke behavior consistency), removing backend/env-derived expectation branches and aligning embedded metrics guards with health-exposed runtime values.
 47. Added direct API-level capability probes in `backend-parity-smoke` for `sessions_graph` / `packs_export` / `packs_import`, validating both enabled-success and disabled-typed-error paths against `/health.memory_store_capability_contract`.
 48. Extracted shared API capability probe script (`scripts/ci/capability-api-probes.sh`) and reused it in both `sdk-ci` and `backend-parity-smoke` (including optional shadow soft-degrade probe), reducing duplicated inline workflow logic.
+49. Fixed `core-production-gate` CI admin token wiring by injecting `ADMIN_TOKEN=ci-admin-token` in prepared `.env`, restoring pack roundtrip gate (`/v1/memory/packs/export|import`) stability after admin-only enforcement.
 
 ## Next Steps
 
