@@ -54,6 +54,17 @@ export type BackendCapabilityErrorDetails = {
   [k: string]: unknown;
 };
 
+export type ShadowDualWriteStrictFailureDetails = {
+  capability: "shadow_mirror_v2";
+  failure_mode?: CapabilityFailureMode;
+  degraded_mode?: "capability_unsupported" | "mirror_failed";
+  fallback_applied?: boolean;
+  strict?: boolean;
+  mirrored?: boolean;
+  error?: string;
+  [k: string]: unknown;
+};
+
 export class AionisApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -113,6 +124,38 @@ export function isBackendCapabilityUnsupportedError(err: unknown): err is Aionis
   if (!(err instanceof AionisApiError)) return false;
   if (err.code !== "backend_capability_unsupported") return false;
   return parseBackendCapabilityErrorDetails(err.details) !== null;
+}
+
+export function parseShadowDualWriteStrictFailureDetails(details: unknown): ShadowDualWriteStrictFailureDetails | null {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return null;
+  const obj = details as Record<string, unknown>;
+  if (obj.capability !== "shadow_mirror_v2") return null;
+  const out: ShadowDualWriteStrictFailureDetails = {
+    capability: "shadow_mirror_v2",
+  };
+  if (obj.failure_mode === "hard_fail" || obj.failure_mode === "soft_degrade") {
+    out.failure_mode = obj.failure_mode;
+  }
+  if (obj.degraded_mode === "capability_unsupported" || obj.degraded_mode === "mirror_failed") {
+    out.degraded_mode = obj.degraded_mode;
+  }
+  if (typeof obj.fallback_applied === "boolean") out.fallback_applied = obj.fallback_applied;
+  if (typeof obj.strict === "boolean") out.strict = obj.strict;
+  if (typeof obj.mirrored === "boolean") out.mirrored = obj.mirrored;
+  if (typeof obj.error === "string") out.error = obj.error;
+  for (const [k, v] of Object.entries(obj)) {
+    if (k in out) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+export function isShadowDualWriteStrictFailureError(
+  err: unknown,
+): err is AionisApiError & { details: ShadowDualWriteStrictFailureDetails } {
+  if (!(err instanceof AionisApiError)) return false;
+  if (err.code !== "shadow_dual_write_strict_failure") return false;
+  return parseShadowDualWriteStrictFailureDetails(err.details) !== null;
 }
 
 export type MemoryWriteInput = {

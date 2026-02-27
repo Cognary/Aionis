@@ -121,6 +121,11 @@ from aionis_sdk import is_backend_capability_unsupported_error
 
 也可以通过 `health()` 或 `getCapabilityContract()`/`get_capability_contract()` 主动读取 `/health.memory_store_capability_contract` 做客户端行为协商。
 
+对于严格模式 shadow dual-write 失败（`error="shadow_dual_write_strict_failure"`），SDK 也提供专用 helper：
+
+- TypeScript: `isShadowDualWriteStrictFailureError`
+- Python: `is_shadow_dual_write_strict_failure_error`
+
 ## 6. Tenant-aware Calls
 
 - 所有 SDK 输入类型都支持 `tenant_id?: string`。

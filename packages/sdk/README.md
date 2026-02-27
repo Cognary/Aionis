@@ -67,6 +67,8 @@ Capability-aware helpers:
 
 1. `isBackendCapabilityUnsupportedError(err)`
 2. `parseBackendCapabilityErrorDetails(err.details)`
+3. `isShadowDualWriteStrictFailureError(err)`
+4. `parseShadowDualWriteStrictFailureDetails(err.details)`
 
 Example:
 

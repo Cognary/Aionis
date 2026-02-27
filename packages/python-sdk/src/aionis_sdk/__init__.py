@@ -3,7 +3,9 @@ from .client import (
     AionisClient,
     AionisNetworkError,
     is_backend_capability_unsupported_error,
+    is_shadow_dual_write_strict_failure_error,
     parse_backend_capability_error_details,
+    parse_shadow_dual_write_strict_failure_details,
 )
 from .types import (
     AionisResponse,
@@ -23,6 +25,7 @@ from .types import (
     MemoryPackV1,
     MemoryRecallInput,
     MemoryRecallTextInput,
+    ShadowDualWriteStrictFailureDetails,
     MemorySessionCreateInput,
     MemorySessionEventsListInput,
     MemoryWriteInput,
@@ -56,6 +59,7 @@ __all__ = [
     "MemoryPackV1",
     "MemoryRecallInput",
     "MemoryRecallTextInput",
+    "ShadowDualWriteStrictFailureDetails",
     "MemorySessionCreateInput",
     "MemorySessionEventsListInput",
     "MemoryWriteInput",
@@ -67,5 +71,7 @@ __all__ = [
     "ToolsSelectInput",
     "ToolsSelectResponse",
     "is_backend_capability_unsupported_error",
+    "is_shadow_dual_write_strict_failure_error",
     "parse_backend_capability_error_details",
+    "parse_shadow_dual_write_strict_failure_details",
 ]

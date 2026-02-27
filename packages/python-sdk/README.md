@@ -99,6 +99,8 @@ Capability-aware helpers:
 
 1. `is_backend_capability_unsupported_error(err)`
 2. `parse_backend_capability_error_details(err.details)`
+3. `is_shadow_dual_write_strict_failure_error(err)`
+4. `parse_shadow_dual_write_strict_failure_details(err.details)`
 
 ```python
 from aionis_sdk import AionisApiError, is_backend_capability_unsupported_error

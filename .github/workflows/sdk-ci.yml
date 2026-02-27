@@ -271,8 +271,20 @@ jobs:
             if (status !== 500) {
               throw new Error(`strict runtime probe expected 500, got ${status}`);
             }
-            if (body.error !== "internal_error") {
-              throw new Error(`strict runtime probe expected error=internal_error, got ${String(body.error)}`);
+            if (body.error !== "shadow_dual_write_strict_failure") {
+              throw new Error(`strict runtime probe expected error=shadow_dual_write_strict_failure, got ${String(body.error)}`);
+            }
+            if (!body.details || body.details.capability !== "shadow_mirror_v2") {
+              throw new Error("strict runtime probe expected details.capability=shadow_mirror_v2");
+            }
+            if (body.details.degraded_mode !== "mirror_failed") {
+              throw new Error(`strict runtime probe expected details.degraded_mode=mirror_failed, got ${String(body.details.degraded_mode)}`);
+            }
+            if (body.details.failure_mode !== "soft_degrade") {
+              throw new Error(`strict runtime probe expected details.failure_mode=soft_degrade, got ${String(body.details.failure_mode)}`);
+            }
+            if (body.details.fallback_applied !== false || body.details.strict !== true) {
+              throw new Error("strict runtime probe expected fallback_applied=false and strict=true");
             }
           '
 

@@ -29,6 +29,16 @@ class BackendCapabilityErrorDetails(TypedDict, total=False):
     fallback_applied: bool
 
 
+class ShadowDualWriteStrictFailureDetails(TypedDict, total=False):
+    capability: Literal["shadow_mirror_v2"]
+    failure_mode: CapabilityFailureMode
+    degraded_mode: Literal["capability_unsupported", "mirror_failed"]
+    fallback_applied: bool
+    strict: bool
+    mirrored: bool
+    error: str
+
+
 class HealthResponse(TypedDict, total=False):
     ok: bool
     memory_store_backend: str

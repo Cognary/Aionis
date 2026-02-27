@@ -831,7 +831,14 @@ async function run() {
           mirrorCommitArtifactsToShadowV2: async () => ({ commits: 0, nodes: 0, edges: 0, outbox: 0 }),
         } as any,
       }),
-    /shadow dual-write unsupported by backend capability/i,
+    (err: any) =>
+      err instanceof HttpError &&
+      err.statusCode === 500 &&
+      err.code === "shadow_dual_write_strict_failure" &&
+      (err.details as any)?.capability === "shadow_mirror_v2" &&
+      (err.details as any)?.degraded_mode === "capability_unsupported" &&
+      (err.details as any)?.fallback_applied === false &&
+      (err.details as any)?.strict === true,
   );
   const writeOutMirrorFail = await applyMemoryWrite({} as any, preparedWriteMinimal as any, {
     maxTextLen: 8000,
@@ -861,6 +868,41 @@ async function run() {
   assert.equal(writeOutMirrorFail.shadow_dual_write?.failure_mode, "soft_degrade");
   assert.equal(writeOutMirrorFail.shadow_dual_write?.degraded_mode, "mirror_failed");
   assert.equal(writeOutMirrorFail.shadow_dual_write?.fallback_applied, true);
+  await assert.rejects(
+    () =>
+      applyMemoryWrite({} as any, preparedWriteMinimal as any, {
+        maxTextLen: 8000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+        shadowDualWriteEnabled: true,
+        shadowDualWriteStrict: true,
+        write_access: {
+          capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+          capabilities: { shadow_mirror_v2: true },
+          nodeScopesByIds: async () => new Map<string, string>(),
+          parentCommitHash: async () => null,
+          insertCommit: async () => "00000000-0000-0000-0000-00000000ac14",
+          insertNode: async () => {},
+          insertRuleDef: async () => {},
+          upsertEdge: async () => {},
+          readyEmbeddingNodeIds: async () => new Set<string>(),
+          insertOutboxEvent: async () => {},
+          appendAfterTopicClusterEventIds: async () => {},
+          mirrorCommitArtifactsToShadowV2: async () => {
+            throw new Error("mirror unavailable");
+          },
+        } as any,
+      }),
+    (err: any) =>
+      err instanceof HttpError &&
+      err.statusCode === 500 &&
+      err.code === "shadow_dual_write_strict_failure" &&
+      (err.details as any)?.capability === "shadow_mirror_v2" &&
+      (err.details as any)?.degraded_mode === "mirror_failed" &&
+      (err.details as any)?.fallback_applied === false &&
+      (err.details as any)?.strict === true &&
+      (err.details as any)?.mirrored === false,
+  );
   assert.ok(
     writeAccessFixture.queries.some((q) => q.sql.includes("aionis_partition_ensure_scope")),
     "write adapter should attempt scope ensure before v2 mirror copy",

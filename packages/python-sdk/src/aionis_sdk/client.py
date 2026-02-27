@@ -12,6 +12,7 @@ from urllib import error, request
 if TYPE_CHECKING:
     from .types import (
         BackendCapabilityErrorDetails,
+        ShadowDualWriteStrictFailureDetails,
         MemoryEventWriteInput,
         MemoryFindInput,
         MemoryPackExportInput,
@@ -87,6 +88,45 @@ def is_backend_capability_unsupported_error(err: BaseException) -> bool:
     if err.code != "backend_capability_unsupported":
         return False
     parsed = parse_backend_capability_error_details(err.details)
+    if parsed is None:
+        return False
+    err.details = parsed
+    return True
+
+
+def parse_shadow_dual_write_strict_failure_details(details: Any) -> Optional["ShadowDualWriteStrictFailureDetails"]:
+    if not isinstance(details, dict):
+        return None
+    if details.get("capability") != "shadow_mirror_v2":
+        return None
+    out: Dict[str, Any] = {"capability": "shadow_mirror_v2"}
+    failure_mode = details.get("failure_mode")
+    if failure_mode in ("hard_fail", "soft_degrade"):
+        out["failure_mode"] = failure_mode
+    degraded_mode = details.get("degraded_mode")
+    if degraded_mode in ("capability_unsupported", "mirror_failed"):
+        out["degraded_mode"] = degraded_mode
+    fallback_applied = details.get("fallback_applied")
+    if isinstance(fallback_applied, bool):
+        out["fallback_applied"] = fallback_applied
+    strict = details.get("strict")
+    if isinstance(strict, bool):
+        out["strict"] = strict
+    mirrored = details.get("mirrored")
+    if isinstance(mirrored, bool):
+        out["mirrored"] = mirrored
+    error_msg = details.get("error")
+    if isinstance(error_msg, str):
+        out["error"] = error_msg
+    return out  # type: ignore[return-value]
+
+
+def is_shadow_dual_write_strict_failure_error(err: BaseException) -> bool:
+    if not isinstance(err, AionisApiError):
+        return False
+    if err.code != "shadow_dual_write_strict_failure":
+        return False
+    parsed = parse_shadow_dual_write_strict_failure_details(err.details)
     if parsed is None:
         return False
     err.details = parsed

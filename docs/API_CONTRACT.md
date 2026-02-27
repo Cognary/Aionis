@@ -85,6 +85,13 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
   - explicit `degraded_mode`
   - capability key
   - whether fallback was applied
+- Strict-mode shadow mirror failures return HTTP `500` with `error="shadow_dual_write_strict_failure"` and `details`:
+  - `capability`: currently `"shadow_mirror_v2"`
+  - `failure_mode`: capability contract mode (currently `"soft_degrade"`)
+  - `degraded_mode`: `"capability_unsupported"` or `"mirror_failed"`
+  - `fallback_applied`: always `false` in strict failure path
+  - `strict`: always `true`
+  - `mirrored`: always `false`
 
 ---
 
@@ -134,6 +141,7 @@ Validation hard rules:
   - `failure_mode`: currently `"soft_degrade"` for shadow mirror path
   - `degraded_mode`: `"capability_unsupported"` or `"mirror_failed"` when `mirrored=false`
   - `fallback_applied`: `true` when request succeeded under non-strict degraded mode
+  - strict failure path does not return this object; request fails with `error="shadow_dual_write_strict_failure"`
 
 ### `POST /v1/memory/feedback`
 

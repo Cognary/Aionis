@@ -5,7 +5,7 @@ import { assertDim, toVectorLiteral } from "../util/pgvector.js";
 import { normalizeText } from "../util/normalize.js";
 import { redactJsonStrings, redactPII } from "../util/redaction.js";
 import { stableUuid } from "../util/uuid.js";
-import { badRequest } from "../util/http.js";
+import { badRequest, HttpError } from "../util/http.js";
 import { capabilityContract, type CapabilityFailureMode } from "../capability-contract.js";
 import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import { MemoryWriteRequest } from "./schemas.js";
@@ -615,7 +615,14 @@ export async function applyMemoryWrite(
         error: msg,
       };
       if (opts.shadowDualWriteStrict) {
-        throw new Error(msg);
+        throw new HttpError(500, "shadow_dual_write_strict_failure", msg, {
+          capability: "shadow_mirror_v2",
+          failure_mode: shadowMirrorSpec.failure_mode,
+          degraded_mode: "capability_unsupported",
+          fallback_applied: false,
+          strict: true,
+          mirrored: false,
+        });
       }
       return result;
     }
@@ -640,7 +647,15 @@ export async function applyMemoryWrite(
         error: msg,
       };
       if (opts.shadowDualWriteStrict) {
-        throw new Error(`shadow dual-write failed: ${msg}`);
+        throw new HttpError(500, "shadow_dual_write_strict_failure", `shadow dual-write failed: ${msg}`, {
+          capability: "shadow_mirror_v2",
+          failure_mode: shadowMirrorSpec.failure_mode,
+          degraded_mode: "mirror_failed",
+          fallback_applied: false,
+          strict: true,
+          mirrored: false,
+          error: msg,
+        });
       }
     }
   }
