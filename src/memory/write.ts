@@ -422,44 +422,31 @@ export async function applyMemoryWrite(
           : "auto_embed_disabled_or_no_provider";
     const embeddingModel = n.embedding ? (n.embedding_model?.trim() ? n.embedding_model.trim() : "client") : null;
 
-	    await client.query(
-	      `INSERT INTO memory_nodes
-	        (id, scope, client_id, type, tier, title, text_summary, slots, raw_ref, evidence_ref, embedding, embedding_model,
-	         memory_lane, producer_agent_id, owner_agent_id, owner_team_id,
-	         embedding_status, embedding_attempts, embedding_last_error, embedding_last_attempt_at, embedding_ready_at,
-	         salience, importance, confidence, redaction_version, commit_id)
-	       VALUES
-	        ($1, $2, $3, $4::memory_node_type, $5::memory_tier, $6, $7, $8::jsonb, $9, $10, $11::vector(1536), $12,
-	         $13::memory_lane, $14, $15, $16,
-	         $17::memory_embedding_status, 0, $18, NULL, CASE WHEN $11 IS NOT NULL THEN now() ELSE NULL END,
-	         $19, $20, $21, $22, $23)
-	       ON CONFLICT (id) DO NOTHING`,
-	      [
-	        n.id,
-	        n.scope,
-	        n.client_id ?? null,
-        n.type,
-        n.tier ?? "hot",
-        n.title ?? null,
-        n.text_summary ?? null,
-        JSON.stringify(n.slots ?? {}),
-        n.raw_ref ?? null,
-	        n.evidence_ref ?? null,
-	        n.embedding ? toVectorLiteral(n.embedding) : null,
-	        embeddingModel,
-          n.memory_lane,
-          n.producer_agent_id ?? null,
-          n.owner_agent_id ?? null,
-          n.owner_team_id ?? null,
-	        embeddingStatus,
-	        embeddingLastError,
-	        n.salience ?? 0.5,
-	        n.importance ?? 0.5,
-	        n.confidence ?? 0.5,
-	        1,
-	        commit_id,
-	      ],
-	    );
+    await writeAccess.insertNode({
+      id: n.id,
+      scope: n.scope,
+      clientId: n.client_id ?? null,
+      type: n.type,
+      tier: n.tier ?? "hot",
+      title: n.title ?? null,
+      textSummary: n.text_summary ?? null,
+      slotsJson: JSON.stringify(n.slots ?? {}),
+      rawRef: n.raw_ref ?? null,
+      evidenceRef: n.evidence_ref ?? null,
+      embeddingVector: n.embedding ? toVectorLiteral(n.embedding) : null,
+      embeddingModel,
+      memoryLane: n.memory_lane,
+      producerAgentId: n.producer_agent_id ?? null,
+      ownerAgentId: n.owner_agent_id ?? null,
+      ownerTeamId: n.owner_team_id ?? null,
+      embeddingStatus,
+      embeddingLastError,
+      salience: n.salience ?? 0.5,
+      importance: n.importance ?? 0.5,
+      confidence: n.confidence ?? 0.5,
+      redactionVersion: 1,
+      commitId: commit_id,
+    });
 
     // If this is a rule node, also create a rule def row (draft by default).
     if (n.type === "rule") {
@@ -477,50 +464,33 @@ export async function applyMemoryWrite(
       if (ruleScope === "team" && !targetTeamId) {
         throw new Error("team-scoped rule requires slots.target_team_id");
       }
-      await client.query(
-        `INSERT INTO memory_rule_defs
-          (scope, rule_node_id, state, if_json, then_json, exceptions_json, rule_scope, target_agent_id, target_team_id, commit_id)
-         VALUES ($1, $2, 'draft', $3::jsonb, $4::jsonb, $5::jsonb, $6::memory_rule_scope, $7, $8, $9)
-         ON CONFLICT (rule_node_id) DO NOTHING`,
-        [
-          n.scope,
-          n.id,
-          JSON.stringify(if_json),
-          JSON.stringify(then_json),
-          JSON.stringify(exceptions_json),
-          ruleScope,
-          targetAgentId || null,
-          targetTeamId || null,
-          commit_id,
-        ],
-      );
+      await writeAccess.insertRuleDef({
+        scope: n.scope,
+        ruleNodeId: n.id,
+        ifJson: JSON.stringify(if_json),
+        thenJson: JSON.stringify(then_json),
+        exceptionsJson: JSON.stringify(exceptions_json),
+        ruleScope,
+        targetAgentId: targetAgentId || null,
+        targetTeamId: targetTeamId || null,
+        commitId: commit_id,
+      });
     }
   }
 
   // Insert edges (upsert to keep ingestion idempotent).
   for (const e of edges) {
-    await client.query(
-      `INSERT INTO memory_edges
-        (id, scope, type, src_id, dst_id, weight, confidence, decay_rate, commit_id)
-       VALUES
-        ($1, $2, $3::memory_edge_type, $4, $5, $6, $7, $8, $9)
-       ON CONFLICT (scope, type, src_id, dst_id) DO UPDATE SET
-         weight = GREATEST(memory_edges.weight, EXCLUDED.weight),
-         confidence = GREATEST(memory_edges.confidence, EXCLUDED.confidence),
-         commit_id = EXCLUDED.commit_id,
-         last_activated = now()`,
-      [
-        e.id,
-        e.scope,
-        e.type,
-        e.src_id,
-        e.dst_id,
-        e.weight ?? 0.5,
-        e.confidence ?? 0.5,
-        e.decay_rate ?? 0.01,
-        commit_id,
-      ],
-    );
+    await writeAccess.upsertEdge({
+      id: e.id,
+      scope: e.scope,
+      type: e.type,
+      srcId: e.src_id,
+      dstId: e.dst_id,
+      weight: e.weight ?? 0.5,
+      confidence: e.confidence ?? 0.5,
+      decayRate: e.decay_rate ?? 0.01,
+      commitId: commit_id,
+    });
   }
 
   const result: WriteResult = {

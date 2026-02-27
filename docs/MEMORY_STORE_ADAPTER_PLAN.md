@@ -42,9 +42,10 @@ Completed in this phase:
 10. `src/store/write-access.ts` added with initial write capabilities (`nodeScopesByIds`, `parentCommitHash`, `insertCommit`).
 11. `applyMemoryWrite(...)` now supports injectable `write_access` and uses it for scope checks + commit-chain write.
 12. Write entrypoints (`/v1/memory/write`, session create/event append, pack import) now pass Postgres write access explicitly.
+13. Write access extraction now also covers core mutation queries (`insert_node`, `insert_rule_def`, `upsert_edge`).
 
 ## Next Steps
 
-1. Continue write-path extraction (`insert_node`, `insert_rule_def`, `upsert_edge`, outbox helpers) into `write-access`.
+1. Continue write-path extraction for outbox helpers (`ready_embedding_lookup`, `embed_nodes enqueue`, `topic_cluster enqueue`, `embed_nodes payload update`).
 2. Define adapter capability contract versioning (required/optional capabilities) for backend parity checks.
 3. Add `embedded` experimental adapter behind explicit feature flag after read/write capability seams are stable.
