@@ -101,6 +101,20 @@ jobs:
             exit 1
           fi
 
+      - name: Capability API probes
+        shell: bash
+        env:
+          AIONIS_BASE_URL: http://localhost:3001
+          ADMIN_TOKEN: ci-admin-token
+          CAPABILITY_PROBE_OUTPUT: /tmp/core_gate_capability_api_probe.json
+          CAPABILITY_PROBE_SCOPE: default
+          CAPABILITY_PROBE_TENANT_ID: default
+          CAPABILITY_PROBE_INCLUDE_SHADOW_SOFT_DEGRADE: auto
+        run: |
+          set -euo pipefail
+          bash scripts/ci/capability-api-probes.sh
+          cat /tmp/core_gate_capability_api_probe.json || true
+
       - name: Run core production gate
         shell: bash
         run: |
