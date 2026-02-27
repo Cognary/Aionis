@@ -511,22 +511,24 @@ export async function memoryRecallParsed(
     }
   }
 
-  await timed("audit_insert", async () => {
-    try {
-      await recallAccess.insertRecallAudit({
-        scope,
-        endpoint,
-        consumerAgentId,
-        consumerTeamId,
-        querySha256: sha256Hex(toVectorLiteral(parsed.query_embedding)),
-        seedCount: seeds.length,
-        nodeCount: outNodes.length,
-        edgeCount: outEdges.length,
-      });
-    } catch {
-      // Best-effort audit; do not block recall path.
-    }
-  });
+  if (recallAccess.capabilities.audit_insert) {
+    await timed("audit_insert", async () => {
+      try {
+        await recallAccess.insertRecallAudit({
+          scope,
+          endpoint,
+          consumerAgentId,
+          consumerTeamId,
+          querySha256: sha256Hex(toVectorLiteral(parsed.query_embedding)),
+          seedCount: seeds.length,
+          nodeCount: outNodes.length,
+          edgeCount: outEdges.length,
+        });
+      } catch {
+        // Best-effort audit; do not block recall path.
+      }
+    });
+  }
 
   return {
     scope: tenancy.scope,

@@ -95,6 +95,7 @@ const embeddedRuntime =
         snapshotCompactionEnabled: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED,
         snapshotCompactionMaxRounds: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS,
         recallDebugEmbeddingsEnabled: env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED,
+        recallAuditInsertEnabled: env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED,
       })
     : null;
 if (embeddedRuntime) {
@@ -128,6 +129,7 @@ const healthDatabaseTargetHash = databaseTargetHash(env.DATABASE_URL);
 
 const recallStoreCapabilities: RecallStoreCapabilities = {
   debug_embeddings: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED,
+  audit_insert: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED,
 };
 
 function recallAccessForClient(client: any) {
@@ -841,6 +843,7 @@ app.log.info(
     memory_store_embedded_recall_debug_embeddings_enabled: embeddedRuntime
       ? env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED
       : null,
+    memory_store_embedded_recall_audit_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED : null,
     memory_store_recall_capabilities: recallStoreCapabilities,
     memory_store_write_capabilities: writeStoreCapabilities,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
@@ -967,6 +970,7 @@ app.get("/health", async () => ({
   memory_store_embedded_recall_debug_embeddings_enabled: embeddedRuntime
     ? env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED
     : null,
+  memory_store_embedded_recall_audit_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED : null,
   memory_store_embedded_snapshot_metrics: embeddedRuntime ? embeddedRuntime.getSnapshotMetrics() : null,
   memory_store_recall_capabilities: recallStoreCapabilities,
   memory_store_write_capabilities: writeStoreCapabilities,

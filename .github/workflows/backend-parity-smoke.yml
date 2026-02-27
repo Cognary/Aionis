@@ -30,6 +30,7 @@ jobs:
       MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS: "8"
       MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED: "false"
       MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED: "false"
+      MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED: "true"
       EMBEDDED_SNAPSHOT_MAX_DROPPED_NODES_GUARD: "32"
 
     steps:
@@ -58,6 +59,7 @@ jobs:
             echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS=${MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS}"
             echo "MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED=${MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED}"
             echo "MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED=${MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED=${MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED}"
           } >> .env
 
       - name: Start db
@@ -110,9 +112,14 @@ jobs:
             const recallCaps = p.memory_store_recall_capabilities;
             if (!recallCaps || typeof recallCaps !== "object") throw new Error("missing recall capability object");
             if (typeof recallCaps.debug_embeddings !== "boolean") throw new Error("missing recall capability debug_embeddings");
+            if (typeof recallCaps.audit_insert !== "boolean") throw new Error("missing recall capability audit_insert");
             const expectedDebugEmbeddings = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED || "false") === "true";
+            const expectedAuditInsert = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED || "false") === "true";
             if (recallCaps.debug_embeddings !== expectedDebugEmbeddings) {
               throw new Error(`recall capability mismatch debug_embeddings: ${recallCaps.debug_embeddings} != ${expectedDebugEmbeddings}`);
+            }
+            if (recallCaps.audit_insert !== expectedAuditInsert) {
+              throw new Error(`recall capability mismatch audit_insert: ${recallCaps.audit_insert} != ${expectedAuditInsert}`);
             }
             const writeCaps = p.memory_store_write_capabilities;
             if (!writeCaps || typeof writeCaps !== "object") throw new Error("missing write capability object");

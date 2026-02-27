@@ -479,7 +479,7 @@ async function run() {
 
   const recallAccessOk = {
     capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
-    capabilities: { debug_embeddings: true },
+    capabilities: { debug_embeddings: true, audit_insert: true },
     stage1CandidatesAnn: async () => [],
     stage1CandidatesExactFallback: async () => [],
     stage2Edges: async () => [],
@@ -505,9 +505,9 @@ async function run() {
     () =>
       assertRecallStoreAccessContract({
         ...recallAccessOk,
-        capabilities: {},
+        capabilities: { debug_embeddings: true },
       } as any),
-    /debug_embeddings must be boolean/,
+    /audit_insert must be boolean/,
   );
 
   const writeAccessOk = {
@@ -569,10 +569,15 @@ async function run() {
   const recallAdapter = createPostgresRecallStoreAccess(recallAccessFixture as any);
   assert.doesNotThrow(() => assertRecallStoreAccessContract(recallAdapter));
   assert.equal(recallAdapter.capabilities.debug_embeddings, true);
+  assert.equal(recallAdapter.capabilities.audit_insert, true);
   const recallAdapterNoDebug = createPostgresRecallStoreAccess(recallAccessFixture as any, {
     capabilities: { debug_embeddings: false },
   });
   assert.equal(recallAdapterNoDebug.capabilities.debug_embeddings, false);
+  const recallAdapterNoAudit = createPostgresRecallStoreAccess(recallAccessFixture as any, {
+    capabilities: { audit_insert: false },
+  });
+  assert.equal(recallAdapterNoAudit.capabilities.audit_insert, false);
   const annRows = await recallAdapter.stage1CandidatesAnn({
     queryEmbedding: [0.1, 0.2],
     scope: "default",
@@ -629,6 +634,20 @@ async function run() {
     nodeCount: 1,
     edgeCount: 1,
   });
+  await assert.rejects(
+    () =>
+      recallAdapterNoAudit.insertRecallAudit({
+        scope: "default",
+        endpoint: "recall",
+        consumerAgentId: "agent_a",
+        consumerTeamId: null,
+        querySha256: "abc",
+        seedCount: 1,
+        nodeCount: 1,
+        edgeCount: 1,
+      }),
+    /recall capability unsupported: audit_insert/i,
+  );
   assert.ok(
     recallAccessFixture.queries.some((q) => q.sql.includes("INSERT INTO memory_recall_audit")),
     "recall adapter should execute audit insert query",
@@ -1197,6 +1216,24 @@ async function run() {
     assertSubset(keys(n), ["id", "type", "title", "text_summary", "topic_state", "member_count"].filter(Boolean));
   }
   assertSubset(keys(out.subgraph.edges[0]), ["from_id", "to_id", "type", "weight"]);
+
+  // Recall should stay functional even when backend declares audit_insert capability unavailable.
+  const outNoAudit = await memoryRecallParsed(
+    fake as any,
+    baseReq,
+    "default",
+    "default",
+    { allow_debug_embeddings: false },
+    undefined,
+    "recall",
+    {
+      recall_access: createPostgresRecallStoreAccess(fake as any, {
+        capabilities: { audit_insert: false },
+      }),
+    },
+  );
+  assert.equal(outNoAudit.subgraph.nodes.length, 2);
+  assert.equal(outNoAudit.subgraph.edges.length, 1);
 
   // return_debug alone must NOT widen the response contract (meta still requires include_meta).
   const outDebugNoMeta = await memoryRecallParsed(

@@ -140,6 +140,7 @@ type EmbeddedRuntimeOptions = {
   snapshotCompactionEnabled?: boolean;
   snapshotCompactionMaxRounds?: number;
   recallDebugEmbeddingsEnabled?: boolean;
+  recallAuditInsertEnabled?: boolean;
 };
 
 type EmbeddedSnapshotCompactionReport = {
@@ -279,6 +280,7 @@ export class EmbeddedMemoryRuntime {
       : 8;
     this.recallCapabilities = {
       debug_embeddings: opts.recallDebugEmbeddingsEnabled ?? false,
+      audit_insert: opts.recallAuditInsertEnabled ?? true,
     };
     this.snapshotMetrics = {
       persist_total: 0,
@@ -309,6 +311,9 @@ export class EmbeddedMemoryRuntime {
       ruleDefs: async (scope, ruleIds) => this.getRuleDefs(scope, ruleIds),
       debugEmbeddings: async (scope, ids) => this.debugEmbeddings(scope, ids),
       insertRecallAudit: async (params) => {
+        if (!this.recallCapabilities.audit_insert) {
+          throw new Error("recall capability unsupported: audit_insert");
+        }
         this.audit.push({
           ...params,
           created_at: new Date().toISOString(),

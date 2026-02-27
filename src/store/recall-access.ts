@@ -114,6 +114,7 @@ export type RecallAuditInsertParams = {
 
 export type RecallStoreCapabilities = {
   debug_embeddings: boolean;
+  audit_insert: boolean;
 };
 
 type CreatePostgresRecallStoreAccessOptions = {
@@ -146,6 +147,7 @@ function stage1QueryParams(params: RecallStage1Params) {
 function resolveRecallStoreCapabilities(partial?: Partial<RecallStoreCapabilities>): RecallStoreCapabilities {
   return {
     debug_embeddings: partial?.debug_embeddings ?? true,
+    audit_insert: partial?.audit_insert ?? true,
   };
 }
 
@@ -500,6 +502,9 @@ export function createPostgresRecallStoreAccess(
     },
 
     async insertRecallAudit(params: RecallAuditInsertParams): Promise<void> {
+      if (!capabilities.audit_insert) {
+        throw new Error("recall capability unsupported: audit_insert");
+      }
       await client.query(
         `
         INSERT INTO memory_recall_audit
@@ -550,5 +555,8 @@ export function assertRecallStoreAccessContract(access: RecallStoreAccess): void
   }
   if (typeof capabilities.debug_embeddings !== "boolean") {
     throw new Error("recall access capabilities.debug_embeddings must be boolean");
+  }
+  if (typeof capabilities.audit_insert !== "boolean") {
+    throw new Error("recall access capabilities.audit_insert must be boolean");
   }
 }
