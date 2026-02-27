@@ -177,6 +177,7 @@ async function run() {
     {
       APP_ENV: "dev",
       DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+      MEMORY_STORE_BACKEND: "postgres",
       MEMORY_RECALL_PROFILE: "lite",
       MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: "lite",
       MEMORY_RECALL_PROFILE_POLICY_JSON: JSON.stringify({
@@ -187,6 +188,7 @@ async function run() {
     },
     async () => {
       const env = loadEnv();
+      assert.equal(env.MEMORY_STORE_BACKEND, "postgres");
       assert.equal(env.MEMORY_RECALL_PROFILE, "lite");
       assert.equal(env.MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE, "lite");
     },

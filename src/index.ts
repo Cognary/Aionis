@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { ZodError, z } from "zod";
 import { loadEnv } from "./config.js";
-import { createDb, withClient, withTx } from "./db.js";
+import { asPostgresMemoryStore, createMemoryStore } from "./store/memory-store.js";
 import {
   createControlAlertRoute,
   enqueueControlIncidentPublishJob,
@@ -65,7 +65,11 @@ import { EmbedQueryBatcher, EmbedQueryBatcherError } from "./util/embed_query_ba
 import { InflightGate, InflightGateError, type InflightGateToken } from "./util/inflight_gate.js";
 
 const env = loadEnv();
-const db = createDb(env.DATABASE_URL);
+const store = createMemoryStore({
+  backend: env.MEMORY_STORE_BACKEND,
+  databaseUrl: env.DATABASE_URL,
+});
+const db = asPostgresMemoryStore(store).db;
 const embedder = createEmbeddingProviderFromEnv(process.env);
 const authResolver = createAuthResolver({
   mode: env.MEMORY_AUTH_MODE,
@@ -772,6 +776,7 @@ app.log.info(
     embedding_dim: embedder?.dim ?? null,
     scope: env.MEMORY_SCOPE,
     tenant_id: env.MEMORY_TENANT_ID,
+    memory_store_backend: env.MEMORY_STORE_BACKEND,
     trust_proxy: env.TRUST_PROXY,
     cors_allow_origins: CORS_ALLOW_ORIGINS,
     auth_mode: env.MEMORY_AUTH_MODE,
@@ -877,7 +882,11 @@ app.addHook("onResponse", async (req, reply) => {
   }
 });
 
-app.get("/health", async () => ({ ok: true, database_target_hash: healthDatabaseTargetHash }));
+app.get("/health", async () => ({
+  ok: true,
+  database_target_hash: healthDatabaseTargetHash,
+  memory_store_backend: env.MEMORY_STORE_BACKEND,
+}));
 
 const ControlTenantSchema = z.object({
   tenant_id: z.string().min(1).max(128),
@@ -1466,7 +1475,7 @@ app.post("/v1/memory/write", async (req, reply) => {
       topicClusterAsyncOnWrite: env.TOPIC_CLUSTER_ASYNC_ON_WRITE,
     });
 
-    const out = await withTx(db, async (client) => {
+    const out = await store.withTx(async (client) => {
       // Attach effective policy for applyMemoryWrite(outbox enqueue) and handler sync execution.
       (prepared as any).trigger_topic_cluster = policy.trigger_topic_cluster;
       (prepared as any).topic_cluster_async = policy.topic_cluster_async;
@@ -1531,7 +1540,7 @@ app.post("/v1/memory/archive/rehydrate", async (req, reply) => {
   const body = withIdentityFromRequest(req, req.body, principal, "rehydrate");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
-  const out = await withTx(db, (client) =>
+  const out = await store.withTx((client) =>
     rehydrateArchiveNodes(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
       maxTextLen: env.MAX_TEXT_LEN,
       piiRedaction: env.PII_REDACTION,
@@ -1546,7 +1555,7 @@ app.post("/v1/memory/nodes/activate", async (req, reply) => {
   const body = withIdentityFromRequest(req, req.body, principal, "activate");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
-  const out = await withTx(db, (client) =>
+  const out = await store.withTx((client) =>
     activateMemoryNodes(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
       maxTextLen: env.MAX_TEXT_LEN,
       piiRedaction: env.PII_REDACTION,
@@ -1564,7 +1573,7 @@ app.post("/v1/memory/sessions", async (req, reply) => {
   const gate = await acquireInflightSlot("write");
   let out: any;
   try {
-    out = await withTx(db, (client) =>
+    out = await store.withTx((client) =>
       createSession(client, body, {
         defaultScope: env.MEMORY_SCOPE,
         defaultTenantId: env.MEMORY_TENANT_ID,
@@ -1591,7 +1600,7 @@ app.post("/v1/memory/events", async (req, reply) => {
   const gate = await acquireInflightSlot("write");
   let out: any;
   try {
-    out = await withTx(db, (client) =>
+    out = await store.withTx((client) =>
       writeSessionEvent(client, body, {
         defaultScope: env.MEMORY_SCOPE,
         defaultTenantId: env.MEMORY_TENANT_ID,
@@ -1628,7 +1637,7 @@ app.get("/v1/memory/sessions/:session_id/events", async (req, reply) => {
   const gate = await acquireInflightSlot("recall");
   let out: any;
   try {
-    out = await withClient(db, (client) =>
+    out = await store.withClient((client) =>
       listSessionEvents(client, input, {
         defaultScope: env.MEMORY_SCOPE,
         defaultTenantId: env.MEMORY_TENANT_ID,
@@ -1649,7 +1658,7 @@ app.post("/v1/memory/packs/export", async (req, reply) => {
   const gate = await acquireInflightSlot("recall");
   let out: any;
   try {
-    out = await withClient(db, (client) =>
+    out = await store.withClient((client) =>
       exportMemoryPack(client, body, {
         defaultScope: env.MEMORY_SCOPE,
         defaultTenantId: env.MEMORY_TENANT_ID,
@@ -1676,7 +1685,7 @@ app.post("/v1/memory/packs/import", async (req, reply) => {
   const gate = await acquireInflightSlot("write");
   let out: any;
   try {
-    out = await withTx(db, (client) =>
+    out = await store.withTx((client) =>
       importMemoryPack(client, body, {
         defaultScope: env.MEMORY_SCOPE,
         defaultTenantId: env.MEMORY_TENANT_ID,
@@ -1703,7 +1712,7 @@ app.post("/v1/memory/find", async (req, reply) => {
   const gate = await acquireInflightSlot("recall");
   let out: any;
   try {
-    out = await withClient(db, async (client) => {
+    out = await store.withClient(async (client) => {
       return await memoryFind(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID);
     });
   } finally {
@@ -1758,7 +1767,7 @@ app.post("/v1/memory/recall", async (req, reply) => {
   const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
   let out: any;
   try {
-    out = await withClient(db, async (client) => {
+    out = await store.withClient(async (client) => {
       const base = await memoryRecallParsed(
         client,
         parsed,
@@ -2018,7 +2027,7 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
     });
     const wantDebugEmbeddings = recallParsed.return_debug && recallParsed.include_embeddings;
     const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
-    out = await withClient(db, async (client) => {
+    out = await store.withClient(async (client) => {
       const base = await memoryRecallParsed(
         client,
         recallParsed,
@@ -2291,7 +2300,7 @@ app.post("/v1/memory/planning/context", async (req, reply) => {
     });
     const auth = buildRecallAuth(req, wantDebugEmbeddings, env.ADMIN_TOKEN);
 
-    out = await withClient(db, async (client) => {
+    out = await store.withClient(async (client) => {
       const recall = await memoryRecallParsed(
         client,
         recallParsed,
@@ -2442,7 +2451,7 @@ app.post("/v1/memory/feedback", async (req, reply) => {
   const body = withIdentityFromRequest(req, req.body, principal, "feedback");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
-  const out = await withTx(db, (client) =>
+  const out = await store.withTx((client) =>
     ruleFeedback(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
       maxTextLen: env.MAX_TEXT_LEN,
       piiRedaction: env.PII_REDACTION,
@@ -2456,7 +2465,7 @@ app.post("/v1/memory/rules/state", async (req, reply) => {
   const body = withIdentityFromRequest(req, req.body, principal, "rules_state");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
-  const out = await withTx(db, (client) => updateRuleState(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID));
+  const out = await store.withTx((client) => updateRuleState(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID));
   return reply.code(200).send(out);
 });
 
@@ -2470,7 +2479,7 @@ app.post("/v1/memory/rules/evaluate", async (req, reply) => {
   const gate = await acquireInflightSlot("recall");
   let out: any;
   try {
-    out = await withClient(db, async (client) => {
+    out = await store.withClient(async (client) => {
       return await evaluateRules(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID);
     });
   } finally {
@@ -2489,7 +2498,7 @@ app.post("/v1/memory/tools/select", async (req, reply) => {
   const gate = await acquireInflightSlot("recall");
   let out: any;
   try {
-    out = await withClient(db, async (client) => {
+    out = await store.withClient(async (client) => {
       return await selectTools(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID);
     });
   } finally {
@@ -2505,7 +2514,7 @@ app.post("/v1/memory/tools/feedback", async (req, reply) => {
   const body = withIdentityFromRequest(req, req.body, principal, "tools_feedback");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
-  const out = await withTx(db, (client) =>
+  const out = await store.withTx((client) =>
     toolSelectionFeedback(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
       maxTextLen: env.MAX_TEXT_LEN,
       piiRedaction: env.PII_REDACTION,
@@ -2515,7 +2524,7 @@ app.post("/v1/memory/tools/feedback", async (req, reply) => {
 });
 
 app.addHook("onClose", async () => {
-  await db.pool.end();
+  await store.close();
 });
 
 await app.listen({ port: env.PORT, host: "0.0.0.0" });

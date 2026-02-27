@@ -13,6 +13,7 @@ const EnvSchema = z.object({
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
   DATABASE_URL: z.string().min(1),
+  MEMORY_STORE_BACKEND: z.enum(["postgres"]).default("postgres"),
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).default(30),
   DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   DB_POOL_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
