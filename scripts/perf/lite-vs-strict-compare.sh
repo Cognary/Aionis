@@ -6,6 +6,8 @@ need() {
 }
 
 need npm
+need curl
+need node
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
@@ -18,6 +20,9 @@ SRC_TENANT_ID="${SRC_TENANT_ID:-${MEMORY_TENANT_ID:-default}}"
 EVENTS="${EVENTS:-20000}"
 TOPICS="${TOPICS:-200}"
 RESET="${RESET:-true}"
+EMBEDDING_DIM="${EMBEDDING_DIM:-1536}"
+PERF_API_KEY="${PERF_API_KEY:-}"
+PERF_AUTH_BEARER="${PERF_AUTH_BEARER:-}"
 
 WARMUP="${WARMUP:-20}"
 RECALL_REQUESTS="${RECALL_REQUESTS:-220}"
@@ -37,6 +42,43 @@ echo "[lite-vs-strict] base url: ${BASE_URL}"
 echo "[lite-vs-strict] scope: ${SCOPE} tenant: ${TENANT_ID}"
 echo "[lite-vs-strict] seed events=${EVENTS} topics=${TOPICS} reset=${RESET}"
 echo "[lite-vs-strict] benchmark recall_requests=${RECALL_REQUESTS} recall_concurrency=${RECALL_CONCURRENCY} warmup=${WARMUP}"
+
+curl_headers=(-H "content-type: application/json")
+if [[ -n "${PERF_API_KEY}" ]]; then
+  curl_headers+=(-H "x-api-key: ${PERF_API_KEY}")
+fi
+if [[ -n "${PERF_AUTH_BEARER}" ]]; then
+  curl_headers+=(-H "authorization: Bearer ${PERF_AUTH_BEARER}")
+fi
+
+echo "[lite-vs-strict] bootstrap source embedding in src scope"
+bootstrap_payload="$(SRC_SCOPE="${SRC_SCOPE}" SRC_TENANT_ID="${SRC_TENANT_ID}" EMBEDDING_DIM="${EMBEDDING_DIM}" node -e '
+const dim = Number(process.env.EMBEDDING_DIM || "1536");
+const scope = process.env.SRC_SCOPE || "default";
+const tenantId = process.env.SRC_TENANT_ID || "default";
+const now = Date.now();
+const body = {
+  tenant_id: tenantId,
+  scope,
+  input_text: `perf bootstrap embedding ${now}`,
+  auto_embed: false,
+  memory_lane: "shared",
+  nodes: [
+    {
+      client_id: `perf_bootstrap_${now}`,
+      type: "event",
+      text_summary: "perf bootstrap embedding source node",
+      embedding: Array.from({ length: dim }, (_, i) => ((i % 11) + 1) / 100),
+      embedding_model: "perf_bootstrap",
+    },
+  ],
+};
+process.stdout.write(JSON.stringify(body));
+')"
+curl -fsS -X POST "${BASE_URL}/v1/memory/write" \
+  "${curl_headers[@]}" \
+  --data "${bootstrap_payload}" \
+  >/dev/null
 
 seed_cmd=(
   npm
@@ -109,4 +151,3 @@ echo "[lite-vs-strict] strict: ${strict_file}"
 echo "[lite-vs-strict] lite: ${lite_file}"
 echo "[lite-vs-strict] report: ${compare_md}"
 echo "[lite-vs-strict] report json: ${compare_json}"
-

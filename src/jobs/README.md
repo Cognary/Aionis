@@ -550,6 +550,8 @@ Run a single-scope seed, benchmark `strict_edges` and `lite` with identical load
 npm run perf:lite-vs-strict
 ```
 
+Note: the script auto-inserts one source-scope node with client-supplied embedding so fresh environments can run without manual embedding bootstrap.
+
 Useful env overrides:
 
 - `BASE_URL=http://localhost:3001`

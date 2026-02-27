@@ -1,0 +1,183 @@
+name: Perf Lite vs Strict Compare
+
+on:
+  workflow_dispatch:
+    inputs:
+      events:
+        description: "Seed event count"
+        required: false
+        default: "20000"
+        type: string
+      topics:
+        description: "Seed topic count"
+        required: false
+        default: "200"
+        type: string
+      recall_requests:
+        description: "Recall requests per profile"
+        required: false
+        default: "220"
+        type: string
+      recall_concurrency:
+        description: "Recall concurrency"
+        required: false
+        default: "8"
+        type: string
+      max_recall_p95_regression_pct:
+        description: "Gate: max lite p95 regression percentage"
+        required: false
+        default: "15"
+        type: string
+      max_recall_fail_rate_regression_abs:
+        description: "Gate: max lite fail-rate regression abs (0~1)"
+        required: false
+        default: "0.01"
+        type: string
+      artifact_retention_days:
+        description: "Artifact retention days"
+        required: false
+        default: "14"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-lite-vs-strict-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perf-lite-vs-strict:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PORT: "3001"
+      BASE_URL: http://localhost:3001
+      LITE_VS_STRICT_OUT_DIR: artifacts/perf/lite_vs_strict_ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Prepare env
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          npm run -s env:throughput:benchmark
+          {
+            echo "APP_ENV=ci"
+            echo "PORT=3001"
+            echo "MEMORY_AUTH_MODE=off"
+            echo "DATABASE_URL=postgres://aionis:aionis@127.0.0.1:5432/aionis_memory"
+            echo "EMBEDDING_PROVIDER=fake"
+            echo "RATE_LIMIT_BYPASS_LOOPBACK=false"
+            echo "MEMORY_RECALL_PROFILE=strict_edges"
+          } >> .env
+
+      - name: Start stack
+        run: docker compose up -d --build
+
+      - name: Wait API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for _ in {1..120}; do
+            if curl -fsS "http://localhost:3001/health" >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "${ok}" -ne 1 ]]; then
+            echo "API not healthy on localhost:3001" >&2
+            exit 1
+          fi
+
+      - name: Run lite vs strict compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          out_dir="artifacts/perf/lite_vs_strict_ci/${run_id}"
+          mkdir -p "${out_dir}"
+          {
+            echo "LITE_VS_STRICT_OUT_DIR=${out_dir}"
+          } >> "${GITHUB_ENV}"
+
+          EVENTS_INPUT="${{ github.event.inputs.events || '20000' }}"
+          TOPICS_INPUT="${{ github.event.inputs.topics || '200' }}"
+          RECALL_REQUESTS_INPUT="${{ github.event.inputs.recall_requests || '220' }}"
+          RECALL_CONCURRENCY_INPUT="${{ github.event.inputs.recall_concurrency || '8' }}"
+          MAX_RECALL_P95_REGRESSION_PCT_INPUT="${{ github.event.inputs.max_recall_p95_regression_pct || '15' }}"
+          MAX_RECALL_FAIL_RATE_REGRESSION_ABS_INPUT="${{ github.event.inputs.max_recall_fail_rate_regression_abs || '0.01' }}"
+
+          OUT_DIR="${out_dir}" \
+          EVENTS="${EVENTS_INPUT}" \
+          TOPICS="${TOPICS_INPUT}" \
+          RECALL_REQUESTS="${RECALL_REQUESTS_INPUT}" \
+          RECALL_CONCURRENCY="${RECALL_CONCURRENCY_INPUT}" \
+          MAX_RECALL_P95_REGRESSION_PCT="${MAX_RECALL_P95_REGRESSION_PCT_INPUT}" \
+          MAX_RECALL_FAIL_RATE_REGRESSION_ABS="${MAX_RECALL_FAIL_RATE_REGRESSION_ABS_INPUT}" \
+          npm run -s perf:lite-vs-strict
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          compare_json="${LITE_VS_STRICT_OUT_DIR}/LITE_VS_STRICT_COMPARE.json"
+          {
+            echo "## Perf Lite vs Strict Compare"
+            echo
+            echo "artifact dir: \`${LITE_VS_STRICT_OUT_DIR}\`"
+            echo
+            if [[ -f "${compare_json}" ]]; then
+              jq '{ok, recall_gate, baseline: .baseline.label, candidate: .candidate.label}' "${compare_json}"
+            else
+              echo "compare report json not found: ${compare_json}"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-lite-vs-strict-artifacts
+          path: ${{ env.LITE_VS_STRICT_OUT_DIR }}
+          retention-days: ${{ fromJSON(github.event.inputs.artifact_retention_days || '14') }}
+          if-no-files-found: warn
+
+      - name: Capture diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p /tmp/perf_lite_vs_strict_diag
+          docker compose ps > /tmp/perf_lite_vs_strict_diag/compose_ps.txt || true
+          docker compose logs --no-color > /tmp/perf_lite_vs_strict_diag/compose_logs.txt || true
+          if [[ -n "${LITE_VS_STRICT_OUT_DIR:-}" && -d "${LITE_VS_STRICT_OUT_DIR}" ]]; then
+            find "${LITE_VS_STRICT_OUT_DIR}" -type f | sort > /tmp/perf_lite_vs_strict_diag/artifact_files.txt || true
+          fi
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-lite-vs-strict-diagnostics
+          path: /tmp/perf_lite_vs_strict_diag/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v
