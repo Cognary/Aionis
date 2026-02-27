@@ -80,6 +80,8 @@ jobs:
             echo "DATABASE_URL=postgres://aionis:aionis@127.0.0.1:5432/aionis_memory"
             echo "EMBEDDING_PROVIDER=fake"
             echo "RATE_LIMIT_BYPASS_LOOPBACK=false"
+            echo "RATE_LIMIT_ENABLED=false"
+            echo "TENANT_QUOTA_ENABLED=false"
             echo "MEMORY_RECALL_PROFILE=strict_edges"
           } >> .env
 
