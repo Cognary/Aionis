@@ -71,6 +71,18 @@ function argNumber(flag: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function argOptionalNumber(flag: string): number | null {
+  const raw = argValue(flag);
+  if (raw === null) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) {
+    throw new Error(`invalid ${flag}: expected number`);
+  }
+  return n;
+}
+
 function round(v: number, d = 4): number {
   const f = 10 ** d;
   return Math.round(v * f) / f;
@@ -149,6 +161,7 @@ async function main() {
   const baselineLabel = argValue("--baseline-label") ?? "baseline";
   const candidateLabel = argValue("--candidate-label") ?? "candidate";
   const maxRecallP95RegressionPct = argNumber("--max-recall-p95-regression-pct", 15);
+  const maxRecallP99RegressionPct = argOptionalNumber("--max-recall-p99-regression-pct");
   const maxRecallFailRateRegressionAbs = argNumber("--max-recall-fail-rate-regression-abs", 0.01);
 
   const baselineFile = path.resolve(baselineArg);
@@ -170,11 +183,15 @@ async function main() {
 
   const recallCmp = comparisons.find((c) => c.case_name === "recall_text") ?? null;
   const recallP95Pct = recallCmp?.delta?.p95_pct ?? 0;
+  const recallP99Pct = recallCmp?.delta?.p99_pct ?? 0;
   const recallFailRateDelta = recallCmp?.delta?.fail_rate_abs ?? 0;
+  const p99GateEnabled = maxRecallP99RegressionPct !== null;
+  const p99GateThreshold = maxRecallP99RegressionPct ?? 0;
   const recallGatePass =
     !!recallCmp &&
     !!recallCmp.delta &&
     recallP95Pct <= maxRecallP95RegressionPct &&
+    (!p99GateEnabled || recallP99Pct <= p99GateThreshold) &&
     recallFailRateDelta <= maxRecallFailRateRegressionAbs;
 
   const rows: string[][] = [
@@ -206,6 +223,8 @@ ${mdTable(rows)}
 
 - max p95 regression pct: ${maxRecallP95RegressionPct}%
 - observed recall p95 regression pct: ${round(recallP95Pct, 4)}%
+- max p99 regression pct: ${p99GateEnabled ? `${maxRecallP99RegressionPct}%` : "disabled"}
+- observed recall p99 regression pct: ${round(recallP99Pct, 4)}%
 - max fail-rate regression abs: ${(maxRecallFailRateRegressionAbs * 100).toFixed(4)}%
 - observed recall fail-rate regression abs: ${round(recallFailRateDelta * 100, 4)}%
 - verdict: ${recallGatePass ? "pass" : "fail"}
@@ -231,6 +250,9 @@ ${mdTable(rows)}
     recall_gate: {
       max_p95_regression_pct: maxRecallP95RegressionPct,
       observed_p95_regression_pct: round(recallP95Pct, 4),
+      p99_gate_enabled: p99GateEnabled,
+      max_p99_regression_pct: p99GateEnabled ? round(p99GateThreshold, 4) : null,
+      observed_p99_regression_pct: round(recallP99Pct, 4),
       max_fail_rate_regression_abs: round(maxRecallFailRateRegressionAbs, 6),
       observed_fail_rate_regression_abs: round(recallFailRateDelta, 6),
       pass: recallGatePass,
@@ -253,4 +275,3 @@ main().catch((err) => {
   console.error(err);
   process.exitCode = 1;
 });
-

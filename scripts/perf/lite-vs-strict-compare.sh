@@ -31,6 +31,7 @@ PACE_MS="${PACE_MS:-0}"
 TIMEOUT_MS="${TIMEOUT_MS:-15000}"
 
 MAX_RECALL_P95_REGRESSION_PCT="${MAX_RECALL_P95_REGRESSION_PCT:-15}"
+MAX_RECALL_P99_REGRESSION_PCT="${MAX_RECALL_P99_REGRESSION_PCT:-}"
 MAX_RECALL_FAIL_RATE_REGRESSION_ABS="${MAX_RECALL_FAIL_RATE_REGRESSION_ABS:-0.01}"
 
 RUN_TAG="${RUN_TAG:-$(date +%Y%m%d_%H%M%S)}"
@@ -42,6 +43,7 @@ echo "[lite-vs-strict] base url: ${BASE_URL}"
 echo "[lite-vs-strict] scope: ${SCOPE} tenant: ${TENANT_ID}"
 echo "[lite-vs-strict] seed events=${EVENTS} topics=${TOPICS} reset=${RESET}"
 echo "[lite-vs-strict] benchmark recall_requests=${RECALL_REQUESTS} recall_concurrency=${RECALL_CONCURRENCY} warmup=${WARMUP}"
+echo "[lite-vs-strict] gates p95<=${MAX_RECALL_P95_REGRESSION_PCT}% fail_rate_abs<=${MAX_RECALL_FAIL_RATE_REGRESSION_ABS} p99<=${MAX_RECALL_P99_REGRESSION_PCT:-disabled}"
 
 curl_headers=(-H "content-type: application/json")
 if [[ -n "${PERF_API_KEY}" ]]; then
@@ -136,15 +138,35 @@ npm run -s job:perf-benchmark -- \
   --recall-profile lite > "${lite_file}"
 
 echo "[lite-vs-strict] generate comparison report"
-npm run -s job:perf-profile-compare -- \
-  --baseline "${strict_file}" \
-  --candidate "${lite_file}" \
-  --baseline-label strict_edges \
-  --candidate-label lite \
-  --max-recall-p95-regression-pct "${MAX_RECALL_P95_REGRESSION_PCT}" \
-  --max-recall-fail-rate-regression-abs "${MAX_RECALL_FAIL_RATE_REGRESSION_ABS}" \
-  --output "${compare_md}" \
-  --output-json "${compare_json}" | tee "${OUT_DIR}/compare_stdout.json"
+compare_cmd=(
+  npm
+  run
+  -s
+  job:perf-profile-compare
+  --
+  --baseline
+  "${strict_file}"
+  --candidate
+  "${lite_file}"
+  --baseline-label
+  strict_edges
+  --candidate-label
+  lite
+  --max-recall-p95-regression-pct
+  "${MAX_RECALL_P95_REGRESSION_PCT}"
+  --max-recall-fail-rate-regression-abs
+  "${MAX_RECALL_FAIL_RATE_REGRESSION_ABS}"
+)
+if [[ -n "${MAX_RECALL_P99_REGRESSION_PCT}" ]]; then
+  compare_cmd+=(--max-recall-p99-regression-pct "${MAX_RECALL_P99_REGRESSION_PCT}")
+fi
+compare_cmd+=(
+  --output
+  "${compare_md}"
+  --output-json
+  "${compare_json}"
+)
+"${compare_cmd[@]}" | tee "${OUT_DIR}/compare_stdout.json"
 
 echo "[lite-vs-strict] done"
 echo "[lite-vs-strict] strict: ${strict_file}"

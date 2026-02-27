@@ -28,6 +28,11 @@ on:
         required: false
         default: "15"
         type: string
+      max_recall_p99_regression_pct:
+        description: "Gate (optional): max lite p99 regression percentage; empty disables"
+        required: false
+        default: ""
+        type: string
       max_recall_fail_rate_regression_abs:
         description: "Gate: max lite fail-rate regression abs (0~1)"
         required: false
@@ -121,6 +126,7 @@ jobs:
           RECALL_REQUESTS_INPUT="${{ github.event.inputs.recall_requests || '220' }}"
           RECALL_CONCURRENCY_INPUT="${{ github.event.inputs.recall_concurrency || '8' }}"
           MAX_RECALL_P95_REGRESSION_PCT_INPUT="${{ github.event.inputs.max_recall_p95_regression_pct || '15' }}"
+          MAX_RECALL_P99_REGRESSION_PCT_INPUT="${{ github.event.inputs.max_recall_p99_regression_pct || '' }}"
           MAX_RECALL_FAIL_RATE_REGRESSION_ABS_INPUT="${{ github.event.inputs.max_recall_fail_rate_regression_abs || '0.01' }}"
 
           OUT_DIR="${out_dir}" \
@@ -129,6 +135,7 @@ jobs:
           RECALL_REQUESTS="${RECALL_REQUESTS_INPUT}" \
           RECALL_CONCURRENCY="${RECALL_CONCURRENCY_INPUT}" \
           MAX_RECALL_P95_REGRESSION_PCT="${MAX_RECALL_P95_REGRESSION_PCT_INPUT}" \
+          MAX_RECALL_P99_REGRESSION_PCT="${MAX_RECALL_P99_REGRESSION_PCT_INPUT}" \
           MAX_RECALL_FAIL_RATE_REGRESSION_ABS="${MAX_RECALL_FAIL_RATE_REGRESSION_ABS_INPUT}" \
           npm run -s perf:lite-vs-strict
 

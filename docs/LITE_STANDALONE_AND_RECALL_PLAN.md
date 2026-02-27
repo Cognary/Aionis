@@ -151,3 +151,4 @@ Status: `in_progress`
 2. Added `job:perf-profile-compare` to generate markdown/json profile comparison reports.
 3. Added `perf:lite-vs-strict` one-command script for seed + strict/lite benchmark + comparison gate.
 4. Added manual CI workflow `Perf Lite vs Strict Compare` (`.github/workflows/perf-lite-vs-strict.yml`) for repeatable artifact capture.
+5. Added optional p99 regression gate (`--max-recall-p99-regression-pct`) for stricter tail-latency control when needed.

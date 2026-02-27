@@ -523,8 +523,12 @@ npm run job:perf-profile-compare -- \
   --baseline /path/to/benchmark_strict_edges.json \
   --candidate /path/to/benchmark_lite.json \
   --baseline-label strict_edges \
-  --candidate-label lite
+  --candidate-label lite \
+  --max-recall-p95-regression-pct 10 \
+  --max-recall-p99-regression-pct 15
 ```
+
+`--max-recall-p99-regression-pct` is optional; omit it to disable p99 gate.
 
 ### One-Command Matrix Runner
 
@@ -560,6 +564,8 @@ Useful env overrides:
 - `TOPICS=200`
 - `RECALL_REQUESTS=220`
 - `RECALL_CONCURRENCY=8`
+- `MAX_RECALL_P95_REGRESSION_PCT=10`
+- `MAX_RECALL_P99_REGRESSION_PCT=15` (optional, unset to disable)
 - `OUT_DIR=/path/to/Aionis/artifacts/perf/lite_vs_strict_custom`
 
 ## Consolidation Candidates (Offline, Shadow Mode)
