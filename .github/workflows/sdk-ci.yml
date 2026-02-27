@@ -13,6 +13,7 @@ on:
       - "scripts/sdk-python-release-check.sh"
       - "scripts/docs-check.sh"
       - "scripts/ci/capability-api-probes.sh"
+      - "scripts/ci/policy-planner-api-probes.sh"
       - "docs/README.md"
       - "docs/SDK*.md"
       - ".github/workflows/sdk-ci.yml"
@@ -32,6 +33,7 @@ on:
       - "scripts/sdk-python-release-check.sh"
       - "scripts/docs-check.sh"
       - "scripts/ci/capability-api-probes.sh"
+      - "scripts/ci/policy-planner-api-probes.sh"
       - "docs/README.md"
       - "docs/SDK*.md"
       - ".github/workflows/sdk-ci.yml"
@@ -407,6 +409,11 @@ jobs:
           CAPABILITY_PROBE_INCLUDE_SHADOW_SOFT_DEGRADE="auto" \
           bash scripts/ci/capability-api-probes.sh >/tmp/sdk_ci_capability_api_probe.json
 
+          AIONIS_BASE_URL="http://127.0.0.1:${PORT}" \
+          POLICY_PLANNER_PROBE_SCOPE="default" \
+          POLICY_PLANNER_PROBE_TENANT_ID="default" \
+          bash scripts/ci/policy-planner-api-probes.sh >/tmp/sdk_ci_policy_planner_probe.json
+
           kill "${API_PID}" || true
           wait "${API_PID}" || true
 
@@ -423,6 +430,7 @@ jobs:
           cat /tmp/sdk_ci_smoke_ts.json || true
           cat /tmp/sdk_ci_smoke_py.json || true
           cat /tmp/sdk_ci_capability_api_probe.json || true
+          cat /tmp/sdk_ci_policy_planner_probe.json || true
 
       - name: Cleanup
         if: always()
