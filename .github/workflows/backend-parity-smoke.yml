@@ -25,6 +25,10 @@ jobs:
       PORT: "3101"
       MEMORY_STORE_BACKEND: ${{ matrix.backend }}
       MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: ${{ matrix.backend == 'embedded' && 'true' || 'false' }}
+      MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES: ${{ matrix.backend == 'embedded' && '12000' || '52428800' }}
+      MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED: "true"
+      MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS: "8"
+      EMBEDDED_SNAPSHOT_MAX_DROPPED_NODES_GUARD: "32"
 
     steps:
       - name: Checkout
@@ -47,6 +51,9 @@ jobs:
             echo "PORT=${PORT}"
             echo "MEMORY_STORE_BACKEND=${MEMORY_STORE_BACKEND}"
             echo "MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED=${MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES=${MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES}"
+            echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED=${MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS=${MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS}"
           } >> .env
 
       - name: Start db
@@ -96,6 +103,12 @@ jobs:
             if (p.memory_store_backend !== expected) throw new Error(`backend mismatch: ${p.memory_store_backend} != ${expected}`);
             if (typeof p.recall_store_access_capability_version !== "number") throw new Error("missing recall capability version");
             if (typeof p.write_store_access_capability_version !== "number") throw new Error("missing write capability version");
+            if (expected === "embedded") {
+              if (typeof p.memory_store_embedded_snapshot_max_bytes !== "number") throw new Error("embedded health missing snapshot max bytes");
+              if (!p.memory_store_embedded_snapshot_metrics || typeof p.memory_store_embedded_snapshot_metrics !== "object") {
+                throw new Error("embedded health missing snapshot metrics object");
+              }
+            }
           '
 
           # Deterministic parity case: write one shared node with ready embedding, then recall with same query embedding.
@@ -155,6 +168,43 @@ jobs:
             }
             if (recallOut.seeds.length < 1) {
               throw new Error("recall returned no seeds for parity case");
+            }
+          '
+
+          curl -fsS "http://127.0.0.1:${PORT}/health" >/tmp/backend_parity_health_after.json
+
+          node -e '
+            const fs = require("fs");
+            const expected = process.env.MEMORY_STORE_BACKEND;
+            if (expected !== "embedded") process.exit(0);
+            const before = JSON.parse(fs.readFileSync("/tmp/backend_parity_health.json", "utf8"));
+            const after = JSON.parse(fs.readFileSync("/tmp/backend_parity_health_after.json", "utf8"));
+            const b = before.memory_store_embedded_snapshot_metrics || {};
+            const a = after.memory_store_embedded_snapshot_metrics || {};
+            const maxRounds = Number(process.env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS || "8");
+            const maxBytes = Number(process.env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES || "0");
+            const maxDroppedNodes = Number(process.env.EMBEDDED_SNAPSHOT_MAX_DROPPED_NODES_GUARD || "32");
+
+            if (typeof a.persist_total !== "number") throw new Error("embedded metrics missing persist_total");
+            if (a.persist_total < Number(b.persist_total || 0) + 1) {
+              throw new Error(`embedded persist_total did not advance after write: before=${b.persist_total} after=${a.persist_total}`);
+            }
+            if (typeof a.last_bytes_before_compaction !== "number" || typeof a.last_bytes_after_compaction !== "number") {
+              throw new Error("embedded metrics missing compaction byte counters");
+            }
+            if (a.last_bytes_after_compaction > a.last_bytes_before_compaction) {
+              throw new Error("embedded compaction should not increase snapshot size");
+            }
+            if (a.last_compaction && typeof a.last_compaction.rounds === "number" && a.last_compaction.rounds > maxRounds) {
+              throw new Error(`embedded compaction rounds exceeded guard: ${a.last_compaction.rounds} > ${maxRounds}`);
+            }
+            if (a.last_bytes_before_compaction > maxBytes && (!a.last_compaction || a.last_compaction.applied !== true)) {
+              throw new Error("embedded compaction should be marked applied when snapshot exceeds max bytes");
+            }
+            if (a.last_compaction && Number(a.last_compaction.dropped_nodes || 0) > maxDroppedNodes) {
+              throw new Error(
+                `embedded compaction dropped too many nodes in one persist: ${a.last_compaction.dropped_nodes} > ${maxDroppedNodes}`,
+              );
             }
           '
 

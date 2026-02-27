@@ -54,9 +54,10 @@ Completed in this phase:
 22. Added embedded runtime snapshot persistence (startup load + write autosave) with contract smoke replay checks.
 23. Added snapshot governance controls: backup rotation, max-bytes guard, and corrupt snapshot quarantine recovery.
 24. Added snapshot compaction policy + operator-visible metrics (tiered payload trimming, edge/node pruning fallback, `/health` metrics exposure, contract smoke coverage).
+25. Added backend parity CI observability for embedded snapshot compaction (health metrics presence checks, post-write metric delta assertions, and node-drop guardrail threshold).
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
 2. Add optional capability negotiation flags for non-parity features per backend (e.g. shadow mirror).
-3. Add compaction-specific observability in backend parity CI (health snapshot-metrics assertions + regression threshold guardrails).
+3. Add runtime compaction telemetry export for long-run trend analysis (artifact timeline + alert thresholds), beyond smoke-level CI assertions.
