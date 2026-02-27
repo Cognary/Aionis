@@ -16,8 +16,17 @@ import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
 import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
-import { RECALL_STORE_ACCESS_CAPABILITY_VERSION, assertRecallStoreAccessContract } from "../store/recall-access.js";
-import { WRITE_STORE_ACCESS_CAPABILITY_VERSION, assertWriteStoreAccessContract } from "../store/write-access.js";
+import {
+  RECALL_STORE_ACCESS_CAPABILITY_VERSION,
+  assertRecallStoreAccessContract,
+  createPostgresRecallStoreAccess,
+} from "../store/recall-access.js";
+import {
+  WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+  assertWriteStoreAccessContract,
+  createPostgresWriteStoreAccess,
+} from "../store/write-access.js";
+import { asPostgresMemoryStore, createMemoryStore } from "../store/memory-store.js";
 
 type QueryResult<T> = { rows: T[]; rowCount: number };
 
@@ -147,6 +156,209 @@ class SessionWriteGuardPgClient {
       };
     }
     throw new Error(`SessionWriteGuardPgClient: unexpected query after guard: ${s.slice(0, 200)}...`);
+  }
+}
+
+class RecallAccessFixturePgClient {
+  readonly queries: Array<{ sql: string; params: any[] | undefined }> = [];
+
+  async query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+    this.queries.push({ sql: s, params });
+
+    if (s.includes("WITH knn AS") && s.includes("FROM memory_nodes n") && s.includes("embedding <=>")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000000901",
+            type: "event",
+            title: "ann",
+            text_summary: "ann",
+            tier: "hot",
+            salience: 0.5,
+            confidence: 0.8,
+            similarity: 0.91,
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("WITH ranked AS") && s.includes("FROM memory_nodes n") && s.includes("distance")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000000902",
+            type: "event",
+            title: "exact",
+            text_summary: "exact",
+            tier: "hot",
+            salience: 0.5,
+            confidence: 0.8,
+            similarity: 0.89,
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("FROM hop1") || s.includes("FROM hop2")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-0000000009e1",
+            scope: "default",
+            type: "part_of",
+            src_id: "00000000-0000-0000-0000-000000000901",
+            dst_id: "00000000-0000-0000-0000-000000000902",
+            weight: 1,
+            confidence: 1,
+            decay_rate: 0.01,
+            last_activated: null,
+            created_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-0000000009c1",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("FROM memory_nodes") && s.includes("embedding_status::text AS embedding_status")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000000901",
+            scope: "default",
+            type: "event",
+            tier: "hot",
+            memory_lane: "private",
+            producer_agent_id: "agent_a",
+            owner_agent_id: "agent_a",
+            owner_team_id: null,
+            title: "n1",
+            text_summary: "n1",
+            slots: {},
+            embedding_status: "ready",
+            embedding_model: "fake",
+            topic_state: null,
+            member_count: null,
+            raw_ref: null,
+            evidence_ref: null,
+            salience: 0.5,
+            importance: 0.5,
+            confidence: 0.8,
+            last_activated: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-0000000009c2",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("FROM memory_rule_defs")) {
+      return {
+        rows: [
+          {
+            rule_node_id: "00000000-0000-0000-0000-0000000009r1",
+            state: "draft",
+            rule_scope: "global",
+            target_agent_id: null,
+            target_team_id: null,
+            if_json: {},
+            then_json: {},
+            exceptions_json: [],
+            positive_count: 0,
+            negative_count: 0,
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("embedding::text AS embedding_text")) {
+      return {
+        rows: [{ id: "00000000-0000-0000-0000-000000000901", embedding_text: "[0.1,0.2]" } as any] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("INSERT INTO memory_recall_audit")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    throw new Error(`RecallAccessFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class WriteAccessFixturePgClient {
+  readonly queries: Array<{ sql: string; params: any[] | undefined }> = [];
+  private readonly throwEnsureScope: boolean;
+
+  constructor(opts?: { throwEnsureScope?: boolean }) {
+    this.throwEnsureScope = !!opts?.throwEnsureScope;
+  }
+
+  async query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+    this.queries.push({ sql: s, params });
+
+    if (s.includes("SELECT id, scope FROM memory_nodes WHERE id = ANY($1::uuid[])")) {
+      return {
+        rows: [
+          { id: "00000000-0000-0000-0000-000000000911", scope: "default" },
+          { id: "00000000-0000-0000-0000-000000000912", scope: "default" },
+        ] as any as T[],
+        rowCount: 2,
+      };
+    }
+
+    if (s.includes("SELECT commit_hash FROM memory_commits WHERE id = $1 AND scope = $2")) {
+      const pid = params?.[0];
+      if (pid === "missing") return { rows: [] as T[], rowCount: 0 };
+      return { rows: [{ commit_hash: "parent-hash" } as any] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_commits") && s.includes("RETURNING id")) {
+      return { rows: [{ id: "00000000-0000-0000-0000-0000000009c0" } as any] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_nodes") && s.includes("ON CONFLICT (id) DO NOTHING")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_rule_defs")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_edges") && s.includes("ON CONFLICT (scope, type, src_id, dst_id) DO UPDATE")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("SELECT id FROM memory_nodes") && s.includes("embedding_status = 'ready'")) {
+      return { rows: [{ id: "00000000-0000-0000-0000-000000000911" } as any] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("SELECT aionis_partition_ensure_scope($1)")) {
+      if (this.throwEnsureScope) throw new Error("scope ensure unavailable");
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_commits_v2")) return { rows: [] as T[], rowCount: 1 };
+    if (s.includes("INSERT INTO memory_nodes_v2")) return { rows: [] as T[], rowCount: 2 };
+    if (s.includes("INSERT INTO memory_edges_v2")) return { rows: [] as T[], rowCount: 3 };
+    if (s.includes("INSERT INTO memory_outbox_v2")) return { rows: [] as T[], rowCount: 4 };
+
+    if (s.includes("INSERT INTO memory_outbox")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("UPDATE memory_outbox")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    throw new Error(`WriteAccessFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
   }
 }
 
@@ -289,6 +501,173 @@ async function run() {
   assert.throws(
     () => assertWriteStoreAccessContract({ capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION } as any),
     /missing required method/,
+  );
+
+  assert.throws(
+    () =>
+      createMemoryStore({
+        backend: "embedded",
+        databaseUrl: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+        embeddedExperimentalEnabled: false,
+      }),
+    /MEMORY_STORE_BACKEND=embedded requires MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED=true/,
+  );
+  const embeddedStore = createMemoryStore({
+    backend: "embedded",
+    databaseUrl: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+    embeddedExperimentalEnabled: true,
+  });
+  assert.equal(embeddedStore.backend, "embedded");
+  assert.equal((embeddedStore as any).mode, "postgres_delegated");
+  assert.ok(asPostgresMemoryStore(embeddedStore).db.pool);
+  await embeddedStore.close();
+
+  const recallAccessFixture = new RecallAccessFixturePgClient();
+  const recallAdapter = createPostgresRecallStoreAccess(recallAccessFixture as any);
+  assert.doesNotThrow(() => assertRecallStoreAccessContract(recallAdapter));
+  const annRows = await recallAdapter.stage1CandidatesAnn({
+    queryEmbedding: [0.1, 0.2],
+    scope: "default",
+    oversample: 20,
+    limit: 10,
+    consumerAgentId: "agent_a",
+    consumerTeamId: null,
+  });
+  assert.equal(annRows.length, 1);
+  assert.equal(annRows[0].id, "00000000-0000-0000-0000-000000000901");
+  const exactRows = await recallAdapter.stage1CandidatesExactFallback({
+    queryEmbedding: [0.1, 0.2],
+    scope: "default",
+    oversample: 20,
+    limit: 10,
+    consumerAgentId: "agent_a",
+    consumerTeamId: null,
+  });
+  assert.equal(exactRows.length, 1);
+  const edgesRows = await recallAdapter.stage2Edges({
+    seedIds: ["00000000-0000-0000-0000-000000000901"],
+    scope: "default",
+    neighborhoodHops: 2,
+    minEdgeWeight: 0,
+    minEdgeConfidence: 0,
+    hop1Budget: 50,
+    hop2Budget: 50,
+    edgeFetchBudget: 100,
+  });
+  assert.equal(edgesRows.length, 1);
+  const nodeRows = await recallAdapter.stage2Nodes({
+    scope: "default",
+    nodeIds: ["00000000-0000-0000-0000-000000000901"],
+    consumerAgentId: "agent_a",
+    consumerTeamId: null,
+    includeSlots: true,
+  });
+  assert.equal(nodeRows.length, 1);
+  const ruleRows = await recallAdapter.ruleDefs("default", ["00000000-0000-0000-0000-0000000009r1"]);
+  assert.equal(ruleRows.length, 1);
+  const debugRows = await recallAdapter.debugEmbeddings("default", ["00000000-0000-0000-0000-000000000901"]);
+  assert.equal(debugRows.length, 1);
+  await recallAdapter.insertRecallAudit({
+    scope: "default",
+    endpoint: "recall",
+    consumerAgentId: "agent_a",
+    consumerTeamId: null,
+    querySha256: "abc",
+    seedCount: 1,
+    nodeCount: 1,
+    edgeCount: 1,
+  });
+  assert.ok(
+    recallAccessFixture.queries.some((q) => q.sql.includes("INSERT INTO memory_recall_audit")),
+    "recall adapter should execute audit insert query",
+  );
+
+  const writeAccessFixture = new WriteAccessFixturePgClient({ throwEnsureScope: true });
+  const writeAdapter = createPostgresWriteStoreAccess(writeAccessFixture as any);
+  assert.doesNotThrow(() => assertWriteStoreAccessContract(writeAdapter));
+  const nodeScopeMap = await writeAdapter.nodeScopesByIds([
+    "00000000-0000-0000-0000-000000000911",
+    "00000000-0000-0000-0000-000000000912",
+  ]);
+  assert.equal(nodeScopeMap.get("00000000-0000-0000-0000-000000000911"), "default");
+  const parentHash = await writeAdapter.parentCommitHash("default", "parent");
+  assert.equal(parentHash, "parent-hash");
+  const parentMissing = await writeAdapter.parentCommitHash("default", "missing");
+  assert.equal(parentMissing, null);
+  const commitId = await writeAdapter.insertCommit({
+    scope: "default",
+    parentCommitId: null,
+    inputSha256: "sha",
+    diffJson: "{}",
+    actor: "tester",
+    modelVersion: null,
+    promptVersion: null,
+    commitHash: "commit-hash",
+  });
+  assert.equal(commitId, "00000000-0000-0000-0000-0000000009c0");
+  await writeAdapter.insertNode({
+    id: "00000000-0000-0000-0000-000000000911",
+    scope: "default",
+    clientId: "client-1",
+    type: "event",
+    tier: "hot",
+    title: "title",
+    textSummary: "summary",
+    slotsJson: "{}",
+    rawRef: null,
+    evidenceRef: null,
+    embeddingVector: null,
+    embeddingModel: null,
+    memoryLane: "private",
+    producerAgentId: "agent_a",
+    ownerAgentId: "agent_a",
+    ownerTeamId: null,
+    embeddingStatus: "pending",
+    embeddingLastError: null,
+    salience: 0.5,
+    importance: 0.5,
+    confidence: 0.8,
+    redactionVersion: 1,
+    commitId,
+  });
+  await writeAdapter.insertRuleDef({
+    scope: "default",
+    ruleNodeId: "00000000-0000-0000-0000-0000000009r1",
+    ifJson: "{}",
+    thenJson: "{}",
+    exceptionsJson: "[]",
+    ruleScope: "global",
+    targetAgentId: null,
+    targetTeamId: null,
+    commitId,
+  });
+  await writeAdapter.upsertEdge({
+    id: "00000000-0000-0000-0000-0000000009e1",
+    scope: "default",
+    type: "part_of",
+    srcId: "00000000-0000-0000-0000-000000000911",
+    dstId: "00000000-0000-0000-0000-000000000912",
+    weight: 0.9,
+    confidence: 0.9,
+    decayRate: 0.01,
+    commitId,
+  });
+  const readyIds = await writeAdapter.readyEmbeddingNodeIds("default", ["00000000-0000-0000-0000-000000000911"]);
+  assert.equal(readyIds.has("00000000-0000-0000-0000-000000000911"), true);
+  await writeAdapter.insertOutboxEvent({
+    scope: "default",
+    commitId,
+    eventType: "embed_nodes",
+    jobKey: "job-1",
+    payloadSha256: "sha",
+    payloadJson: "{}",
+  });
+  await writeAdapter.appendAfterTopicClusterEventIds("default", commitId, `["00000000-0000-0000-0000-000000000911"]`);
+  const copied = await writeAdapter.mirrorCommitArtifactsToShadowV2("default", commitId);
+  assert.deepEqual(copied, { commits: 1, nodes: 2, edges: 3, outbox: 4 });
+  assert.ok(
+    writeAccessFixture.queries.some((q) => q.sql.includes("aionis_partition_ensure_scope")),
+    "write adapter should attempt scope ensure before v2 mirror copy",
   );
 
   // Schema hard cap: max_edges <= 100

@@ -48,9 +48,10 @@ Completed in this phase:
 16. Added adapter capability/version contract for recall/write access with startup fail-fast checks.
 17. Added parity smoke checks in contract suite for adapter capability contracts.
 18. Added `MEMORY_STORE_BACKEND=embedded` experimental route (postgres-delegated shim) behind explicit env gate.
+19. Added query-level parity fixtures for Postgres recall/write adapters in contract smoke.
 
 ## Next Steps
 
 1. Replace embedded shim internals with true local engine adapter implementation (while keeping contract stable).
 2. Add optional capability negotiation flags for non-parity features per backend (e.g. shadow mirror).
-3. Expand parity smoke to execute query-level fixtures against each backend implementation.
+3. Add backend-matrix parity smoke execution (`postgres` + `embedded`) in CI with comparable fixture assertions.
