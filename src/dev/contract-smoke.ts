@@ -3,6 +3,7 @@ import { MemoryRecallRequest, PlanningContextRequest, ToolsFeedbackRequest, Tool
 import { HttpError } from "../util/http.js";
 import { requireAdminTokenHeader } from "../util/admin_auth.js";
 import { resolveTenantScope } from "../memory/tenant.js";
+import { loadEnv } from "../config.js";
 import {
   createApiKeyPrincipalResolver,
   normalizeControlAlertRouteTarget,
@@ -155,7 +156,57 @@ function assertSubset(actual: string[], expected: string[]) {
   for (const k of actual) assert.ok(expected.includes(k), `unexpected key: ${k} (allowed=${expected.join(",")})`);
 }
 
+async function withEnv<T>(patch: Record<string, string>, fn: () => Promise<T> | T): Promise<T> {
+  const previous = new Map<string, string | undefined>();
+  for (const [k, v] of Object.entries(patch)) {
+    previous.set(k, process.env[k]);
+    process.env[k] = v;
+  }
+  try {
+    return await fn();
+  } finally {
+    for (const [k, v] of previous.entries()) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
 async function run() {
+  await withEnv(
+    {
+      APP_ENV: "dev",
+      DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+      MEMORY_RECALL_PROFILE: "lite",
+      MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: "lite",
+      MEMORY_RECALL_PROFILE_POLICY_JSON: JSON.stringify({
+        endpoint: { recall: "lite", recall_text: "strict_edges" },
+        tenant_default: { tenant_lite: "lite" },
+        tenant_endpoint: { tenant_lite: { recall: "lite" } },
+      }),
+    },
+    async () => {
+      const env = loadEnv();
+      assert.equal(env.MEMORY_RECALL_PROFILE, "lite");
+      assert.equal(env.MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE, "lite");
+    },
+  );
+  await withEnv(
+    {
+      APP_ENV: "dev",
+      DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+      MEMORY_RECALL_PROFILE: "strict_edges",
+      MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: "strict_edges",
+      MEMORY_RECALL_PROFILE_POLICY_JSON: JSON.stringify({ endpoint: { recall: "not_allowed" } }),
+    },
+    async () => {
+      assert.throws(
+        () => loadEnv(),
+        /legacy\|strict_edges\|quality_first\|lite/,
+      );
+    },
+  );
+
   // Schema hard cap: max_edges <= 100
   assert.throws(
     () => MemoryRecallRequest.parse({ query_embedding: [0], max_edges: 101 }),
