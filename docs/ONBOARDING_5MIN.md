@@ -212,6 +212,48 @@ Stop:
 make stack-down
 ```
 
+### Embedded strict-failure smoke (local only)
+
+If you are testing embedded backend strict-mode behavior, you can verify SDK/helper handling of
+`shadow_dual_write_strict_failure` with this dev-only probe:
+
+1. Start with embedded backend + strict shadow dual-write enabled:
+
+```bash
+MEMORY_STORE_BACKEND=embedded \
+MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED=true \
+MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED=true \
+MEMORY_SHADOW_DUAL_WRITE_ENABLED=true \
+MEMORY_SHADOW_DUAL_WRITE_STRICT=true \
+make stack-up
+```
+
+2. Induce one mirror runtime failure (dev DB only) and issue a write:
+
+```bash
+docker compose exec -T db psql -U aionis -d aionis_memory -c \
+  "ALTER TABLE memory_commits_v2 RENAME TO memory_commits_v2_ci_tmp;"
+
+curl -sS -i http://localhost:3001/v1/memory/write \
+  -H 'content-type: application/json' \
+  -d '{"input_text":"strict runtime probe","auto_embed":false,"nodes":[{"client_id":"strict_evt_1","type":"event","text_summary":"strict probe"}],"edges":[]}'
+```
+
+Expected response shape:
+
+1. HTTP `500`
+2. `error="shadow_dual_write_strict_failure"`
+3. `details.capability="shadow_mirror_v2"`
+4. `details.degraded_mode="mirror_failed"`
+
+3. Restore table and stop stack:
+
+```bash
+docker compose exec -T db psql -U aionis -d aionis_memory -c \
+  "ALTER TABLE memory_commits_v2_ci_tmp RENAME TO memory_commits_v2;"
+make stack-down
+```
+
 ## Production Baseline (Minimum)
 
 Before external production usage, set:

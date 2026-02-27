@@ -69,9 +69,10 @@ Completed in this phase:
 37. Added strict-mode fail-fast fixture in `sdk-ci` for embedded backend (`MEMORY_SHADOW_DUAL_WRITE_STRICT=true` with unavailable mirror capability must fail startup with env validation error).
 38. Added strict runtime mirror-failure fixture in `sdk-ci` for embedded backend (enable strict+mirror capability, induce mirror table failure, assert `/v1/memory/write` hard-fails with HTTP 500).
 39. Upgraded strict runtime shadow mirror failure to typed API contract (`error=shadow_dual_write_strict_failure` + structured details), and added TS/Python SDK helper parsers/type guards.
+40. Added explicit local/embedded integration examples for strict-failure SDK helper usage in `docs/SDK.md` and dev smoke reproduction steps in `docs/ONBOARDING_5MIN.md`.
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
 2. Add runtime compaction telemetry export for long-run trend analysis (artifact timeline + alert thresholds), beyond smoke-level CI assertions.
-3. Add explicit docs + smoke examples for SDK-side strict-failure helper usage in local/embedded integration guides.
+3. Keep onboarding smoke and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).

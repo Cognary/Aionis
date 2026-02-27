@@ -126,6 +126,57 @@ from aionis_sdk import is_backend_capability_unsupported_error
 - TypeScript: `isShadowDualWriteStrictFailureError`
 - Python: `is_shadow_dual_write_strict_failure_error`
 
+TypeScript example:
+
+```ts
+import { AionisApiError, isShadowDualWriteStrictFailureError } from "@aionis/sdk";
+
+try {
+  await client.write({
+    scope: "default",
+    input_text: "strict mirror write",
+    auto_embed: false,
+    nodes: [{ client_id: "strict_evt_1", type: "event", text_summary: "strict probe" }],
+    edges: [],
+  });
+} catch (err) {
+  if (isShadowDualWriteStrictFailureError(err)) {
+    console.error("strict mirror failure", err.details.degraded_mode, err.details.failure_mode, err.details.error);
+  } else if (err instanceof AionisApiError) {
+    console.error("api error", err.code, err.message);
+  } else {
+    throw err;
+  }
+}
+```
+
+Python example:
+
+```python
+from aionis_sdk import (
+    AionisApiError,
+    is_shadow_dual_write_strict_failure_error,
+)
+
+try:
+    client.write(
+        {
+            "scope": "default",
+            "input_text": "strict mirror write",
+            "auto_embed": False,
+            "nodes": [{"client_id": "strict_evt_1", "type": "event", "text_summary": "strict probe"}],
+            "edges": [],
+        }
+    )
+except Exception as err:
+    if is_shadow_dual_write_strict_failure_error(err):
+        print("strict mirror failure", err.details.get("degraded_mode"), err.details.get("failure_mode"), err.details.get("error"))
+    elif isinstance(err, AionisApiError):
+        print("api error", err.code, str(err))
+    else:
+        raise
+```
+
 ## 6. Tenant-aware Calls
 
 - 所有 SDK 输入类型都支持 `tenant_id?: string`。
