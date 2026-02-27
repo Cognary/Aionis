@@ -5,7 +5,7 @@ title: "Memory Store Adapter Plan"
 # Memory Store Adapter Plan
 
 Last updated: `2026-02-27`  
-Status: `phase_p1_in_progress`
+Status: `phase_p2_in_progress`
 
 ## Objective
 
@@ -46,9 +46,11 @@ Completed in this phase:
 14. Write access extraction now covers outbox-related helpers (`ready_embedding_lookup`, `embed_nodes/topic_cluster enqueue`, `embed_nodes payload update`).
 15. Shadow dual-write mirror path (`memory_*_v2` copy) moved into `write-access` (`mirrorCommitArtifactsToShadowV2`).
 16. Added adapter capability/version contract for recall/write access with startup fail-fast checks.
+17. Added parity smoke checks in contract suite for adapter capability contracts.
+18. Added `MEMORY_STORE_BACKEND=embedded` experimental route (postgres-delegated shim) behind explicit env gate.
 
 ## Next Steps
 
-1. Add optional/experimental capability flags (e.g. shadow mirror support) for embedded backend negotiation.
-2. Add adapter parity smoke tests (contract fixtures for recall/write access implementations).
-3. Add `embedded` experimental adapter behind explicit feature flag after parity smoke tests pass.
+1. Replace embedded shim internals with true local engine adapter implementation (while keeping contract stable).
+2. Add optional capability negotiation flags for non-parity features per backend (e.g. shadow mirror).
+3. Expand parity smoke to execute query-level fixtures against each backend implementation.

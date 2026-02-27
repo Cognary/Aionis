@@ -78,6 +78,7 @@ const env = loadEnv();
 const store = createMemoryStore({
   backend: env.MEMORY_STORE_BACKEND,
   databaseUrl: env.DATABASE_URL,
+  embeddedExperimentalEnabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
 });
 const db = asPostgresMemoryStore(store).db;
 const embedder = createEmbeddingProviderFromEnv(process.env);
@@ -787,6 +788,7 @@ app.log.info(
     scope: env.MEMORY_SCOPE,
     tenant_id: env.MEMORY_TENANT_ID,
     memory_store_backend: env.MEMORY_STORE_BACKEND,
+    memory_store_embedded_experimental_enabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     trust_proxy: env.TRUST_PROXY,
@@ -898,6 +900,7 @@ app.get("/health", async () => ({
   ok: true,
   database_target_hash: healthDatabaseTargetHash,
   memory_store_backend: env.MEMORY_STORE_BACKEND,
+  memory_store_embedded_experimental_enabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
   recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
 }));

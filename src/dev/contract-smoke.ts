@@ -16,6 +16,8 @@ import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
 import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
+import { RECALL_STORE_ACCESS_CAPABILITY_VERSION, assertRecallStoreAccessContract } from "../store/recall-access.js";
+import { WRITE_STORE_ACCESS_CAPABILITY_VERSION, assertWriteStoreAccessContract } from "../store/write-access.js";
 
 type QueryResult<T> = { rows: T[]; rowCount: number };
 
@@ -178,6 +180,7 @@ async function run() {
       APP_ENV: "dev",
       DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
       MEMORY_STORE_BACKEND: "postgres",
+      MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: "false",
       MEMORY_RECALL_PROFILE: "lite",
       MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: "lite",
       MEMORY_RECALL_PROFILE_POLICY_JSON: JSON.stringify({
@@ -189,8 +192,36 @@ async function run() {
     async () => {
       const env = loadEnv();
       assert.equal(env.MEMORY_STORE_BACKEND, "postgres");
+      assert.equal(env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED, false);
       assert.equal(env.MEMORY_RECALL_PROFILE, "lite");
       assert.equal(env.MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE, "lite");
+    },
+  );
+  await withEnv(
+    {
+      APP_ENV: "dev",
+      DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+      MEMORY_STORE_BACKEND: "embedded",
+      MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: "false",
+    },
+    async () => {
+      assert.throws(
+        () => loadEnv(),
+        /MEMORY_STORE_BACKEND=embedded requires MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED=true/,
+      );
+    },
+  );
+  await withEnv(
+    {
+      APP_ENV: "dev",
+      DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+      MEMORY_STORE_BACKEND: "embedded",
+      MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: "true",
+    },
+    async () => {
+      const env = loadEnv();
+      assert.equal(env.MEMORY_STORE_BACKEND, "embedded");
+      assert.equal(env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED, true);
     },
   );
   await withEnv(
@@ -207,6 +238,57 @@ async function run() {
         /legacy\|strict_edges\|quality_first\|lite/,
       );
     },
+  );
+
+  const recallAccessOk = {
+    capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
+    stage1CandidatesAnn: async () => [],
+    stage1CandidatesExactFallback: async () => [],
+    stage2Edges: async () => [],
+    stage2Nodes: async () => [],
+    ruleDefs: async () => [],
+    debugEmbeddings: async () => [],
+    insertRecallAudit: async () => {},
+  };
+  assert.doesNotThrow(() => assertRecallStoreAccessContract(recallAccessOk as any));
+  assert.throws(
+    () =>
+      assertRecallStoreAccessContract({
+        ...recallAccessOk,
+        capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION + 1,
+      } as any),
+    /capability version mismatch/,
+  );
+  assert.throws(
+    () => assertRecallStoreAccessContract({ capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION } as any),
+    /missing required method/,
+  );
+
+  const writeAccessOk = {
+    capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+    nodeScopesByIds: async () => new Map<string, string>(),
+    parentCommitHash: async () => null,
+    insertCommit: async () => "00000000-0000-0000-0000-000000000001",
+    insertNode: async () => {},
+    insertRuleDef: async () => {},
+    upsertEdge: async () => {},
+    readyEmbeddingNodeIds: async () => new Set<string>(),
+    insertOutboxEvent: async () => {},
+    appendAfterTopicClusterEventIds: async () => {},
+    mirrorCommitArtifactsToShadowV2: async () => ({ commits: 0, nodes: 0, edges: 0, outbox: 0 }),
+  };
+  assert.doesNotThrow(() => assertWriteStoreAccessContract(writeAccessOk as any));
+  assert.throws(
+    () =>
+      assertWriteStoreAccessContract({
+        ...writeAccessOk,
+        capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION + 1,
+      } as any),
+    /capability version mismatch/,
+  );
+  assert.throws(
+    () => assertWriteStoreAccessContract({ capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION } as any),
+    /missing required method/,
   );
 
   // Schema hard cap: max_edges <= 100
