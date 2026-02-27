@@ -11,7 +11,12 @@ PY_SDK_SRC = os.path.join(ROOT, "packages", "python-sdk", "src")
 if PY_SDK_SRC not in sys.path:
     sys.path.insert(0, PY_SDK_SRC)
 
-from aionis_sdk import AionisApiError, AionisClient  # noqa: E402
+from aionis_sdk import (  # noqa: E402
+    AionisApiError,
+    AionisClient,
+    is_backend_capability_unsupported_error,
+    parse_backend_capability_error_details,
+)
 
 
 def _infer_api_key_from_env() -> str | None:
@@ -84,6 +89,75 @@ def main() -> int:
             }
         )
 
+        health = client.health()
+        capability_contract = client.get_capability_contract()
+        health_data = health.get("data") if isinstance(health.get("data"), dict) else {}
+        contract_from_health = (
+            health_data.get("memory_store_capability_contract")
+            if isinstance(health_data.get("memory_store_capability_contract"), dict)
+            else {}
+        )
+        if capability_contract.get("data") != contract_from_health:
+            raise RuntimeError("get_capability_contract does not match /health.memory_store_capability_contract")
+        feature_caps = (
+            health_data.get("memory_store_feature_capabilities")
+            if isinstance(health_data.get("memory_store_feature_capabilities"), dict)
+            else {}
+        )
+
+        pack_export = None
+        packs_export_enabled = feature_caps.get("packs_export")
+        if packs_export_enabled is False:
+            try:
+                client.pack_export(
+                    {
+                        "scope": scope,
+                        "include_nodes": False,
+                        "include_edges": False,
+                        "include_commits": False,
+                        "include_meta": False,
+                        "max_rows": 1,
+                    }
+                )
+                raise RuntimeError("pack_export must fail when packs_export capability is disabled")
+            except Exception as err:
+                if not is_backend_capability_unsupported_error(err):
+                    raise
+                details = parse_backend_capability_error_details(getattr(err, "details", None))
+                if not isinstance(details, dict) or details.get("capability") != "packs_export":
+                    raise RuntimeError("pack_export capability error details missing capability=packs_export")
+                pack_export = {
+                    "ok": True,
+                    "status": getattr(err, "status", None),
+                    "request_id": getattr(err, "request_id", None),
+                    "capability_error": {
+                        "capability": details.get("capability"),
+                        "failure_mode": details.get("failure_mode"),
+                        "degraded_mode": details.get("degraded_mode"),
+                        "fallback_applied": details.get("fallback_applied"),
+                    },
+                }
+        elif packs_export_enabled is True:
+            pack_out = client.pack_export(
+                {
+                    "scope": scope,
+                    "include_nodes": False,
+                    "include_edges": False,
+                    "include_commits": False,
+                    "include_meta": False,
+                    "max_rows": 1,
+                }
+            )
+            manifest = pack_out.get("data", {}).get("manifest", {}) if isinstance(pack_out.get("data"), dict) else {}
+            pack_export = {
+                "ok": True,
+                "status": pack_out.get("status"),
+                "request_id": pack_out.get("request_id"),
+                "manifest_sha256": manifest.get("sha256") if isinstance(manifest, dict) else None,
+            }
+        else:
+            pack_export = {"ok": False, "reason": "packs_export capability missing in /health response"}
+
         recall_text = None
         try:
             recall = client.recall_text(
@@ -150,6 +224,14 @@ def main() -> int:
                         else None
                     ),
                 },
+                "health": {
+                    "status": health.get("status"),
+                    "request_id": health.get("request_id"),
+                    "backend": health_data.get("memory_store_backend"),
+                    "feature_capabilities": feature_caps,
+                    "capability_contract_keys": sorted(contract_from_health.keys()),
+                },
+                "pack_export": pack_export,
                 "recall_text": recall_text,
             },
         }

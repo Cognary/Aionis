@@ -1,5 +1,10 @@
 import { loadEnv } from "../config.js";
-import { AionisApiError, AionisClient } from "../sdk/index.js";
+import {
+  AionisApiError,
+  AionisClient,
+  isBackendCapabilityUnsupportedError,
+  parseBackendCapabilityErrorDetails,
+} from "../sdk/index.js";
 
 function inferApiKeyFromEnv(): string | undefined {
   const explicit = process.env.API_KEY?.trim() || process.env.PERF_API_KEY?.trim();
@@ -60,6 +65,79 @@ async function main() {
     rules_limit: 50,
   });
 
+  const health = await client.health();
+  const capabilityContract = await client.getCapabilityContract();
+  const featureCaps = health.data.memory_store_feature_capabilities ?? {};
+  const contractFromHealth = health.data.memory_store_capability_contract ?? {};
+
+  if (JSON.stringify(capabilityContract.data) !== JSON.stringify(contractFromHealth)) {
+    throw new Error("getCapabilityContract does not match /health.memory_store_capability_contract");
+  }
+
+  let packExport:
+    | { ok: true; status: number; request_id: string | null; manifest_sha256: string | null }
+    | {
+        ok: true;
+        status: number;
+        request_id: string | null;
+        capability_error: {
+          capability: string;
+          failure_mode: string | null;
+          degraded_mode: string | null;
+          fallback_applied: boolean | null;
+        };
+      }
+    | { ok: false; reason: string };
+
+  if (featureCaps.packs_export === false) {
+    try {
+      await client.packExport({
+        scope,
+        include_nodes: false,
+        include_edges: false,
+        include_commits: false,
+        include_meta: false,
+        max_rows: 1,
+      });
+      throw new Error("packExport must fail when packs_export capability is disabled");
+    } catch (err) {
+      if (!isBackendCapabilityUnsupportedError(err)) throw err;
+      const details = parseBackendCapabilityErrorDetails(err.details);
+      if (!details || details.capability !== "packs_export") {
+        throw new Error("packExport capability error details missing capability=packs_export");
+      }
+      packExport = {
+        ok: true,
+        status: err.status,
+        request_id: err.request_id,
+        capability_error: {
+          capability: details.capability,
+          failure_mode: details.failure_mode ?? null,
+          degraded_mode: details.degraded_mode ?? null,
+          fallback_applied: typeof details.fallback_applied === "boolean" ? details.fallback_applied : null,
+        },
+      };
+    }
+  } else if (featureCaps.packs_export === true) {
+    const packOut = await client.packExport({
+      scope,
+      include_nodes: false,
+      include_edges: false,
+      include_commits: false,
+      include_meta: false,
+      max_rows: 1,
+    });
+    const manifestSha = packOut.data.manifest?.sha256 ?? null;
+    packExport = {
+      ok: true,
+      status: packOut.status,
+      request_id: packOut.request_id,
+      manifest_sha256: manifestSha,
+    };
+  } else {
+    packExport = { ok: false, reason: "packs_export capability missing in /health response" };
+  }
+
   let recallText: { ok: boolean; status: number; request_id: string | null; seeds: number } | { ok: false; reason: string };
   try {
     const recall = await client.recallText({
@@ -118,6 +196,14 @@ async function main() {
         selected: tools.data.selection?.selected ?? null,
         ordered: tools.data.selection?.ordered ?? [],
       },
+      health: {
+        status: health.status,
+        request_id: health.request_id,
+        backend: health.data.memory_store_backend ?? null,
+        feature_capabilities: featureCaps,
+        capability_contract_keys: Object.keys(capabilityContract.data ?? {}),
+      },
+      pack_export: packExport,
       recall_text: recallText,
     },
   };

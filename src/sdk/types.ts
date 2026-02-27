@@ -1,4 +1,5 @@
 import type {
+  MemoryPackExportInput,
   MemoryRecallInput,
   MemoryRecallTextInput,
   MemoryWriteInput,
@@ -8,6 +9,7 @@ import type {
 } from "../memory/schemas.js";
 
 export type {
+  MemoryPackExportInput,
   MemoryRecallInput,
   MemoryRecallTextInput,
   MemoryWriteInput,
@@ -56,6 +58,22 @@ export type ApiErrorPayload = {
   issues?: Array<{ path: string; message: string }>;
 };
 
+export type CapabilityFailureMode = "hard_fail" | "soft_degrade";
+
+export type CapabilityContractSpec = {
+  failure_mode: CapabilityFailureMode;
+  degraded_modes: string[];
+};
+
+export type BackendCapabilityErrorDetails = {
+  capability: string;
+  backend?: string;
+  failure_mode?: CapabilityFailureMode;
+  degraded_mode?: string;
+  fallback_applied?: boolean;
+  [k: string]: unknown;
+};
+
 export class AionisApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -91,6 +109,32 @@ export class AionisNetworkError extends Error {
   }
 }
 
+export function parseBackendCapabilityErrorDetails(details: unknown): BackendCapabilityErrorDetails | null {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return null;
+  const obj = details as Record<string, unknown>;
+  if (typeof obj.capability !== "string" || obj.capability.trim().length === 0) return null;
+  const out: BackendCapabilityErrorDetails = {
+    capability: obj.capability,
+  };
+  if (typeof obj.backend === "string") out.backend = obj.backend;
+  if (obj.failure_mode === "hard_fail" || obj.failure_mode === "soft_degrade") {
+    out.failure_mode = obj.failure_mode;
+  }
+  if (typeof obj.degraded_mode === "string") out.degraded_mode = obj.degraded_mode;
+  if (typeof obj.fallback_applied === "boolean") out.fallback_applied = obj.fallback_applied;
+  for (const [k, v] of Object.entries(obj)) {
+    if (k in out) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+export function isBackendCapabilityUnsupportedError(err: unknown): err is AionisApiError & { details: BackendCapabilityErrorDetails } {
+  if (!(err instanceof AionisApiError)) return false;
+  if (err.code !== "backend_capability_unsupported") return false;
+  return parseBackendCapabilityErrorDetails(err.details) !== null;
+}
+
 export type MemoryWriteResponse = {
   tenant_id?: string;
   scope?: string;
@@ -100,6 +144,27 @@ export type MemoryWriteResponse = {
   edges: Array<Record<string, unknown>>;
   embedding_backfill?: { enqueued: true; pending_nodes: number };
   topic_cluster?: Record<string, unknown>;
+  shadow_dual_write?: {
+    enabled: boolean;
+    strict: boolean;
+    mirrored: boolean;
+    copied?: { commits: number; nodes: number; edges: number; outbox: number };
+    capability?: string;
+    failure_mode?: CapabilityFailureMode;
+    degraded_mode?: string;
+    fallback_applied?: boolean;
+    error?: string;
+  };
+  [k: string]: unknown;
+};
+
+export type HealthResponse = {
+  ok: boolean;
+  memory_store_backend?: string;
+  memory_store_recall_capabilities?: Record<string, boolean>;
+  memory_store_write_capabilities?: Record<string, boolean>;
+  memory_store_feature_capabilities?: Record<string, boolean>;
+  memory_store_capability_contract?: Record<string, CapabilityContractSpec>;
   [k: string]: unknown;
 };
 
@@ -120,6 +185,37 @@ export type MemoryRecallResponse = {
   debug?: Record<string, unknown>;
   rules?: Record<string, unknown>;
   query?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
+export type MemoryPackExportResponse = {
+  tenant_id: string;
+  scope: string;
+  manifest: {
+    version: string;
+    pack_version: string;
+    sha256: string;
+    generated_at: string;
+    counts: {
+      nodes: number;
+      edges: number;
+      commits: number;
+    };
+    truncated: {
+      nodes: boolean;
+      edges: boolean;
+      commits: boolean;
+    };
+    max_rows: number;
+  };
+  pack: {
+    version: "aionis_pack_v1";
+    tenant_id: string;
+    scope: string;
+    nodes: Array<Record<string, unknown>>;
+    edges: Array<Record<string, unknown>>;
+    commits: Array<Record<string, unknown>>;
+  };
   [k: string]: unknown;
 };
 

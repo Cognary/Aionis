@@ -90,6 +90,10 @@ jobs:
 
       - name: Startup health + API parity smoke
         run: |
+          if [[ "${MEMORY_STORE_BACKEND}" == "embedded" ]]; then
+            export MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED=false
+          fi
+
           node dist/index.js >/tmp/backend_parity_api.log 2>&1 &
           API_PID=$!
           echo "${API_PID}" >/tmp/backend_parity_api.pid
@@ -226,6 +230,9 @@ jobs:
               throw new Error("recall returned no seeds for parity case");
             }
           '
+
+          npm run -s sdk:smoke >/tmp/backend_parity_sdk_smoke.json
+          npm run -s sdk:py:smoke >/tmp/backend_parity_py_sdk_smoke.json
 
           curl -fsS "http://127.0.0.1:${PORT}/health" >/tmp/backend_parity_health_after.json
 
