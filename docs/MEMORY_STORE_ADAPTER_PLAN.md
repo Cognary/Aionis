@@ -50,9 +50,10 @@ Completed in this phase:
 18. Added `MEMORY_STORE_BACKEND=embedded` experimental route (postgres-delegated shim) behind explicit env gate.
 19. Added query-level parity fixtures for Postgres recall/write adapters in contract smoke.
 20. Added CI backend-matrix parity smoke workflow (`postgres` + `embedded`) with migration + contract + startup health + write/recall API parity checks.
+21. Added embedded in-memory runtime (`in_memory_v1`) and switched embedded backend recall paths to local adapter with write-through mirror from API write flows.
 
 ## Next Steps
 
-1. Replace embedded shim internals with true local engine adapter implementation (while keeping contract stable).
+1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
 2. Add optional capability negotiation flags for non-parity features per backend (e.g. shadow mirror).
-3. Extend backend-matrix CI parity cases beyond write/recall baseline (e.g. rules evaluate, planning context).
+3. Add persistence/snapshot strategy for embedded runtime (file-backed replay/import) instead of process-memory only.

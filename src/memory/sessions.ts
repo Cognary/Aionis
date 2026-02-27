@@ -13,6 +13,7 @@ import {
 import { resolveTenantScope } from "./tenant.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 import { createPostgresWriteStoreAccess } from "../store/write-access.js";
+import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import { buildAionisUri } from "./uri.js";
 
 type SessionWriteOptions = {
@@ -24,6 +25,7 @@ type SessionWriteOptions = {
   shadowDualWriteEnabled: boolean;
   shadowDualWriteStrict: boolean;
   embedder: EmbeddingProvider | null;
+  embeddedRuntime?: EmbeddedMemoryRuntime | null;
 };
 
 type SessionEventListOptions = {
@@ -181,6 +183,7 @@ export async function createSession(client: pg.PoolClient, body: unknown, opts: 
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
     write_access: createPostgresWriteStoreAccess(client),
   });
+  if (opts.embeddedRuntime) opts.embeddedRuntime.applyWrite(prepared as any, out as any);
 
   const node = out.nodes.find((n) => n.client_id === sessionCid) ?? out.nodes[0] ?? null;
   return {
@@ -315,6 +318,7 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
     write_access: createPostgresWriteStoreAccess(client),
   });
+  if (opts.embeddedRuntime) opts.embeddedRuntime.applyWrite(prepared as any, out as any);
 
   const eventNode = out.nodes.find((n) => n.client_id === eventCid) ?? null;
   const sessionNode = out.nodes.find((n) => n.client_id === sessionCid) ?? null;

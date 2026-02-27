@@ -5,6 +5,7 @@ import { badRequest } from "../util/http.js";
 import { resolveTenantScope } from "./tenant.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 import { createPostgresWriteStoreAccess } from "../store/write-access.js";
+import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import { MemoryPackExportRequest, MemoryPackImportRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 
@@ -17,6 +18,7 @@ type PackOptions = {
   shadowDualWriteEnabled: boolean;
   shadowDualWriteStrict: boolean;
   embedder: EmbeddingProvider | null;
+  embeddedRuntime?: EmbeddedMemoryRuntime | null;
 };
 
 type ExportNodeRow = {
@@ -312,6 +314,7 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
     write_access: createPostgresWriteStoreAccess(client),
   });
+  if (opts.embeddedRuntime) opts.embeddedRuntime.applyWrite(prepared as any, out as any);
 
   return {
     ok: true,

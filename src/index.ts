@@ -5,6 +5,7 @@ import { performance } from "node:perf_hooks";
 import { ZodError, z } from "zod";
 import { loadEnv } from "./config.js";
 import { asPostgresMemoryStore, createMemoryStore } from "./store/memory-store.js";
+import { createEmbeddedMemoryRuntime } from "./store/embedded-memory-runtime.js";
 import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   assertRecallStoreAccessContract,
@@ -81,6 +82,7 @@ const store = createMemoryStore({
   embeddedExperimentalEnabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
 });
 const db = asPostgresMemoryStore(store).db;
+const embeddedRuntime = env.MEMORY_STORE_BACKEND === "embedded" ? createEmbeddedMemoryRuntime() : null;
 const embedder = createEmbeddingProviderFromEnv(process.env);
 const authResolver = createAuthResolver({
   mode: env.MEMORY_AUTH_MODE,
@@ -106,6 +108,11 @@ function databaseTargetHash(databaseUrl: string): string | null {
 }
 
 const healthDatabaseTargetHash = databaseTargetHash(env.DATABASE_URL);
+
+function recallAccessForClient(client: any) {
+  if (embeddedRuntime) return embeddedRuntime.createRecallAccess();
+  return createPostgresRecallStoreAccess(client);
+}
 
 const recallLimiter = env.RATE_LIMIT_ENABLED
   ? new TokenBucketLimiter({
@@ -789,6 +796,7 @@ app.log.info(
     tenant_id: env.MEMORY_TENANT_ID,
     memory_store_backend: env.MEMORY_STORE_BACKEND,
     memory_store_embedded_experimental_enabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
+    memory_store_embedded_runtime: embeddedRuntime ? "in_memory_v1" : null,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     trust_proxy: env.TRUST_PROXY,
@@ -901,6 +909,7 @@ app.get("/health", async () => ({
   database_target_hash: healthDatabaseTargetHash,
   memory_store_backend: env.MEMORY_STORE_BACKEND,
   memory_store_embedded_experimental_enabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
+  memory_store_embedded_runtime: embeddedRuntime ? "in_memory_v1" : null,
   recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
 }));
@@ -1528,6 +1537,9 @@ app.post("/v1/memory/write", async (req, reply) => {
 
       return writeRes;
     });
+    if (embeddedRuntime) {
+      embeddedRuntime.applyWrite(prepared as any, out as any);
+    }
 
     const ms = performance.now() - t0;
     req.log.info(
@@ -1601,6 +1613,7 @@ app.post("/v1/memory/sessions", async (req, reply) => {
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
         embedder,
+        embeddedRuntime,
       }),
     );
   } finally {
@@ -1628,6 +1641,7 @@ app.post("/v1/memory/events", async (req, reply) => {
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
         embedder,
+        embeddedRuntime,
       }),
     );
   } finally {
@@ -1686,6 +1700,7 @@ app.post("/v1/memory/packs/export", async (req, reply) => {
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
         embedder,
+        embeddedRuntime,
       }),
     );
   } finally {
@@ -1800,7 +1815,7 @@ app.post("/v1/memory/recall", async (req, reply) => {
         "recall",
         {
           stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
-          recall_access: createPostgresRecallStoreAccess(client),
+          recall_access: recallAccessForClient(client),
         },
       );
 
@@ -2063,7 +2078,7 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
         "recall_text",
         {
           stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
-          recall_access: createPostgresRecallStoreAccess(client),
+          recall_access: recallAccessForClient(client),
         },
       );
 
@@ -2339,7 +2354,7 @@ app.post("/v1/memory/planning/context", async (req, reply) => {
         "recall_text",
         {
           stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
-          recall_access: createPostgresRecallStoreAccess(client),
+          recall_access: recallAccessForClient(client),
         },
       );
 

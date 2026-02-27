@@ -27,6 +27,7 @@ import {
   createPostgresWriteStoreAccess,
 } from "../store/write-access.js";
 import { asPostgresMemoryStore, createMemoryStore } from "../store/memory-store.js";
+import { createEmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 
 type QueryResult<T> = { rows: T[]; rowCount: number };
 
@@ -669,6 +670,43 @@ async function run() {
     writeAccessFixture.queries.some((q) => q.sql.includes("aionis_partition_ensure_scope")),
     "write adapter should attempt scope ensure before v2 mirror copy",
   );
+
+  const embeddedRuntime = createEmbeddedMemoryRuntime();
+  embeddedRuntime.applyWrite(
+    {
+      scope: "tenant:parity::scope:embedded",
+      auto_embed_effective: false,
+      nodes: [
+        {
+          id: "00000000-0000-0000-0000-000000000e11",
+          scope: "tenant:parity::scope:embedded",
+          type: "event",
+          tier: "hot",
+          memory_lane: "shared",
+          title: "embedded event",
+          text_summary: "embedded event",
+          slots: {},
+          embedding: Array.from({ length: 8 }, () => 0),
+          embedding_model: "client",
+        },
+      ],
+      edges: [],
+    } as any,
+    {
+      commit_id: "00000000-0000-0000-0000-000000000ec1",
+      commit_hash: "embedded-commit",
+    } as any,
+  );
+  const embeddedSeeds = await embeddedRuntime.createRecallAccess().stage1CandidatesAnn({
+    queryEmbedding: Array.from({ length: 8 }, () => 0),
+    scope: "tenant:parity::scope:embedded",
+    oversample: 10,
+    limit: 5,
+    consumerAgentId: null,
+    consumerTeamId: null,
+  });
+  assert.equal(embeddedSeeds.length, 1);
+  assert.equal(embeddedSeeds[0].id, "00000000-0000-0000-0000-000000000e11");
 
   // Schema hard cap: max_edges <= 100
   assert.throws(
