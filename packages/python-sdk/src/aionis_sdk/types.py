@@ -7,12 +7,35 @@ MemoryLane = Literal["private", "shared"]
 Tier = Literal["hot", "warm", "cold", "archive"]
 FeedbackOutcome = Literal["positive", "negative", "neutral"]
 DecisionLinkMode = Literal["provided", "inferred", "created_from_feedback"]
+CapabilityFailureMode = Literal["hard_fail", "soft_degrade"]
 
 
 class AionisResponse(TypedDict, total=False):
     data: Any
     status: int
     request_id: Optional[str]
+
+
+class CapabilityContractSpec(TypedDict, total=False):
+    failure_mode: CapabilityFailureMode
+    degraded_modes: List[str]
+
+
+class BackendCapabilityErrorDetails(TypedDict, total=False):
+    capability: str
+    backend: str
+    failure_mode: CapabilityFailureMode
+    degraded_mode: str
+    fallback_applied: bool
+
+
+class HealthResponse(TypedDict, total=False):
+    ok: bool
+    memory_store_backend: str
+    memory_store_recall_capabilities: Dict[str, bool]
+    memory_store_write_capabilities: Dict[str, bool]
+    memory_store_feature_capabilities: Dict[str, bool]
+    memory_store_capability_contract: Dict[str, CapabilityContractSpec]
 
 
 class EdgeEndpointInput(TypedDict, total=False):

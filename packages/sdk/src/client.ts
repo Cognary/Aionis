@@ -3,6 +3,8 @@ import type {
   AionisClientOptions,
   AionisResponse,
   ApiErrorPayload,
+  CapabilityContractSpec,
+  HealthResponse,
   MemoryEventWriteInput,
   MemoryEventWriteResponse,
   MemoryFindInput,
@@ -204,6 +206,23 @@ export class AionisClient {
 
   async toolsFeedback(input: ToolsFeedbackInput, opts?: RequestOptions): Promise<AionisResponse<ToolsFeedbackResponse>> {
     return this.requestPost<ToolsFeedbackInput, ToolsFeedbackResponse>("/v1/memory/tools/feedback", input, opts);
+  }
+
+  async health(opts?: RequestOptions): Promise<AionisResponse<HealthResponse>> {
+    return this.requestGet<HealthResponse>("/health", undefined, opts);
+  }
+
+  async getCapabilityContract(opts?: RequestOptions): Promise<AionisResponse<Record<string, CapabilityContractSpec>>> {
+    const out = await this.health(opts);
+    const contract =
+      out.data && typeof out.data === "object" && out.data.memory_store_capability_contract
+        ? out.data.memory_store_capability_contract
+        : {};
+    return {
+      data: contract,
+      status: out.status,
+      request_id: out.request_id,
+    };
   }
 
   private async requestPost<TReq, TRes>(path: string, body: TReq, opts?: RequestOptions): Promise<AionisResponse<TRes>> {

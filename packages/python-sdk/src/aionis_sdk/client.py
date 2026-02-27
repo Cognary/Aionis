@@ -11,6 +11,7 @@ from urllib import error, request
 
 if TYPE_CHECKING:
     from .types import (
+        BackendCapabilityErrorDetails,
         MemoryEventWriteInput,
         MemoryFindInput,
         MemoryPackExportInput,
@@ -56,6 +57,40 @@ class AionisNetworkError(Exception):
     def __init__(self, message: str, request_id: Optional[str] = None) -> None:
         super().__init__(message)
         self.request_id = request_id
+
+
+def parse_backend_capability_error_details(details: Any) -> Optional["BackendCapabilityErrorDetails"]:
+    if not isinstance(details, dict):
+        return None
+    capability = details.get("capability")
+    if not isinstance(capability, str) or not capability.strip():
+        return None
+    out: Dict[str, Any] = {"capability": capability}
+    backend = details.get("backend")
+    if isinstance(backend, str):
+        out["backend"] = backend
+    failure_mode = details.get("failure_mode")
+    if failure_mode in ("hard_fail", "soft_degrade"):
+        out["failure_mode"] = failure_mode
+    degraded_mode = details.get("degraded_mode")
+    if isinstance(degraded_mode, str):
+        out["degraded_mode"] = degraded_mode
+    fallback_applied = details.get("fallback_applied")
+    if isinstance(fallback_applied, bool):
+        out["fallback_applied"] = fallback_applied
+    return out  # type: ignore[return-value]
+
+
+def is_backend_capability_unsupported_error(err: BaseException) -> bool:
+    if not isinstance(err, AionisApiError):
+        return False
+    if err.code != "backend_capability_unsupported":
+        return False
+    parsed = parse_backend_capability_error_details(err.details)
+    if parsed is None:
+        return False
+    err.details = parsed
+    return True
 
 
 def _join_url(base_url: str, path: str) -> str:
@@ -183,6 +218,23 @@ class AionisClient:
 
     def tools_feedback(self, payload: "ToolsFeedbackInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/tools/feedback", payload, request_options)
+
+    def health(self, **request_options: Any) -> Dict[str, Any]:
+        return self._request("/health", {}, request_options, method="GET")
+
+    def get_capability_contract(self, **request_options: Any) -> Dict[str, Any]:
+        out = self.health(**request_options)
+        data = out.get("data") if isinstance(out, dict) else None
+        contract: Dict[str, Any] = {}
+        if isinstance(data, dict):
+            maybe = data.get("memory_store_capability_contract")
+            if isinstance(maybe, dict):
+                contract = maybe
+        return {
+            "data": contract,
+            "status": out.get("status"),
+            "request_id": out.get("request_id"),
+        }
 
     def _request(
         self,

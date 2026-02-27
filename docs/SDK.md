@@ -27,6 +27,8 @@ title: "Aionis SDK (TypeScript + Python)"
 10. `rulesEvaluate`
 11. `toolsSelect`
 12. `toolsFeedback`
+13. `health`
+14. `getCapabilityContract` / `get_capability_contract`
 
 并内置：
 
@@ -100,6 +102,24 @@ try {
 ```
 
 网络与超时会抛出 `AionisNetworkError`。
+
+### 5.1 Backend capability negotiation
+
+当后端返回 `backend_capability_unsupported`（HTTP 501）时，可用 SDK helper 判断并读取标准化字段（`capability`, `failure_mode`, `degraded_mode`, `fallback_applied`）：
+
+TypeScript:
+
+```ts
+import { isBackendCapabilityUnsupportedError } from "@aionis/sdk";
+```
+
+Python:
+
+```python
+from aionis_sdk import is_backend_capability_unsupported_error
+```
+
+也可以通过 `health()` 或 `getCapabilityContract()`/`get_capability_contract()` 主动读取 `/health.memory_store_capability_contract` 做客户端行为协商。
 
 ## 6. Tenant-aware Calls
 

@@ -61,9 +61,10 @@ Completed in this phase:
 29. Added store feature capability negotiation for `sessions_graph`, `packs_export`, and `packs_import` with API route gate enforcement, `/health` exposure, and CI coverage.
 30. Added capability-specific fallback contract details (`degraded_mode`, capability key, fallback flag) for feature-gated errors and shadow dual-write degraded path, with API-contract + contract-smoke coverage.
 31. Centralized capability fallback contract registry (`hard_fail` vs `soft_degrade`) and exposed it via `/health` for client/runtime negotiation.
+32. Wired capability fallback negotiation into TypeScript/Python SDKs (`health` + `getCapabilityContract` helpers, capability-unsupported error parsers, and README/SDK contract docs).
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
-2. Wire capability fallback contract into SDK/client adapters for automatic behavior negotiation.
+2. Add SDK smoke coverage for capability negotiation helpers against both `postgres` and `embedded` backends.
 3. Add runtime compaction telemetry export for long-run trend analysis (artifact timeline + alert thresholds), beyond smoke-level CI assertions.

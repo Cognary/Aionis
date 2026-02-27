@@ -87,11 +87,30 @@ client.tools_feedback(feedback_payload)
 10. `rules_evaluate`
 11. `tools_select`
 12. `tools_feedback`
+13. `health`
+14. `get_capability_contract`
 
 ## Error model
 
 1. `AionisApiError`: API returned non-2xx response.
 2. `AionisNetworkError`: request timeout/network failure.
+
+Capability-aware helpers:
+
+1. `is_backend_capability_unsupported_error(err)`
+2. `parse_backend_capability_error_details(err.details)`
+
+```python
+from aionis_sdk import AionisApiError, is_backend_capability_unsupported_error
+
+try:
+    client.pack_export({"scope": "default"})
+except Exception as err:
+    if is_backend_capability_unsupported_error(err):
+        print(err.details.get("capability"), err.details.get("failure_mode"))
+    elif isinstance(err, AionisApiError):
+        print(err.code, str(err))
+```
 
 ## Smoke
 

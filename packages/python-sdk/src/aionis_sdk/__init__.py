@@ -1,8 +1,18 @@
-from .client import AionisApiError, AionisClient, AionisNetworkError
+from .client import (
+    AionisApiError,
+    AionisClient,
+    AionisNetworkError,
+    is_backend_capability_unsupported_error,
+    parse_backend_capability_error_details,
+)
 from .types import (
     AionisResponse,
+    BackendCapabilityErrorDetails,
+    CapabilityContractSpec,
+    CapabilityFailureMode,
     DecisionLinkMode,
     FeedbackOutcome,
+    HealthResponse,
     MemoryEdgeInput,
     MemoryEventWriteInput,
     MemoryFindInput,
@@ -30,8 +40,12 @@ __all__ = [
     "AionisClient",
     "AionisNetworkError",
     "AionisResponse",
+    "BackendCapabilityErrorDetails",
+    "CapabilityContractSpec",
+    "CapabilityFailureMode",
     "DecisionLinkMode",
     "FeedbackOutcome",
+    "HealthResponse",
     "MemoryEdgeInput",
     "MemoryEventWriteInput",
     "MemoryFindInput",
@@ -52,4 +66,6 @@ __all__ = [
     "ToolsSelectDecision",
     "ToolsSelectInput",
     "ToolsSelectResponse",
+    "is_backend_capability_unsupported_error",
+    "parse_backend_capability_error_details",
 ]

@@ -55,11 +55,35 @@ If you set custom headers manually, the SDK will not override existing auth head
 10. `rulesEvaluate`
 11. `toolsSelect`
 12. `toolsFeedback`
+13. `health`
+14. `getCapabilityContract`
 
 ## Error model
 
 1. `AionisApiError`: API returned non-2xx response.
 2. `AionisNetworkError`: request timeout/network failure.
+
+Capability-aware helpers:
+
+1. `isBackendCapabilityUnsupportedError(err)`
+2. `parseBackendCapabilityErrorDetails(err.details)`
+
+Example:
+
+```ts
+import { AionisApiError, isBackendCapabilityUnsupportedError } from "@aionis/sdk";
+
+try {
+  await client.packExport({ scope: "default" });
+} catch (err) {
+  if (isBackendCapabilityUnsupportedError(err)) {
+    // err.details now carries capability contract fields
+    console.log(err.details.capability, err.details.failure_mode, err.details.degraded_mode);
+  } else if (err instanceof AionisApiError) {
+    console.error(err.code, err.message);
+  }
+}
+```
 
 ## Smoke
 
