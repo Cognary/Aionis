@@ -479,6 +479,14 @@ Measure recall/write latency percentiles (p50/p95/p99) with configurable concurr
 npm run job:perf-benchmark -- --base-url http://localhost:3001 --scope perf --tenant-id default --mode all --warmup 20 --recall-requests 200 --recall-concurrency 12 --write-requests 80 --write-concurrency 4
 ```
 
+Optional profile pinning (forces recall knobs to a known preset for A/B runs):
+
+```bash
+npm run job:perf-benchmark -- --base-url http://localhost:3001 --scope perf --tenant-id default --mode recall --recall-profile lite
+```
+
+`--recall-profile` supports: `legacy|strict_edges|quality_first|lite`.
+
 Auth handling:
 
 - for `MEMORY_AUTH_MODE=api_key` or `api_key_or_jwt`, script auto-picks the first key from `MEMORY_API_KEYS_JSON`
@@ -508,6 +516,16 @@ Aggregate matrix artifacts to markdown report:
 npm run job:perf-report -- --dir /path/to/Aionis/artifacts/perf/<run_id> --output /path/to/Aionis/artifacts/perf/<run_id>/PERFORMANCE_REPORT_V1.md
 ```
 
+Compare two benchmark artifacts (e.g. `strict_edges` vs `lite`) and emit both markdown and json:
+
+```bash
+npm run job:perf-profile-compare -- \
+  --baseline /path/to/benchmark_strict_edges.json \
+  --candidate /path/to/benchmark_lite.json \
+  --baseline-label strict_edges \
+  --candidate-label lite
+```
+
 ### One-Command Matrix Runner
 
 Run multi-scale seed + benchmark + explain + report:
@@ -523,6 +541,26 @@ Useful env overrides:
 - `SCOPE_PREFIX=perf_d`
 - `TENANT_ID=default`
 - `OUT_DIR=/path/to/Aionis/artifacts/perf/custom_run`
+
+### Lite vs Strict Recall Compare
+
+Run a single-scope seed, benchmark `strict_edges` and `lite` with identical load, then generate comparison report:
+
+```bash
+npm run perf:lite-vs-strict
+```
+
+Note: the script auto-inserts one source-scope node with client-supplied embedding so fresh environments can run without manual embedding bootstrap.
+
+Useful env overrides:
+
+- `BASE_URL=http://localhost:3001`
+- `SCOPE=perf_lite_vs_strict_custom`
+- `EVENTS=20000`
+- `TOPICS=200`
+- `RECALL_REQUESTS=220`
+- `RECALL_CONCURRENCY=8`
+- `OUT_DIR=/path/to/Aionis/artifacts/perf/lite_vs_strict_custom`
 
 ## Consolidation Candidates (Offline, Shadow Mode)
 
