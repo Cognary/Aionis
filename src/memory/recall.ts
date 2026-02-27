@@ -480,6 +480,11 @@ export async function memoryRecallParsed(
       badRequest(
         "debug_embeddings_backend_unsupported",
         "include_embeddings is not supported by current backend capability (debug_embeddings=false)",
+        {
+          capability: "debug_embeddings",
+          degraded_mode: "feature_disabled",
+          fallback_applied: false,
+        },
       );
     }
     const MAX_EMBED_NODES = 5;

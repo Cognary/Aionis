@@ -19,6 +19,7 @@ import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
 import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
+import { applyMemoryWrite } from "../memory/write.js";
 import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   assertRecallStoreAccessContract,
@@ -755,6 +756,108 @@ async function run() {
     () => writeAdapterNoMirror.mirrorCommitArtifactsToShadowV2("default", commitId),
     /write capability unsupported: shadow_mirror_v2/i,
   );
+  const preparedWriteMinimal = {
+    tenant_id: "default",
+    scope_public: "default",
+    scope: "default",
+    actor: "tester",
+    memory_lane_default: "shared",
+    parent_commit_id: null,
+    input_sha256: "a".repeat(64),
+    model_version: null,
+    prompt_version: null,
+    redaction_meta: {},
+    auto_embed_effective: false,
+    force_reembed: false,
+    nodes: [
+      {
+        id: "00000000-0000-0000-0000-00000000aa11",
+        scope: "default",
+        type: "event",
+        memory_lane: "shared",
+        slots: {},
+        text_summary: "event",
+      },
+    ],
+    edges: [],
+  };
+  const writeOutNoMirror = await applyMemoryWrite({} as any, preparedWriteMinimal as any, {
+    maxTextLen: 8000,
+    piiRedaction: false,
+    allowCrossScopeEdges: false,
+    shadowDualWriteEnabled: true,
+    shadowDualWriteStrict: false,
+    write_access: {
+      capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+      capabilities: { shadow_mirror_v2: false },
+      nodeScopesByIds: async () => new Map<string, string>(),
+      parentCommitHash: async () => null,
+      insertCommit: async () => "00000000-0000-0000-0000-00000000ac11",
+      insertNode: async () => {},
+      insertRuleDef: async () => {},
+      upsertEdge: async () => {},
+      readyEmbeddingNodeIds: async () => new Set<string>(),
+      insertOutboxEvent: async () => {},
+      appendAfterTopicClusterEventIds: async () => {},
+      mirrorCommitArtifactsToShadowV2: async () => ({ commits: 0, nodes: 0, edges: 0, outbox: 0 }),
+    } as any,
+  });
+  assert.equal(writeOutNoMirror.shadow_dual_write?.mirrored, false);
+  assert.equal(writeOutNoMirror.shadow_dual_write?.capability, "shadow_mirror_v2");
+  assert.equal(writeOutNoMirror.shadow_dual_write?.degraded_mode, "capability_unsupported");
+  assert.equal(writeOutNoMirror.shadow_dual_write?.fallback_applied, true);
+  await assert.rejects(
+    () =>
+      applyMemoryWrite({} as any, preparedWriteMinimal as any, {
+        maxTextLen: 8000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+        shadowDualWriteEnabled: true,
+        shadowDualWriteStrict: true,
+        write_access: {
+          capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+          capabilities: { shadow_mirror_v2: false },
+          nodeScopesByIds: async () => new Map<string, string>(),
+          parentCommitHash: async () => null,
+          insertCommit: async () => "00000000-0000-0000-0000-00000000ac12",
+          insertNode: async () => {},
+          insertRuleDef: async () => {},
+          upsertEdge: async () => {},
+          readyEmbeddingNodeIds: async () => new Set<string>(),
+          insertOutboxEvent: async () => {},
+          appendAfterTopicClusterEventIds: async () => {},
+          mirrorCommitArtifactsToShadowV2: async () => ({ commits: 0, nodes: 0, edges: 0, outbox: 0 }),
+        } as any,
+      }),
+    /shadow dual-write unsupported by backend capability/i,
+  );
+  const writeOutMirrorFail = await applyMemoryWrite({} as any, preparedWriteMinimal as any, {
+    maxTextLen: 8000,
+    piiRedaction: false,
+    allowCrossScopeEdges: false,
+    shadowDualWriteEnabled: true,
+    shadowDualWriteStrict: false,
+    write_access: {
+      capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+      capabilities: { shadow_mirror_v2: true },
+      nodeScopesByIds: async () => new Map<string, string>(),
+      parentCommitHash: async () => null,
+      insertCommit: async () => "00000000-0000-0000-0000-00000000ac13",
+      insertNode: async () => {},
+      insertRuleDef: async () => {},
+      upsertEdge: async () => {},
+      readyEmbeddingNodeIds: async () => new Set<string>(),
+      insertOutboxEvent: async () => {},
+      appendAfterTopicClusterEventIds: async () => {},
+      mirrorCommitArtifactsToShadowV2: async () => {
+        throw new Error("mirror unavailable");
+      },
+    } as any,
+  });
+  assert.equal(writeOutMirrorFail.shadow_dual_write?.mirrored, false);
+  assert.equal(writeOutMirrorFail.shadow_dual_write?.capability, "shadow_mirror_v2");
+  assert.equal(writeOutMirrorFail.shadow_dual_write?.degraded_mode, "mirror_failed");
+  assert.equal(writeOutMirrorFail.shadow_dual_write?.fallback_applied, true);
   assert.ok(
     writeAccessFixture.queries.some((q) => q.sql.includes("aionis_partition_ensure_scope")),
     "write adapter should attempt scope ensure before v2 mirror copy",
@@ -1306,7 +1409,11 @@ async function run() {
           capabilities: { debug_embeddings: false },
         }),
       }),
-    (err: any) => err instanceof HttpError && err.code === "debug_embeddings_backend_unsupported",
+    (err: any) =>
+      err instanceof HttpError &&
+      err.code === "debug_embeddings_backend_unsupported" &&
+      (err.details as any)?.capability === "debug_embeddings" &&
+      (err.details as any)?.degraded_mode === "feature_disabled",
   );
 
   // limit>20 should be rejected in debug embeddings mode.

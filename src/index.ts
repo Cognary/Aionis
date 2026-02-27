@@ -157,7 +157,12 @@ function writeAccessForClient(client: any) {
 
 function requireStoreFeatureCapability(capability: keyof typeof storeFeatureCapabilities): void {
   if (storeFeatureCapabilities[capability]) return;
-  throw new HttpError(501, "backend_capability_unsupported", `backend capability unsupported: ${capability}`);
+  throw new HttpError(501, "backend_capability_unsupported", `backend capability unsupported: ${capability}`, {
+    capability,
+    backend: env.MEMORY_STORE_BACKEND,
+    degraded_mode: "feature_disabled",
+    fallback_applied: false,
+  });
 }
 
 const recallLimiter = env.RATE_LIMIT_ENABLED

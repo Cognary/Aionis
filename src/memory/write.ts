@@ -24,6 +24,9 @@ type WriteResult = {
     strict: boolean;
     mirrored: boolean;
     copied?: { commits: number; nodes: number; edges: number; outbox: number };
+    capability?: "shadow_mirror_v2";
+    degraded_mode?: "capability_unsupported" | "mirror_failed";
+    fallback_applied?: boolean;
     error?: string;
   };
   topic_cluster?:
@@ -602,6 +605,9 @@ export async function applyMemoryWrite(
         enabled: true,
         strict: opts.shadowDualWriteStrict,
         mirrored: false,
+        capability: "shadow_mirror_v2",
+        degraded_mode: "capability_unsupported",
+        fallback_applied: true,
         error: msg,
       };
       if (opts.shadowDualWriteStrict) {
@@ -623,6 +629,9 @@ export async function applyMemoryWrite(
         enabled: true,
         strict: opts.shadowDualWriteStrict,
         mirrored: false,
+        capability: "shadow_mirror_v2",
+        degraded_mode: "mirror_failed",
+        fallback_applied: true,
         error: msg,
       };
       if (opts.shadowDualWriteStrict) {

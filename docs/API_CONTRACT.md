@@ -72,6 +72,19 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
     - `tenant_rate_limited_write`
     - `tenant_rate_limited_debug_embeddings`
 
+## Backend Capability Fallback Contract
+
+- Capability-gated endpoints can return HTTP `501` with `error="backend_capability_unsupported"`.
+- Error `details` include:
+  - `capability`: disabled backend feature key (for example `sessions_graph`, `packs_export`, `packs_import`)
+  - `backend`: effective memory backend (`postgres` or `embedded`)
+  - `degraded_mode`: currently `"feature_disabled"`
+  - `fallback_applied`: boolean
+- Capability-gated optional subpaths can degrade in-place (instead of failing the whole request), and must expose:
+  - explicit `degraded_mode`
+  - capability key
+  - whether fallback was applied
+
 ---
 
 ## Endpoints
@@ -115,7 +128,10 @@ Validation hard rules:
 - `edges: { id, type, src_id, dst_id }[]`
 - `embedding_backfill?: { enqueued: true, pending_nodes: number }`
 - `topic_cluster?: { ... } | { enqueued: true }`
-- `shadow_dual_write?: { enabled, strict, mirrored, copied?, error? }`
+- `shadow_dual_write?: { enabled, strict, mirrored, copied?, capability?, degraded_mode?, fallback_applied?, error? }`
+  - `capability`: currently `"shadow_mirror_v2"` when dual-write path is capability-gated
+  - `degraded_mode`: `"capability_unsupported"` or `"mirror_failed"` when `mirrored=false`
+  - `fallback_applied`: `true` when request succeeded under non-strict degraded mode
 
 ### `POST /v1/memory/feedback`
 
