@@ -132,56 +132,43 @@ jobs:
           node -e '
             const fs = require("fs");
             const p = JSON.parse(fs.readFileSync("/tmp/backend_parity_health.json", "utf8"));
-            const expected = process.env.MEMORY_STORE_BACKEND;
+            const expectedBackend = process.env.MEMORY_STORE_BACKEND;
             if (p.ok !== true) throw new Error("health ok must be true");
-            if (p.memory_store_backend !== expected) throw new Error(`backend mismatch: ${p.memory_store_backend} != ${expected}`);
+            if (p.memory_store_backend !== expectedBackend) {
+              throw new Error(`backend mismatch: ${p.memory_store_backend} != ${expectedBackend}`);
+            }
             if (typeof p.recall_store_access_capability_version !== "number") throw new Error("missing recall capability version");
             if (typeof p.write_store_access_capability_version !== "number") throw new Error("missing write capability version");
             const recallCaps = p.memory_store_recall_capabilities;
             if (!recallCaps || typeof recallCaps !== "object") throw new Error("missing recall capability object");
             if (typeof recallCaps.debug_embeddings !== "boolean") throw new Error("missing recall capability debug_embeddings");
             if (typeof recallCaps.audit_insert !== "boolean") throw new Error("missing recall capability audit_insert");
-            const expectedDebugEmbeddings = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED || "false") === "true";
-            const expectedAuditInsert = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED || "false") === "true";
-            if (recallCaps.debug_embeddings !== expectedDebugEmbeddings) {
-              throw new Error(`recall capability mismatch debug_embeddings: ${recallCaps.debug_embeddings} != ${expectedDebugEmbeddings}`);
-            }
-            if (recallCaps.audit_insert !== expectedAuditInsert) {
-              throw new Error(`recall capability mismatch audit_insert: ${recallCaps.audit_insert} != ${expectedAuditInsert}`);
-            }
             const writeCaps = p.memory_store_write_capabilities;
             if (!writeCaps || typeof writeCaps !== "object") throw new Error("missing write capability object");
             if (typeof writeCaps.shadow_mirror_v2 !== "boolean") throw new Error("missing write capability shadow_mirror_v2");
-            const expectedShadowMirror = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED || "false") === "true";
-            if (writeCaps.shadow_mirror_v2 !== expectedShadowMirror) {
-              throw new Error(`write capability mismatch shadow_mirror_v2: ${writeCaps.shadow_mirror_v2} != ${expectedShadowMirror}`);
-            }
             const featureCaps = p.memory_store_feature_capabilities;
             if (!featureCaps || typeof featureCaps !== "object") throw new Error("missing feature capability object");
             if (typeof featureCaps.sessions_graph !== "boolean") throw new Error("missing feature capability sessions_graph");
             if (typeof featureCaps.packs_export !== "boolean") throw new Error("missing feature capability packs_export");
             if (typeof featureCaps.packs_import !== "boolean") throw new Error("missing feature capability packs_import");
-            const expectedSessionGraph = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED || "false") === "true";
-            const expectedPackExport = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED || "false") === "true";
-            const expectedPackImport = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED || "false") === "true";
-            if (featureCaps.sessions_graph !== expectedSessionGraph) {
-              throw new Error(`feature capability mismatch sessions_graph: ${featureCaps.sessions_graph} != ${expectedSessionGraph}`);
-            }
-            if (featureCaps.packs_export !== expectedPackExport) {
-              throw new Error(`feature capability mismatch packs_export: ${featureCaps.packs_export} != ${expectedPackExport}`);
-            }
-            if (featureCaps.packs_import !== expectedPackImport) {
-              throw new Error(`feature capability mismatch packs_import: ${featureCaps.packs_import} != ${expectedPackImport}`);
-            }
             const contract = p.memory_store_capability_contract;
             if (!contract || typeof contract !== "object") throw new Error("missing capability contract object");
-            if (!contract.shadow_mirror_v2 || contract.shadow_mirror_v2.failure_mode !== "soft_degrade") {
-              throw new Error("capability contract mismatch for shadow_mirror_v2");
+            const requiredCaps = ["sessions_graph", "packs_export", "packs_import", "debug_embeddings", "shadow_mirror_v2"];
+            for (const cap of requiredCaps) {
+              const spec = contract[cap];
+              if (!spec || typeof spec !== "object") throw new Error(`capability contract missing key: ${cap}`);
+              if (typeof spec.failure_mode !== "string") throw new Error(`capability contract missing failure_mode: ${cap}`);
+              if (!Array.isArray(spec.degraded_modes)) throw new Error(`capability contract missing degraded_modes: ${cap}`);
             }
-            if (!contract.sessions_graph || contract.sessions_graph.failure_mode !== "hard_fail") {
-              throw new Error("capability contract mismatch for sessions_graph");
+            if (contract.shadow_mirror_v2.failure_mode !== "soft_degrade") {
+              throw new Error("capability contract mismatch for shadow_mirror_v2.failure_mode");
             }
-            if (expected === "embedded") {
+            for (const cap of ["sessions_graph", "packs_export", "packs_import", "debug_embeddings"]) {
+              if (contract[cap].failure_mode !== "hard_fail") {
+                throw new Error(`capability contract mismatch for ${cap}.failure_mode`);
+              }
+            }
+            if (p.memory_store_backend === "embedded") {
               if (typeof p.memory_store_embedded_snapshot_max_bytes !== "number") throw new Error("embedded health missing snapshot max bytes");
               if (!p.memory_store_embedded_snapshot_metrics || typeof p.memory_store_embedded_snapshot_metrics !== "object") {
                 throw new Error("embedded health missing snapshot metrics object");
@@ -256,14 +243,85 @@ jobs:
 
           node -e '
             const fs = require("fs");
-            const expected = process.env.MEMORY_STORE_BACKEND;
-            if (expected !== "embedded") process.exit(0);
             const before = JSON.parse(fs.readFileSync("/tmp/backend_parity_health.json", "utf8"));
             const after = JSON.parse(fs.readFileSync("/tmp/backend_parity_health_after.json", "utf8"));
+            const tsOut = JSON.parse(fs.readFileSync("/tmp/backend_parity_sdk_smoke.json", "utf8"));
+            const pyOut = JSON.parse(fs.readFileSync("/tmp/backend_parity_py_sdk_smoke.json", "utf8"));
+            const ensure = (cond, msg) => { if (!cond) throw new Error(msg); };
+            const backend = String(after.memory_store_backend || before.memory_store_backend || "");
+            const featureCaps = after.memory_store_feature_capabilities || {};
+            const recallCaps = after.memory_store_recall_capabilities || {};
+            const writeCaps = after.memory_store_write_capabilities || {};
+
+            function assertSdkOut(name, out) {
+              ensure(out && out.ok === true, `${name} sdk smoke must be ok=true`);
+              const calls = out.calls || {};
+              const health = calls.health || {};
+              ensure(health.backend === backend, `${name} backend mismatch with /health`);
+              const outFeature = health.feature_capabilities || {};
+              const outRecall = health.recall_capabilities || {};
+              const outWrite = health.write_capabilities || {};
+
+              for (const key of ["sessions_graph", "packs_export", "packs_import"]) {
+                ensure(typeof featureCaps[key] === "boolean", `/health feature capability missing ${key}`);
+                ensure(outFeature[key] === featureCaps[key], `${name} feature capability mismatch for ${key}`);
+              }
+              for (const key of ["debug_embeddings", "audit_insert"]) {
+                ensure(typeof recallCaps[key] === "boolean", `/health recall capability missing ${key}`);
+                ensure(outRecall[key] === recallCaps[key], `${name} recall capability mismatch for ${key}`);
+              }
+              ensure(
+                typeof writeCaps.shadow_mirror_v2 === "boolean",
+                "/health write capability missing shadow_mirror_v2",
+              );
+              ensure(
+                outWrite.shadow_mirror_v2 === writeCaps.shadow_mirror_v2,
+                `${name} write capability mismatch for shadow_mirror_v2`,
+              );
+
+              if (featureCaps.packs_export === true) {
+                ensure(
+                  typeof calls.pack_export?.manifest_sha256 === "string" && calls.pack_export.manifest_sha256.length > 0,
+                  `${name} packs_export enabled path must return manifest sha256`,
+                );
+              } else {
+                ensure(
+                  calls.pack_export?.capability_error?.capability === "packs_export",
+                  `${name} packs_export disabled path must return capability error`,
+                );
+              }
+
+              if (featureCaps.sessions_graph === true) {
+                ensure(
+                  typeof calls.sessions_graph?.events_returned === "number" && calls.sessions_graph.events_returned >= 1,
+                  `${name} sessions_graph enabled path must return events`,
+                );
+              } else {
+                ensure(
+                  calls.sessions_graph?.capability_error?.capability === "sessions_graph",
+                  `${name} sessions_graph disabled path must return capability error`,
+                );
+              }
+
+              if (featureCaps.packs_import === true) {
+                ensure(calls.pack_import?.verified === true, `${name} packs_import enabled verify_only must be verified`);
+                ensure(calls.pack_import?.imported === false, `${name} packs_import enabled verify_only must not import`);
+              } else {
+                ensure(
+                  calls.pack_import?.capability_error?.capability === "packs_import",
+                  `${name} packs_import disabled path must return capability error`,
+                );
+              }
+            }
+
+            assertSdkOut("ts", tsOut);
+            assertSdkOut("py", pyOut);
+
+            if (backend !== "embedded") process.exit(0);
             const b = before.memory_store_embedded_snapshot_metrics || {};
             const a = after.memory_store_embedded_snapshot_metrics || {};
-            const maxRounds = Number(process.env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS || "8");
-            const maxBytes = Number(process.env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES || "0");
+            const maxRounds = Number(after.memory_store_embedded_snapshot_compaction_max_rounds || "8");
+            const maxBytes = Number(after.memory_store_embedded_snapshot_max_bytes || "0");
             const maxDroppedNodes = Number(process.env.EMBEDDED_SNAPSHOT_MAX_DROPPED_NODES_GUARD || "32");
 
             if (typeof a.persist_total !== "number") throw new Error("embedded metrics missing persist_total");
