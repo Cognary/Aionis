@@ -31,6 +31,9 @@ jobs:
       MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED: "false"
       MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED: "false"
       MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED: "true"
+      MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED: "true"
+      MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED: "true"
+      MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED: "true"
       EMBEDDED_SNAPSHOT_MAX_DROPPED_NODES_GUARD: "32"
 
     steps:
@@ -60,6 +63,9 @@ jobs:
             echo "MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED=${MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED}"
             echo "MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED=${MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED}"
             echo "MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED=${MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED=${MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED=${MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED=${MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED}"
           } >> .env
 
       - name: Start db
@@ -127,6 +133,23 @@ jobs:
             const expectedShadowMirror = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED || "false") === "true";
             if (writeCaps.shadow_mirror_v2 !== expectedShadowMirror) {
               throw new Error(`write capability mismatch shadow_mirror_v2: ${writeCaps.shadow_mirror_v2} != ${expectedShadowMirror}`);
+            }
+            const featureCaps = p.memory_store_feature_capabilities;
+            if (!featureCaps || typeof featureCaps !== "object") throw new Error("missing feature capability object");
+            if (typeof featureCaps.sessions_graph !== "boolean") throw new Error("missing feature capability sessions_graph");
+            if (typeof featureCaps.packs_export !== "boolean") throw new Error("missing feature capability packs_export");
+            if (typeof featureCaps.packs_import !== "boolean") throw new Error("missing feature capability packs_import");
+            const expectedSessionGraph = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED || "false") === "true";
+            const expectedPackExport = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED || "false") === "true";
+            const expectedPackImport = expected === "postgres" || String(process.env.MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED || "false") === "true";
+            if (featureCaps.sessions_graph !== expectedSessionGraph) {
+              throw new Error(`feature capability mismatch sessions_graph: ${featureCaps.sessions_graph} != ${expectedSessionGraph}`);
+            }
+            if (featureCaps.packs_export !== expectedPackExport) {
+              throw new Error(`feature capability mismatch packs_export: ${featureCaps.packs_export} != ${expectedPackExport}`);
+            }
+            if (featureCaps.packs_import !== expectedPackImport) {
+              throw new Error(`feature capability mismatch packs_import: ${featureCaps.packs_import} != ${expectedPackImport}`);
             }
             if (expected === "embedded") {
               if (typeof p.memory_store_embedded_snapshot_max_bytes !== "number") throw new Error("embedded health missing snapshot max bytes");

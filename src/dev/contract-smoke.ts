@@ -453,12 +453,22 @@ async function run() {
       MEMORY_SHADOW_DUAL_WRITE_ENABLED: "true",
       MEMORY_SHADOW_DUAL_WRITE_STRICT: "true",
       MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED: "true",
+      MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED: "true",
+      MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED: "false",
+      MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED: "false",
+      MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED: "false",
+      MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED: "false",
     },
     async () => {
       const env = loadEnv();
       assert.equal(env.MEMORY_STORE_BACKEND, "embedded");
       assert.equal(env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED, true);
       assert.equal(env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED, true);
+      assert.equal(env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED, true);
+      assert.equal(env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED, false);
+      assert.equal(env.MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED, false);
+      assert.equal(env.MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED, false);
+      assert.equal(env.MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED, false);
     },
   );
   await withEnv(

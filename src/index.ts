@@ -143,10 +143,21 @@ const writeStoreCapabilities: WriteStoreCapabilities = {
   shadow_mirror_v2: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED,
 };
 
+const storeFeatureCapabilities = {
+  sessions_graph: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED,
+  packs_export: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED,
+  packs_import: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED,
+} as const;
+
 function writeAccessForClient(client: any) {
   return createPostgresWriteStoreAccess(client, {
     capabilities: writeStoreCapabilities,
   });
+}
+
+function requireStoreFeatureCapability(capability: keyof typeof storeFeatureCapabilities): void {
+  if (storeFeatureCapabilities[capability]) return;
+  throw new HttpError(501, "backend_capability_unsupported", `backend capability unsupported: ${capability}`);
 }
 
 const recallLimiter = env.RATE_LIMIT_ENABLED
@@ -844,8 +855,12 @@ app.log.info(
       ? env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED
       : null,
     memory_store_embedded_recall_audit_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED : null,
+    memory_store_embedded_session_graph_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED : null,
+    memory_store_embedded_pack_export_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED : null,
+    memory_store_embedded_pack_import_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED : null,
     memory_store_recall_capabilities: recallStoreCapabilities,
     memory_store_write_capabilities: writeStoreCapabilities,
+    memory_store_feature_capabilities: storeFeatureCapabilities,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     trust_proxy: env.TRUST_PROXY,
@@ -971,9 +986,13 @@ app.get("/health", async () => ({
     ? env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED
     : null,
   memory_store_embedded_recall_audit_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED : null,
+  memory_store_embedded_session_graph_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED : null,
+  memory_store_embedded_pack_export_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED : null,
+  memory_store_embedded_pack_import_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED : null,
   memory_store_embedded_snapshot_metrics: embeddedRuntime ? embeddedRuntime.getSnapshotMetrics() : null,
   memory_store_recall_capabilities: recallStoreCapabilities,
   memory_store_write_capabilities: writeStoreCapabilities,
+  memory_store_feature_capabilities: storeFeatureCapabilities,
   recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
 }));
@@ -1660,6 +1679,7 @@ app.post("/v1/memory/nodes/activate", async (req, reply) => {
 
 // Session-first API: create/update a session envelope while preserving commit-chain write semantics.
 app.post("/v1/memory/sessions", async (req, reply) => {
+  requireStoreFeatureCapability("sessions_graph");
   const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "write");
   await enforceRateLimit(req, reply, "write");
@@ -1689,6 +1709,7 @@ app.post("/v1/memory/sessions", async (req, reply) => {
 
 // Session-first API: append one event into a session stream and link via graph edge part_of.
 app.post("/v1/memory/events", async (req, reply) => {
+  requireStoreFeatureCapability("sessions_graph");
   const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "write");
   await enforceRateLimit(req, reply, "write");
@@ -1718,6 +1739,7 @@ app.post("/v1/memory/events", async (req, reply) => {
 
 // Session-first API: list events belonging to one session, with tenant/lane controls.
 app.get("/v1/memory/sessions/:session_id/events", async (req, reply) => {
+  requireStoreFeatureCapability("sessions_graph");
   const principal = await requireMemoryPrincipal(req);
   const params = req.params as any;
   const query = req.query as any;
@@ -1749,6 +1771,7 @@ app.get("/v1/memory/sessions/:session_id/events", async (req, reply) => {
 
 // Pack export: scoped snapshot with deterministic payload hash.
 app.post("/v1/memory/packs/export", async (req, reply) => {
+  requireStoreFeatureCapability("packs_export");
   requireAdminToken(req);
   const body = req.body ?? {};
   await enforceRateLimit(req, reply, "recall");
@@ -1778,6 +1801,7 @@ app.post("/v1/memory/packs/export", async (req, reply) => {
 
 // Pack import: hash-verified replay into write pipeline with idempotent client_id mapping.
 app.post("/v1/memory/packs/import", async (req, reply) => {
+  requireStoreFeatureCapability("packs_import");
   requireAdminToken(req);
   const body = req.body ?? {};
   await enforceRateLimit(req, reply, "write");
