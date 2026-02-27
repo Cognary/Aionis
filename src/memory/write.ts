@@ -6,6 +6,7 @@ import { normalizeText } from "../util/normalize.js";
 import { redactJsonStrings, redactPII } from "../util/redaction.js";
 import { stableUuid } from "../util/uuid.js";
 import { badRequest } from "../util/http.js";
+import { capabilityContract, type CapabilityFailureMode } from "../capability-contract.js";
 import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import { MemoryWriteRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
@@ -25,6 +26,7 @@ type WriteResult = {
     mirrored: boolean;
     copied?: { commits: number; nodes: number; edges: number; outbox: number };
     capability?: "shadow_mirror_v2";
+    failure_mode?: CapabilityFailureMode;
     degraded_mode?: "capability_unsupported" | "mirror_failed";
     fallback_applied?: boolean;
     error?: string;
@@ -599,6 +601,7 @@ export async function applyMemoryWrite(
   }
 
   if (opts.shadowDualWriteEnabled) {
+    const shadowMirrorSpec = capabilityContract("shadow_mirror_v2");
     if (!writeAccess.capabilities.shadow_mirror_v2) {
       const msg = "shadow dual-write unsupported by backend capability: shadow_mirror_v2";
       result.shadow_dual_write = {
@@ -606,6 +609,7 @@ export async function applyMemoryWrite(
         strict: opts.shadowDualWriteStrict,
         mirrored: false,
         capability: "shadow_mirror_v2",
+        failure_mode: shadowMirrorSpec.failure_mode,
         degraded_mode: "capability_unsupported",
         fallback_applied: true,
         error: msg,
@@ -630,6 +634,7 @@ export async function applyMemoryWrite(
         strict: opts.shadowDualWriteStrict,
         mirrored: false,
         capability: "shadow_mirror_v2",
+        failure_mode: shadowMirrorSpec.failure_mode,
         degraded_mode: "mirror_failed",
         fallback_applied: true,
         error: msg,

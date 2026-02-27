@@ -60,9 +60,10 @@ Completed in this phase:
 28. Extended recall capability negotiation with `audit_insert` declaration (backend toggle, runtime skip path when unavailable, `/health` exposure, and CI/contract coverage).
 29. Added store feature capability negotiation for `sessions_graph`, `packs_export`, and `packs_import` with API route gate enforcement, `/health` exposure, and CI coverage.
 30. Added capability-specific fallback contract details (`degraded_mode`, capability key, fallback flag) for feature-gated errors and shadow dual-write degraded path, with API-contract + contract-smoke coverage.
+31. Centralized capability fallback contract registry (`hard_fail` vs `soft_degrade`) and exposed it via `/health` for client/runtime negotiation.
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
-2. Extend capability negotiation to finer-grained semantics per API surface (capability-aware response DTOs where fallback is allowed).
+2. Wire capability fallback contract into SDK/client adapters for automatic behavior negotiation.
 3. Add runtime compaction telemetry export for long-run trend analysis (artifact timeline + alert thresholds), beyond smoke-level CI assertions.

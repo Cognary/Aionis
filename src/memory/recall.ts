@@ -1,6 +1,7 @@
 import type pg from "pg";
 import { performance } from "node:perf_hooks";
 import { assertDim, toVectorLiteral } from "../util/pgvector.js";
+import { capabilityContract } from "../capability-contract.js";
 import {
   assertRecallStoreAccessContract,
   createPostgresRecallStoreAccess,
@@ -477,11 +478,13 @@ export async function memoryRecallParsed(
   let embedding_debug: any = undefined;
   if (parsed.return_debug && parsed.include_embeddings) {
     if (!recallAccess.capabilities.debug_embeddings) {
+      const spec = capabilityContract("debug_embeddings");
       badRequest(
         "debug_embeddings_backend_unsupported",
         "include_embeddings is not supported by current backend capability (debug_embeddings=false)",
         {
           capability: "debug_embeddings",
+          failure_mode: spec.failure_mode,
           degraded_mode: "feature_disabled",
           fallback_applied: false,
         },

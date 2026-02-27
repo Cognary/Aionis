@@ -151,6 +151,14 @@ jobs:
             if (featureCaps.packs_import !== expectedPackImport) {
               throw new Error(`feature capability mismatch packs_import: ${featureCaps.packs_import} != ${expectedPackImport}`);
             }
+            const contract = p.memory_store_capability_contract;
+            if (!contract || typeof contract !== "object") throw new Error("missing capability contract object");
+            if (!contract.shadow_mirror_v2 || contract.shadow_mirror_v2.failure_mode !== "soft_degrade") {
+              throw new Error("capability contract mismatch for shadow_mirror_v2");
+            }
+            if (!contract.sessions_graph || contract.sessions_graph.failure_mode !== "hard_fail") {
+              throw new Error("capability contract mismatch for sessions_graph");
+            }
             if (expected === "embedded") {
               if (typeof p.memory_store_embedded_snapshot_max_bytes !== "number") throw new Error("embedded health missing snapshot max bytes");
               if (!p.memory_store_embedded_snapshot_metrics || typeof p.memory_store_embedded_snapshot_metrics !== "object") {

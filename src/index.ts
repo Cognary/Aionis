@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { ZodError, z } from "zod";
 import { loadEnv } from "./config.js";
+import { CAPABILITY_CONTRACT, capabilityContract, type CapabilityId } from "./capability-contract.js";
 import { asPostgresMemoryStore, createMemoryStore } from "./store/memory-store.js";
 import { createEmbeddedMemoryRuntime } from "./store/embedded-memory-runtime.js";
 import {
@@ -157,9 +158,11 @@ function writeAccessForClient(client: any) {
 
 function requireStoreFeatureCapability(capability: keyof typeof storeFeatureCapabilities): void {
   if (storeFeatureCapabilities[capability]) return;
+  const spec = capabilityContract(capability as CapabilityId);
   throw new HttpError(501, "backend_capability_unsupported", `backend capability unsupported: ${capability}`, {
     capability,
     backend: env.MEMORY_STORE_BACKEND,
+    failure_mode: spec.failure_mode,
     degraded_mode: "feature_disabled",
     fallback_applied: false,
   });
@@ -866,6 +869,7 @@ app.log.info(
     memory_store_recall_capabilities: recallStoreCapabilities,
     memory_store_write_capabilities: writeStoreCapabilities,
     memory_store_feature_capabilities: storeFeatureCapabilities,
+    memory_store_capability_contract: CAPABILITY_CONTRACT,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     trust_proxy: env.TRUST_PROXY,
@@ -998,6 +1002,7 @@ app.get("/health", async () => ({
   memory_store_recall_capabilities: recallStoreCapabilities,
   memory_store_write_capabilities: writeStoreCapabilities,
   memory_store_feature_capabilities: storeFeatureCapabilities,
+  memory_store_capability_contract: CAPABILITY_CONTRACT,
   recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
 }));

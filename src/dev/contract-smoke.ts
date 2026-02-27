@@ -7,6 +7,7 @@ import { HttpError } from "../util/http.js";
 import { requireAdminTokenHeader } from "../util/admin_auth.js";
 import { resolveTenantScope } from "../memory/tenant.js";
 import { loadEnv } from "../config.js";
+import { CAPABILITY_CONTRACT, capabilityContract } from "../capability-contract.js";
 import {
   createApiKeyPrincipalResolver,
   normalizeControlAlertRouteTarget,
@@ -804,6 +805,7 @@ async function run() {
   });
   assert.equal(writeOutNoMirror.shadow_dual_write?.mirrored, false);
   assert.equal(writeOutNoMirror.shadow_dual_write?.capability, "shadow_mirror_v2");
+  assert.equal(writeOutNoMirror.shadow_dual_write?.failure_mode, "soft_degrade");
   assert.equal(writeOutNoMirror.shadow_dual_write?.degraded_mode, "capability_unsupported");
   assert.equal(writeOutNoMirror.shadow_dual_write?.fallback_applied, true);
   await assert.rejects(
@@ -856,6 +858,7 @@ async function run() {
   });
   assert.equal(writeOutMirrorFail.shadow_dual_write?.mirrored, false);
   assert.equal(writeOutMirrorFail.shadow_dual_write?.capability, "shadow_mirror_v2");
+  assert.equal(writeOutMirrorFail.shadow_dual_write?.failure_mode, "soft_degrade");
   assert.equal(writeOutMirrorFail.shadow_dual_write?.degraded_mode, "mirror_failed");
   assert.equal(writeOutMirrorFail.shadow_dual_write?.fallback_applied, true);
   assert.ok(
@@ -1413,8 +1416,14 @@ async function run() {
       err instanceof HttpError &&
       err.code === "debug_embeddings_backend_unsupported" &&
       (err.details as any)?.capability === "debug_embeddings" &&
+      (err.details as any)?.failure_mode === "hard_fail" &&
       (err.details as any)?.degraded_mode === "feature_disabled",
   );
+
+  // Capability contract registry should stay explicit and machine-readable.
+  assert.equal(capabilityContract("shadow_mirror_v2").failure_mode, "soft_degrade");
+  assert.equal(capabilityContract("debug_embeddings").failure_mode, "hard_fail");
+  assert.equal(Array.isArray(CAPABILITY_CONTRACT.packs_import.degraded_modes), true);
 
   // limit>20 should be rejected in debug embeddings mode.
   const badLimit = MemoryRecallRequest.parse({ ...baseReq, limit: 21, return_debug: true, include_embeddings: true });
