@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { MemoryRecallRequest, PlanningContextRequest, ToolsFeedbackRequest, ToolsSelectRequest } from "../memory/schemas.js";
 import { HttpError } from "../util/http.js";
 import { requireAdminTokenHeader } from "../util/admin_auth.js";
@@ -672,7 +675,7 @@ async function run() {
   );
 
   const embeddedRuntime = createEmbeddedMemoryRuntime();
-  embeddedRuntime.applyWrite(
+  await embeddedRuntime.applyWrite(
     {
       scope: "tenant:parity::scope:embedded",
       auto_embed_effective: false,
@@ -707,6 +710,59 @@ async function run() {
   });
   assert.equal(embeddedSeeds.length, 1);
   assert.equal(embeddedSeeds[0].id, "00000000-0000-0000-0000-000000000e11");
+
+  const embeddedSnapshotPath = path.join(
+    os.tmpdir(),
+    `aionis_embedded_runtime_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,
+  );
+  await fs.rm(embeddedSnapshotPath, { force: true });
+  const embeddedPersist = createEmbeddedMemoryRuntime({
+    snapshotPath: embeddedSnapshotPath,
+    autoPersist: true,
+  });
+  await embeddedPersist.loadSnapshot();
+  await embeddedPersist.applyWrite(
+    {
+      scope: "tenant:parity::scope:embedded_snapshot",
+      auto_embed_effective: false,
+      nodes: [
+        {
+          id: "00000000-0000-0000-0000-000000000e21",
+          scope: "tenant:parity::scope:embedded_snapshot",
+          type: "event",
+          tier: "hot",
+          memory_lane: "shared",
+          title: "embedded persisted event",
+          text_summary: "embedded persisted event",
+          slots: {},
+          embedding: Array.from({ length: 8 }, () => 0),
+          embedding_model: "client",
+        },
+      ],
+      edges: [],
+    } as any,
+    {
+      commit_id: "00000000-0000-0000-0000-000000000ec2",
+      commit_hash: "embedded-commit-2",
+    } as any,
+  );
+
+  const embeddedReloaded = createEmbeddedMemoryRuntime({
+    snapshotPath: embeddedSnapshotPath,
+    autoPersist: false,
+  });
+  await embeddedReloaded.loadSnapshot();
+  const embeddedReloadedSeeds = await embeddedReloaded.createRecallAccess().stage1CandidatesAnn({
+    queryEmbedding: Array.from({ length: 8 }, () => 0),
+    scope: "tenant:parity::scope:embedded_snapshot",
+    oversample: 10,
+    limit: 5,
+    consumerAgentId: null,
+    consumerTeamId: null,
+  });
+  assert.equal(embeddedReloadedSeeds.length, 1);
+  assert.equal(embeddedReloadedSeeds[0].id, "00000000-0000-0000-0000-000000000e21");
+  await fs.rm(embeddedSnapshotPath, { force: true });
 
   // Schema hard cap: max_edges <= 100
   assert.throws(

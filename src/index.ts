@@ -82,7 +82,16 @@ const store = createMemoryStore({
   embeddedExperimentalEnabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
 });
 const db = asPostgresMemoryStore(store).db;
-const embeddedRuntime = env.MEMORY_STORE_BACKEND === "embedded" ? createEmbeddedMemoryRuntime() : null;
+const embeddedRuntime =
+  env.MEMORY_STORE_BACKEND === "embedded"
+    ? createEmbeddedMemoryRuntime({
+        snapshotPath: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_PATH,
+        autoPersist: env.MEMORY_STORE_EMBEDDED_AUTOSAVE,
+      })
+    : null;
+if (embeddedRuntime) {
+  await embeddedRuntime.loadSnapshot();
+}
 const embedder = createEmbeddingProviderFromEnv(process.env);
 const authResolver = createAuthResolver({
   mode: env.MEMORY_AUTH_MODE,
@@ -797,6 +806,8 @@ app.log.info(
     memory_store_backend: env.MEMORY_STORE_BACKEND,
     memory_store_embedded_experimental_enabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
     memory_store_embedded_runtime: embeddedRuntime ? "in_memory_v1" : null,
+    memory_store_embedded_snapshot_path: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_PATH : null,
+    memory_store_embedded_autosave: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_AUTOSAVE : null,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     trust_proxy: env.TRUST_PROXY,
@@ -910,6 +921,8 @@ app.get("/health", async () => ({
   memory_store_backend: env.MEMORY_STORE_BACKEND,
   memory_store_embedded_experimental_enabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
   memory_store_embedded_runtime: embeddedRuntime ? "in_memory_v1" : null,
+  memory_store_embedded_snapshot_path: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_PATH : null,
+  memory_store_embedded_autosave: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_AUTOSAVE : null,
   recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
 }));
@@ -1538,7 +1551,7 @@ app.post("/v1/memory/write", async (req, reply) => {
       return writeRes;
     });
     if (embeddedRuntime) {
-      embeddedRuntime.applyWrite(prepared as any, out as any);
+      await embeddedRuntime.applyWrite(prepared as any, out as any);
     }
 
     const ms = performance.now() - t0;

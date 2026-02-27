@@ -314,7 +314,7 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
     write_access: createPostgresWriteStoreAccess(client),
   });
-  if (opts.embeddedRuntime) opts.embeddedRuntime.applyWrite(prepared as any, out as any);
+  if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
 
   return {
     ok: true,

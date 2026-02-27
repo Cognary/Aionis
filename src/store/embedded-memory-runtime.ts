@@ -1,3 +1,5 @@
+import { promises as fs } from "node:fs";
+import { dirname } from "node:path";
 import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   type RecallCandidate,
@@ -120,6 +122,19 @@ type EmbeddedAuditRow = {
   created_at: string;
 };
 
+type EmbeddedSnapshotV1 = {
+  version: 1;
+  nodes: EmbeddedNodeRecord[];
+  edges: EmbeddedEdgeRecord[];
+  rule_defs: EmbeddedRuleDefRecord[];
+  audit: EmbeddedAuditRow[];
+};
+
+type EmbeddedRuntimeOptions = {
+  snapshotPath?: string | null;
+  autoPersist?: boolean;
+};
+
 function nodeKey(scope: string, id: string): string {
   return `${scope}::${id}`;
 }
@@ -181,8 +196,12 @@ export class EmbeddedMemoryRuntime {
   private readonly ruleDefs = new Map<string, EmbeddedRuleDefRecord>();
   private readonly audit: EmbeddedAuditRow[] = [];
   private readonly recallAccess: RecallStoreAccess;
+  private readonly snapshotPath: string | null;
+  private readonly autoPersist: boolean;
 
-  constructor() {
+  constructor(opts: EmbeddedRuntimeOptions = {}) {
+    this.snapshotPath = opts.snapshotPath?.trim() ? opts.snapshotPath.trim() : null;
+    this.autoPersist = opts.autoPersist ?? true;
     this.recallAccess = {
       capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
       stage1CandidatesAnn: async (params) => this.stage1Candidates(params),
@@ -205,7 +224,7 @@ export class EmbeddedMemoryRuntime {
     return this.recallAccess;
   }
 
-  applyWrite(prepared: EmbeddedWritePrepared, out: EmbeddedWriteResult): void {
+  async applyWrite(prepared: EmbeddedWritePrepared, out: EmbeddedWriteResult): Promise<void> {
     const now = new Date().toISOString();
 
     for (const n of prepared.nodes) {
@@ -282,6 +301,51 @@ export class EmbeddedMemoryRuntime {
       };
       this.edgesByUnique.set(upsertKey, next);
     }
+    if (this.autoPersist) await this.persistSnapshot();
+  }
+
+  async loadSnapshot(): Promise<void> {
+    if (!this.snapshotPath) return;
+    let raw: string;
+    try {
+      raw = await fs.readFile(this.snapshotPath, "utf8");
+    } catch (err: any) {
+      if (err?.code === "ENOENT") return;
+      throw err;
+    }
+
+    const parsed = JSON.parse(raw) as EmbeddedSnapshotV1;
+    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges) || !Array.isArray(parsed.rule_defs)) {
+      throw new Error(`invalid embedded snapshot format: ${this.snapshotPath}`);
+    }
+
+    this.nodes.clear();
+    this.edgesByUnique.clear();
+    this.ruleDefs.clear();
+    this.audit.splice(0, this.audit.length);
+
+    for (const n of parsed.nodes) this.nodes.set(nodeKey(n.scope, n.id), n);
+    for (const e of parsed.edges) this.edgesByUnique.set(edgeUpsertKey(e.scope, e.type, e.src_id, e.dst_id), e);
+    for (const r of parsed.rule_defs) this.ruleDefs.set(nodeKey(r.scope, r.rule_node_id), r);
+    if (Array.isArray(parsed.audit)) {
+      for (const a of parsed.audit.slice(-5000)) this.audit.push(a);
+    }
+  }
+
+  async persistSnapshot(): Promise<void> {
+    if (!this.snapshotPath) return;
+    const snapshot: EmbeddedSnapshotV1 = {
+      version: 1,
+      nodes: Array.from(this.nodes.values()),
+      edges: Array.from(this.edgesByUnique.values()),
+      rule_defs: Array.from(this.ruleDefs.values()),
+      audit: this.audit.slice(-5000),
+    };
+    const dir = dirname(this.snapshotPath);
+    await fs.mkdir(dir, { recursive: true });
+    const tmp = `${this.snapshotPath}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(snapshot), "utf8");
+    await fs.rename(tmp, this.snapshotPath);
   }
 
   private async stage1Candidates(params: RecallStage1Params): Promise<RecallCandidate[]> {
@@ -432,6 +496,6 @@ export class EmbeddedMemoryRuntime {
   }
 }
 
-export function createEmbeddedMemoryRuntime(): EmbeddedMemoryRuntime {
-  return new EmbeddedMemoryRuntime();
+export function createEmbeddedMemoryRuntime(opts: EmbeddedRuntimeOptions = {}): EmbeddedMemoryRuntime {
+  return new EmbeddedMemoryRuntime(opts);
 }
