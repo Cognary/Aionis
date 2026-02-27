@@ -902,6 +902,77 @@ async function run() {
   );
   await fs.rm(strictSnapshotPath, { force: true });
 
+  const compactSnapshotPath = path.join(
+    os.tmpdir(),
+    `aionis_embedded_runtime_compact_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,
+  );
+  const compactScope = "tenant:parity::scope:embedded_compact";
+  const compactRuntime = createEmbeddedMemoryRuntime({
+    snapshotPath: compactSnapshotPath,
+    autoPersist: true,
+    snapshotMaxBytes: 4500,
+    snapshotCompactionEnabled: true,
+    snapshotCompactionMaxRounds: 6,
+  });
+  await compactRuntime.applyWrite(
+    {
+      scope: compactScope,
+      auto_embed_effective: false,
+      nodes: Array.from({ length: 24 }, (_, i) => {
+        const seq = String(600 + i).padStart(12, "0");
+        return {
+          id: `00000000-0000-0000-0000-${seq}`,
+          scope: compactScope,
+          type: "event",
+          tier: i % 3 === 0 ? "archive" : i % 2 === 0 ? "cold" : "warm",
+          memory_lane: "shared",
+          text_summary: `compact-node-${i}-${"x".repeat(220)}`,
+          slots: { payload: "y".repeat(320), idx: i },
+          raw_ref: `raw://${"z".repeat(80)}`,
+          evidence_ref: `evidence://${"w".repeat(80)}`,
+          embedding: Array.from({ length: 8 }, () => 0.2),
+        };
+      }),
+      edges: Array.from({ length: 23 }, (_, i) => {
+        const seq = String(800 + i).padStart(12, "0");
+        const src = String(600 + i).padStart(12, "0");
+        const dst = String(600 + i + 1).padStart(12, "0");
+        return {
+          id: `00000000-0000-0000-0000-${seq}`,
+          scope: compactScope,
+          type: "related_to",
+          src_id: `00000000-0000-0000-0000-${src}`,
+          dst_id: `00000000-0000-0000-0000-${dst}`,
+          weight: 0.2 + (i % 5) * 0.05,
+          confidence: 0.2 + (i % 4) * 0.05,
+        };
+      }),
+    } as any,
+    {
+      commit_id: "00000000-0000-0000-0000-000000000ec7",
+      commit_hash: "embedded-commit-7",
+    } as any,
+  );
+  const compactStat = await fs.stat(compactSnapshotPath);
+  assert.ok(compactStat.size > 0);
+  const compactMetrics = compactRuntime.getSnapshotMetrics();
+  assert.equal(compactMetrics.persist_total, 1);
+  assert.equal(compactMetrics.last_compaction.applied, true);
+  assert.ok((compactMetrics.last_bytes_after_compaction ?? Number.POSITIVE_INFINITY) < (compactMetrics.last_bytes_before_compaction ?? 0));
+  if (!compactMetrics.last_over_limit_after_compaction) {
+    assert.ok(compactStat.size <= 4500);
+  }
+  assert.ok(
+    compactMetrics.last_compaction.trimmed_payload_nodes > 0 ||
+      compactMetrics.last_compaction.dropped_edges > 0 ||
+      compactMetrics.last_compaction.dropped_nodes > 0,
+    "compaction should reduce payload/graph when snapshot exceeds max bytes",
+  );
+  await fs.rm(compactSnapshotPath, { force: true });
+  await fs.rm(`${compactSnapshotPath}.1`, { force: true });
+  await fs.rm(`${compactSnapshotPath}.2`, { force: true });
+  await fs.rm(`${compactSnapshotPath}.3`, { force: true });
+
   // Schema hard cap: max_edges <= 100
   assert.throws(
     () => MemoryRecallRequest.parse({ query_embedding: [0], max_edges: 101 }),

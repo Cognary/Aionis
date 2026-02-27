@@ -90,6 +90,8 @@ const embeddedRuntime =
         snapshotMaxBytes: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES,
         snapshotMaxBackups: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BACKUPS,
         snapshotStrictMaxBytes: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES,
+        snapshotCompactionEnabled: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED,
+        snapshotCompactionMaxRounds: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS,
       })
     : null;
 if (embeddedRuntime) {
@@ -814,6 +816,8 @@ app.log.info(
     memory_store_embedded_snapshot_max_bytes: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES : null,
     memory_store_embedded_snapshot_max_backups: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BACKUPS : null,
     memory_store_embedded_snapshot_strict_max_bytes: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES : null,
+    memory_store_embedded_snapshot_compaction_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED : null,
+    memory_store_embedded_snapshot_compaction_max_rounds: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS : null,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     trust_proxy: env.TRUST_PROXY,
@@ -932,6 +936,9 @@ app.get("/health", async () => ({
   memory_store_embedded_snapshot_max_bytes: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES : null,
   memory_store_embedded_snapshot_max_backups: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BACKUPS : null,
   memory_store_embedded_snapshot_strict_max_bytes: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES : null,
+  memory_store_embedded_snapshot_compaction_enabled: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED : null,
+  memory_store_embedded_snapshot_compaction_max_rounds: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS : null,
+  memory_store_embedded_snapshot_metrics: embeddedRuntime ? embeddedRuntime.getSnapshotMetrics() : null,
   recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
 }));

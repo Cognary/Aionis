@@ -136,7 +136,40 @@ type EmbeddedRuntimeOptions = {
   snapshotMaxBytes?: number;
   snapshotMaxBackups?: number;
   snapshotStrictMaxBytes?: boolean;
+  snapshotCompactionEnabled?: boolean;
+  snapshotCompactionMaxRounds?: number;
 };
+
+type EmbeddedSnapshotCompactionReport = {
+  applied: boolean;
+  rounds: number;
+  trimmed_payload_nodes: number;
+  dropped_audit: number;
+  dropped_nodes: number;
+  dropped_edges: number;
+  dropped_rule_defs: number;
+};
+
+export type EmbeddedSnapshotMetrics = {
+  persist_total: number;
+  persist_failures_total: number;
+  load_quarantined_total: number;
+  last_persist_at: string | null;
+  last_error: string | null;
+  last_bytes_before_compaction: number | null;
+  last_bytes_after_compaction: number | null;
+  last_over_limit_after_compaction: boolean;
+  last_compaction: EmbeddedSnapshotCompactionReport;
+  runtime_nodes: number;
+  runtime_edges: number;
+  runtime_rule_defs: number;
+  runtime_audit_rows: number;
+};
+
+type EmbeddedSnapshotMetricsState = Omit<
+  EmbeddedSnapshotMetrics,
+  "runtime_nodes" | "runtime_edges" | "runtime_rule_defs" | "runtime_audit_rows"
+>;
 
 function nodeKey(scope: string, id: string): string {
   return `${scope}::${id}`;
@@ -193,6 +226,29 @@ function edgeToRecallRow(e: EmbeddedEdgeRecord): RecallEdgeRow {
   };
 }
 
+function compactionTierWeight(tier: EmbeddedNodeRecord["tier"]): number {
+  if (tier === "hot") return 3;
+  if (tier === "warm") return 2;
+  if (tier === "cold") return 1;
+  return 0;
+}
+
+function nodeCompactionScore(node: EmbeddedNodeRecord): number {
+  const tier = compactionTierWeight(node.tier) * 10;
+  const typeBias = node.type === "rule" ? 8 : 0;
+  const quality = Number(node.salience ?? 0) + Number(node.importance ?? 0) + Number(node.confidence ?? 0);
+  const updated = Date.parse(node.updated_at);
+  const recency = Number.isFinite(updated) ? updated / 8.64e10 : 0; // days scale
+  return tier + typeBias + quality + recency;
+}
+
+function edgeCompactionScore(edge: EmbeddedEdgeRecord): number {
+  const quality = Number(edge.weight ?? 0) + Number(edge.confidence ?? 0);
+  const created = Date.parse(edge.created_at);
+  const recency = Number.isFinite(created) ? created / 8.64e10 : 0;
+  return quality + recency;
+}
+
 export class EmbeddedMemoryRuntime {
   private readonly nodes = new Map<string, EmbeddedNodeRecord>();
   private readonly edgesByUnique = new Map<string, EmbeddedEdgeRecord>();
@@ -204,6 +260,9 @@ export class EmbeddedMemoryRuntime {
   private readonly snapshotMaxBytes: number;
   private readonly snapshotMaxBackups: number;
   private readonly snapshotStrictMaxBytes: boolean;
+  private readonly snapshotCompactionEnabled: boolean;
+  private readonly snapshotCompactionMaxRounds: number;
+  private readonly snapshotMetrics: EmbeddedSnapshotMetricsState;
 
   constructor(opts: EmbeddedRuntimeOptions = {}) {
     this.snapshotPath = opts.snapshotPath?.trim() ? opts.snapshotPath.trim() : null;
@@ -211,6 +270,29 @@ export class EmbeddedMemoryRuntime {
     this.snapshotMaxBytes = Number.isFinite(opts.snapshotMaxBytes as number) ? Math.max(1, Math.trunc(opts.snapshotMaxBytes as number)) : 50 * 1024 * 1024;
     this.snapshotMaxBackups = Number.isFinite(opts.snapshotMaxBackups as number) ? Math.max(0, Math.trunc(opts.snapshotMaxBackups as number)) : 3;
     this.snapshotStrictMaxBytes = opts.snapshotStrictMaxBytes ?? false;
+    this.snapshotCompactionEnabled = opts.snapshotCompactionEnabled ?? true;
+    this.snapshotCompactionMaxRounds = Number.isFinite(opts.snapshotCompactionMaxRounds as number)
+      ? Math.max(1, Math.trunc(opts.snapshotCompactionMaxRounds as number))
+      : 8;
+    this.snapshotMetrics = {
+      persist_total: 0,
+      persist_failures_total: 0,
+      load_quarantined_total: 0,
+      last_persist_at: null,
+      last_error: null,
+      last_bytes_before_compaction: null,
+      last_bytes_after_compaction: null,
+      last_over_limit_after_compaction: false,
+      last_compaction: {
+        applied: false,
+        rounds: 0,
+        trimmed_payload_nodes: 0,
+        dropped_audit: 0,
+        dropped_nodes: 0,
+        dropped_edges: 0,
+        dropped_rule_defs: 0,
+      },
+    };
     this.recallAccess = {
       capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
       stage1CandidatesAnn: async (params) => this.stage1Candidates(params),
@@ -231,6 +313,17 @@ export class EmbeddedMemoryRuntime {
 
   createRecallAccess(): RecallStoreAccess {
     return this.recallAccess;
+  }
+
+  getSnapshotMetrics(): EmbeddedSnapshotMetrics {
+    return {
+      ...this.snapshotMetrics,
+      last_compaction: { ...this.snapshotMetrics.last_compaction },
+      runtime_nodes: this.nodes.size,
+      runtime_edges: this.edgesByUnique.size,
+      runtime_rule_defs: this.ruleDefs.size,
+      runtime_audit_rows: this.audit.length,
+    };
   }
 
   async applyWrite(prepared: EmbeddedWritePrepared, out: EmbeddedWriteResult): Promise<void> {
@@ -350,30 +443,51 @@ export class EmbeddedMemoryRuntime {
 
   async persistSnapshot(): Promise<void> {
     if (!this.snapshotPath) return;
-    let snapshot: EmbeddedSnapshotV1 = {
-      version: 1,
-      nodes: Array.from(this.nodes.values()),
-      edges: Array.from(this.edgesByUnique.values()),
-      rule_defs: Array.from(this.ruleDefs.values()),
-      audit: this.audit.slice(-5000),
+    this.snapshotMetrics.persist_total += 1;
+    let bytesBefore = 0;
+    let bytesAfter = 0;
+    let report: EmbeddedSnapshotCompactionReport = {
+      applied: false,
+      rounds: 0,
+      trimmed_payload_nodes: 0,
+      dropped_audit: 0,
+      dropped_nodes: 0,
+      dropped_edges: 0,
+      dropped_rule_defs: 0,
     };
-    let body = JSON.stringify(snapshot);
-    let bytes = Buffer.byteLength(body, "utf8");
-    if (bytes > this.snapshotMaxBytes) {
-      snapshot = { ...snapshot, audit: snapshot.audit.slice(-200) };
-      body = JSON.stringify(snapshot);
-      bytes = Buffer.byteLength(body, "utf8");
-    }
-    if (bytes > this.snapshotMaxBytes && this.snapshotStrictMaxBytes) {
-      throw new Error(`embedded snapshot exceeds max bytes: size=${bytes} max=${this.snapshotMaxBytes}`);
-    }
 
-    const dir = dirname(this.snapshotPath);
-    await fs.mkdir(dir, { recursive: true });
-    await this.rotateSnapshotBackups();
-    const tmp = `${this.snapshotPath}.tmp`;
-    await fs.writeFile(tmp, body, "utf8");
-    await fs.rename(tmp, this.snapshotPath);
+    try {
+      const snapshot = this.buildSnapshot();
+      bytesBefore = this.snapshotByteSize(snapshot);
+      const compacted = this.compactSnapshot(snapshot, bytesBefore);
+      bytesAfter = compacted.bytes;
+      report = compacted.report;
+
+      this.snapshotMetrics.last_bytes_before_compaction = bytesBefore;
+      this.snapshotMetrics.last_bytes_after_compaction = bytesAfter;
+      this.snapshotMetrics.last_over_limit_after_compaction = bytesAfter > this.snapshotMaxBytes;
+      this.snapshotMetrics.last_compaction = { ...report };
+
+      if (bytesAfter > this.snapshotMaxBytes && this.snapshotStrictMaxBytes) {
+        throw new Error(`embedded snapshot exceeds max bytes: size=${bytesAfter} max=${this.snapshotMaxBytes}`);
+      }
+
+      const dir = dirname(this.snapshotPath);
+      await fs.mkdir(dir, { recursive: true });
+      await this.rotateSnapshotBackups();
+      const tmp = `${this.snapshotPath}.tmp`;
+      await fs.writeFile(tmp, compacted.body, "utf8");
+      await fs.rename(tmp, this.snapshotPath);
+      this.snapshotMetrics.last_persist_at = new Date().toISOString();
+      this.snapshotMetrics.last_error = null;
+    } catch (err: any) {
+      this.snapshotMetrics.persist_failures_total += 1;
+      this.snapshotMetrics.last_error = err?.message ? String(err.message) : String(err);
+      if (bytesBefore > 0) this.snapshotMetrics.last_bytes_before_compaction = bytesBefore;
+      if (bytesAfter > 0) this.snapshotMetrics.last_bytes_after_compaction = bytesAfter;
+      this.snapshotMetrics.last_compaction = { ...report };
+      throw err;
+    }
   }
 
   private async quarantineCorruptSnapshot(): Promise<void> {
@@ -382,9 +496,144 @@ export class EmbeddedMemoryRuntime {
     const out = `${this.snapshotPath}.corrupt.${ts}`;
     try {
       await fs.rename(this.snapshotPath, out);
+      this.snapshotMetrics.load_quarantined_total += 1;
     } catch {
       // ignore quarantine failures; caller can still proceed with empty runtime state.
     }
+  }
+
+  private buildSnapshot(): EmbeddedSnapshotV1 {
+    return {
+      version: 1,
+      nodes: Array.from(this.nodes.values()).map((n) => ({ ...n })),
+      edges: Array.from(this.edgesByUnique.values()).map((e) => ({ ...e })),
+      rule_defs: Array.from(this.ruleDefs.values()).map((r) => ({ ...r })),
+      audit: this.audit.slice(-5000),
+    };
+  }
+
+  private snapshotByteSize(snapshot: EmbeddedSnapshotV1): number {
+    return Buffer.byteLength(JSON.stringify(snapshot), "utf8");
+  }
+
+  private compactSnapshot(
+    snapshot: EmbeddedSnapshotV1,
+    bytesBefore: number,
+  ): { body: string; bytes: number; report: EmbeddedSnapshotCompactionReport } {
+    const report: EmbeddedSnapshotCompactionReport = {
+      applied: false,
+      rounds: 0,
+      trimmed_payload_nodes: 0,
+      dropped_audit: 0,
+      dropped_nodes: 0,
+      dropped_edges: 0,
+      dropped_rule_defs: 0,
+    };
+
+    let bytes = bytesBefore;
+    if (bytes <= this.snapshotMaxBytes) {
+      return { body: JSON.stringify(snapshot), bytes, report };
+    }
+
+    report.applied = true;
+
+    if (snapshot.audit.length > 200) {
+      const nextAudit = snapshot.audit.slice(-200);
+      report.dropped_audit += snapshot.audit.length - nextAudit.length;
+      snapshot.audit = nextAudit;
+      bytes = this.snapshotByteSize(snapshot);
+    }
+    if (bytes <= this.snapshotMaxBytes || !this.snapshotCompactionEnabled) {
+      return { body: JSON.stringify(snapshot), bytes, report };
+    }
+
+    const payloadPasses: Array<Set<EmbeddedNodeRecord["tier"]>> = [new Set(["archive", "cold"]), new Set(["warm"]), new Set(["hot"])];
+    for (const tiers of payloadPasses) {
+      if (bytes <= this.snapshotMaxBytes) break;
+      const changed = this.trimNodePayload(snapshot, tiers);
+      if (changed > 0) {
+        report.trimmed_payload_nodes += changed;
+        bytes = this.snapshotByteSize(snapshot);
+      }
+    }
+    if (bytes <= this.snapshotMaxBytes || this.snapshotStrictMaxBytes) {
+      return { body: JSON.stringify(snapshot), bytes, report };
+    }
+
+    for (let i = 0; i < this.snapshotCompactionMaxRounds && bytes > this.snapshotMaxBytes; i++) {
+      report.rounds += 1;
+      const droppedEdges = this.pruneLowestValueEdges(snapshot, 0.2);
+      report.dropped_edges += droppedEdges;
+      bytes = this.snapshotByteSize(snapshot);
+      if (bytes <= this.snapshotMaxBytes) break;
+
+      const dropped = this.pruneLowestValueNodes(snapshot, 0.1);
+      report.dropped_nodes += dropped.nodes;
+      report.dropped_edges += dropped.edges;
+      report.dropped_rule_defs += dropped.rule_defs;
+      bytes = this.snapshotByteSize(snapshot);
+
+      if (droppedEdges === 0 && dropped.nodes === 0) break;
+    }
+
+    return { body: JSON.stringify(snapshot), bytes, report };
+  }
+
+  private trimNodePayload(snapshot: EmbeddedSnapshotV1, tiers: Set<EmbeddedNodeRecord["tier"]>): number {
+    let changed = 0;
+    snapshot.nodes = snapshot.nodes.map((node) => {
+      if (!tiers.has(node.tier)) return node;
+      if (node.type === "rule") return node;
+      const nextSummary =
+        typeof node.text_summary === "string" && node.text_summary.length > 384 ? `${node.text_summary.slice(0, 381)}...` : node.text_summary;
+      const hasSlots = node.slots && Object.keys(node.slots).length > 0;
+      const willChange = hasSlots || !!node.raw_ref || !!node.evidence_ref || nextSummary !== node.text_summary;
+      if (!willChange) return node;
+      changed += 1;
+      return {
+        ...node,
+        slots: {},
+        raw_ref: null,
+        evidence_ref: null,
+        text_summary: nextSummary ?? null,
+      };
+    });
+    return changed;
+  }
+
+  private pruneLowestValueEdges(snapshot: EmbeddedSnapshotV1, ratio: number): number {
+    if (snapshot.edges.length === 0) return 0;
+    const drop = Math.max(1, Math.ceil(snapshot.edges.length * ratio));
+    const ranked = [...snapshot.edges].sort((a, b) => edgeCompactionScore(a) - edgeCompactionScore(b) || a.id.localeCompare(b.id));
+    const dropKeys = new Set(
+      ranked.slice(0, drop).map((e) => edgeUpsertKey(e.scope, e.type, e.src_id, e.dst_id)),
+    );
+    const before = snapshot.edges.length;
+    snapshot.edges = snapshot.edges.filter((e) => !dropKeys.has(edgeUpsertKey(e.scope, e.type, e.src_id, e.dst_id)));
+    return before - snapshot.edges.length;
+  }
+
+  private pruneLowestValueNodes(snapshot: EmbeddedSnapshotV1, ratio: number): { nodes: number; edges: number; rule_defs: number } {
+    if (snapshot.nodes.length === 0) return { nodes: 0, edges: 0, rule_defs: 0 };
+    const drop = Math.max(1, Math.ceil(snapshot.nodes.length * ratio));
+    const ranked = [...snapshot.nodes].sort((a, b) => nodeCompactionScore(a) - nodeCompactionScore(b) || a.id.localeCompare(b.id));
+    const dropNodeKeys = new Set(ranked.slice(0, drop).map((n) => nodeKey(n.scope, n.id)));
+
+    const beforeNodes = snapshot.nodes.length;
+    const beforeEdges = snapshot.edges.length;
+    const beforeRuleDefs = snapshot.rule_defs.length;
+
+    snapshot.nodes = snapshot.nodes.filter((n) => !dropNodeKeys.has(nodeKey(n.scope, n.id)));
+    snapshot.edges = snapshot.edges.filter(
+      (e) => !dropNodeKeys.has(nodeKey(e.scope, e.src_id)) && !dropNodeKeys.has(nodeKey(e.scope, e.dst_id)),
+    );
+    snapshot.rule_defs = snapshot.rule_defs.filter((r) => !dropNodeKeys.has(nodeKey(r.scope, r.rule_node_id)));
+
+    return {
+      nodes: beforeNodes - snapshot.nodes.length,
+      edges: beforeEdges - snapshot.edges.length,
+      rule_defs: beforeRuleDefs - snapshot.rule_defs.length,
+    };
   }
 
   private async rotateSnapshotBackups(): Promise<void> {
