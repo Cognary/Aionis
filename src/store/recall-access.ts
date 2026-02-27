@@ -81,11 +81,43 @@ export type RecallStage2NodesParams = {
   includeSlots: boolean;
 };
 
+export type RecallRuleDefRow = {
+  rule_node_id: string;
+  state: string;
+  rule_scope: string;
+  target_agent_id: string | null;
+  target_team_id: string | null;
+  if_json: any;
+  then_json: any;
+  exceptions_json: any;
+  positive_count: number | null;
+  negative_count: number | null;
+};
+
+export type RecallDebugEmbeddingRow = {
+  id: string;
+  embedding_text: string;
+};
+
+export type RecallAuditInsertParams = {
+  scope: string;
+  endpoint: "recall" | "recall_text";
+  consumerAgentId: string | null;
+  consumerTeamId: string | null;
+  querySha256: string;
+  seedCount: number;
+  nodeCount: number;
+  edgeCount: number;
+};
+
 export interface RecallStoreAccess {
   stage1CandidatesAnn(params: RecallStage1Params): Promise<RecallCandidate[]>;
   stage1CandidatesExactFallback(params: RecallStage1Params): Promise<RecallCandidate[]>;
   stage2Edges(params: RecallStage2EdgesParams): Promise<RecallEdgeRow[]>;
   stage2Nodes(params: RecallStage2NodesParams): Promise<RecallNodeRow[]>;
+  ruleDefs(scope: string, ruleIds: string[]): Promise<RecallRuleDefRow[]>;
+  debugEmbeddings(scope: string, ids: string[]): Promise<RecallDebugEmbeddingRow[]>;
+  insertRecallAudit(params: RecallAuditInsertParams): Promise<void>;
 }
 
 function stage1QueryParams(params: RecallStage1Params) {
@@ -418,6 +450,47 @@ export function createPostgresRecallStoreAccess(client: pg.PoolClient): RecallSt
         [params.scope, params.nodeIds, params.consumerAgentId, params.consumerTeamId],
       );
       return out.rows;
+    },
+
+    async ruleDefs(scope: string, ruleIds: string[]): Promise<RecallRuleDefRow[]> {
+      const out = await client.query<RecallRuleDefRow>(
+        `SELECT rule_node_id, state::text AS state, rule_scope::text AS rule_scope, target_agent_id, target_team_id, if_json, then_json, exceptions_json, positive_count, negative_count
+         FROM memory_rule_defs
+         WHERE scope = $1 AND rule_node_id = ANY($2::uuid[])`,
+        [scope, ruleIds],
+      );
+      return out.rows;
+    },
+
+    async debugEmbeddings(scope: string, ids: string[]): Promise<RecallDebugEmbeddingRow[]> {
+      const out = await client.query<RecallDebugEmbeddingRow>(
+        `SELECT id, embedding::text AS embedding_text
+         FROM memory_nodes
+         WHERE scope = $1 AND id = ANY($2::uuid[]) AND embedding IS NOT NULL`,
+        [scope, ids],
+      );
+      return out.rows;
+    },
+
+    async insertRecallAudit(params: RecallAuditInsertParams): Promise<void> {
+      await client.query(
+        `
+        INSERT INTO memory_recall_audit
+          (scope, endpoint, consumer_agent_id, consumer_team_id, query_sha256, seed_count, node_count, edge_count)
+        VALUES
+          ($1, $2, $3, $4, $5, $6, $7, $8)
+        `,
+        [
+          params.scope,
+          params.endpoint,
+          params.consumerAgentId,
+          params.consumerTeamId,
+          params.querySha256,
+          params.seedCount,
+          params.nodeCount,
+          params.edgeCount,
+        ],
+      );
     },
   };
 }

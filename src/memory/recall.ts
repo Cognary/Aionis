@@ -398,15 +398,8 @@ export async function memoryRecallParsed(
   const ruleIds = outNodeRows.filter((n) => n.type === "rule").map((n) => n.id);
   const ruleDefMap = new Map<string, any>();
   if (ruleIds.length) {
-    const rr = await timed("rule_defs", () =>
-      client.query(
-        `SELECT rule_node_id, state::text AS state, rule_scope::text AS rule_scope, target_agent_id, target_team_id, if_json, then_json, exceptions_json, positive_count, negative_count
-         FROM memory_rule_defs
-         WHERE scope = $1 AND rule_node_id = ANY($2::uuid[])`,
-        [scope, ruleIds],
-      ),
-    );
-    for (const row of rr.rows) ruleDefMap.set(row.rule_node_id, row);
+    const rr = await timed("rule_defs", () => recallAccess.ruleDefs(scope, ruleIds));
+    for (const row of rr) ruleDefMap.set(row.rule_node_id, row);
   }
 
   const { text: context_text, items: context_items, citations, compaction: context_compaction } = buildContext(
@@ -484,15 +477,8 @@ export async function memoryRecallParsed(
     const MAX_EMBED_NODES = 5;
     const PREVIEW_DIMS = 16;
     const ids = seedIds.slice(0, MAX_EMBED_NODES);
-    const er = await timed("debug_embeddings", () =>
-      client.query<{ id: string; embedding_text: string }>(
-        `SELECT id, embedding::text AS embedding_text
-         FROM memory_nodes
-         WHERE scope = $1 AND id = ANY($2::uuid[]) AND embedding IS NOT NULL`,
-        [scope, ids],
-      ),
-    );
-    embedding_debug = er.rows.map((row) => {
+    const er = await timed("debug_embeddings", () => recallAccess.debugEmbeddings(scope, ids));
+    embedding_debug = er.map((row) => {
       let parsedVec: { dims: number; preview: number[] };
       try {
         parsedVec = parseVectorText(row.embedding_text, PREVIEW_DIMS);
@@ -519,24 +505,16 @@ export async function memoryRecallParsed(
 
   await timed("audit_insert", async () => {
     try {
-      await client.query(
-        `
-        INSERT INTO memory_recall_audit
-          (scope, endpoint, consumer_agent_id, consumer_team_id, query_sha256, seed_count, node_count, edge_count)
-        VALUES
-          ($1, $2, $3, $4, $5, $6, $7, $8)
-        `,
-        [
-          scope,
-          endpoint,
-          consumerAgentId,
-          consumerTeamId,
-          sha256Hex(toVectorLiteral(parsed.query_embedding)),
-          seeds.length,
-          outNodes.length,
-          outEdges.length,
-        ],
-      );
+      await recallAccess.insertRecallAudit({
+        scope,
+        endpoint,
+        consumerAgentId,
+        consumerTeamId,
+        querySha256: sha256Hex(toVectorLiteral(parsed.query_embedding)),
+        seedCount: seeds.length,
+        nodeCount: outNodes.length,
+        edgeCount: outEdges.length,
+      });
     } catch {
       // Best-effort audit; do not block recall path.
     }

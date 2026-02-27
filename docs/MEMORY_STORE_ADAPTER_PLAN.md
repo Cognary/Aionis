@@ -38,9 +38,10 @@ Completed in this phase:
 6. `memoryRecallParsed(...)` now supports injectable `recall_access` while preserving default Postgres behavior.
 7. Recall call sites (`/v1/memory/recall`, `/v1/memory/recall_text`, `/v1/planning/context`) now pass store access explicitly.
 8. Stage2 neighborhood fetches (`stage2_edges`, `stage2_nodes`) moved into `recall-access` Postgres adapter.
+9. Recall access extraction completed for read path queries (`rule_defs`, `debug_embeddings`) and best-effort `audit_insert`.
 
 ## Next Steps
 
-1. Complete recall access extraction for remaining queries (`rule_defs`, `debug_embeddings`, `audit_insert`).
-2. Start write-path extraction (`append_commit` + minimal node/edge fetch capabilities), keeping Postgres as reference.
+1. Start write-path extraction (`append_commit` + minimal node/edge fetch capabilities), keeping Postgres as reference.
+2. Define adapter capability contract versioning (required/optional capabilities) for backend parity checks.
 3. Add `embedded` experimental adapter behind explicit feature flag after read/write capability seams are stable.
