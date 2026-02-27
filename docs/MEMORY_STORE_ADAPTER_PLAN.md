@@ -74,6 +74,7 @@ Completed in this phase:
 42. Expanded SDK capability-negotiation smoke to cover `sessions_graph` and `packs_import` via SDK methods (success path on capability-enabled backend, typed `backend_capability_unsupported` path on capability-disabled backend), and synchronized `src/sdk` methods/types with these endpoints.
 43. Upgraded `sdk-ci` capability-negotiation matrix to include embedded feature-enabled profile and switched assertions from backend-hardcoded branches to capability-driven checks (`/health.memory_store_feature_capabilities`) for `packs_export`/`sessions_graph`/`packs_import`.
 44. Extended SDK smoke health payloads with recall/write capabilities and gated soft-degrade probe execution on `write_capabilities.shadow_mirror_v2=false` (instead of backend-only branching), reducing false failures when embedded mirror capability is enabled.
+45. Upgraded `backend-parity-smoke` matrix to capability profiles (`postgres`, `embedded_capability_off`, `embedded_feature_enabled`) and removed embedded runtime env overrides so parity checks always validate declared capability state directly.
 
 ## Next Steps
 
