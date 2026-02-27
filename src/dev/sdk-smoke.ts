@@ -207,6 +207,7 @@ async function main() {
       title: "sdk smoke session",
       input_text: "sdk smoke create session",
       auto_embed: false,
+      memory_lane: "shared",
     });
     const event = await client.writeEvent({
       scope,
@@ -215,6 +216,7 @@ async function main() {
       event_id: `sdk_smoke_event_${stamp}`,
       input_text: "sdk smoke session event",
       auto_embed: false,
+      memory_lane: "shared",
     });
     const events = await client.listSessionEvents(sessionId, {
       scope,

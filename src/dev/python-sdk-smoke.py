@@ -206,6 +206,7 @@ def main() -> int:
                     "title": "python sdk smoke session",
                     "input_text": "python sdk smoke create session",
                     "auto_embed": False,
+                    "memory_lane": "shared",
                 }
             )
             event = client.write_event(
@@ -216,6 +217,7 @@ def main() -> int:
                     "event_id": f"py_sdk_smoke_event_{stamp}",
                     "input_text": "python sdk smoke session event",
                     "auto_embed": False,
+                    "memory_lane": "shared",
                 }
             )
             events = client.list_session_events(
