@@ -23,6 +23,7 @@ jobs:
     env:
       DATABASE_URL: postgres://aionis:aionis@127.0.0.1:5432/aionis_memory
       PORT: "3101"
+      ADMIN_TOKEN: ci-admin-token
       MEMORY_STORE_BACKEND: ${{ matrix.backend }}
       MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: ${{ matrix.backend == 'embedded' && 'true' || 'false' }}
       MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES: ${{ matrix.backend == 'embedded' && '12000' || '52428800' }}
@@ -55,6 +56,7 @@ jobs:
           {
             echo "DATABASE_URL=${DATABASE_URL}"
             echo "PORT=${PORT}"
+            echo "ADMIN_TOKEN=${ADMIN_TOKEN}"
             echo "MEMORY_STORE_BACKEND=${MEMORY_STORE_BACKEND}"
             echo "MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED=${MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED}"
             echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES=${MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES}"
