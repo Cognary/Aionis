@@ -43,6 +43,9 @@ on:
         required: false
         default: "14"
         type: string
+  schedule:
+    # Daily drift watch (UTC)
+    - cron: "35 5 * * *"
 
 permissions:
   contents: read
