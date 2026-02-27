@@ -61,6 +61,15 @@ export type WriteEdgeUpsertArgs = {
   commitId: string;
 };
 
+export type WriteOutboxInsertArgs = {
+  scope: string;
+  commitId: string;
+  eventType: "embed_nodes" | "topic_cluster";
+  jobKey: string;
+  payloadSha256: string;
+  payloadJson: string;
+};
+
 export interface WriteStoreAccess {
   nodeScopesByIds(ids: string[]): Promise<Map<string, string>>;
   parentCommitHash(scope: string, parentCommitId: string): Promise<string | null>;
@@ -68,6 +77,9 @@ export interface WriteStoreAccess {
   insertNode(args: WriteNodeInsertArgs): Promise<void>;
   insertRuleDef(args: WriteRuleDefInsertArgs): Promise<void>;
   upsertEdge(args: WriteEdgeUpsertArgs): Promise<void>;
+  readyEmbeddingNodeIds(scope: string, ids: string[]): Promise<Set<string>>;
+  insertOutboxEvent(args: WriteOutboxInsertArgs): Promise<void>;
+  appendAfterTopicClusterEventIds(scope: string, commitId: string, eventIdsJson: string): Promise<void>;
 }
 
 export function createPostgresWriteStoreAccess(client: pg.PoolClient): WriteStoreAccess {
@@ -186,6 +198,40 @@ export function createPostgresWriteStoreAccess(client: pg.PoolClient): WriteStor
            commit_id = EXCLUDED.commit_id,
            last_activated = now()`,
         [args.id, args.scope, args.type, args.srcId, args.dstId, args.weight, args.confidence, args.decayRate, args.commitId],
+      );
+    },
+
+    async readyEmbeddingNodeIds(scope: string, ids: string[]): Promise<Set<string>> {
+      if (ids.length === 0) return new Set();
+      const out = await client.query<{ id: string }>(
+        `
+        SELECT id
+        FROM memory_nodes
+        WHERE scope = $1
+          AND id = ANY($2::uuid[])
+          AND embedding_status = 'ready'
+          AND embedding IS NOT NULL
+        `,
+        [scope, ids],
+      );
+      return new Set(out.rows.map((row) => row.id));
+    },
+
+    async insertOutboxEvent(args: WriteOutboxInsertArgs): Promise<void> {
+      await client.query(
+        `INSERT INTO memory_outbox (scope, commit_id, event_type, job_key, payload_sha256, payload)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+         ON CONFLICT (scope, event_type, job_key) DO NOTHING`,
+        [args.scope, args.commitId, args.eventType, args.jobKey, args.payloadSha256, args.payloadJson],
+      );
+    },
+
+    async appendAfterTopicClusterEventIds(scope: string, commitId: string, eventIdsJson: string): Promise<void> {
+      await client.query(
+        `UPDATE memory_outbox
+         SET payload = payload || jsonb_build_object('after_topic_cluster_event_ids', $3::jsonb)
+         WHERE scope=$1 AND commit_id=$2 AND event_type='embed_nodes'`,
+        [scope, commitId, eventIdsJson],
       );
     },
   };

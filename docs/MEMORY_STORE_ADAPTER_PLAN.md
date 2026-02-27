@@ -43,9 +43,10 @@ Completed in this phase:
 11. `applyMemoryWrite(...)` now supports injectable `write_access` and uses it for scope checks + commit-chain write.
 12. Write entrypoints (`/v1/memory/write`, session create/event append, pack import) now pass Postgres write access explicitly.
 13. Write access extraction now also covers core mutation queries (`insert_node`, `insert_rule_def`, `upsert_edge`).
+14. Write access extraction now covers outbox-related helpers (`ready_embedding_lookup`, `embed_nodes/topic_cluster enqueue`, `embed_nodes payload update`).
 
 ## Next Steps
 
-1. Continue write-path extraction for outbox helpers (`ready_embedding_lookup`, `embed_nodes enqueue`, `topic_cluster enqueue`, `embed_nodes payload update`).
-2. Define adapter capability contract versioning (required/optional capabilities) for backend parity checks.
+1. Define adapter capability contract versioning (required/optional capabilities) for backend parity checks.
+2. Extract shadow dual-write mirror helpers (`memory_*_v2` copy path) behind write store access.
 3. Add `embedded` experimental adapter behind explicit feature flag after read/write capability seams are stable.

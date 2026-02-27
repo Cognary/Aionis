@@ -514,33 +514,22 @@ export async function applyMemoryWrite(
     let embedNodes = embedPlanned;
     if (!prepared.force_reembed && embedNodes.length > 0) {
       const ids = embedNodes.map((n) => n.id);
-      const rr = await client.query<{ id: string }>(
-        `
-        SELECT id
-        FROM memory_nodes
-        WHERE scope = $1
-          AND id = ANY($2::uuid[])
-          AND embedding_status = 'ready'
-          AND embedding IS NOT NULL
-        `,
-        [scope, ids],
-      );
-      if (rr.rowCount && rr.rowCount > 0) {
-        const ready = new Set(rr.rows.map((r) => r.id));
-        embedNodes = embedNodes.filter((n) => !ready.has(n.id));
-      }
+      const ready = await writeAccess.readyEmbeddingNodeIds(scope, ids);
+      if (ready.size > 0) embedNodes = embedNodes.filter((n) => !ready.has(n.id));
     }
 
     if (embedNodes.length > 0) {
       const payload = { nodes: embedNodes, ...(prepared.force_reembed ? { force_reembed: true } : {}) };
       const payloadSha = sha256Hex(stableStringify(payload));
       const jobKey = sha256Hex(stableStringify({ v: 1, scope, commit_id, event_type: "embed_nodes", payloadSha }));
-      await client.query(
-        `INSERT INTO memory_outbox (scope, commit_id, event_type, job_key, payload_sha256, payload)
-         VALUES ($1, $2, 'embed_nodes', $3, $4, $5::jsonb)
-         ON CONFLICT (scope, event_type, job_key) DO NOTHING`,
-        [scope, commit_id, jobKey, payloadSha, JSON.stringify(payload)],
-      );
+      await writeAccess.insertOutboxEvent({
+        scope,
+        commitId: commit_id,
+        eventType: "embed_nodes",
+        jobKey,
+        payloadSha256: payloadSha,
+        payloadJson: JSON.stringify(payload),
+      });
       enqueuedEmbedNodes = true;
       result.embedding_backfill = { enqueued: true, pending_nodes: embedNodes.length };
     }
@@ -560,18 +549,8 @@ export async function applyMemoryWrite(
     // Detect current embedding readiness from DB (handles idempotent retries where the node already exists and is READY).
     const readyInDb = new Set<string>();
     if (eventIds.length > 0) {
-      const rr = await client.query<{ id: string }>(
-        `
-        SELECT id
-        FROM memory_nodes
-        WHERE scope = $1
-          AND id = ANY($2::uuid[])
-          AND embedding_status = 'ready'
-          AND embedding IS NOT NULL
-        `,
-        [scope, eventIds],
-      );
-      for (const row of rr.rows) readyInDb.add(row.id);
+      const ready = await writeAccess.readyEmbeddingNodeIds(scope, eventIds);
+      for (const id of ready) readyInDb.add(id);
     }
 
     // If force_reembed, prefer clustering after the new embedding is computed (so we don't cluster using stale vectors).
@@ -594,12 +573,7 @@ export async function applyMemoryWrite(
 
     // If some events are not ready (or forced) and we enqueued embed_nodes, attach event ids so worker can enqueue clustering after backfill.
     if (waitForEmbed.length > 0 && enqueuedEmbedNodes) {
-      await client.query(
-        `UPDATE memory_outbox
-         SET payload = payload || jsonb_build_object('after_topic_cluster_event_ids', $3::jsonb)
-         WHERE scope=$1 AND commit_id=$2 AND event_type='embed_nodes'`,
-        [scope, commit_id, JSON.stringify(waitForEmbed)],
-      );
+      await writeAccess.appendAfterTopicClusterEventIds(scope, commit_id, JSON.stringify(waitForEmbed));
       result.topic_cluster = { enqueued: true };
     }
 
@@ -608,12 +582,14 @@ export async function applyMemoryWrite(
       const payload = { event_ids: runNow };
       const payloadSha = sha256Hex(stableStringify(payload));
       const jobKey = sha256Hex(stableStringify({ v: 1, scope, commit_id, event_type: "topic_cluster", payloadSha }));
-      await client.query(
-        `INSERT INTO memory_outbox (scope, commit_id, event_type, job_key, payload_sha256, payload)
-         VALUES ($1, $2, 'topic_cluster', $3, $4, $5::jsonb)
-         ON CONFLICT (scope, event_type, job_key) DO NOTHING`,
-        [scope, commit_id, jobKey, payloadSha, JSON.stringify(payload)],
-      );
+      await writeAccess.insertOutboxEvent({
+        scope,
+        commitId: commit_id,
+        eventType: "topic_cluster",
+        jobKey,
+        payloadSha256: payloadSha,
+        payloadJson: JSON.stringify(payload),
+      });
       result.topic_cluster = { enqueued: true };
     }
   }
