@@ -539,6 +539,12 @@ npm run job:perf-profile-aggregate -- \
   --max-recall-p99-regression-pct 10
 ```
 
+Build a rolling trend summary from compare artifacts:
+
+```bash
+npm run job:perf-profile-trend -- --dir /path/to/perf_dir --window-days 7
+```
+
 ### One-Command Matrix Runner
 
 Run multi-scale seed + benchmark + explain + report:
@@ -577,6 +583,15 @@ Useful env overrides:
 - `MAX_RECALL_P95_REGRESSION_PCT=10`
 - `MAX_RECALL_P99_REGRESSION_PCT=15` (optional, unset to disable)
 - `OUT_DIR=/path/to/Aionis/artifacts/perf/lite_vs_strict_custom`
+
+Collect last-7-day trend from GitHub workflow artifacts (requires `gh` auth):
+
+```bash
+TREND_OUT_DIR=/path/to/Aionis/artifacts/perf/lite_vs_strict_trend \
+WINDOW_DAYS=7 \
+REPO=Cognary/Aionis \
+bash scripts/perf/collect-lite-vs-strict-trend.sh
+```
 
 ## Consolidation Candidates (Offline, Shadow Mode)
 

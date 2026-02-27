@@ -154,3 +154,4 @@ Status: `in_progress`
 5. Added optional p99 regression gate (`--max-recall-p99-regression-pct`) for stricter tail-latency control when needed.
 6. Enabled daily scheduled run for `Perf Lite vs Strict Compare` (UTC cron) to track profile drift over time.
 7. Added `SAMPLE_RUNS` median-gate aggregation (`job:perf-profile-aggregate`) to reduce one-shot jitter impact.
+8. Added 7-day trend summary generation from workflow artifacts (`job:perf-profile-trend` + `collect-lite-vs-strict-trend.sh`) and wired it into workflow summary.

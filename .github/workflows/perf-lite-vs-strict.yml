@@ -54,6 +54,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: perf-lite-vs-strict-${{ github.ref }}
@@ -149,12 +150,29 @@ jobs:
           MAX_RECALL_FAIL_RATE_REGRESSION_ABS="${MAX_RECALL_FAIL_RATE_REGRESSION_ABS_INPUT}" \
           npm run -s perf:lite-vs-strict
 
+      - name: Build 7d trend summary
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREND_OUT_DIR="${LITE_VS_STRICT_OUT_DIR}/trend_7d" \
+          WINDOW_DAYS=7 \
+          RUN_LIMIT=80 \
+          REPO="${GITHUB_REPOSITORY}" \
+          WORKFLOW_NAME="Perf Lite vs Strict Compare" \
+          ARTIFACT_NAME="perf-lite-vs-strict-artifacts" \
+          bash scripts/perf/collect-lite-vs-strict-trend.sh
+
       - name: Publish summary
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           compare_json="${LITE_VS_STRICT_OUT_DIR}/LITE_VS_STRICT_COMPARE.json"
+          trend_json="${LITE_VS_STRICT_OUT_DIR}/trend_7d/LITE_VS_STRICT_TREND_7D.json"
           {
             echo "## Perf Lite vs Strict Compare"
             echo
@@ -164,6 +182,14 @@ jobs:
               jq '{ok, recall_gate, aggregation: (.aggregation // null), baseline: .baseline.label, candidate: .candidate.label}' "${compare_json}"
             else
               echo "compare report json not found: ${compare_json}"
+            fi
+            echo
+            echo "## 7d Trend Summary"
+            echo
+            if [[ -f "${trend_json}" ]]; then
+              jq '{window_days, metrics, latest_run}' "${trend_json}"
+            else
+              echo "trend report json not found: ${trend_json}"
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
 

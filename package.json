@@ -65,6 +65,7 @@
     "job:perf-benchmark": "tsx src/jobs/perf-benchmark.ts",
     "job:perf-profile-compare": "tsx src/jobs/perf-profile-compare.ts",
     "job:perf-profile-aggregate": "tsx src/jobs/perf-profile-aggregate.ts",
+    "job:perf-profile-trend": "tsx src/jobs/perf-profile-trend.ts",
     "job:perf-worker-benchmark": "tsx src/jobs/perf-worker-benchmark.ts",
     "job:perf-report": "tsx src/jobs/perf-report.ts",
     "job:partition-maintenance": "tsx src/jobs/partition-maintenance.ts",
