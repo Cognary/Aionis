@@ -6,6 +6,7 @@ import { ZodError, z } from "zod";
 import { loadEnv } from "./config.js";
 import { asPostgresMemoryStore, createMemoryStore } from "./store/memory-store.js";
 import { createPostgresRecallStoreAccess } from "./store/recall-access.js";
+import { createPostgresWriteStoreAccess } from "./store/write-access.js";
 import {
   createControlAlertRoute,
   enqueueControlIncidentPublishJob,
@@ -1487,6 +1488,7 @@ app.post("/v1/memory/write", async (req, reply) => {
         allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        write_access: createPostgresWriteStoreAccess(client),
       });
 
       // Optional synchronous topic clustering (if requested and not async).

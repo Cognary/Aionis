@@ -4,6 +4,7 @@ import { sha256Hex } from "../util/crypto.js";
 import { badRequest } from "../util/http.js";
 import { resolveTenantScope } from "./tenant.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
+import { createPostgresWriteStoreAccess } from "../store/write-access.js";
 import { MemoryPackExportRequest, MemoryPackImportRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 
@@ -309,6 +310,7 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
     allowCrossScopeEdges: opts.allowCrossScopeEdges,
     shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
+    write_access: createPostgresWriteStoreAccess(client),
   });
 
   return {

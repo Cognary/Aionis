@@ -39,9 +39,12 @@ Completed in this phase:
 7. Recall call sites (`/v1/memory/recall`, `/v1/memory/recall_text`, `/v1/planning/context`) now pass store access explicitly.
 8. Stage2 neighborhood fetches (`stage2_edges`, `stage2_nodes`) moved into `recall-access` Postgres adapter.
 9. Recall access extraction completed for read path queries (`rule_defs`, `debug_embeddings`) and best-effort `audit_insert`.
+10. `src/store/write-access.ts` added with initial write capabilities (`nodeScopesByIds`, `parentCommitHash`, `insertCommit`).
+11. `applyMemoryWrite(...)` now supports injectable `write_access` and uses it for scope checks + commit-chain write.
+12. Write entrypoints (`/v1/memory/write`, session create/event append, pack import) now pass Postgres write access explicitly.
 
 ## Next Steps
 
-1. Start write-path extraction (`append_commit` + minimal node/edge fetch capabilities), keeping Postgres as reference.
+1. Continue write-path extraction (`insert_node`, `insert_rule_def`, `upsert_edge`, outbox helpers) into `write-access`.
 2. Define adapter capability contract versioning (required/optional capabilities) for backend parity checks.
 3. Add `embedded` experimental adapter behind explicit feature flag after read/write capability seams are stable.

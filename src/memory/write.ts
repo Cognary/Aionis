@@ -6,6 +6,7 @@ import { normalizeText } from "../util/normalize.js";
 import { redactJsonStrings, redactPII } from "../util/redaction.js";
 import { stableUuid } from "../util/uuid.js";
 import { badRequest } from "../util/http.js";
+import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import { MemoryWriteRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { resolveTenantScope, toTenantScopeKey } from "./tenant.js";
@@ -71,21 +72,8 @@ type PrepareWriteOptions = {
 type ApplyWriteOptions = PrepareWriteOptions & {
   shadowDualWriteEnabled: boolean;
   shadowDualWriteStrict: boolean;
+  write_access?: WriteStoreAccess;
 };
-
-async function fetchExistingNodeScopes(
-  client: pg.PoolClient,
-  ids: string[],
-): Promise<Map<string, string>> {
-  if (ids.length === 0) return new Map();
-  const r = await client.query<{ id: string; scope: string }>(
-    "SELECT id, scope FROM memory_nodes WHERE id = ANY($1::uuid[])",
-    [ids],
-  );
-  const out = new Map<string, string>();
-  for (const row of r.rows) out.set(row.id, row.scope);
-  return out;
-}
 
 type PreparedNode = {
   id: string;
@@ -331,6 +319,7 @@ export async function applyMemoryWrite(
   prepared: PreparedWrite,
   opts: ApplyWriteOptions,
 ): Promise<WriteResult> {
+  const writeAccess = opts.write_access ?? createPostgresWriteStoreAccess(client);
   const scope = prepared.scope;
   const actor = prepared.actor;
   const nodes = prepared.nodes;
@@ -343,7 +332,7 @@ export async function applyMemoryWrite(
   // Guard against explicit-id collisions across scopes.
   {
     const ids = nodes.map((n) => n.id);
-    const existing = await fetchExistingNodeScopes(client, Array.from(new Set(ids)));
+    const existing = await writeAccess.nodeScopesByIds(Array.from(new Set(ids)));
     for (const n of nodes) {
       const s = existing.get(n.id);
       if (s && s !== n.scope) {
@@ -355,7 +344,7 @@ export async function applyMemoryWrite(
   const referencedExistingIds = Array.from(
     new Set(edges.flatMap((e) => [e.src_id, e.dst_id]).filter((id) => !localNodeScope.has(id))),
   );
-  const existingScopes = await fetchExistingNodeScopes(client, referencedExistingIds);
+  const existingScopes = await writeAccess.nodeScopesByIds(referencedExistingIds);
 
   for (const e of edges) {
     const srcScope = localNodeScope.get(e.src_id) ?? existingScopes.get(e.src_id);
@@ -388,12 +377,9 @@ export async function applyMemoryWrite(
   // Compute commit chain.
   let parentHash = "";
   if (prepared.parent_commit_id) {
-    const r = await client.query<{ commit_hash: string }>(
-      "SELECT commit_hash FROM memory_commits WHERE id = $1 AND scope = $2",
-      [prepared.parent_commit_id, scope],
-    );
-    if (r.rowCount !== 1) throw new Error(`parent_commit_id not found in scope ${scope}`);
-    parentHash = r.rows[0].commit_hash;
+    const parent = await writeAccess.parentCommitHash(scope, prepared.parent_commit_id);
+    if (!parent) throw new Error(`parent_commit_id not found in scope ${scope}`);
+    parentHash = parent;
   }
 
   const diffSha = sha256Hex(stableStringify(diff));
@@ -410,24 +396,16 @@ export async function applyMemoryWrite(
   );
 
   // Insert commit.
-  const commitRes = await client.query<{ id: string }>(
-    `INSERT INTO memory_commits
-      (scope, parent_id, input_sha256, diff_json, actor, model_version, prompt_version, commit_hash)
-     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8)
-     ON CONFLICT (commit_hash) DO UPDATE SET diff_json = memory_commits.diff_json
-     RETURNING id`,
-    [
-      scope,
-      prepared.parent_commit_id,
-      prepared.input_sha256,
-      JSON.stringify(diff),
-      actor,
-      prepared.model_version,
-      prepared.prompt_version,
-      commitHash,
-    ],
-  );
-  const commit_id = commitRes.rows[0].id;
+  const commit_id = await writeAccess.insertCommit({
+    scope,
+    parentCommitId: prepared.parent_commit_id,
+    inputSha256: prepared.input_sha256,
+    diffJson: JSON.stringify(diff),
+    actor,
+    modelVersion: prepared.model_version,
+    promptVersion: prepared.prompt_version,
+    commitHash,
+  });
 
   // Insert nodes.
   for (const n of nodes) {

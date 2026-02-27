@@ -12,6 +12,7 @@ import {
 } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
+import { createPostgresWriteStoreAccess } from "../store/write-access.js";
 import { buildAionisUri } from "./uri.js";
 
 type SessionWriteOptions = {
@@ -178,6 +179,7 @@ export async function createSession(client: pg.PoolClient, body: unknown, opts: 
     allowCrossScopeEdges: opts.allowCrossScopeEdges,
     shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
+    write_access: createPostgresWriteStoreAccess(client),
   });
 
   const node = out.nodes.find((n) => n.client_id === sessionCid) ?? out.nodes[0] ?? null;
@@ -311,6 +313,7 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
     allowCrossScopeEdges: opts.allowCrossScopeEdges,
     shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
+    write_access: createPostgresWriteStoreAccess(client),
   });
 
   const eventNode = out.nodes.find((n) => n.client_id === eventCid) ?? null;
