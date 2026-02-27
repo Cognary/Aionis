@@ -8,7 +8,7 @@ TARGET_ENV="${ROOT_DIR}/.env"
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/env/apply-throughput-profile.sh <prod|benchmark>
+  bash scripts/env/apply-throughput-profile.sh <lite|prod|benchmark>
 
 Behavior:
   - Creates .env from .env.example when .env is missing.
@@ -30,7 +30,7 @@ fi
 
 PROFILE_FILE="${PROFILES_DIR}/${PROFILE}.env"
 if [[ ! -f "${PROFILE_FILE}" ]]; then
-  echo "unknown profile: ${PROFILE} (expected prod|benchmark)" >&2
+  echo "unknown profile: ${PROFILE} (expected lite|prod|benchmark)" >&2
   exit 1
 fi
 

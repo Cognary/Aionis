@@ -98,7 +98,7 @@ const EnvSchema = z.object({
   API_WRITE_QUEUE_MAX: z.coerce.number().int().min(0).max(200000).default(3000),
   API_WRITE_QUEUE_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(2_000),
   // Server-side default recall tuning profile used when callers omit recall knobs.
-  MEMORY_RECALL_PROFILE: z.enum(["legacy", "strict_edges", "quality_first"]).default("strict_edges"),
+  MEMORY_RECALL_PROFILE: z.enum(["legacy", "strict_edges", "quality_first", "lite"]).default("strict_edges"),
   // Layered recall profile policy (global -> endpoint -> tenant -> tenant+endpoint), JSON object.
   MEMORY_RECALL_PROFILE_POLICY_JSON: z.string().default("{}"),
   // Adaptive profile downgrade on recall queue pressure.
@@ -109,7 +109,7 @@ const EnvSchema = z.object({
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
   MEMORY_RECALL_ADAPTIVE_WAIT_MS: z.coerce.number().int().min(1).max(60_000).default(200),
-  MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: z.enum(["legacy", "strict_edges", "quality_first"]).default("strict_edges"),
+  MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: z.enum(["legacy", "strict_edges", "quality_first", "lite"]).default("strict_edges"),
   // Additional queue-pressure hard caps to trim recall tail latency.
   MEMORY_RECALL_ADAPTIVE_HARD_CAP_ENABLED: z
     .string()
@@ -364,10 +364,10 @@ export function loadEnv(): Env {
     if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
       throw new Error("MEMORY_RECALL_PROFILE_POLICY_JSON must be a JSON object");
     }
-    const allowedProfiles = new Set(["legacy", "strict_edges", "quality_first"]);
+    const allowedProfiles = new Set(["legacy", "strict_edges", "quality_first", "lite"]);
     const validateProfile = (value: unknown, path: string) => {
       if (typeof value !== "string" || !allowedProfiles.has(value)) {
-        throw new Error(`${path} must be one of: legacy|strict_edges|quality_first`);
+        throw new Error(`${path} must be one of: legacy|strict_edges|quality_first|lite`);
       }
     };
     const asRecord = policy as Record<string, unknown>;

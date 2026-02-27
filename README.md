@@ -124,6 +124,24 @@ npm run -s docker:build:standalone
 npm run -s docker:run:standalone
 ```
 
+Optional local-lite mode (lower resource usage + tighter recall budgets):
+
+```bash
+cp .env.example .env
+npm run -s env:throughput:lite
+docker run --rm -it \
+  -p 3001:3001 \
+  --env-file .env \
+  -v aionis-standalone-data:/var/lib/postgresql/data \
+  aionis-standalone:local
+```
+
+Quick smoke:
+
+```bash
+npm run -s e2e:standalone-lite-smoke
+```
+
 Or run directly:
 
 ```bash
