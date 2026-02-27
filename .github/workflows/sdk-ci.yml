@@ -79,3 +79,150 @@ jobs:
 
       - name: Docs check
         run: npm run -s docs:check
+
+  sdk-capability-negotiation-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - postgres
+          - embedded
+    env:
+      DATABASE_URL: postgres://aionis:aionis@127.0.0.1:5432/aionis_memory
+      PORT: "3101"
+      ADMIN_TOKEN: ci-admin-token
+      MEMORY_STORE_BACKEND: ${{ matrix.backend }}
+      MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: ${{ matrix.backend == 'embedded' && 'true' || 'false' }}
+      MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES: ${{ matrix.backend == 'embedded' && '12000' || '52428800' }}
+      MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED: "true"
+      MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS: "8"
+      MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED: "false"
+      MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED: "false"
+      MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED: "true"
+      MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED: "true"
+      MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED: ${{ matrix.backend == 'embedded' && 'false' || 'true' }}
+      MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Prepare env file
+        run: |
+          cp .env.example .env
+          {
+            echo "DATABASE_URL=${DATABASE_URL}"
+            echo "PORT=${PORT}"
+            echo "ADMIN_TOKEN=${ADMIN_TOKEN}"
+            echo "MEMORY_STORE_BACKEND=${MEMORY_STORE_BACKEND}"
+            echo "MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED=${MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES=${MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES}"
+            echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED=${MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS=${MEMORY_STORE_EMBEDDED_SNAPSHOT_COMPACTION_MAX_ROUNDS}"
+            echo "MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED=${MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED=${MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED=${MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED=${MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED=${MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED}"
+            echo "MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED=${MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED}"
+          } >> .env
+
+      - name: Start db
+        run: docker compose up -d db
+
+      - name: Wait for db
+        run: |
+          for i in {1..60}; do
+            if docker compose exec -T db pg_isready -U aionis -d aionis_memory >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "db not ready in time" >&2
+          exit 1
+
+      - name: Run migrations
+        run: docker compose run --rm migrate
+
+      - name: Build API
+        run: npm run -s build
+
+      - name: SDK capability negotiation smoke
+        run: |
+          node dist/index.js >/tmp/sdk_ci_api.log 2>&1 &
+          API_PID=$!
+
+          for i in {1..60}; do
+            if curl -fsS "http://127.0.0.1:${PORT}/health" >/tmp/sdk_ci_health.json 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [[ ! -s /tmp/sdk_ci_health.json ]]; then
+            echo "health endpoint never became ready" >&2
+            sed -n '1,220p' /tmp/sdk_ci_api.log >&2 || true
+            exit 1
+          fi
+
+          npm run -s sdk:smoke >/tmp/sdk_ci_smoke_ts.json
+          npm run -s sdk:py:smoke >/tmp/sdk_ci_smoke_py.json
+
+          node -e '
+            const fs = require("fs");
+            const expected = process.env.MEMORY_STORE_BACKEND;
+            const tsOut = JSON.parse(fs.readFileSync("/tmp/sdk_ci_smoke_ts.json", "utf8"));
+            const pyOut = JSON.parse(fs.readFileSync("/tmp/sdk_ci_smoke_py.json", "utf8"));
+            const ensure = (cond, msg) => { if (!cond) throw new Error(msg); };
+            for (const [name, out] of [["ts", tsOut], ["py", pyOut]]) {
+              ensure(out && out.ok === true, `${name} smoke must be ok=true`);
+              ensure(out.calls && out.calls.health && out.calls.pack_export, `${name} smoke must include health + pack_export`);
+            }
+            if (expected === "embedded") {
+              const tsCap = tsOut.calls.pack_export.capability_error;
+              const pyCap = pyOut.calls.pack_export.capability_error;
+              ensure(tsCap && tsCap.capability === "packs_export", "ts embedded must expose packs_export capability error");
+              ensure(pyCap && pyCap.capability === "packs_export", "py embedded must expose packs_export capability error");
+            } else {
+              ensure(
+                typeof tsOut.calls.pack_export.manifest_sha256 === "string" && tsOut.calls.pack_export.manifest_sha256.length > 0,
+                "ts postgres must export pack manifest sha256",
+              );
+              ensure(
+                typeof pyOut.calls.pack_export.manifest_sha256 === "string" && pyOut.calls.pack_export.manifest_sha256.length > 0,
+                "py postgres must export pack manifest sha256",
+              );
+            }
+          '
+
+          kill "${API_PID}" || true
+          wait "${API_PID}" || true
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps || true
+          docker compose logs --no-color db || true
+          sed -n '1,220p' /tmp/sdk_ci_api.log || true
+          cat /tmp/sdk_ci_smoke_ts.json || true
+          cat /tmp/sdk_ci_smoke_py.json || true
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

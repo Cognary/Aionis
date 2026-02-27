@@ -63,9 +63,10 @@ Completed in this phase:
 31. Centralized capability fallback contract registry (`hard_fail` vs `soft_degrade`) and exposed it via `/health` for client/runtime negotiation.
 32. Wired capability fallback negotiation into TypeScript/Python SDKs (`health` + `getCapabilityContract` helpers, capability-unsupported error parsers, and README/SDK contract docs).
 33. Added backend-parity SDK smoke coverage for capability negotiation (TS + Python): checks `/health` contract parity and validates `packs_export` success vs `backend_capability_unsupported` path by backend capability state.
+34. Promoted SDK capability-negotiation checks into `sdk-ci.yml` (dedicated backend matrix smoke for TS + Python SDK outputs, including unsupported `packs_export` contract assertions on embedded backend).
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
 2. Add runtime compaction telemetry export for long-run trend analysis (artifact timeline + alert thresholds), beyond smoke-level CI assertions.
-3. Promote SDK capability-negotiation checks from parity smoke into dedicated SDK CI assertions (including unsupported-capability contract fixtures).
+3. Expand unsupported-capability fixture coverage beyond `packs_export` (for example `sessions_graph`, `packs_import`) in SDK CI assertions.
