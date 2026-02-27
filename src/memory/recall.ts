@@ -1,7 +1,13 @@
 import type pg from "pg";
 import { performance } from "node:perf_hooks";
 import { assertDim, toVectorLiteral } from "../util/pgvector.js";
-import { createPostgresRecallStoreAccess, type RecallCandidate, type RecallStoreAccess } from "../store/recall-access.js";
+import {
+  createPostgresRecallStoreAccess,
+  type RecallCandidate,
+  type RecallEdgeRow,
+  type RecallNodeRow,
+  type RecallStoreAccess,
+} from "../store/recall-access.js";
 import { MemoryRecallRequest, type MemoryRecallInput } from "./schemas.js";
 import { buildContext } from "./context.js";
 import { sha256Hex } from "../util/crypto.js";
@@ -21,46 +27,8 @@ export type MemoryRecallOptions = {
   recall_access?: RecallStoreAccess;
 };
 
-type NodeRow = {
-  id: string;
-  scope: string;
-  type: string;
-  tier: string;
-  memory_lane: "private" | "shared";
-  producer_agent_id: string | null;
-  owner_agent_id: string | null;
-  owner_team_id: string | null;
-  title: string | null;
-  text_summary: string | null;
-  slots: any;
-  embedding_status: string;
-  embedding_model: string | null;
-  topic_state: string | null;
-  member_count: number | null;
-  raw_ref: string | null;
-  evidence_ref: string | null;
-  salience: number;
-  importance: number;
-  confidence: number;
-  last_activated: string | null;
-  created_at: string;
-  updated_at: string;
-  commit_id: string | null;
-};
-
-type EdgeRow = {
-  id: string;
-  scope: string;
-  type: string;
-  src_id: string;
-  dst_id: string;
-  weight: number;
-  confidence: number;
-  decay_rate: number;
-  last_activated: string | null;
-  created_at: string;
-  commit_id: string | null;
-};
+type NodeRow = RecallNodeRow;
+type EdgeRow = RecallEdgeRow;
 
 function edgeTypeWeight(t: string): number {
   if (t === "derived_from") return 1.0;
@@ -292,134 +260,22 @@ export async function memoryRecallParsed(
   const minEdgeConf = Math.max(0, Math.min(1, parsed.min_edge_confidence ?? 0));
 
   const neighborhoodEdges = await timed("stage2_edges", () =>
-    client.query<EdgeRow>(
-      parsed.neighborhood_hops === 1
-        ? `
-          WITH seed AS (
-            SELECT unnest($1::uuid[]) AS id
-          ),
-          hop1 AS (
-            (
-              SELECT e.*
-              FROM memory_edges e
-              JOIN seed s ON s.id = e.src_id
-              WHERE e.scope = $2
-                AND COALESCE(e.weight, 1) >= $3
-                AND COALESCE(e.confidence, 1) >= $4
-              ORDER BY e.weight DESC, e.confidence DESC
-              LIMIT $5
-            )
-            UNION
-            (
-              SELECT e.*
-              FROM memory_edges e
-              JOIN seed s ON s.id = e.dst_id
-              WHERE e.scope = $2
-                AND COALESCE(e.weight, 1) >= $3
-                AND COALESCE(e.confidence, 1) >= $4
-              ORDER BY e.weight DESC, e.confidence DESC
-              LIMIT $5
-            )
-          )
-          SELECT
-            id,
-            scope,
-            type::text AS type,
-            src_id,
-            dst_id,
-            weight,
-            confidence,
-            decay_rate,
-            last_activated,
-            created_at,
-            commit_id
-          FROM hop1
-          ORDER BY weight DESC, confidence DESC
-          LIMIT $6
-        `
-        : `
-          WITH seed AS (
-            SELECT unnest($1::uuid[]) AS id
-          ),
-          hop1 AS (
-            (
-              SELECT e.*
-              FROM memory_edges e
-              JOIN seed s ON s.id = e.src_id
-              WHERE e.scope = $2
-                AND COALESCE(e.weight, 1) >= $3
-                AND COALESCE(e.confidence, 1) >= $4
-              ORDER BY e.weight DESC, e.confidence DESC
-              LIMIT $5
-            )
-            UNION
-            (
-              SELECT e.*
-              FROM memory_edges e
-              JOIN seed s ON s.id = e.dst_id
-              WHERE e.scope = $2
-                AND COALESCE(e.weight, 1) >= $3
-                AND COALESCE(e.confidence, 1) >= $4
-              ORDER BY e.weight DESC, e.confidence DESC
-              LIMIT $5
-            )
-          ),
-          nodes AS (
-            SELECT src_id AS id FROM hop1
-            UNION
-            SELECT dst_id AS id FROM hop1
-            UNION
-            SELECT id FROM seed
-          ),
-          hop2 AS (
-            (
-              SELECT e.*
-              FROM memory_edges e
-              JOIN nodes n ON n.id = e.src_id
-              WHERE e.scope = $2
-                AND COALESCE(e.weight, 1) >= $3
-                AND COALESCE(e.confidence, 1) >= $4
-              ORDER BY e.weight DESC, e.confidence DESC
-              LIMIT $7
-            )
-            UNION
-            (
-              SELECT e.*
-              FROM memory_edges e
-              JOIN nodes n ON n.id = e.dst_id
-              WHERE e.scope = $2
-                AND COALESCE(e.weight, 1) >= $3
-                AND COALESCE(e.confidence, 1) >= $4
-              ORDER BY e.weight DESC, e.confidence DESC
-              LIMIT $7
-            )
-          )
-          SELECT
-            id,
-            scope,
-            type::text AS type,
-            src_id,
-            dst_id,
-            weight,
-            confidence,
-            decay_rate,
-            last_activated,
-            created_at,
-            commit_id
-          FROM hop2
-          ORDER BY weight DESC, confidence DESC
-          LIMIT $6
-        `,
-      parsed.neighborhood_hops === 1
-        ? [seedIds, scope, minEdgeWeight, minEdgeConf, HOP1_BUDGET, EDGE_FETCH_BUDGET]
-        : [seedIds, scope, minEdgeWeight, minEdgeConf, HOP1_BUDGET, EDGE_FETCH_BUDGET, HOP2_BUDGET],
-    ),
+    recallAccess.stage2Edges({
+      seedIds,
+      scope,
+      neighborhoodHops: parsed.neighborhood_hops as 1 | 2,
+      minEdgeWeight,
+      minEdgeConfidence: minEdgeConf,
+      hop1Budget: HOP1_BUDGET,
+      hop2Budget: HOP2_BUDGET,
+      edgeFetchBudget: EDGE_FETCH_BUDGET,
+    }),
   );
 
   // Derive node ids directly from the edge rows to avoid repeating the neighborhood CTE in a second query.
   const nodeScore = new Map<string, number>();
   const nodeIdSet = new Set<string>(seedIds);
-  for (const e of neighborhoodEdges.rows) {
+  for (const e of neighborhoodEdges) {
     nodeIdSet.add(e.src_id);
     nodeIdSet.add(e.dst_id);
     const s = e.weight * e.confidence;
@@ -441,50 +297,19 @@ export async function memoryRecallParsed(
 
   const wantSlots = parsed.include_slots || parsed.include_slots_preview;
   const neighborhoodNodes = await timed("stage2_nodes", () =>
-    client.query<NodeRow>(
-      `
-      SELECT
-        id,
-        scope,
-        type::text AS type,
-        tier::text AS tier,
-        memory_lane::text AS memory_lane,
-        producer_agent_id,
-        owner_agent_id,
-        owner_team_id,
-        title,
-        text_summary,
-        ${wantSlots ? "slots," : "NULL::jsonb AS slots,"}
-        embedding_status::text AS embedding_status,
-        embedding_model,
-        CASE WHEN type = 'topic' THEN COALESCE(slots->>'topic_state','active') ELSE NULL END AS topic_state,
-        CASE WHEN type = 'topic' THEN NULLIF(slots->>'member_count','')::int ELSE NULL END AS member_count,
-        raw_ref,
-        evidence_ref,
-        salience,
-        importance,
-        confidence,
-        last_activated,
-        created_at,
-        updated_at,
-        commit_id
-      FROM memory_nodes
-      WHERE scope = $1
-        AND id = ANY($2::uuid[])
-        AND (
-          memory_lane = 'shared'::memory_lane
-          OR (memory_lane = 'private'::memory_lane AND owner_agent_id = $3::text)
-          OR ($4::text IS NOT NULL AND memory_lane = 'private'::memory_lane AND owner_team_id = $4::text)
-        )
-      `,
-      [scope, nodeIds, consumerAgentId, consumerTeamId],
-    ),
+    recallAccess.stage2Nodes({
+      scope,
+      nodeIds,
+      consumerAgentId,
+      consumerTeamId,
+      includeSlots: wantSlots,
+    }),
   );
 
   const nodeMapAll = new Map<string, NodeRow>();
-  for (const n of neighborhoodNodes.rows) nodeMapAll.set(n.id, n);
+  for (const n of neighborhoodNodes) nodeMapAll.set(n.id, n);
   // Filter edges to only those with both endpoints present in our node fetch budget.
-  const edgesAll: EdgeRow[] = neighborhoodEdges.rows.filter((e) => nodeMapAll.has(e.src_id) && nodeMapAll.has(e.dst_id));
+  const edgesAll: EdgeRow[] = neighborhoodEdges.filter((e) => nodeMapAll.has(e.src_id) && nodeMapAll.has(e.dst_id));
 
   // Scoring excludes draft topics (they shouldn't influence activation/ranking),
   // but draft topics may still appear in the returned subgraph for explainability.

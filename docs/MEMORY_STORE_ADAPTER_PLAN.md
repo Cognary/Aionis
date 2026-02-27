@@ -37,9 +37,10 @@ Completed in this phase:
 5. `src/store/recall-access.ts` added and covers Stage1 ANN + exact-fallback candidate queries for Postgres.
 6. `memoryRecallParsed(...)` now supports injectable `recall_access` while preserving default Postgres behavior.
 7. Recall call sites (`/v1/memory/recall`, `/v1/memory/recall_text`, `/v1/planning/context`) now pass store access explicitly.
+8. Stage2 neighborhood fetches (`stage2_edges`, `stage2_nodes`) moved into `recall-access` Postgres adapter.
 
 ## Next Steps
 
-1. Extend recall access beyond Stage1 (`stage2_edges`, `stage2_nodes`, `rule_defs`, `debug_embeddings`, `audit_insert`).
+1. Complete recall access extraction for remaining queries (`rule_defs`, `debug_embeddings`, `audit_insert`).
 2. Start write-path extraction (`append_commit` + minimal node/edge fetch capabilities), keeping Postgres as reference.
 3. Add `embedded` experimental adapter behind explicit feature flag after read/write capability seams are stable.
