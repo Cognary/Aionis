@@ -2,6 +2,56 @@ import "dotenv/config";
 import { loadEnv } from "../config.js";
 
 type CaseName = "recall_text" | "write";
+type RecallProfileName = "legacy" | "strict_edges" | "quality_first" | "lite";
+
+type RecallProfileDefaults = {
+  limit: number;
+  neighborhood_hops: 1 | 2;
+  max_nodes: number;
+  max_edges: number;
+  ranked_limit: number;
+  min_edge_weight: number;
+  min_edge_confidence: number;
+};
+
+const RECALL_PROFILE_DEFAULTS: Record<RecallProfileName, RecallProfileDefaults> = {
+  legacy: {
+    limit: 30,
+    neighborhood_hops: 2,
+    max_nodes: 50,
+    max_edges: 100,
+    ranked_limit: 100,
+    min_edge_weight: 0,
+    min_edge_confidence: 0,
+  },
+  strict_edges: {
+    limit: 24,
+    neighborhood_hops: 2,
+    max_nodes: 60,
+    max_edges: 80,
+    ranked_limit: 140,
+    min_edge_weight: 0.2,
+    min_edge_confidence: 0.2,
+  },
+  quality_first: {
+    limit: 30,
+    neighborhood_hops: 2,
+    max_nodes: 80,
+    max_edges: 100,
+    ranked_limit: 180,
+    min_edge_weight: 0.05,
+    min_edge_confidence: 0.05,
+  },
+  lite: {
+    limit: 12,
+    neighborhood_hops: 1,
+    max_nodes: 24,
+    max_edges: 24,
+    ranked_limit: 48,
+    min_edge_weight: 0.25,
+    min_edge_confidence: 0.25,
+  },
+};
 
 type Sample = {
   ok: boolean;
@@ -109,6 +159,13 @@ function pickApiKey(envJson: string): string | null {
   }
 }
 
+function parseRecallProfile(raw: string): RecallProfileName | null {
+  const v = raw.trim().toLowerCase();
+  if (!v) return null;
+  if (v === "legacy" || v === "strict_edges" || v === "quality_first" || v === "lite") return v;
+  return null;
+}
+
 async function runConcurrent(total: number, concurrency: number, fn: (i: number) => Promise<Sample>): Promise<Sample[]> {
   const out: Sample[] = [];
   let next = 0;
@@ -190,6 +247,13 @@ async function main() {
   const compressionProfileRaw = (argValue("--compression-profile") ?? "aggressive").trim().toLowerCase();
   const compressionProfile: "balanced" | "aggressive" = compressionProfileRaw === "balanced" ? "balanced" : "aggressive";
   const compressionQueryText = (argValue("--compression-query-text") ?? "memory graph perf compression").trim();
+  const recallProfileRaw = (argValue("--recall-profile") ?? "").trim().toLowerCase();
+  const recallProfile = parseRecallProfile(recallProfileRaw);
+  if (recallProfileRaw.length > 0 && !recallProfile) {
+    throw new Error("invalid --recall-profile; expected: legacy|strict_edges|quality_first|lite");
+  }
+  const recallProfileDefaults = recallProfile ? RECALL_PROFILE_DEFAULTS[recallProfile] : null;
+  const recallDefaultLimit = recallProfileDefaults?.limit ?? 20;
 
   const apiKey = process.env.PERF_API_KEY?.trim() || pickApiKey(process.env.MEMORY_API_KEYS_JSON ?? "");
   const bearer = process.env.PERF_AUTH_BEARER?.trim() || "";
@@ -238,13 +302,16 @@ async function main() {
     return { ok: out.ok, status: out.status, ms: out.ms, error: out.error };
   };
 
+  const recallPayload = (queryText: string, extras?: Record<string, unknown>): Record<string, unknown> => ({
+    tenant_id: tenantId,
+    scope,
+    query_text: queryText,
+    ...(recallProfileDefaults ?? {}),
+    ...(extras ?? {}),
+  });
+
   const warmupReq = async () => {
-    await timedRequest("/v1/memory/recall_text", {
-      tenant_id: tenantId,
-      scope,
-      query_text: "perf warmup",
-      limit: 20,
-    });
+    await timedRequest("/v1/memory/recall_text", recallPayload("perf warmup", { limit: recallDefaultLimit }));
   };
   for (let i = 0; i < warmup; i += 1) await warmupReq();
 
@@ -254,12 +321,7 @@ async function main() {
     const t0 = Date.now();
     const samples = await runConcurrent(recallRequests, recallConcurrency, async () => {
       if (paceMs > 0) await sleepMs(paceMs);
-      return timedRequest("/v1/memory/recall_text", {
-        tenant_id: tenantId,
-        scope,
-        query_text: "memory graph perf",
-        limit: 20,
-      });
+      return timedRequest("/v1/memory/recall_text", recallPayload("memory graph perf", { limit: recallDefaultLimit }));
     });
     cases.push({ name: "recall_text", summary: summarize("recall_text", samples, Date.now() - t0) });
   }
@@ -303,26 +365,23 @@ async function main() {
     for (let i = 0; i < compressionSamples; i += 1) {
       if (paceMs > 0) await sleepMs(paceMs);
 
-      const baseline = await timedRequestJson("/v1/memory/recall_text", {
-        tenant_id: tenantId,
-        scope,
-        query_text: compressionQueryText,
-        limit: 20,
-        context_compaction_profile: "balanced",
-      });
+      const baseline = await timedRequestJson(
+        "/v1/memory/recall_text",
+        recallPayload(compressionQueryText, { limit: recallDefaultLimit, context_compaction_profile: "balanced" }),
+      );
       const baselineStatusKey = baseline.error ? `baseline:error:${baseline.error}` : `baseline:${baseline.status}`;
       compressionByStatus[baselineStatusKey] = (compressionByStatus[baselineStatusKey] ?? 0) + 1;
       if (baseline.error) transportErrorCount += 1;
 
-      const compressed = await timedRequestJson("/v1/memory/recall_text", {
-        tenant_id: tenantId,
-        scope,
-        query_text: compressionQueryText,
-        limit: 20,
-        context_token_budget: compressionTokenBudget,
-        context_compaction_profile: compressionProfile,
-        return_debug: true,
-      });
+      const compressed = await timedRequestJson(
+        "/v1/memory/recall_text",
+        recallPayload(compressionQueryText, {
+          limit: recallDefaultLimit,
+          context_token_budget: compressionTokenBudget,
+          context_compaction_profile: compressionProfile,
+          return_debug: true,
+        }),
+      );
       const compressedStatusKey = compressed.error ? `compressed:error:${compressed.error}` : `compressed:${compressed.status}`;
       compressionByStatus[compressedStatusKey] = (compressionByStatus[compressedStatusKey] ?? 0) + 1;
       if (compressed.error) transportErrorCount += 1;
@@ -439,6 +498,8 @@ async function main() {
           timeout_ms: timeoutMs,
           pace_ms: paceMs,
           fail_on_transport_error_rate: failTransportRate,
+          recall_profile: recallProfile,
+          recall_profile_defaults: recallProfileDefaults,
           embed_on_write: embedOnWrite,
           compression_check: compressionCheck || mode === "compression",
           compression_pair_gate_mode: compressionPairGateMode,

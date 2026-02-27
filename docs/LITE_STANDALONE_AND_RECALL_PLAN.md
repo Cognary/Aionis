@@ -5,7 +5,7 @@ title: "Standalone + Lite Recall Plan"
 # Standalone + Lite Recall Plan
 
 Last updated: `2026-02-27`
-Status: `completed`
+Status: `completed (with follow-up in progress)`
 
 ## Objective
 
@@ -142,3 +142,11 @@ Evidence to capture:
 2. `Phase 1`: completed.
 3. `Phase 2`: completed.
 4. `Phase 3`: completed.
+
+## Follow-up (Quantification)
+
+Status: `in_progress`
+
+1. Added `perf-benchmark --recall-profile` for deterministic profile A/B runs.
+2. Added `job:perf-profile-compare` to generate markdown/json profile comparison reports.
+3. Added `perf:lite-vs-strict` one-command script for seed + strict/lite benchmark + comparison gate.
