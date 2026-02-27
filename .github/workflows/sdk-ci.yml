@@ -353,7 +353,16 @@ jobs:
             ensure(tsBackend === pyBackend, `ts/py backend mismatch: ${String(tsBackend)} vs ${String(pyBackend)}`);
 
             function assertClientByCapabilities(name, out) {
+              const recallCaps = out.calls.health.recall_capabilities || {};
+              const writeCaps = out.calls.health.write_capabilities || {};
               const caps = out.calls.health.feature_capabilities || {};
+              for (const key of ["debug_embeddings", "audit_insert"]) {
+                ensure(typeof recallCaps[key] === "boolean", `${name} recall_capabilities.${key} must be boolean`);
+              }
+              ensure(
+                typeof writeCaps.shadow_mirror_v2 === "boolean",
+                `${name} write_capabilities.shadow_mirror_v2 must be boolean`,
+              );
               for (const key of ["packs_export", "sessions_graph", "packs_import"]) {
                 ensure(typeof caps[key] === "boolean", `${name} feature_capabilities.${key} must be boolean`);
               }
@@ -386,6 +395,10 @@ jobs:
 
             assertClientByCapabilities("ts", tsOut);
             assertClientByCapabilities("py", pyOut);
+            ensure(
+              tsOut.calls.health.write_capabilities.shadow_mirror_v2 === pyOut.calls.health.write_capabilities.shadow_mirror_v2,
+              "ts/py write capability mismatch: shadow_mirror_v2",
+            );
 
             async function probeWriteSoftDegrade() {
               const payload = {
@@ -430,6 +443,7 @@ jobs:
 
             (async () => {
               if (tsBackend !== "embedded") return;
+              if (tsOut.calls.health.write_capabilities.shadow_mirror_v2 !== false) return;
               await probeWriteSoftDegrade();
             })().catch((err) => {
               console.error(err && err.message ? err.message : String(err));

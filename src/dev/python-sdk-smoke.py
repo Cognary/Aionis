@@ -390,6 +390,16 @@ def main() -> int:
                     "status": health.get("status"),
                     "request_id": health.get("request_id"),
                     "backend": health_data.get("memory_store_backend"),
+                    "recall_capabilities": (
+                        health_data.get("memory_store_recall_capabilities")
+                        if isinstance(health_data.get("memory_store_recall_capabilities"), dict)
+                        else {}
+                    ),
+                    "write_capabilities": (
+                        health_data.get("memory_store_write_capabilities")
+                        if isinstance(health_data.get("memory_store_write_capabilities"), dict)
+                        else {}
+                    ),
                     "feature_capabilities": feature_caps,
                     "capability_contract_keys": sorted(contract_from_health.keys()),
                 },

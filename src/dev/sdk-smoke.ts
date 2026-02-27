@@ -385,6 +385,8 @@ async function main() {
         status: health.status,
         request_id: health.request_id,
         backend: health.data.memory_store_backend ?? null,
+        recall_capabilities: health.data.memory_store_recall_capabilities ?? {},
+        write_capabilities: health.data.memory_store_write_capabilities ?? {},
         feature_capabilities: featureCaps,
         capability_contract_keys: Object.keys(capabilityContract.data ?? {}),
       },
