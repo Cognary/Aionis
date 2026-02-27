@@ -27,6 +27,14 @@ const EnvSchema = z.object({
     .transform((v) => (v ?? "true").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES: z.coerce.number().int().positive().max(1024 * 1024 * 1024).default(50 * 1024 * 1024),
+  MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BACKUPS: z.coerce.number().int().min(0).max(20).default(3),
+  MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).default(30),
   DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   DB_POOL_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),

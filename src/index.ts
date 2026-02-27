@@ -87,6 +87,9 @@ const embeddedRuntime =
     ? createEmbeddedMemoryRuntime({
         snapshotPath: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_PATH,
         autoPersist: env.MEMORY_STORE_EMBEDDED_AUTOSAVE,
+        snapshotMaxBytes: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES,
+        snapshotMaxBackups: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BACKUPS,
+        snapshotStrictMaxBytes: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES,
       })
     : null;
 if (embeddedRuntime) {
@@ -808,6 +811,9 @@ app.log.info(
     memory_store_embedded_runtime: embeddedRuntime ? "in_memory_v1" : null,
     memory_store_embedded_snapshot_path: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_PATH : null,
     memory_store_embedded_autosave: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_AUTOSAVE : null,
+    memory_store_embedded_snapshot_max_bytes: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES : null,
+    memory_store_embedded_snapshot_max_backups: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BACKUPS : null,
+    memory_store_embedded_snapshot_strict_max_bytes: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES : null,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     trust_proxy: env.TRUST_PROXY,
@@ -923,6 +929,9 @@ app.get("/health", async () => ({
   memory_store_embedded_runtime: embeddedRuntime ? "in_memory_v1" : null,
   memory_store_embedded_snapshot_path: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_PATH : null,
   memory_store_embedded_autosave: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_AUTOSAVE : null,
+  memory_store_embedded_snapshot_max_bytes: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BYTES : null,
+  memory_store_embedded_snapshot_max_backups: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_MAX_BACKUPS : null,
+  memory_store_embedded_snapshot_strict_max_bytes: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_STRICT_MAX_BYTES : null,
   recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
 }));

@@ -764,6 +764,144 @@ async function run() {
   assert.equal(embeddedReloadedSeeds[0].id, "00000000-0000-0000-0000-000000000e21");
   await fs.rm(embeddedSnapshotPath, { force: true });
 
+  const rotateSnapshotPath = path.join(
+    os.tmpdir(),
+    `aionis_embedded_runtime_rotate_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,
+  );
+  const rotateRuntime = createEmbeddedMemoryRuntime({
+    snapshotPath: rotateSnapshotPath,
+    autoPersist: true,
+    snapshotMaxBackups: 2,
+  });
+  await rotateRuntime.applyWrite(
+    {
+      scope: "tenant:parity::scope:embedded_rotate",
+      auto_embed_effective: false,
+      nodes: [
+        {
+          id: "00000000-0000-0000-0000-000000000e31",
+          scope: "tenant:parity::scope:embedded_rotate",
+          type: "event",
+          memory_lane: "shared",
+          slots: {},
+          embedding: Array.from({ length: 8 }, () => 0),
+        },
+      ],
+      edges: [],
+    } as any,
+    {
+      commit_id: "00000000-0000-0000-0000-000000000ec3",
+      commit_hash: "embedded-commit-3",
+    } as any,
+  );
+  await rotateRuntime.applyWrite(
+    {
+      scope: "tenant:parity::scope:embedded_rotate",
+      auto_embed_effective: false,
+      nodes: [
+        {
+          id: "00000000-0000-0000-0000-000000000e32",
+          scope: "tenant:parity::scope:embedded_rotate",
+          type: "event",
+          memory_lane: "shared",
+          slots: {},
+          embedding: Array.from({ length: 8 }, () => 0),
+        },
+      ],
+      edges: [],
+    } as any,
+    {
+      commit_id: "00000000-0000-0000-0000-000000000ec4",
+      commit_hash: "embedded-commit-4",
+    } as any,
+  );
+  await rotateRuntime.applyWrite(
+    {
+      scope: "tenant:parity::scope:embedded_rotate",
+      auto_embed_effective: false,
+      nodes: [
+        {
+          id: "00000000-0000-0000-0000-000000000e33",
+          scope: "tenant:parity::scope:embedded_rotate",
+          type: "event",
+          memory_lane: "shared",
+          slots: {},
+          embedding: Array.from({ length: 8 }, () => 0),
+        },
+      ],
+      edges: [],
+    } as any,
+    {
+      commit_id: "00000000-0000-0000-0000-000000000ec5",
+      commit_hash: "embedded-commit-5",
+    } as any,
+  );
+  await fs.access(rotateSnapshotPath);
+  await fs.access(`${rotateSnapshotPath}.1`);
+  await fs.access(`${rotateSnapshotPath}.2`);
+  await fs.rm(rotateSnapshotPath, { force: true });
+  await fs.rm(`${rotateSnapshotPath}.1`, { force: true });
+  await fs.rm(`${rotateSnapshotPath}.2`, { force: true });
+
+  const corruptSnapshotPath = path.join(
+    os.tmpdir(),
+    `aionis_embedded_runtime_corrupt_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,
+  );
+  await fs.writeFile(corruptSnapshotPath, "{not-json", "utf8");
+  const corruptRuntime = createEmbeddedMemoryRuntime({
+    snapshotPath: corruptSnapshotPath,
+    autoPersist: false,
+  });
+  await corruptRuntime.loadSnapshot();
+  const corruptDir = path.dirname(corruptSnapshotPath);
+  const corruptBase = path.basename(corruptSnapshotPath);
+  const corruptFiles = await fs.readdir(corruptDir);
+  assert.ok(
+    corruptFiles.some((f) => f.startsWith(`${corruptBase}.corrupt.`)),
+    "invalid snapshot should be quarantined with .corrupt suffix",
+  );
+  await fs.rm(corruptSnapshotPath, { force: true });
+  for (const f of corruptFiles.filter((x) => x.startsWith(`${corruptBase}.corrupt.`))) {
+    await fs.rm(path.join(corruptDir, f), { force: true });
+  }
+
+  const strictSnapshotPath = path.join(
+    os.tmpdir(),
+    `aionis_embedded_runtime_strict_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,
+  );
+  const strictRuntime = createEmbeddedMemoryRuntime({
+    snapshotPath: strictSnapshotPath,
+    autoPersist: true,
+    snapshotMaxBytes: 64,
+    snapshotStrictMaxBytes: true,
+  });
+  await assert.rejects(
+    () =>
+      strictRuntime.applyWrite(
+        {
+          scope: "tenant:parity::scope:embedded_strict",
+          auto_embed_effective: false,
+          nodes: [
+            {
+              id: "00000000-0000-0000-0000-000000000e41",
+              scope: "tenant:parity::scope:embedded_strict",
+              type: "event",
+              memory_lane: "shared",
+              slots: {},
+              embedding: Array.from({ length: 256 }, () => 0.5),
+            },
+          ],
+          edges: [],
+        } as any,
+        {
+          commit_id: "00000000-0000-0000-0000-000000000ec6",
+          commit_hash: "embedded-commit-6",
+        } as any,
+      ),
+    /embedded snapshot exceeds max bytes/i,
+  );
+  await fs.rm(strictSnapshotPath, { force: true });
+
   // Schema hard cap: max_edges <= 100
   assert.throws(
     () => MemoryRecallRequest.parse({ query_embedding: [0], max_edges: 101 }),

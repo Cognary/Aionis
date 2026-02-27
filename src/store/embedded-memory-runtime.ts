@@ -133,6 +133,9 @@ type EmbeddedSnapshotV1 = {
 type EmbeddedRuntimeOptions = {
   snapshotPath?: string | null;
   autoPersist?: boolean;
+  snapshotMaxBytes?: number;
+  snapshotMaxBackups?: number;
+  snapshotStrictMaxBytes?: boolean;
 };
 
 function nodeKey(scope: string, id: string): string {
@@ -198,10 +201,16 @@ export class EmbeddedMemoryRuntime {
   private readonly recallAccess: RecallStoreAccess;
   private readonly snapshotPath: string | null;
   private readonly autoPersist: boolean;
+  private readonly snapshotMaxBytes: number;
+  private readonly snapshotMaxBackups: number;
+  private readonly snapshotStrictMaxBytes: boolean;
 
   constructor(opts: EmbeddedRuntimeOptions = {}) {
     this.snapshotPath = opts.snapshotPath?.trim() ? opts.snapshotPath.trim() : null;
     this.autoPersist = opts.autoPersist ?? true;
+    this.snapshotMaxBytes = Number.isFinite(opts.snapshotMaxBytes as number) ? Math.max(1, Math.trunc(opts.snapshotMaxBytes as number)) : 50 * 1024 * 1024;
+    this.snapshotMaxBackups = Number.isFinite(opts.snapshotMaxBackups as number) ? Math.max(0, Math.trunc(opts.snapshotMaxBackups as number)) : 3;
+    this.snapshotStrictMaxBytes = opts.snapshotStrictMaxBytes ?? false;
     this.recallAccess = {
       capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
       stage1CandidatesAnn: async (params) => this.stage1Candidates(params),
@@ -314,9 +323,16 @@ export class EmbeddedMemoryRuntime {
       throw err;
     }
 
-    const parsed = JSON.parse(raw) as EmbeddedSnapshotV1;
+    let parsed: EmbeddedSnapshotV1;
+    try {
+      parsed = JSON.parse(raw) as EmbeddedSnapshotV1;
+    } catch {
+      await this.quarantineCorruptSnapshot();
+      return;
+    }
     if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges) || !Array.isArray(parsed.rule_defs)) {
-      throw new Error(`invalid embedded snapshot format: ${this.snapshotPath}`);
+      await this.quarantineCorruptSnapshot();
+      return;
     }
 
     this.nodes.clear();
@@ -334,18 +350,64 @@ export class EmbeddedMemoryRuntime {
 
   async persistSnapshot(): Promise<void> {
     if (!this.snapshotPath) return;
-    const snapshot: EmbeddedSnapshotV1 = {
+    let snapshot: EmbeddedSnapshotV1 = {
       version: 1,
       nodes: Array.from(this.nodes.values()),
       edges: Array.from(this.edgesByUnique.values()),
       rule_defs: Array.from(this.ruleDefs.values()),
       audit: this.audit.slice(-5000),
     };
+    let body = JSON.stringify(snapshot);
+    let bytes = Buffer.byteLength(body, "utf8");
+    if (bytes > this.snapshotMaxBytes) {
+      snapshot = { ...snapshot, audit: snapshot.audit.slice(-200) };
+      body = JSON.stringify(snapshot);
+      bytes = Buffer.byteLength(body, "utf8");
+    }
+    if (bytes > this.snapshotMaxBytes && this.snapshotStrictMaxBytes) {
+      throw new Error(`embedded snapshot exceeds max bytes: size=${bytes} max=${this.snapshotMaxBytes}`);
+    }
+
     const dir = dirname(this.snapshotPath);
     await fs.mkdir(dir, { recursive: true });
+    await this.rotateSnapshotBackups();
     const tmp = `${this.snapshotPath}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(snapshot), "utf8");
+    await fs.writeFile(tmp, body, "utf8");
     await fs.rename(tmp, this.snapshotPath);
+  }
+
+  private async quarantineCorruptSnapshot(): Promise<void> {
+    if (!this.snapshotPath) return;
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const out = `${this.snapshotPath}.corrupt.${ts}`;
+    try {
+      await fs.rename(this.snapshotPath, out);
+    } catch {
+      // ignore quarantine failures; caller can still proceed with empty runtime state.
+    }
+  }
+
+  private async rotateSnapshotBackups(): Promise<void> {
+    if (!this.snapshotPath || this.snapshotMaxBackups <= 0) return;
+    for (let i = this.snapshotMaxBackups; i >= 1; i--) {
+      const src = i === 1 ? this.snapshotPath : `${this.snapshotPath}.${i - 1}`;
+      const dst = `${this.snapshotPath}.${i}`;
+      try {
+        await fs.access(src);
+      } catch {
+        continue;
+      }
+      try {
+        await fs.rm(dst, { force: true });
+      } catch {
+        // best effort
+      }
+      try {
+        await fs.rename(src, dst);
+      } catch {
+        // ignore rotation errors; persistence will still try to write latest snapshot.
+      }
+    }
   }
 
   private async stage1Candidates(params: RecallStage1Params): Promise<RecallCandidate[]> {

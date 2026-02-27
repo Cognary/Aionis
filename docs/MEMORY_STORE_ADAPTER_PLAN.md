@@ -52,9 +52,10 @@ Completed in this phase:
 20. Added CI backend-matrix parity smoke workflow (`postgres` + `embedded`) with migration + contract + startup health + write/recall API parity checks.
 21. Added embedded in-memory runtime (`in_memory_v1`) and switched embedded backend recall paths to local adapter with write-through mirror from API write flows.
 22. Added embedded runtime snapshot persistence (startup load + write autosave) with contract smoke replay checks.
+23. Added snapshot governance controls: backup rotation, max-bytes guard, and corrupt snapshot quarantine recovery.
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
 2. Add optional capability negotiation flags for non-parity features per backend (e.g. shadow mirror).
-3. Add snapshot compaction/rotation policy (size limits, retention, corruption recovery path).
+3. Add snapshot compaction policy for node/edge payload growth (beyond audit trimming), with operator-visible metrics.
