@@ -67,9 +67,10 @@ Completed in this phase:
 35. Expanded `sdk-ci` unsupported-capability fixtures for embedded backend to include `sessions_graph` and `packs_import` (API-level `501 backend_capability_unsupported` + capability key + hard-fail contract assertions).
 36. Added `shadow_mirror_v2` write-path soft-degrade fixture assertion in `sdk-ci` for embedded backend (`/v1/memory/write` returns `shadow_dual_write` with `soft_degrade`, `capability_unsupported`, and `fallback_applied=true` when mirror capability is unavailable).
 37. Added strict-mode fail-fast fixture in `sdk-ci` for embedded backend (`MEMORY_SHADOW_DUAL_WRITE_STRICT=true` with unavailable mirror capability must fail startup with env validation error).
+38. Added strict runtime mirror-failure fixture in `sdk-ci` for embedded backend (enable strict+mirror capability, induce mirror table failure, assert `/v1/memory/write` hard-fails with HTTP 500).
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
 2. Add runtime compaction telemetry export for long-run trend analysis (artifact timeline + alert thresholds), beyond smoke-level CI assertions.
-3. Add strict runtime mirror-failure fixture coverage (mirror capability enabled + induced mirror failure) to validate request-level hard-fail behavior under strict mode.
+3. Add API-level strict-failure error contract enhancement for shadow mirror failures (typed error code/details instead of generic `internal_error`) and wire SDK helpers.
