@@ -80,6 +80,7 @@ Completed in this phase:
 48. Extracted shared API capability probe script (`scripts/ci/capability-api-probes.sh`) and reused it in both `sdk-ci` and `backend-parity-smoke` (including optional shadow soft-degrade probe), reducing duplicated inline workflow logic.
 49. Fixed `core-production-gate` CI admin token wiring by injecting `ADMIN_TOKEN=ci-admin-token` in prepared `.env`, restoring pack roundtrip gate (`/v1/memory/packs/export|import`) stability after admin-only enforcement.
 50. Added shared capability API probes to `core-production-gate` so production gate CI also validates `/health`-declared capability contracts and API behavior consistency (including optional shadow soft-degrade path).
+51. Added shared policy/planner API probes (`scripts/ci/policy-planner-api-probes.sh`) and wired them into `backend-parity-smoke` + `core-production-gate` to validate `/v1/memory/rules/evaluate`, `/v1/memory/tools/select`, and `/v1/memory/planning/context` contract shape plus cross-endpoint consistency.
 
 ## Next Steps
 

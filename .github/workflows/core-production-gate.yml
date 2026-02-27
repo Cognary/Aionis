@@ -115,6 +115,17 @@ jobs:
           bash scripts/ci/capability-api-probes.sh
           cat /tmp/core_gate_capability_api_probe.json || true
 
+      - name: Policy + planner API probes
+        shell: bash
+        env:
+          AIONIS_BASE_URL: http://localhost:3001
+          POLICY_PLANNER_PROBE_SCOPE: default
+          POLICY_PLANNER_PROBE_TENANT_ID: default
+        run: |
+          set -euo pipefail
+          bash scripts/ci/policy-planner-api-probes.sh >/tmp/core_gate_policy_planner_probe.json
+          cat /tmp/core_gate_policy_planner_probe.json || true
+
       - name: Run core production gate
         shell: bash
         run: |
@@ -188,6 +199,8 @@ jobs:
         run: |
           set +e
           mkdir -p /tmp/core_gate_diag
+          cp /tmp/core_gate_capability_api_probe.json /tmp/core_gate_diag/capability_api_probe.json 2>/dev/null || true
+          cp /tmp/core_gate_policy_planner_probe.json /tmp/core_gate_diag/policy_planner_api_probe.json 2>/dev/null || true
           find artifacts/core_gate -type f -maxdepth 3 2>/dev/null | sort > /tmp/core_gate_diag/files.txt || true
           summary_file="$(find artifacts/core_gate -type f -name summary.json | sort | tail -n 1 || true)"
           if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then

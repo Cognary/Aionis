@@ -245,6 +245,11 @@ jobs:
           CAPABILITY_PROBE_INCLUDE_SHADOW_SOFT_DEGRADE="false" \
           bash scripts/ci/capability-api-probes.sh >/tmp/backend_parity_capability_api_probe.json
 
+          AIONIS_BASE_URL="http://127.0.0.1:${PORT}" \
+          POLICY_PLANNER_PROBE_SCOPE="backend_parity_smoke" \
+          POLICY_PLANNER_PROBE_TENANT_ID="default" \
+          bash scripts/ci/policy-planner-api-probes.sh >/tmp/backend_parity_policy_planner_probe.json
+
           curl -fsS "http://127.0.0.1:${PORT}/health" >/tmp/backend_parity_health_after.json
 
           node -e '
@@ -363,6 +368,7 @@ jobs:
           docker compose logs --no-color db || true
           sed -n '1,220p' /tmp/backend_parity_api.log || true
           cat /tmp/backend_parity_capability_api_probe.json || true
+          cat /tmp/backend_parity_policy_planner_probe.json || true
 
       - name: Cleanup
         if: always()
