@@ -101,9 +101,9 @@ jobs:
       MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED: "false"
       MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED: "false"
       MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED: "true"
-      MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED: "true"
+      MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED: ${{ matrix.backend == 'embedded' && 'false' || 'true' }}
       MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED: ${{ matrix.backend == 'embedded' && 'false' || 'true' }}
-      MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED: "true"
+      MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED: ${{ matrix.backend == 'embedded' && 'false' || 'true' }}
 
     steps:
       - name: Checkout
@@ -187,6 +187,8 @@ jobs:
           node -e '
             const fs = require("fs");
             const expected = process.env.MEMORY_STORE_BACKEND;
+            const port = process.env.PORT;
+            const adminToken = process.env.ADMIN_TOKEN;
             const tsOut = JSON.parse(fs.readFileSync("/tmp/sdk_ci_smoke_ts.json", "utf8"));
             const pyOut = JSON.parse(fs.readFileSync("/tmp/sdk_ci_smoke_py.json", "utf8"));
             const ensure = (cond, msg) => { if (!cond) throw new Error(msg); };
@@ -209,6 +211,54 @@ jobs:
                 "py postgres must export pack manifest sha256",
               );
             }
+
+            async function probeUnsupported(capability, path, payload) {
+              const res = await fetch(`http://127.0.0.1:${port}${path}`, {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  "x-admin-token": adminToken,
+                },
+                body: JSON.stringify(payload),
+              });
+              let parsed = {};
+              try {
+                parsed = await res.json();
+              } catch {
+                throw new Error(`${capability} probe must return json`);
+              }
+              ensure(res.status === 501, `${capability} probe must return 501`);
+              ensure(parsed.error === "backend_capability_unsupported", `${capability} probe must return backend_capability_unsupported`);
+              ensure(parsed.details && parsed.details.capability === capability, `${capability} probe must include details.capability`);
+              ensure(parsed.details && parsed.details.failure_mode === "hard_fail", `${capability} probe must include hard_fail mode`);
+            }
+
+            (async () => {
+              if (expected !== "embedded") return;
+              await probeUnsupported("sessions_graph", "/v1/memory/sessions", {
+                scope: "default",
+                actor: "ci",
+                session_id: `sdk_ci_sess_${Date.now()}`,
+                auto_embed: false,
+              });
+              await probeUnsupported("packs_import", "/v1/memory/packs/import", {
+                scope: "default",
+                actor: "ci",
+                verify_only: true,
+                auto_embed: false,
+                pack: {
+                  version: "aionis_pack_v1",
+                  tenant_id: "default",
+                  scope: "default",
+                  nodes: [],
+                  edges: [],
+                  commits: [],
+                },
+              });
+            })().catch((err) => {
+              console.error(err && err.message ? err.message : String(err));
+              process.exit(1);
+            });
           '
 
           kill "${API_PID}" || true
