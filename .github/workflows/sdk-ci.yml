@@ -319,13 +319,30 @@ jobs:
             const ensure = (cond, msg) => { if (!cond) throw new Error(msg); };
             for (const [name, out] of [["ts", tsOut], ["py", pyOut]]) {
               ensure(out && out.ok === true, `${name} smoke must be ok=true`);
-              ensure(out.calls && out.calls.health && out.calls.pack_export, `${name} smoke must include health + pack_export`);
+              ensure(
+                out.calls && out.calls.health && out.calls.pack_export && out.calls.sessions_graph && out.calls.pack_import,
+                `${name} smoke must include health + pack_export + sessions_graph + pack_import`,
+              );
             }
             if (expected === "embedded") {
               const tsCap = tsOut.calls.pack_export.capability_error;
               const pyCap = pyOut.calls.pack_export.capability_error;
+              const tsSessCap = tsOut.calls.sessions_graph.capability_error;
+              const pySessCap = pyOut.calls.sessions_graph.capability_error;
+              const tsPackImportCap = tsOut.calls.pack_import.capability_error;
+              const pyPackImportCap = pyOut.calls.pack_import.capability_error;
               ensure(tsCap && tsCap.capability === "packs_export", "ts embedded must expose packs_export capability error");
               ensure(pyCap && pyCap.capability === "packs_export", "py embedded must expose packs_export capability error");
+              ensure(tsSessCap && tsSessCap.capability === "sessions_graph", "ts embedded must expose sessions_graph capability error");
+              ensure(pySessCap && pySessCap.capability === "sessions_graph", "py embedded must expose sessions_graph capability error");
+              ensure(
+                tsPackImportCap && tsPackImportCap.capability === "packs_import",
+                "ts embedded must expose packs_import capability error",
+              );
+              ensure(
+                pyPackImportCap && pyPackImportCap.capability === "packs_import",
+                "py embedded must expose packs_import capability error",
+              );
             } else {
               ensure(
                 typeof tsOut.calls.pack_export.manifest_sha256 === "string" && tsOut.calls.pack_export.manifest_sha256.length > 0,
@@ -335,27 +352,12 @@ jobs:
                 typeof pyOut.calls.pack_export.manifest_sha256 === "string" && pyOut.calls.pack_export.manifest_sha256.length > 0,
                 "py postgres must export pack manifest sha256",
               );
-            }
-
-            async function probeUnsupported(capability, path, payload) {
-              const res = await fetch(`http://127.0.0.1:${port}${path}`, {
-                method: "POST",
-                headers: {
-                  "content-type": "application/json",
-                  "x-admin-token": adminToken,
-                },
-                body: JSON.stringify(payload),
-              });
-              let parsed = {};
-              try {
-                parsed = await res.json();
-              } catch {
-                throw new Error(`${capability} probe must return json`);
-              }
-              ensure(res.status === 501, `${capability} probe must return 501`);
-              ensure(parsed.error === "backend_capability_unsupported", `${capability} probe must return backend_capability_unsupported`);
-              ensure(parsed.details && parsed.details.capability === capability, `${capability} probe must include details.capability`);
-              ensure(parsed.details && parsed.details.failure_mode === "hard_fail", `${capability} probe must include hard_fail mode`);
+              ensure(tsOut.calls.sessions_graph.events_returned >= 1, "ts postgres must return session events");
+              ensure(pyOut.calls.sessions_graph.events_returned >= 1, "py postgres must return session events");
+              ensure(tsOut.calls.pack_import.verified === true, "ts postgres pack_import verify_only must be verified");
+              ensure(tsOut.calls.pack_import.imported === false, "ts postgres pack_import verify_only must not import");
+              ensure(pyOut.calls.pack_import.verified === true, "py postgres pack_import verify_only must be verified");
+              ensure(pyOut.calls.pack_import.imported === false, "py postgres pack_import verify_only must not import");
             }
 
             async function probeWriteSoftDegrade() {
@@ -401,26 +403,6 @@ jobs:
 
             (async () => {
               if (expected !== "embedded") return;
-              await probeUnsupported("sessions_graph", "/v1/memory/sessions", {
-                scope: "default",
-                actor: "ci",
-                session_id: `sdk_ci_sess_${Date.now()}`,
-                auto_embed: false,
-              });
-              await probeUnsupported("packs_import", "/v1/memory/packs/import", {
-                scope: "default",
-                actor: "ci",
-                verify_only: true,
-                auto_embed: false,
-                pack: {
-                  version: "aionis_pack_v1",
-                  tenant_id: "default",
-                  scope: "default",
-                  nodes: [],
-                  edges: [],
-                  commits: [],
-                },
-              });
               await probeWriteSoftDegrade();
             })().catch((err) => {
               console.error(err && err.message ? err.message : String(err));

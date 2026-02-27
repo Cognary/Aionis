@@ -104,8 +104,13 @@ def main() -> int:
             if isinstance(health_data.get("memory_store_feature_capabilities"), dict)
             else {}
         )
+        effective_tenant = write.get("data", {}).get("tenant_id") if isinstance(write.get("data"), dict) else None
+        if not isinstance(effective_tenant, str) or not effective_tenant.strip():
+            effective_tenant = "default"
 
         pack_export = None
+        exported_pack_for_import = None
+        exported_manifest_sha_for_import = None
         packs_export_enabled = feature_caps.get("packs_export")
         if packs_export_enabled is False:
             try:
@@ -149,14 +154,169 @@ def main() -> int:
                 }
             )
             manifest = pack_out.get("data", {}).get("manifest", {}) if isinstance(pack_out.get("data"), dict) else {}
+            exported_pack_for_import = pack_out.get("data", {}).get("pack") if isinstance(pack_out.get("data"), dict) else None
+            exported_manifest_sha_for_import = manifest.get("sha256") if isinstance(manifest, dict) else None
             pack_export = {
                 "ok": True,
                 "status": pack_out.get("status"),
                 "request_id": pack_out.get("request_id"),
-                "manifest_sha256": manifest.get("sha256") if isinstance(manifest, dict) else None,
+                "manifest_sha256": exported_manifest_sha_for_import,
             }
         else:
             pack_export = {"ok": False, "reason": "packs_export capability missing in /health response"}
+
+        sessions_graph = None
+        sessions_enabled = feature_caps.get("sessions_graph")
+        if sessions_enabled is False:
+            try:
+                client.create_session(
+                    {
+                        "scope": scope,
+                        "actor": "py_sdk_smoke",
+                        "session_id": f"py_sdk_smoke_session_{stamp}",
+                        "input_text": "python sdk smoke session should fail when disabled",
+                        "auto_embed": False,
+                    }
+                )
+                raise RuntimeError("create_session must fail when sessions_graph capability is disabled")
+            except Exception as err:
+                if not is_backend_capability_unsupported_error(err):
+                    raise
+                details = parse_backend_capability_error_details(getattr(err, "details", None))
+                if not isinstance(details, dict) or details.get("capability") != "sessions_graph":
+                    raise RuntimeError("create_session capability error details missing capability=sessions_graph")
+                sessions_graph = {
+                    "ok": True,
+                    "status": getattr(err, "status", None),
+                    "request_id": getattr(err, "request_id", None),
+                    "capability_error": {
+                        "capability": details.get("capability"),
+                        "failure_mode": details.get("failure_mode"),
+                        "degraded_mode": details.get("degraded_mode"),
+                        "fallback_applied": details.get("fallback_applied"),
+                    },
+                }
+        elif sessions_enabled is True:
+            session_id = f"py_sdk_smoke_session_{stamp}"
+            created = client.create_session(
+                {
+                    "scope": scope,
+                    "actor": "py_sdk_smoke",
+                    "session_id": session_id,
+                    "title": "python sdk smoke session",
+                    "input_text": "python sdk smoke create session",
+                    "auto_embed": False,
+                }
+            )
+            event = client.write_event(
+                {
+                    "scope": scope,
+                    "actor": "py_sdk_smoke",
+                    "session_id": session_id,
+                    "event_id": f"py_sdk_smoke_event_{stamp}",
+                    "input_text": "python sdk smoke session event",
+                    "auto_embed": False,
+                }
+            )
+            events = client.list_session_events(
+                session_id,
+                {
+                    "scope": scope,
+                    "include_meta": False,
+                    "include_slots": False,
+                    "include_slots_preview": False,
+                    "limit": 20,
+                    "offset": 0,
+                },
+            )
+            events_list = events.get("data", {}).get("events", []) if isinstance(events.get("data"), dict) else []
+            sessions_graph = {
+                "ok": True,
+                "create_status": created.get("status"),
+                "create_request_id": created.get("request_id"),
+                "write_event_status": event.get("status"),
+                "write_event_request_id": event.get("request_id"),
+                "list_status": events.get("status"),
+                "list_request_id": events.get("request_id"),
+                "session_id": session_id,
+                "event_id": event.get("data", {}).get("event_id") if isinstance(event.get("data"), dict) else None,
+                "events_returned": len(events_list) if isinstance(events_list, list) else 0,
+            }
+        else:
+            sessions_graph = {"ok": False, "reason": "sessions_graph capability missing in /health response"}
+
+        pack_import = None
+        packs_import_enabled = feature_caps.get("packs_import")
+        if packs_import_enabled is False:
+            try:
+                client.pack_import(
+                    {
+                        "scope": scope,
+                        "actor": "py_sdk_smoke",
+                        "verify_only": True,
+                        "auto_embed": False,
+                        "pack": {
+                            "version": "aionis_pack_v1",
+                            "tenant_id": effective_tenant,
+                            "scope": scope,
+                            "nodes": [],
+                            "edges": [],
+                            "commits": [],
+                        },
+                    }
+                )
+                raise RuntimeError("pack_import must fail when packs_import capability is disabled")
+            except Exception as err:
+                if not is_backend_capability_unsupported_error(err):
+                    raise
+                details = parse_backend_capability_error_details(getattr(err, "details", None))
+                if not isinstance(details, dict) or details.get("capability") != "packs_import":
+                    raise RuntimeError("pack_import capability error details missing capability=packs_import")
+                pack_import = {
+                    "ok": True,
+                    "status": getattr(err, "status", None),
+                    "request_id": getattr(err, "request_id", None),
+                    "capability_error": {
+                        "capability": details.get("capability"),
+                        "failure_mode": details.get("failure_mode"),
+                        "degraded_mode": details.get("degraded_mode"),
+                        "fallback_applied": details.get("fallback_applied"),
+                    },
+                }
+        elif packs_import_enabled is True:
+            payload = {
+                "scope": scope,
+                "actor": "py_sdk_smoke",
+                "verify_only": True,
+                "auto_embed": False,
+                "pack": (
+                    exported_pack_for_import
+                    if isinstance(exported_pack_for_import, dict)
+                    else {
+                        "version": "aionis_pack_v1",
+                        "tenant_id": effective_tenant,
+                        "scope": scope,
+                        "nodes": [],
+                        "edges": [],
+                        "commits": [],
+                    }
+                ),
+            }
+            if isinstance(exported_manifest_sha_for_import, str) and exported_manifest_sha_for_import:
+                payload["manifest_sha256"] = exported_manifest_sha_for_import
+            imported = client.pack_import(payload)
+            imported_data = imported.get("data") if isinstance(imported.get("data"), dict) else {}
+            planned = imported_data.get("planned") if isinstance(imported_data, dict) else {}
+            pack_import = {
+                "ok": True,
+                "status": imported.get("status"),
+                "request_id": imported.get("request_id"),
+                "verified": bool(isinstance(imported_data, dict) and imported_data.get("verified") is True),
+                "imported": bool(isinstance(imported_data, dict) and imported_data.get("imported") is True),
+                "planned_nodes": planned.get("nodes") if isinstance(planned, dict) else None,
+            }
+        else:
+            pack_import = {"ok": False, "reason": "packs_import capability missing in /health response"}
 
         recall_text = None
         try:
@@ -232,6 +392,8 @@ def main() -> int:
                     "capability_contract_keys": sorted(contract_from_health.keys()),
                 },
                 "pack_export": pack_export,
+                "sessions_graph": sessions_graph,
+                "pack_import": pack_import,
                 "recall_text": recall_text,
             },
         }

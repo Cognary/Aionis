@@ -71,6 +71,7 @@ Completed in this phase:
 39. Upgraded strict runtime shadow mirror failure to typed API contract (`error=shadow_dual_write_strict_failure` + structured details), and added TS/Python SDK helper parsers/type guards.
 40. Added explicit local/embedded integration examples for strict-failure SDK helper usage in `docs/SDK.md` and dev smoke reproduction steps in `docs/ONBOARDING_5MIN.md`.
 41. Added one-command local strict-failure probe (`npm run -s smoke:strict-shadow-failure`) to automate mirror-failure injection, typed error assertion, and table recovery.
+42. Expanded SDK capability-negotiation smoke to cover `sessions_graph` and `packs_import` via SDK methods (success path on capability-enabled backend, typed `backend_capability_unsupported` path on capability-disabled backend), and synchronized `src/sdk` methods/types with these endpoints.
 
 ## Next Steps
 

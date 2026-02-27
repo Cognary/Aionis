@@ -5,11 +5,21 @@ import type {
   ApiErrorPayload,
   CapabilityContractSpec,
   HealthResponse,
+  MemoryEventWriteInput,
+  MemoryEventWriteResponse,
+  MemoryFindInput,
+  MemoryFindResponse,
   MemoryPackExportInput,
   MemoryPackExportResponse,
+  MemoryPackImportInput,
+  MemoryPackImportResponse,
   MemoryRecallInput,
   MemoryRecallResponse,
   MemoryRecallTextInput,
+  MemorySessionCreateInput,
+  MemorySessionCreateResponse,
+  MemorySessionEventsListInput,
+  MemorySessionEventsListResponse,
   MemoryWriteInput,
   MemoryWriteResponse,
   RequestOptions,
@@ -155,8 +165,35 @@ export class AionisClient {
     return this.requestPost<MemoryRecallTextInput, MemoryRecallResponse>("/v1/memory/recall_text", input, opts);
   }
 
+  async find(input: MemoryFindInput, opts?: RequestOptions): Promise<AionisResponse<MemoryFindResponse>> {
+    return this.requestPost<MemoryFindInput, MemoryFindResponse>("/v1/memory/find", input, opts);
+  }
+
+  async createSession(input: MemorySessionCreateInput, opts?: RequestOptions): Promise<AionisResponse<MemorySessionCreateResponse>> {
+    return this.requestPost<MemorySessionCreateInput, MemorySessionCreateResponse>("/v1/memory/sessions", input, opts);
+  }
+
+  async writeEvent(input: MemoryEventWriteInput, opts?: RequestOptions): Promise<AionisResponse<MemoryEventWriteResponse>> {
+    return this.requestPost<MemoryEventWriteInput, MemoryEventWriteResponse>("/v1/memory/events", input, opts);
+  }
+
+  async listSessionEvents(
+    sessionId: string,
+    input?: MemorySessionEventsListInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<MemorySessionEventsListResponse>> {
+    const sid = String(sessionId ?? "").trim();
+    if (!sid) throw new Error("sessionId is required");
+    const path = `/v1/memory/sessions/${encodeURIComponent(sid)}/events`;
+    return this.requestGet<MemorySessionEventsListResponse>(path, input ?? {}, opts);
+  }
+
   async packExport(input: MemoryPackExportInput, opts?: RequestOptions): Promise<AionisResponse<MemoryPackExportResponse>> {
     return this.requestPost<MemoryPackExportInput, MemoryPackExportResponse>("/v1/memory/packs/export", input, opts);
+  }
+
+  async packImport(input: MemoryPackImportInput, opts?: RequestOptions): Promise<AionisResponse<MemoryPackImportResponse>> {
+    return this.requestPost<MemoryPackImportInput, MemoryPackImportResponse>("/v1/memory/packs/import", input, opts);
   }
 
   async rulesEvaluate(input: RulesEvaluateInput, opts?: RequestOptions): Promise<AionisResponse<RulesEvaluateResponse>> {
@@ -276,10 +313,8 @@ export class AionisClient {
         if (!canRetry) break;
 
         if (err instanceof AionisApiError) {
-          // Non-retryable API error should have already thrown above.
           throw err;
         }
-        // Network/timeout path: retry with backoff.
         await sleep(computeBackoffMs(perReqRetry, attempt + 1));
         if (isAbort) continue;
       }

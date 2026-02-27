@@ -1,7 +1,12 @@
 import type {
+  MemoryEventWriteInput,
+  MemoryFindInput,
   MemoryPackExportInput,
+  MemoryPackImportInput,
   MemoryRecallInput,
   MemoryRecallTextInput,
+  MemorySessionCreateInput,
+  MemorySessionEventsListInput as MemorySessionEventsListSchemaInput,
   MemoryWriteInput,
   RulesEvaluateInput,
   ToolsFeedbackInput,
@@ -9,14 +14,20 @@ import type {
 } from "../memory/schemas.js";
 
 export type {
+  MemoryEventWriteInput,
+  MemoryFindInput,
   MemoryPackExportInput,
+  MemoryPackImportInput,
   MemoryRecallInput,
   MemoryRecallTextInput,
+  MemorySessionCreateInput,
   MemoryWriteInput,
   RulesEvaluateInput,
   ToolsFeedbackInput,
   ToolsSelectInput,
 };
+
+export type MemorySessionEventsListInput = Partial<Omit<MemorySessionEventsListSchemaInput, "session_id">>;
 
 export type AionisResponse<T> = {
   data: T;
@@ -231,6 +242,72 @@ export type MemoryRecallResponse = {
   [k: string]: unknown;
 };
 
+export type MemoryFindResponse = {
+  tenant_id: string;
+  scope: string;
+  mode: "find";
+  filters: Record<string, unknown>;
+  nodes: Array<Record<string, unknown>>;
+  page: {
+    limit: number;
+    offset: number;
+    returned: number;
+    has_more: boolean;
+  };
+  [k: string]: unknown;
+};
+
+export type MemorySessionCreateResponse = {
+  tenant_id: string;
+  scope: string;
+  session_id: string;
+  session_node_id: string | null;
+  session_uri: string | null;
+  commit_id: string;
+  commit_hash: string;
+  nodes: Array<{ id: string; client_id?: string; type: string }>;
+  edges: Array<Record<string, unknown>>;
+  embedding_backfill?: { enqueued: true; pending_nodes: number } | null;
+  [k: string]: unknown;
+};
+
+export type MemoryEventWriteResponse = {
+  tenant_id: string;
+  scope: string;
+  session_id: string;
+  event_id: string;
+  event_node_id: string | null;
+  session_node_id: string | null;
+  event_uri: string | null;
+  session_uri: string | null;
+  commit_id: string;
+  commit_hash: string;
+  nodes: Array<{ id: string; client_id?: string; type: string }>;
+  edges: Array<Record<string, unknown>>;
+  embedding_backfill?: { enqueued: true; pending_nodes: number } | null;
+  [k: string]: unknown;
+};
+
+export type MemorySessionEventsListResponse = {
+  tenant_id: string;
+  scope: string;
+  session: {
+    session_id: string;
+    node_id: string;
+    title: string | null;
+    text_summary: string | null;
+    uri: string;
+  } | null;
+  events: Array<Record<string, unknown>>;
+  page: {
+    limit: number;
+    offset: number;
+    returned: number;
+    has_more: boolean;
+  };
+  [k: string]: unknown;
+};
+
 export type MemoryPackExportResponse = {
   tenant_id: string;
   scope: string;
@@ -259,6 +336,22 @@ export type MemoryPackExportResponse = {
     edges: Array<Record<string, unknown>>;
     commits: Array<Record<string, unknown>>;
   };
+  [k: string]: unknown;
+};
+
+export type MemoryPackImportResponse = {
+  ok: boolean;
+  verified: boolean;
+  imported: boolean;
+  tenant_id: string;
+  scope: string;
+  pack_sha256: string;
+  commit_id?: string;
+  commit_hash?: string;
+  nodes?: number;
+  edges?: number;
+  embedding_backfill?: { enqueued: true; pending_nodes: number } | null;
+  planned?: { nodes: number; edges: number; commits_in_pack: number };
   [k: string]: unknown;
 };
 

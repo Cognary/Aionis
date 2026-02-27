@@ -74,6 +74,8 @@ async function main() {
     throw new Error("getCapabilityContract does not match /health.memory_store_capability_contract");
   }
 
+  const effectiveTenant = typeof write.data.tenant_id === "string" && write.data.tenant_id.trim() ? write.data.tenant_id : "default";
+
   let packExport:
     | { ok: true; status: number; request_id: string | null; manifest_sha256: string | null }
     | {
@@ -88,6 +90,8 @@ async function main() {
         };
       }
     | { ok: false; reason: string };
+  let exportedPackForImport: Record<string, unknown> | null = null;
+  let exportedManifestShaForImport: string | null = null;
 
   if (featureCaps.packs_export === false) {
     try {
@@ -128,6 +132,8 @@ async function main() {
       max_rows: 1,
     });
     const manifestSha = packOut.data.manifest?.sha256 ?? null;
+    exportedPackForImport = (packOut.data.pack as Record<string, unknown> | undefined) ?? null;
+    exportedManifestShaForImport = manifestSha;
     packExport = {
       ok: true,
       status: packOut.status,
@@ -136,6 +142,183 @@ async function main() {
     };
   } else {
     packExport = { ok: false, reason: "packs_export capability missing in /health response" };
+  }
+
+  let sessionsGraph:
+    | {
+        ok: true;
+        create_status: number;
+        create_request_id: string | null;
+        write_event_status: number;
+        write_event_request_id: string | null;
+        list_status: number;
+        list_request_id: string | null;
+        session_id: string;
+        event_id: string | null;
+        events_returned: number;
+      }
+    | {
+        ok: true;
+        status: number;
+        request_id: string | null;
+        capability_error: {
+          capability: string;
+          failure_mode: string | null;
+          degraded_mode: string | null;
+          fallback_applied: boolean | null;
+        };
+      }
+    | { ok: false; reason: string };
+
+  if (featureCaps.sessions_graph === false) {
+    try {
+      await client.createSession({
+        scope,
+        actor: "sdk_smoke",
+        session_id: `sdk_smoke_session_${stamp}`,
+        input_text: "sdk smoke session should fail when capability disabled",
+        auto_embed: false,
+      });
+      throw new Error("createSession must fail when sessions_graph capability is disabled");
+    } catch (err) {
+      if (!isBackendCapabilityUnsupportedError(err)) throw err;
+      const details = parseBackendCapabilityErrorDetails(err.details);
+      if (!details || details.capability !== "sessions_graph") {
+        throw new Error("createSession capability error details missing capability=sessions_graph");
+      }
+      sessionsGraph = {
+        ok: true,
+        status: err.status,
+        request_id: err.request_id,
+        capability_error: {
+          capability: details.capability,
+          failure_mode: details.failure_mode ?? null,
+          degraded_mode: details.degraded_mode ?? null,
+          fallback_applied: typeof details.fallback_applied === "boolean" ? details.fallback_applied : null,
+        },
+      };
+    }
+  } else if (featureCaps.sessions_graph === true) {
+    const sessionId = `sdk_smoke_session_${stamp}`;
+    const created = await client.createSession({
+      scope,
+      actor: "sdk_smoke",
+      session_id: sessionId,
+      title: "sdk smoke session",
+      input_text: "sdk smoke create session",
+      auto_embed: false,
+    });
+    const event = await client.writeEvent({
+      scope,
+      actor: "sdk_smoke",
+      session_id: sessionId,
+      event_id: `sdk_smoke_event_${stamp}`,
+      input_text: "sdk smoke session event",
+      auto_embed: false,
+    });
+    const events = await client.listSessionEvents(sessionId, {
+      scope,
+      include_meta: false,
+      include_slots: false,
+      include_slots_preview: false,
+      limit: 20,
+      offset: 0,
+    });
+    sessionsGraph = {
+      ok: true,
+      create_status: created.status,
+      create_request_id: created.request_id,
+      write_event_status: event.status,
+      write_event_request_id: event.request_id,
+      list_status: events.status,
+      list_request_id: events.request_id,
+      session_id: sessionId,
+      event_id: typeof event.data.event_id === "string" ? event.data.event_id : null,
+      events_returned: Array.isArray(events.data.events) ? events.data.events.length : 0,
+    };
+  } else {
+    sessionsGraph = { ok: false, reason: "sessions_graph capability missing in /health response" };
+  }
+
+  let packImport:
+    | { ok: true; status: number; request_id: string | null; verified: boolean; imported: boolean; planned_nodes: number | null }
+    | {
+        ok: true;
+        status: number;
+        request_id: string | null;
+        capability_error: {
+          capability: string;
+          failure_mode: string | null;
+          degraded_mode: string | null;
+          fallback_applied: boolean | null;
+        };
+      }
+    | { ok: false; reason: string };
+
+  if (featureCaps.packs_import === false) {
+    try {
+      await client.packImport({
+        scope,
+        actor: "sdk_smoke",
+        verify_only: true,
+        auto_embed: false,
+        pack: {
+          version: "aionis_pack_v1",
+          tenant_id: effectiveTenant,
+          scope,
+          nodes: [],
+          edges: [],
+          commits: [],
+        },
+      });
+      throw new Error("packImport must fail when packs_import capability is disabled");
+    } catch (err) {
+      if (!isBackendCapabilityUnsupportedError(err)) throw err;
+      const details = parseBackendCapabilityErrorDetails(err.details);
+      if (!details || details.capability !== "packs_import") {
+        throw new Error("packImport capability error details missing capability=packs_import");
+      }
+      packImport = {
+        ok: true,
+        status: err.status,
+        request_id: err.request_id,
+        capability_error: {
+          capability: details.capability,
+          failure_mode: details.failure_mode ?? null,
+          degraded_mode: details.degraded_mode ?? null,
+          fallback_applied: typeof details.fallback_applied === "boolean" ? details.fallback_applied : null,
+        },
+      };
+    }
+  } else if (featureCaps.packs_import === true) {
+    const payload = {
+      scope,
+      actor: "sdk_smoke",
+      verify_only: true,
+      auto_embed: false,
+      ...(exportedManifestShaForImport ? { manifest_sha256: exportedManifestShaForImport } : {}),
+      pack:
+        exportedPackForImport ?? {
+          version: "aionis_pack_v1",
+          tenant_id: effectiveTenant,
+          scope,
+          nodes: [],
+          edges: [],
+          commits: [],
+        },
+    };
+    const imported = await client.packImport(payload as any);
+    packImport = {
+      ok: true,
+      status: imported.status,
+      request_id: imported.request_id,
+      verified: imported.data.verified === true,
+      imported: imported.data.imported === true,
+      planned_nodes:
+        imported.data.planned && typeof imported.data.planned.nodes === "number" ? imported.data.planned.nodes : null,
+    };
+  } else {
+    packImport = { ok: false, reason: "packs_import capability missing in /health response" };
   }
 
   let recallText: { ok: boolean; status: number; request_id: string | null; seeds: number } | { ok: false; reason: string };
@@ -204,6 +387,8 @@ async function main() {
         capability_contract_keys: Object.keys(capabilityContract.data ?? {}),
       },
       pack_export: packExport,
+      sessions_graph: sessionsGraph,
+      pack_import: packImport,
       recall_text: recallText,
     },
   };
