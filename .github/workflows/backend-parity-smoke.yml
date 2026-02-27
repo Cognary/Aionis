@@ -1,0 +1,113 @@
+name: Backend Parity Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  parity-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - postgres
+          - embedded
+
+    env:
+      DATABASE_URL: postgres://aionis:aionis@127.0.0.1:5432/aionis_memory
+      PORT: "3101"
+      MEMORY_STORE_BACKEND: ${{ matrix.backend }}
+      MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: ${{ matrix.backend == 'embedded' && 'true' || 'false' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Prepare env file
+        run: |
+          cp .env.example .env
+          {
+            echo "DATABASE_URL=${DATABASE_URL}"
+            echo "PORT=${PORT}"
+            echo "MEMORY_STORE_BACKEND=${MEMORY_STORE_BACKEND}"
+            echo "MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED=${MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED}"
+          } >> .env
+
+      - name: Start db
+        run: docker compose up -d db
+
+      - name: Wait for db
+        run: |
+          for i in {1..60}; do
+            if docker compose exec -T db pg_isready -U aionis -d aionis_memory >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "db not ready in time" >&2
+          exit 1
+
+      - name: Run migrations
+        run: docker compose run --rm migrate
+
+      - name: Contract smoke
+        run: npm run -s test:contract
+
+      - name: Startup health smoke
+        run: |
+          node dist/index.js >/tmp/backend_parity_api.log 2>&1 &
+          API_PID=$!
+          echo "${API_PID}" >/tmp/backend_parity_api.pid
+
+          for i in {1..60}; do
+            if curl -fsS "http://127.0.0.1:${PORT}/health" >/tmp/backend_parity_health.json 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [[ ! -s /tmp/backend_parity_health.json ]]; then
+            echo "health endpoint never became ready" >&2
+            sed -n '1,220p' /tmp/backend_parity_api.log >&2 || true
+            exit 1
+          fi
+
+          node -e '
+            const fs = require("fs");
+            const p = JSON.parse(fs.readFileSync("/tmp/backend_parity_health.json", "utf8"));
+            const expected = process.env.MEMORY_STORE_BACKEND;
+            if (p.ok !== true) throw new Error("health ok must be true");
+            if (p.memory_store_backend !== expected) throw new Error(`backend mismatch: ${p.memory_store_backend} != ${expected}`);
+            if (typeof p.recall_store_access_capability_version !== "number") throw new Error("missing recall capability version");
+            if (typeof p.write_store_access_capability_version !== "number") throw new Error("missing write capability version");
+          '
+
+          kill "${API_PID}" || true
+          wait "${API_PID}" || true
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps || true
+          docker compose logs --no-color db || true
+          sed -n '1,220p' /tmp/backend_parity_api.log || true
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
