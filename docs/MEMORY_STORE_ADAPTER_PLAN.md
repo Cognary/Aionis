@@ -70,9 +70,10 @@ Completed in this phase:
 38. Added strict runtime mirror-failure fixture in `sdk-ci` for embedded backend (enable strict+mirror capability, induce mirror table failure, assert `/v1/memory/write` hard-fails with HTTP 500).
 39. Upgraded strict runtime shadow mirror failure to typed API contract (`error=shadow_dual_write_strict_failure` + structured details), and added TS/Python SDK helper parsers/type guards.
 40. Added explicit local/embedded integration examples for strict-failure SDK helper usage in `docs/SDK.md` and dev smoke reproduction steps in `docs/ONBOARDING_5MIN.md`.
+41. Added one-command local strict-failure probe (`npm run -s smoke:strict-shadow-failure`) to automate mirror-failure injection, typed error assertion, and table recovery.
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
 2. Add runtime compaction telemetry export for long-run trend analysis (artifact timeline + alert thresholds), beyond smoke-level CI assertions.
-3. Keep onboarding smoke and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).
+3. Keep local smoke command and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).

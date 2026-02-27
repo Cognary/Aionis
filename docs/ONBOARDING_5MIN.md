@@ -228,15 +228,10 @@ MEMORY_SHADOW_DUAL_WRITE_STRICT=true \
 make stack-up
 ```
 
-2. Induce one mirror runtime failure (dev DB only) and issue a write:
+2. Run one-command smoke (recommended):
 
 ```bash
-docker compose exec -T db psql -U aionis -d aionis_memory -c \
-  "ALTER TABLE memory_commits_v2 RENAME TO memory_commits_v2_ci_tmp;"
-
-curl -sS -i http://localhost:3001/v1/memory/write \
-  -H 'content-type: application/json' \
-  -d '{"input_text":"strict runtime probe","auto_embed":false,"nodes":[{"client_id":"strict_evt_1","type":"event","text_summary":"strict probe"}],"edges":[]}'
+npm run -s smoke:strict-shadow-failure
 ```
 
 Expected response shape:
@@ -249,8 +244,6 @@ Expected response shape:
 3. Restore table and stop stack:
 
 ```bash
-docker compose exec -T db psql -U aionis -d aionis_memory -c \
-  "ALTER TABLE memory_commits_v2_ci_tmp RENAME TO memory_commits_v2;"
 make stack-down
 ```
 
