@@ -2,6 +2,7 @@ import type pg from "pg";
 import { performance } from "node:perf_hooks";
 import { assertDim, toVectorLiteral } from "../util/pgvector.js";
 import {
+  assertRecallStoreAccessContract,
   createPostgresRecallStoreAccess,
   type RecallCandidate,
   type RecallEdgeRow,
@@ -186,6 +187,7 @@ export async function memoryRecallParsed(
 
   const oversample = Math.max(parsed.limit, Math.min(1000, parsed.limit * 5));
   const recallAccess = options?.recall_access ?? createPostgresRecallStoreAccess(client);
+  assertRecallStoreAccessContract(recallAccess);
 
   // Stage 1 (primary): ANN kNN candidate fetch (fast path).
   const stage1Ann = await timed("stage1_candidates_ann", () =>

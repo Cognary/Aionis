@@ -5,8 +5,16 @@ import { performance } from "node:perf_hooks";
 import { ZodError, z } from "zod";
 import { loadEnv } from "./config.js";
 import { asPostgresMemoryStore, createMemoryStore } from "./store/memory-store.js";
-import { createPostgresRecallStoreAccess } from "./store/recall-access.js";
-import { createPostgresWriteStoreAccess } from "./store/write-access.js";
+import {
+  RECALL_STORE_ACCESS_CAPABILITY_VERSION,
+  assertRecallStoreAccessContract,
+  createPostgresRecallStoreAccess,
+} from "./store/recall-access.js";
+import {
+  WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+  assertWriteStoreAccessContract,
+  createPostgresWriteStoreAccess,
+} from "./store/write-access.js";
 import {
   createControlAlertRoute,
   enqueueControlIncidentPublishJob,
@@ -779,6 +787,8 @@ app.log.info(
     scope: env.MEMORY_SCOPE,
     tenant_id: env.MEMORY_TENANT_ID,
     memory_store_backend: env.MEMORY_STORE_BACKEND,
+    recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
+    write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     trust_proxy: env.TRUST_PROXY,
     cors_allow_origins: CORS_ALLOW_ORIGINS,
     auth_mode: env.MEMORY_AUTH_MODE,
@@ -888,6 +898,8 @@ app.get("/health", async () => ({
   ok: true,
   database_target_hash: healthDatabaseTargetHash,
   memory_store_backend: env.MEMORY_STORE_BACKEND,
+  recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
+  write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
 }));
 
 const ControlTenantSchema = z.object({
@@ -2537,6 +2549,11 @@ app.post("/v1/memory/tools/feedback", async (req, reply) => {
 
 app.addHook("onClose", async () => {
   await store.close();
+});
+
+await store.withClient(async (client) => {
+  assertRecallStoreAccessContract(createPostgresRecallStoreAccess(client));
+  assertWriteStoreAccessContract(createPostgresWriteStoreAccess(client));
 });
 
 await app.listen({ port: env.PORT, host: "0.0.0.0" });

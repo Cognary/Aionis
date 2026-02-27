@@ -6,7 +6,7 @@ import { normalizeText } from "../util/normalize.js";
 import { redactJsonStrings, redactPII } from "../util/redaction.js";
 import { stableUuid } from "../util/uuid.js";
 import { badRequest } from "../util/http.js";
-import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
+import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import { MemoryWriteRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { resolveTenantScope, toTenantScopeKey } from "./tenant.js";
@@ -320,6 +320,7 @@ export async function applyMemoryWrite(
   opts: ApplyWriteOptions,
 ): Promise<WriteResult> {
   const writeAccess = opts.write_access ?? createPostgresWriteStoreAccess(client);
+  assertWriteStoreAccessContract(writeAccess);
   const scope = prepared.scope;
   const actor = prepared.actor;
   const nodes = prepared.nodes;
@@ -596,7 +597,7 @@ export async function applyMemoryWrite(
 
   if (opts.shadowDualWriteEnabled) {
     try {
-      const copied = await mirrorCommitArtifactsToShadowV2(client, scope, commit_id);
+      const copied = await writeAccess.mirrorCommitArtifactsToShadowV2(scope, commit_id);
       result.shadow_dual_write = {
         enabled: true,
         strict: opts.shadowDualWriteStrict,
@@ -618,72 +619,4 @@ export async function applyMemoryWrite(
   }
 
   return result;
-}
-
-async function mirrorCommitArtifactsToShadowV2(
-  client: pg.PoolClient,
-  scope: string,
-  commitId: string,
-): Promise<{ commits: number; nodes: number; edges: number; outbox: number }> {
-  // Best effort: create scope partitions if scaffold function exists.
-  try {
-    await client.query("SELECT aionis_partition_ensure_scope($1)", [scope]);
-  } catch {
-    // noop: fall back to default partitions if available
-  }
-
-  const commitsRes = await client.query(
-    `
-    INSERT INTO memory_commits_v2
-    SELECT *
-    FROM memory_commits
-    WHERE scope = $1
-      AND id = $2
-    ON CONFLICT DO NOTHING
-    `,
-    [scope, commitId],
-  );
-
-  const nodesRes = await client.query(
-    `
-    INSERT INTO memory_nodes_v2
-    SELECT *
-    FROM memory_nodes
-    WHERE scope = $1
-      AND commit_id = $2
-    ON CONFLICT DO NOTHING
-    `,
-    [scope, commitId],
-  );
-
-  const edgesRes = await client.query(
-    `
-    INSERT INTO memory_edges_v2
-    SELECT *
-    FROM memory_edges
-    WHERE scope = $1
-      AND commit_id = $2
-    ON CONFLICT DO NOTHING
-    `,
-    [scope, commitId],
-  );
-
-  const outboxRes = await client.query(
-    `
-    INSERT INTO memory_outbox_v2
-    SELECT *
-    FROM memory_outbox
-    WHERE scope = $1
-      AND commit_id = $2
-    ON CONFLICT DO NOTHING
-    `,
-    [scope, commitId],
-  );
-
-  return {
-    commits: commitsRes.rowCount ?? 0,
-    nodes: nodesRes.rowCount ?? 0,
-    edges: edgesRes.rowCount ?? 0,
-    outbox: outboxRes.rowCount ?? 0,
-  };
 }

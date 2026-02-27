@@ -44,9 +44,11 @@ Completed in this phase:
 12. Write entrypoints (`/v1/memory/write`, session create/event append, pack import) now pass Postgres write access explicitly.
 13. Write access extraction now also covers core mutation queries (`insert_node`, `insert_rule_def`, `upsert_edge`).
 14. Write access extraction now covers outbox-related helpers (`ready_embedding_lookup`, `embed_nodes/topic_cluster enqueue`, `embed_nodes payload update`).
+15. Shadow dual-write mirror path (`memory_*_v2` copy) moved into `write-access` (`mirrorCommitArtifactsToShadowV2`).
+16. Added adapter capability/version contract for recall/write access with startup fail-fast checks.
 
 ## Next Steps
 
-1. Define adapter capability contract versioning (required/optional capabilities) for backend parity checks.
-2. Extract shadow dual-write mirror helpers (`memory_*_v2` copy path) behind write store access.
-3. Add `embedded` experimental adapter behind explicit feature flag after read/write capability seams are stable.
+1. Add optional/experimental capability flags (e.g. shadow mirror support) for embedded backend negotiation.
+2. Add adapter parity smoke tests (contract fixtures for recall/write access implementations).
+3. Add `embedded` experimental adapter behind explicit feature flag after parity smoke tests pass.

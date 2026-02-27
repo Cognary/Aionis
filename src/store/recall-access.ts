@@ -1,6 +1,8 @@
 import type pg from "pg";
 import { toVectorLiteral } from "../util/pgvector.js";
 
+export const RECALL_STORE_ACCESS_CAPABILITY_VERSION = 1 as const;
+
 export type RecallCandidate = {
   id: string;
   type: string;
@@ -111,6 +113,7 @@ export type RecallAuditInsertParams = {
 };
 
 export interface RecallStoreAccess {
+  readonly capability_version: typeof RECALL_STORE_ACCESS_CAPABILITY_VERSION;
   stage1CandidatesAnn(params: RecallStage1Params): Promise<RecallCandidate[]>;
   stage1CandidatesExactFallback(params: RecallStage1Params): Promise<RecallCandidate[]>;
   stage2Edges(params: RecallStage2EdgesParams): Promise<RecallEdgeRow[]>;
@@ -133,6 +136,7 @@ function stage1QueryParams(params: RecallStage1Params) {
 
 export function createPostgresRecallStoreAccess(client: pg.PoolClient): RecallStoreAccess {
   return {
+    capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     async stage1CandidatesAnn(params: RecallStage1Params): Promise<RecallCandidate[]> {
       const out = await client.query<RecallCandidate>(
         `
@@ -493,4 +497,28 @@ export function createPostgresRecallStoreAccess(client: pg.PoolClient): RecallSt
       );
     },
   };
+}
+
+export function assertRecallStoreAccessContract(access: RecallStoreAccess): void {
+  if (access.capability_version !== RECALL_STORE_ACCESS_CAPABILITY_VERSION) {
+    throw new Error(
+      `recall access capability version mismatch: expected=${RECALL_STORE_ACCESS_CAPABILITY_VERSION} got=${String(
+        (access as any).capability_version,
+      )}`,
+    );
+  }
+  const requiredMethods = [
+    "stage1CandidatesAnn",
+    "stage1CandidatesExactFallback",
+    "stage2Edges",
+    "stage2Nodes",
+    "ruleDefs",
+    "debugEmbeddings",
+    "insertRecallAudit",
+  ] as const;
+  for (const method of requiredMethods) {
+    if (typeof (access as any)[method] !== "function") {
+      throw new Error(`recall access missing required method: ${method}`);
+    }
+  }
 }

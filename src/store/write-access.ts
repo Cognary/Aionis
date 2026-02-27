@@ -1,5 +1,7 @@
 import type pg from "pg";
 
+export const WRITE_STORE_ACCESS_CAPABILITY_VERSION = 1 as const;
+
 export type WriteCommitInsertArgs = {
   scope: string;
   parentCommitId: string | null;
@@ -70,7 +72,15 @@ export type WriteOutboxInsertArgs = {
   payloadJson: string;
 };
 
+export type WriteShadowMirrorCopied = {
+  commits: number;
+  nodes: number;
+  edges: number;
+  outbox: number;
+};
+
 export interface WriteStoreAccess {
+  readonly capability_version: typeof WRITE_STORE_ACCESS_CAPABILITY_VERSION;
   nodeScopesByIds(ids: string[]): Promise<Map<string, string>>;
   parentCommitHash(scope: string, parentCommitId: string): Promise<string | null>;
   insertCommit(args: WriteCommitInsertArgs): Promise<string>;
@@ -80,10 +90,12 @@ export interface WriteStoreAccess {
   readyEmbeddingNodeIds(scope: string, ids: string[]): Promise<Set<string>>;
   insertOutboxEvent(args: WriteOutboxInsertArgs): Promise<void>;
   appendAfterTopicClusterEventIds(scope: string, commitId: string, eventIdsJson: string): Promise<void>;
+  mirrorCommitArtifactsToShadowV2(scope: string, commitId: string): Promise<WriteShadowMirrorCopied>;
 }
 
 export function createPostgresWriteStoreAccess(client: pg.PoolClient): WriteStoreAccess {
   return {
+    capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     async nodeScopesByIds(ids: string[]): Promise<Map<string, string>> {
       if (ids.length === 0) return new Map();
       const out = await client.query<{ id: string; scope: string }>(
@@ -234,5 +246,96 @@ export function createPostgresWriteStoreAccess(client: pg.PoolClient): WriteStor
         [scope, commitId, eventIdsJson],
       );
     },
+
+    async mirrorCommitArtifactsToShadowV2(scope: string, commitId: string): Promise<WriteShadowMirrorCopied> {
+      // Best effort: create scope partitions if scaffold function exists.
+      try {
+        await client.query("SELECT aionis_partition_ensure_scope($1)", [scope]);
+      } catch {
+        // noop: fall back to default partitions if available
+      }
+
+      const commitsRes = await client.query(
+        `
+        INSERT INTO memory_commits_v2
+        SELECT *
+        FROM memory_commits
+        WHERE scope = $1
+          AND id = $2
+        ON CONFLICT DO NOTHING
+        `,
+        [scope, commitId],
+      );
+
+      const nodesRes = await client.query(
+        `
+        INSERT INTO memory_nodes_v2
+        SELECT *
+        FROM memory_nodes
+        WHERE scope = $1
+          AND commit_id = $2
+        ON CONFLICT DO NOTHING
+        `,
+        [scope, commitId],
+      );
+
+      const edgesRes = await client.query(
+        `
+        INSERT INTO memory_edges_v2
+        SELECT *
+        FROM memory_edges
+        WHERE scope = $1
+          AND commit_id = $2
+        ON CONFLICT DO NOTHING
+        `,
+        [scope, commitId],
+      );
+
+      const outboxRes = await client.query(
+        `
+        INSERT INTO memory_outbox_v2
+        SELECT *
+        FROM memory_outbox
+        WHERE scope = $1
+          AND commit_id = $2
+        ON CONFLICT DO NOTHING
+        `,
+        [scope, commitId],
+      );
+
+      return {
+        commits: commitsRes.rowCount ?? 0,
+        nodes: nodesRes.rowCount ?? 0,
+        edges: edgesRes.rowCount ?? 0,
+        outbox: outboxRes.rowCount ?? 0,
+      };
+    },
   };
+}
+
+export function assertWriteStoreAccessContract(access: WriteStoreAccess): void {
+  if (access.capability_version !== WRITE_STORE_ACCESS_CAPABILITY_VERSION) {
+    throw new Error(
+      `write access capability version mismatch: expected=${WRITE_STORE_ACCESS_CAPABILITY_VERSION} got=${String(
+        (access as any).capability_version,
+      )}`,
+    );
+  }
+  const requiredMethods = [
+    "nodeScopesByIds",
+    "parentCommitHash",
+    "insertCommit",
+    "insertNode",
+    "insertRuleDef",
+    "upsertEdge",
+    "readyEmbeddingNodeIds",
+    "insertOutboxEvent",
+    "appendAfterTopicClusterEventIds",
+    "mirrorCommitArtifactsToShadowV2",
+  ] as const;
+  for (const method of requiredMethods) {
+    if (typeof (access as any)[method] !== "function") {
+      throw new Error(`write access missing required method: ${method}`);
+    }
+  }
 }
