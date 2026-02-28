@@ -395,11 +395,46 @@ jobs:
             >/tmp/backend_parity_embedded_snapshot_rollup.json
           cat /tmp/backend_parity_embedded_snapshot_rollup.json
 
+      - name: Build embedded snapshot telemetry history trend
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          hist_dir="artifacts/backend_parity/history_input"
+          mkdir -p "${hist_dir}/run_${GITHUB_RUN_ID}"
+          cp artifacts/backend_parity/rollup/summary.json "${hist_dir}/run_${GITHUB_RUN_ID}/summary.json"
+
+          mapfile -t run_ids < <(
+            gh run list \
+              --workflow "Backend Parity Smoke" \
+              --branch main \
+              --limit 20 \
+              --json databaseId,conclusion \
+              | jq -r '.[] | select(.conclusion=="success") | .databaseId' \
+              | head -n 8
+          )
+
+          for run_id in "${run_ids[@]}"; do
+            [[ -n "${run_id}" ]] || continue
+            [[ "${run_id}" == "${GITHUB_RUN_ID}" ]] && continue
+            out_dir="${hist_dir}/run_${run_id}"
+            mkdir -p "${out_dir}"
+            gh run download "${run_id}" -n backend-parity-rollup -D "${out_dir}" >/dev/null 2>&1 || true
+          done
+
+          EMBEDDED_SNAPSHOT_TELEMETRY_HISTORY_INPUT_DIR="${hist_dir}" \
+          EMBEDDED_SNAPSHOT_TELEMETRY_HISTORY_OUTPUT="artifacts/backend_parity/history/summary.json" \
+          EMBEDDED_SNAPSHOT_TELEMETRY_HISTORY_FAIL_ON_RECENT_FAILURE="false" \
+          node scripts/ci/embedded-snapshot-telemetry-history.mjs \
+            >/tmp/backend_parity_embedded_snapshot_history.json
+          cat /tmp/backend_parity_embedded_snapshot_history.json
+
       - name: Publish rollup summary
         if: always()
         run: |
           set +e
           summary_file="artifacts/backend_parity/rollup/summary.json"
+          history_file="artifacts/backend_parity/history/summary.json"
           {
             echo "## Backend Parity Embedded Snapshot Telemetry Rollup"
             echo
@@ -407,6 +442,14 @@ jobs:
               jq '{ok, totals, profiles, deltas, failures}' "${summary_file}"
             else
               echo "summary not found"
+            fi
+            echo
+            echo "## Backend Parity Embedded Snapshot Telemetry History"
+            echo
+            if [[ -f "${history_file}" ]]; then
+              jq '{ok, runs_total, runs_with_failures, latest, stats, failed_runs}' "${history_file}"
+            else
+              echo "history summary not found"
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -417,6 +460,8 @@ jobs:
           name: backend-parity-rollup
           path: |
             /tmp/backend_parity_embedded_snapshot_rollup.json
+            /tmp/backend_parity_embedded_snapshot_history.json
             artifacts/backend_parity/rollup/
+            artifacts/backend_parity/history/
           retention-days: 14
           if-no-files-found: warn
