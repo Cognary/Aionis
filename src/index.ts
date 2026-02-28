@@ -1771,6 +1771,7 @@ app.get("/v1/memory/sessions/:session_id/events", async (req, reply) => {
       listSessionEvents(client, input, {
         defaultScope: env.MEMORY_SCOPE,
         defaultTenantId: env.MEMORY_TENANT_ID,
+        embeddedRuntime,
       }),
     );
   } finally {
@@ -1830,6 +1831,7 @@ app.post("/v1/memory/packs/import", async (req, reply) => {
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
         writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
         embedder,
+        embeddedRuntime,
       }),
     );
   } finally {

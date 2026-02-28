@@ -88,7 +88,62 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
   let edgesHasMore = false;
   let commitsHasMore = false;
 
-  if (parsed.include_nodes) {
+  if (opts.embeddedRuntime) {
+    const snapshot = opts.embeddedRuntime.exportPackSnapshot({
+      scope: tenancy.scope_key,
+      includeNodes: parsed.include_nodes,
+      includeEdges: parsed.include_edges,
+      includeCommits: parsed.include_commits,
+      maxRows,
+    });
+    nodes = snapshot.nodes.map((n) => ({
+      id: n.id,
+      client_id: n.client_id,
+      type: n.type,
+      tier: n.tier,
+      memory_lane: n.memory_lane,
+      producer_agent_id: n.producer_agent_id,
+      owner_agent_id: n.owner_agent_id,
+      owner_team_id: n.owner_team_id,
+      title: n.title,
+      text_summary: n.text_summary,
+      slots: n.slots,
+      raw_ref: n.raw_ref,
+      evidence_ref: n.evidence_ref,
+      salience: n.salience,
+      importance: n.importance,
+      confidence: n.confidence,
+      created_at: n.created_at,
+      updated_at: n.updated_at,
+      commit_id: n.commit_id,
+    }));
+    edges = snapshot.edges.map((e) => ({
+      id: e.id,
+      type: e.type,
+      src_id: e.src_id,
+      dst_id: e.dst_id,
+      src_client_id: e.src_client_id,
+      dst_client_id: e.dst_client_id,
+      weight: e.weight,
+      confidence: e.confidence,
+      decay_rate: e.decay_rate,
+      created_at: e.created_at,
+      commit_id: e.commit_id,
+    }));
+    commits = snapshot.commits.map((c) => ({
+      id: c.id,
+      parent_id: c.parent_id,
+      input_sha256: c.input_sha256,
+      actor: c.actor,
+      model_version: c.model_version,
+      prompt_version: c.prompt_version,
+      created_at: c.created_at,
+      commit_hash: c.commit_hash,
+    }));
+    nodesHasMore = snapshot.truncated.nodes;
+    edgesHasMore = snapshot.truncated.edges;
+    commitsHasMore = snapshot.truncated.commits;
+  } else if (parsed.include_nodes) {
     const rr = await client.query<ExportNodeRow>(
       `
       SELECT
@@ -122,7 +177,7 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
     nodes = nodesHasMore ? rr.rows.slice(0, maxRows) : rr.rows;
   }
 
-  if (parsed.include_edges) {
+  if (!opts.embeddedRuntime && parsed.include_edges) {
     const rr = await client.query<ExportEdgeRow>(
       `
       SELECT
@@ -150,7 +205,7 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
     edges = edgesHasMore ? rr.rows.slice(0, maxRows) : rr.rows;
   }
 
-  if (parsed.include_commits) {
+  if (!opts.embeddedRuntime && parsed.include_commits) {
     const rr = await client.query<ExportCommitRow>(
       `
       SELECT

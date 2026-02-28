@@ -32,6 +32,7 @@ type SessionWriteOptions = {
 type SessionEventListOptions = {
   defaultScope: string;
   defaultTenantId: string;
+  embeddedRuntime?: EmbeddedMemoryRuntime | null;
 };
 
 type EventRow = {
@@ -368,6 +369,93 @@ export async function listSessionEvents(client: pg.PoolClient, input: unknown, o
   );
   const sid = parsed.session_id.trim();
   const sessionCid = sessionClientId(sid);
+  if (opts.embeddedRuntime) {
+    const embedded = opts.embeddedRuntime.listSessionEvents({
+      scope: tenancy.scope_key,
+      sessionClientId: sessionCid,
+      consumerAgentId: parsed.consumer_agent_id ?? null,
+      consumerTeamId: parsed.consumer_team_id ?? null,
+      limit: parsed.limit,
+      offset: parsed.offset,
+    });
+    if (!embedded.session) {
+      return {
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        session: null,
+        events: [],
+        page: {
+          limit: parsed.limit,
+          offset: parsed.offset,
+          returned: 0,
+          has_more: false,
+        },
+      };
+    }
+    const events = embedded.events.map((row) => {
+      const out: Record<string, unknown> = {
+        uri: buildAionisUri({
+          tenant_id: tenancy.tenant_id,
+          scope: tenancy.scope,
+          type: "event",
+          id: row.id,
+        }),
+        id: row.id,
+        client_id: row.client_id,
+        event_id: typeof row.slots?.event_id === "string" ? row.slots.event_id : null,
+        type: row.type,
+        title: row.title,
+        text_summary: row.text_summary,
+        edge_weight: row.edge_weight,
+        edge_confidence: row.edge_confidence,
+      };
+      if (parsed.include_slots) out.slots = row.slots;
+      else if (parsed.include_slots_preview) out.slots_preview = pickSlotsPreview(row.slots, parsed.slots_preview_keys);
+      if (parsed.include_meta) {
+        out.memory_lane = row.memory_lane;
+        out.producer_agent_id = row.producer_agent_id;
+        out.owner_agent_id = row.owner_agent_id;
+        out.owner_team_id = row.owner_team_id;
+        out.embedding_status = row.embedding_status;
+        out.embedding_model = row.embedding_model;
+        out.raw_ref = row.raw_ref;
+        out.evidence_ref = row.evidence_ref;
+        out.created_at = row.created_at;
+        out.updated_at = row.updated_at;
+        out.last_activated = row.last_activated;
+        out.salience = row.salience;
+        out.importance = row.importance;
+        out.confidence = row.confidence;
+        out.commit_id = row.commit_id;
+      }
+      return out;
+    });
+
+    return {
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      session: {
+        session_id: sid,
+        node_id: embedded.session.id,
+        title: embedded.session.title,
+        text_summary: embedded.session.text_summary,
+        uri: buildAionisUri({
+          tenant_id: tenancy.tenant_id,
+          scope: tenancy.scope,
+          type: "topic",
+          id: embedded.session.id,
+        }),
+      },
+      events,
+      page: {
+        limit: parsed.limit,
+        offset: parsed.offset,
+        returned: events.length,
+        has_more: embedded.has_more,
+      },
+    };
+  }
+
   const sr = await client.query<SessionRow>(
     `
     SELECT

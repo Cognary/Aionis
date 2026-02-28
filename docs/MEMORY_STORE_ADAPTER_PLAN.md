@@ -96,9 +96,10 @@ Completed in this phase:
 64. Added backend-parity cross-run telemetry history aggregation (`embedded-snapshot-telemetry-history.mjs`) in `telemetry-rollup`, downloading recent successful `backend-parity-rollup` artifacts to publish history stats (`runs_total`, failure trend, latest-run summary) into step summary + artifacts.
 65. Integrated backend-parity telemetry history checks into `core-production-gate` (summary ingestion + thresholded warn/fail control via workflow inputs), and surfaced check/history payloads in gate summaries/artifacts.
 66. Added drift-oriented backend-parity history gates in `core-production-gate` (`persist_total_avg` delta and `dropped_nodes_max` delta between latest and previous run), with configurable workflow inputs and explicit observed/threshold fields in check output.
+67. Extended embedded local runtime beyond recall/write baseline for `sessions` + `packs`: added runtime-native `session events` read path and pack snapshot export path, wired API routes to prefer runtime when `MEMORY_STORE_BACKEND=embedded`, and fixed `packs/import` embedded runtime mirror propagation.
 
 ## Next Steps
 
-1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
+1. Continue embedded runtime expansion for policy/planner paths (`rules/evaluate`, `tools/select`, `planning/context`) to reduce remaining Postgres coupling in embedded mode.
 2. Calibrate drift thresholds from observed baseline windows (for example, p95 delta bands over last N runs) and promote selected warns to enforce mode.
 3. Keep local smoke command and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).

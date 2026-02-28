@@ -18,6 +18,7 @@ import { toVectorLiteral } from "../util/pgvector.js";
 type EmbeddedNodeInput = {
   id: string;
   scope: string;
+  client_id?: string | null;
   type: string;
   tier?: "hot" | "warm" | "cold" | "archive";
   memory_lane: "private" | "shared";
@@ -62,6 +63,7 @@ type EmbeddedWriteResult = {
 type EmbeddedNodeRecord = {
   id: string;
   scope: string;
+  client_id: string | null;
   type: string;
   tier: "hot" | "warm" | "cold" | "archive";
   memory_lane: "private" | "shared";
@@ -174,6 +176,99 @@ type EmbeddedSnapshotMetricsState = Omit<
   "runtime_nodes" | "runtime_edges" | "runtime_rule_defs" | "runtime_audit_rows"
 >;
 
+export type EmbeddedSessionNodeView = {
+  id: string;
+  title: string | null;
+  text_summary: string | null;
+  memory_lane: "private" | "shared";
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
+};
+
+export type EmbeddedSessionEventView = {
+  id: string;
+  client_id: string | null;
+  type: string;
+  title: string | null;
+  text_summary: string | null;
+  slots: Record<string, unknown>;
+  memory_lane: "private" | "shared";
+  producer_agent_id: string | null;
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
+  embedding_status: "pending" | "ready" | "failed" | null;
+  embedding_model: string | null;
+  raw_ref: string | null;
+  evidence_ref: string | null;
+  salience: number;
+  importance: number;
+  confidence: number;
+  last_activated: string | null;
+  created_at: string;
+  updated_at: string;
+  commit_id: string | null;
+  edge_weight: number;
+  edge_confidence: number;
+};
+
+export type EmbeddedPackNodeView = {
+  id: string;
+  client_id: string | null;
+  type: string;
+  tier: string;
+  memory_lane: "private" | "shared";
+  producer_agent_id: string | null;
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
+  title: string | null;
+  text_summary: string | null;
+  slots: Record<string, unknown>;
+  raw_ref: string | null;
+  evidence_ref: string | null;
+  salience: number;
+  importance: number;
+  confidence: number;
+  created_at: string;
+  updated_at: string;
+  commit_id: string | null;
+};
+
+export type EmbeddedPackEdgeView = {
+  id: string;
+  type: string;
+  src_id: string;
+  dst_id: string;
+  src_client_id: string | null;
+  dst_client_id: string | null;
+  weight: number;
+  confidence: number;
+  decay_rate: number;
+  created_at: string;
+  commit_id: string | null;
+};
+
+export type EmbeddedPackCommitView = {
+  id: string;
+  parent_id: string | null;
+  input_sha256: string;
+  actor: string;
+  model_version: string | null;
+  prompt_version: string | null;
+  created_at: string;
+  commit_hash: string;
+};
+
+export type EmbeddedPackSnapshotView = {
+  nodes: EmbeddedPackNodeView[];
+  edges: EmbeddedPackEdgeView[];
+  commits: EmbeddedPackCommitView[];
+  truncated: {
+    nodes: boolean;
+    edges: boolean;
+    commits: boolean;
+  };
+};
+
 function nodeKey(scope: string, id: string): string {
   return `${scope}::${id}`;
 }
@@ -250,6 +345,20 @@ function edgeCompactionScore(edge: EmbeddedEdgeRecord): number {
   const created = Date.parse(edge.created_at);
   const recency = Number.isFinite(created) ? created / 8.64e10 : 0;
   return quality + recency;
+}
+
+function compareCreatedAtAsc(a: string, b: string): number {
+  const ta = Date.parse(a);
+  const tb = Date.parse(b);
+  if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return ta - tb;
+  return a.localeCompare(b);
+}
+
+function compareCreatedAtDesc(a: string, b: string): number {
+  const ta = Date.parse(a);
+  const tb = Date.parse(b);
+  if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return tb - ta;
+  return b.localeCompare(a);
 }
 
 export class EmbeddedMemoryRuntime {
@@ -338,6 +447,192 @@ export class EmbeddedMemoryRuntime {
     };
   }
 
+  listSessionEvents(params: {
+    scope: string;
+    sessionClientId: string;
+    consumerAgentId: string | null;
+    consumerTeamId: string | null;
+    limit: number;
+    offset: number;
+  }): {
+    session: EmbeddedSessionNodeView | null;
+    events: EmbeddedSessionEventView[];
+    has_more: boolean;
+  } {
+    const session = Array.from(this.nodes.values())
+      .filter((n) => n.scope === params.scope && n.type === "topic" && n.client_id === params.sessionClientId)
+      .filter((n) => candidateVisible(n, params.consumerAgentId, params.consumerTeamId))
+      .sort((a, b) => compareCreatedAtDesc(a.created_at, b.created_at) || b.id.localeCompare(a.id))[0];
+
+    if (!session) {
+      return { session: null, events: [], has_more: false };
+    }
+
+    const eventPairs: Array<{ node: EmbeddedNodeRecord; edge: EmbeddedEdgeRecord }> = [];
+    for (const edge of this.edgesByUnique.values()) {
+      if (edge.scope !== params.scope) continue;
+      if (edge.type !== "part_of") continue;
+      if (edge.dst_id !== session.id) continue;
+      const src = this.nodes.get(nodeKey(params.scope, edge.src_id));
+      if (!src || src.type !== "event") continue;
+      if (!candidateVisible(src, params.consumerAgentId, params.consumerTeamId)) continue;
+      eventPairs.push({ node: src, edge });
+    }
+    eventPairs.sort((a, b) => compareCreatedAtDesc(a.node.created_at, b.node.created_at) || b.node.id.localeCompare(a.node.id));
+
+    const slice = eventPairs.slice(params.offset, params.offset + params.limit + 1);
+    const hasMore = slice.length > params.limit;
+    const chosen = hasMore ? slice.slice(0, params.limit) : slice;
+
+    return {
+      session: {
+        id: session.id,
+        title: session.title,
+        text_summary: session.text_summary,
+        memory_lane: session.memory_lane,
+        owner_agent_id: session.owner_agent_id,
+        owner_team_id: session.owner_team_id,
+      },
+      events: chosen.map(({ node, edge }) => ({
+        id: node.id,
+        client_id: node.client_id,
+        type: node.type,
+        title: node.title,
+        text_summary: node.text_summary,
+        slots: node.slots,
+        memory_lane: node.memory_lane,
+        producer_agent_id: node.producer_agent_id,
+        owner_agent_id: node.owner_agent_id,
+        owner_team_id: node.owner_team_id,
+        embedding_status: node.embedding_status,
+        embedding_model: node.embedding_model,
+        raw_ref: node.raw_ref,
+        evidence_ref: node.evidence_ref,
+        salience: node.salience,
+        importance: node.importance,
+        confidence: node.confidence,
+        last_activated: null,
+        created_at: node.created_at,
+        updated_at: node.updated_at,
+        commit_id: node.commit_id,
+        edge_weight: edge.weight,
+        edge_confidence: edge.confidence,
+      })),
+      has_more: hasMore,
+    };
+  }
+
+  exportPackSnapshot(params: {
+    scope: string;
+    includeNodes: boolean;
+    includeEdges: boolean;
+    includeCommits: boolean;
+    maxRows: number;
+  }): EmbeddedPackSnapshotView {
+    let nodes: EmbeddedPackNodeView[] = [];
+    let edges: EmbeddedPackEdgeView[] = [];
+    let commits: EmbeddedPackCommitView[] = [];
+    let nodesHasMore = false;
+    let edgesHasMore = false;
+    let commitsHasMore = false;
+
+    if (params.includeNodes) {
+      const all = Array.from(this.nodes.values())
+        .filter((n) => n.scope === params.scope)
+        .sort((a, b) => compareCreatedAtAsc(a.created_at, b.created_at) || a.id.localeCompare(b.id));
+      nodesHasMore = all.length > params.maxRows;
+      const chosen = nodesHasMore ? all.slice(0, params.maxRows) : all;
+      nodes = chosen.map((n) => ({
+        id: n.id,
+        client_id: n.client_id,
+        type: n.type,
+        tier: n.tier,
+        memory_lane: n.memory_lane,
+        producer_agent_id: n.producer_agent_id,
+        owner_agent_id: n.owner_agent_id,
+        owner_team_id: n.owner_team_id,
+        title: n.title,
+        text_summary: n.text_summary,
+        slots: n.slots,
+        raw_ref: n.raw_ref,
+        evidence_ref: n.evidence_ref,
+        salience: n.salience,
+        importance: n.importance,
+        confidence: n.confidence,
+        created_at: n.created_at,
+        updated_at: n.updated_at,
+        commit_id: n.commit_id,
+      }));
+    }
+
+    if (params.includeEdges) {
+      const all = Array.from(this.edgesByUnique.values())
+        .filter((e) => e.scope === params.scope)
+        .sort((a, b) => compareCreatedAtAsc(a.created_at, b.created_at) || a.id.localeCompare(b.id));
+      edgesHasMore = all.length > params.maxRows;
+      const chosen = edgesHasMore ? all.slice(0, params.maxRows) : all;
+      edges = chosen.map((e) => ({
+        id: e.id,
+        type: e.type,
+        src_id: e.src_id,
+        dst_id: e.dst_id,
+        src_client_id: this.nodes.get(nodeKey(e.scope, e.src_id))?.client_id ?? null,
+        dst_client_id: this.nodes.get(nodeKey(e.scope, e.dst_id))?.client_id ?? null,
+        weight: e.weight,
+        confidence: e.confidence,
+        decay_rate: e.decay_rate,
+        created_at: e.created_at,
+        commit_id: e.commit_id,
+      }));
+    }
+
+    if (params.includeCommits) {
+      const commitMeta = new Map<string, { created_at: string }>();
+      for (const n of this.nodes.values()) {
+        if (n.scope !== params.scope) continue;
+        if (!n.commit_id) continue;
+        const cur = commitMeta.get(n.commit_id);
+        if (!cur || compareCreatedAtAsc(n.created_at, cur.created_at) < 0) {
+          commitMeta.set(n.commit_id, { created_at: n.created_at });
+        }
+      }
+      for (const e of this.edgesByUnique.values()) {
+        if (e.scope !== params.scope) continue;
+        if (!e.commit_id) continue;
+        const cur = commitMeta.get(e.commit_id);
+        if (!cur || compareCreatedAtAsc(e.created_at, cur.created_at) < 0) {
+          commitMeta.set(e.commit_id, { created_at: e.created_at });
+        }
+      }
+      const all = Array.from(commitMeta.entries())
+        .map(([id, meta]) => ({ id, created_at: meta.created_at }))
+        .sort((a, b) => compareCreatedAtAsc(a.created_at, b.created_at) || a.id.localeCompare(b.id));
+      commitsHasMore = all.length > params.maxRows;
+      const chosen = commitsHasMore ? all.slice(0, params.maxRows) : all;
+      commits = chosen.map((c) => ({
+        id: c.id,
+        parent_id: null,
+        input_sha256: "",
+        actor: "embedded_runtime",
+        model_version: null,
+        prompt_version: null,
+        created_at: c.created_at,
+        commit_hash: c.id,
+      }));
+    }
+
+    return {
+      nodes,
+      edges,
+      commits,
+      truncated: {
+        nodes: nodesHasMore,
+        edges: edgesHasMore,
+        commits: commitsHasMore,
+      },
+    };
+  }
+
   async applyWrite(prepared: EmbeddedWritePrepared, out: EmbeddedWriteResult): Promise<void> {
     const now = new Date().toISOString();
 
@@ -352,6 +647,7 @@ export class EmbeddedMemoryRuntime {
       const record: EmbeddedNodeRecord = {
         id: n.id,
         scope: n.scope,
+        client_id: n.client_id ?? null,
         type: n.type,
         tier: n.tier ?? "hot",
         memory_lane: n.memory_lane,
@@ -445,7 +741,12 @@ export class EmbeddedMemoryRuntime {
     this.ruleDefs.clear();
     this.audit.splice(0, this.audit.length);
 
-    for (const n of parsed.nodes) this.nodes.set(nodeKey(n.scope, n.id), n);
+    for (const n of parsed.nodes) {
+      this.nodes.set(nodeKey(n.scope, n.id), {
+        ...n,
+        client_id: typeof (n as any).client_id === "string" ? String((n as any).client_id) : null,
+      });
+    }
     for (const e of parsed.edges) this.edgesByUnique.set(edgeUpsertKey(e.scope, e.type, e.src_id, e.dst_id), e);
     for (const r of parsed.rule_defs) this.ruleDefs.set(nodeKey(r.scope, r.rule_node_id), r);
     if (Array.isArray(parsed.audit)) {
