@@ -4,7 +4,7 @@ title: "SDK Compatibility Matrix"
 
 # SDK Compatibility Matrix
 
-Last updated: `2026-02-23`
+Last updated: `2026-02-28`
 
 ## Versioning policy
 
@@ -22,13 +22,13 @@ Last updated: `2026-02-23`
 
 | SDK | SDK version | API contract baseline | Core methods | Error model | Retry + request_id | Status |
 |---|---|---|---|---|---|---|
-| `@aionis/sdk` (TypeScript) | `0.1.5` (`0.1.x`) | `docs/API_CONTRACT.md` (2026-02-23) | `write/recall/recallText/find/createSession/writeEvent/listSessionEvents/packExport/packImport/rulesEvaluate/toolsSelect/toolsFeedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
-| `aionis-sdk` (Python) | `0.1.5` (`0.1.x`) | `docs/API_CONTRACT.md` (2026-02-23) | `write/recall/recall_text/find/create_session/write_event/list_session_events/pack_export/pack_import/rules_evaluate/tools_select/tools_feedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
+| `@aionis/sdk` (TypeScript) | `0.2.0` (`0.2.x`) | `docs/API_CONTRACT.md` (2026-02-23) | `write/recall/recallText/find/createSession/writeEvent/listSessionEvents/packExport/packImport/rulesEvaluate/toolsSelect/toolsFeedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
+| `aionis-sdk` (Python) | `0.2.0` (`0.2.x`) | `docs/API_CONTRACT.md` (2026-02-23) | `write/recall/recall_text/find/create_session/write_event/list_session_events/pack_export/pack_import/rules_evaluate/tools_select/tools_feedback` | `AionisApiError` + `AionisNetworkError` | yes | current |
 
 ## Backward compatibility notes
 
-1. `0.1.x` expects the server to return structured error payload with `error/message/details` (and optional `issues`).
-2. `0.1.x` assumes request correlation header `x-request-id` is returned by API.
+1. `0.2.x` expects the server to return structured error payload with `error/message/details` (and optional `issues`).
+2. `0.2.x` assumes request correlation header `x-request-id` is returned by API.
 3. `recall_text` can return `no_embedding_provider` (400); SDK preserves this as `AionisApiError.code`.
 
 ## Release checklist

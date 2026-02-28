@@ -4,7 +4,7 @@ title: "5-Minute Developer Onboarding"
 
 # 5-Minute Developer Onboarding
 
-Last updated: `2026-02-19`
+Last updated: `2026-02-28`
 
 This guide is for external developers who want to use Aionis quickly.
 
@@ -81,7 +81,7 @@ curl -sS "$BASE_URL/v1/memory/recall_text" \
 TypeScript:
 
 ```bash
-npm i @aionis/sdk@0.1.5
+npm i @aionis/sdk@0.2.0
 ```
 
 ```ts
@@ -114,7 +114,7 @@ try {
 Python:
 
 ```bash
-pip install aionis-sdk==0.1.5
+pip install aionis-sdk==0.2.0
 ```
 
 ```python

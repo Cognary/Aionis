@@ -202,8 +202,8 @@ SDK client is available at:
 
 Current release status:
 
-- TypeScript SDK published: `@aionis/sdk@0.1.5`.
-- Python SDK published: `aionis-sdk==0.1.5`.
+- TypeScript SDK published: `@aionis/sdk@0.2.0`.
+- Python SDK published: `aionis-sdk==0.2.0`.
 - Release runbook: `/path/to/Aionis/docs/SDK_RELEASE.md`.
 
 Smoke:

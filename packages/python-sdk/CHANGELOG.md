@@ -4,6 +4,13 @@ All notable changes to `aionis-sdk` will be documented in this file.
 
 The format is based on Keep a Changelog and this package follows SemVer.
 
+## [0.2.0] - 2026-02-28
+
+### Changed
+
+1. Aligned SDK release to the unified `0.2.0` baseline across core, npm, PyPI, and Docker channels.
+2. No API surface break in this release; this is a coordinated version alignment release.
+
 ## [0.1.5] - 2026-02-23
 
 ### Added

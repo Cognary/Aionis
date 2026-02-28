@@ -37,7 +37,7 @@ print(out["status"], out["request_id"], out["data"]["commit_id"])
 
 ## Typed payloads
 
-`0.1.5+` exports `TypedDict` API payloads from `aionis_sdk.types`:
+`0.2.0+` exports `TypedDict` API payloads from `aionis_sdk.types`:
 
 ```python
 from aionis_sdk import AionisClient
