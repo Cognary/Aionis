@@ -5,12 +5,25 @@ import { RuleStateUpdateRequest } from "./schemas.js";
 import { badRequest } from "../util/http.js";
 import { parsePolicyPatch } from "./rule-policy.js";
 import { resolveTenantScope } from "./tenant.js";
+import type { EmbeddedMemoryRuntime, EmbeddedRuleDefSyncInput } from "../store/embedded-memory-runtime.js";
 
 function isPlainObject(v: any): v is Record<string, any> {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
-export async function updateRuleState(client: pg.PoolClient, body: unknown, defaultScope: string, defaultTenantId: string) {
+type UpdateRuleStateOptions = {
+  embeddedRuntime?: EmbeddedMemoryRuntime | null;
+};
+
+type RuleDefSyncRow = EmbeddedRuleDefSyncInput;
+
+export async function updateRuleState(
+  client: pg.PoolClient,
+  body: unknown,
+  defaultScope: string,
+  defaultTenantId: string,
+  opts: UpdateRuleStateOptions = {},
+) {
   const parsed = RuleStateUpdateRequest.parse(body);
   const tenancy = resolveTenantScope(
     { scope: parsed.scope, tenant_id: parsed.tenant_id },
@@ -173,7 +186,7 @@ export async function updateRuleState(client: pg.PoolClient, body: unknown, defa
       ? String(slots.target_team_id).trim()
       : null;
 
-  await client.query(
+  const ruleDefRes = await client.query<RuleDefSyncRow>(
     `
     INSERT INTO memory_rule_defs
       (scope, rule_node_id, state, if_json, then_json, exceptions_json, rule_scope, target_agent_id, target_team_id, commit_id)
@@ -184,6 +197,20 @@ export async function updateRuleState(client: pg.PoolClient, body: unknown, defa
       commit_id = EXCLUDED.commit_id,
       updated_at = now()
     WHERE memory_rule_defs.scope = EXCLUDED.scope
+    RETURNING
+      scope,
+      rule_node_id::text AS rule_node_id,
+      state::text AS state,
+      rule_scope::text AS rule_scope,
+      target_agent_id,
+      target_team_id,
+      if_json,
+      then_json,
+      exceptions_json,
+      positive_count,
+      negative_count,
+      commit_id::text AS commit_id,
+      updated_at::text AS updated_at
     `,
     [
       scope,
@@ -199,12 +226,18 @@ export async function updateRuleState(client: pg.PoolClient, body: unknown, defa
     ],
   );
 
+  const becameExecutionRelevant = parsed.state === "active" || parsed.state === "shadow";
+
   // Optional: touch the node so it has a recent activation timestamp when it becomes active.
-  if (parsed.state === "active" || parsed.state === "shadow") {
+  if (becameExecutionRelevant) {
     await client.query(
       "UPDATE memory_nodes SET last_activated = now() WHERE scope = $1 AND id = $2",
       [scope, parsed.rule_node_id],
     );
+  }
+
+  if (opts.embeddedRuntime && ruleDefRes.rowCount) {
+    await opts.embeddedRuntime.syncRuleDefs(ruleDefRes.rows, { touchRuleNodes: becameExecutionRelevant });
   }
 
   return { tenant_id: tenancy.tenant_id, scope: tenancy.scope, commit_id, commit_hash: commitHash };

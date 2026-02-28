@@ -7,11 +7,15 @@ import { normalizeText } from "../util/normalize.js";
 import { redactPII } from "../util/redaction.js";
 import { RuleFeedbackRequest } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
+import type { EmbeddedMemoryRuntime, EmbeddedRuleDefSyncInput } from "../store/embedded-memory-runtime.js";
 
 type FeedbackOptions = {
   maxTextLen: number;
   piiRedaction: boolean;
+  embeddedRuntime?: EmbeddedMemoryRuntime | null;
 };
+
+type RuleDefSyncRow = EmbeddedRuleDefSyncInput;
 
 export async function ruleFeedback(
   client: pg.PoolClient,
@@ -95,7 +99,7 @@ export async function ruleFeedback(
   );
 
   // Update aggregate stats.
-  await client.query(
+  const ruleDefRes = await client.query<RuleDefSyncRow>(
     `
     UPDATE memory_rule_defs
     SET
@@ -103,9 +107,27 @@ export async function ruleFeedback(
       negative_count = negative_count + CASE WHEN $2 = 'negative' THEN 1 ELSE 0 END,
       last_evaluated_at = now()
     WHERE scope = $1 AND rule_node_id = $3
+    RETURNING
+      scope,
+      rule_node_id::text AS rule_node_id,
+      state::text AS state,
+      rule_scope::text AS rule_scope,
+      target_agent_id,
+      target_team_id,
+      if_json,
+      then_json,
+      exceptions_json,
+      positive_count,
+      negative_count,
+      commit_id::text AS commit_id,
+      updated_at::text AS updated_at
     `,
     [scope, parsed.outcome, parsed.rule_node_id],
   );
+
+  if (opts.embeddedRuntime && ruleDefRes.rowCount) {
+    await opts.embeddedRuntime.syncRuleDefs(ruleDefRes.rows);
+  }
 
   return { tenant_id: tenancy.tenant_id, scope: tenancy.scope, commit_id, commit_hash: commitHash, feedback_id: feedbackId };
 }

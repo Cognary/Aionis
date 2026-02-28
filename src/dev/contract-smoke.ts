@@ -945,6 +945,107 @@ async function run() {
   assert.equal(embeddedSeeds.length, 1);
   assert.equal(embeddedSeeds[0].id, "00000000-0000-0000-0000-000000000e11");
 
+  const embeddedRuleScope = "tenant:parity::scope:embedded_rules";
+  const embeddedRuleNodeId = "00000000-0000-0000-0000-000000000e51";
+  const embeddedRuleRuntime = createEmbeddedMemoryRuntime();
+  await embeddedRuleRuntime.applyWrite(
+    {
+      scope: embeddedRuleScope,
+      auto_embed_effective: false,
+      nodes: [
+        {
+          id: embeddedRuleNodeId,
+          scope: embeddedRuleScope,
+          type: "rule",
+          tier: "hot",
+          memory_lane: "shared",
+          text_summary: "embedded rule",
+          slots: {
+            if: { intent: "json" },
+            then: { tool: { allow: ["psql"] } },
+            exceptions: [],
+          },
+        },
+      ],
+      edges: [],
+    } as any,
+    {
+      commit_id: "00000000-0000-0000-0000-000000000ec8",
+      commit_hash: "embedded-commit-8",
+    } as any,
+  );
+  assert.equal(embeddedRuleRuntime.listRuleCandidates({ scope: embeddedRuleScope, limit: 10 }).length, 0);
+
+  const stateUpdatedAt = new Date().toISOString();
+  await embeddedRuleRuntime.syncRuleDefs(
+    [
+      {
+        scope: embeddedRuleScope,
+        rule_node_id: embeddedRuleNodeId,
+        state: "active",
+        rule_scope: "global",
+        target_agent_id: null,
+        target_team_id: null,
+        if_json: { intent: "json" },
+        then_json: { tool: { allow: ["psql"] } },
+        exceptions_json: [],
+        positive_count: 0,
+        negative_count: 0,
+        commit_id: "00000000-0000-0000-0000-000000000ec9",
+        updated_at: stateUpdatedAt,
+      },
+    ],
+    { touchRuleNodes: true },
+  );
+  const activeRules = embeddedRuleRuntime.listRuleCandidates({ scope: embeddedRuleScope, limit: 10 });
+  assert.equal(activeRules.length, 1);
+  assert.equal(activeRules[0].state, "active");
+  assert.equal(activeRules[0].rule_commit_id, "00000000-0000-0000-0000-000000000ec9");
+  assert.equal(activeRules[0].updated_at, stateUpdatedAt);
+
+  const feedbackUpdatedAt = new Date(Date.now() + 1_000).toISOString();
+  await embeddedRuleRuntime.syncRuleDefs([
+    {
+      scope: embeddedRuleScope,
+      rule_node_id: embeddedRuleNodeId,
+      state: "active",
+      rule_scope: "global",
+      target_agent_id: null,
+      target_team_id: null,
+      if_json: { intent: "json" },
+      then_json: { tool: { allow: ["psql"] } },
+      exceptions_json: [],
+      positive_count: 2,
+      negative_count: 1,
+      commit_id: "00000000-0000-0000-0000-000000000ec9",
+      updated_at: feedbackUpdatedAt,
+    },
+  ]);
+  const afterFeedback = embeddedRuleRuntime.listRuleCandidates({ scope: embeddedRuleScope, limit: 10 });
+  assert.equal(afterFeedback.length, 1);
+  assert.equal(afterFeedback[0].positive_count, 2);
+  assert.equal(afterFeedback[0].negative_count, 1);
+  assert.equal(afterFeedback[0].updated_at, feedbackUpdatedAt);
+
+  await embeddedRuleRuntime.syncRuleDefs([
+    {
+      scope: embeddedRuleScope,
+      rule_node_id: embeddedRuleNodeId,
+      state: "disabled",
+      rule_scope: "global",
+      target_agent_id: null,
+      target_team_id: null,
+      if_json: { intent: "json" },
+      then_json: { tool: { allow: ["psql"] } },
+      exceptions_json: [],
+      positive_count: 2,
+      negative_count: 1,
+      commit_id: "00000000-0000-0000-0000-000000000ec9",
+      updated_at: new Date(Date.now() + 2_000).toISOString(),
+    },
+  ]);
+  assert.equal(embeddedRuleRuntime.listRuleCandidates({ scope: embeddedRuleScope, limit: 10 }).length, 0);
+
   const embeddedSnapshotPath = path.join(
     os.tmpdir(),
     `aionis_embedded_runtime_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,

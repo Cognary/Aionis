@@ -99,11 +99,14 @@ type EmbeddedEdgeRecord = {
   commit_id: string | null;
 };
 
+type EmbeddedRuleState = "draft" | "shadow" | "active" | "disabled";
+type EmbeddedRuleScope = "global" | "agent" | "team";
+
 type EmbeddedRuleDefRecord = {
   scope: string;
   rule_node_id: string;
-  state: "draft" | "shadow" | "active";
-  rule_scope: "global" | "agent" | "team";
+  state: EmbeddedRuleState;
+  rule_scope: EmbeddedRuleScope;
   target_agent_id: string | null;
   target_team_id: string | null;
   if_json: any;
@@ -111,6 +114,8 @@ type EmbeddedRuleDefRecord = {
   exceptions_json: any;
   positive_count: number;
   negative_count: number;
+  commit_id: string | null;
+  updated_at: string;
 };
 
 type EmbeddedAuditRow = {
@@ -271,7 +276,7 @@ export type EmbeddedPackSnapshotView = {
 
 export type EmbeddedRuleCandidateView = {
   rule_node_id: string;
-  state: "draft" | "shadow" | "active";
+  state: "shadow" | "active";
   rule_scope: "global" | "team" | "agent";
   target_agent_id: string | null;
   target_team_id: string | null;
@@ -286,6 +291,22 @@ export type EmbeddedRuleCandidateView = {
   rule_commit_id: string;
   rule_summary: string | null;
   rule_slots: any;
+  updated_at: string;
+};
+
+export type EmbeddedRuleDefSyncInput = {
+  scope: string;
+  rule_node_id: string;
+  state: EmbeddedRuleState;
+  rule_scope: EmbeddedRuleScope;
+  target_agent_id: string | null;
+  target_team_id: string | null;
+  if_json: any;
+  then_json: any;
+  exceptions_json: any;
+  positive_count: number;
+  negative_count: number;
+  commit_id: string | null;
   updated_at: string;
 };
 
@@ -379,6 +400,24 @@ function compareCreatedAtDesc(a: string, b: string): number {
   const tb = Date.parse(b);
   if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return tb - ta;
   return b.localeCompare(a);
+}
+
+function normalizeRuleState(raw: unknown): EmbeddedRuleState {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (v === "shadow" || v === "active" || v === "disabled") return v;
+  return "draft";
+}
+
+function normalizeRuleScope(raw: unknown): EmbeddedRuleScope {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (v === "agent" || v === "team") return v;
+  return "global";
+}
+
+function normalizeIso(raw: unknown, fallback: string): string {
+  const v = typeof raw === "string" ? raw.trim() : "";
+  if (!v) return fallback;
+  return Number.isFinite(Date.parse(v)) ? v : fallback;
 }
 
 export class EmbeddedMemoryRuntime {
@@ -663,6 +702,7 @@ export class EmbeddedMemoryRuntime {
     for (const def of this.ruleDefs.values()) {
       if (def.scope !== params.scope) continue;
       if (!allowed.has(def.state)) continue;
+      if (def.state !== "shadow" && def.state !== "active") continue;
       const node = this.nodes.get(nodeKey(def.scope, def.rule_node_id));
       if (!node) continue;
       all.push({
@@ -679,14 +719,54 @@ export class EmbeddedMemoryRuntime {
         exceptions_json: def.exceptions_json,
         positive_count: def.positive_count,
         negative_count: def.negative_count,
-        rule_commit_id: node.commit_id ?? "",
+        rule_commit_id: def.commit_id ?? node.commit_id ?? "",
         rule_summary: node.text_summary ?? null,
         rule_slots: node.slots ?? {},
-        updated_at: node.updated_at,
+        updated_at: def.updated_at,
       });
     }
     all.sort((a, b) => compareCreatedAtDesc(a.updated_at, b.updated_at) || a.rule_node_id.localeCompare(b.rule_node_id));
     return all.slice(0, Math.max(0, params.limit));
+  }
+
+  async syncRuleDefs(rows: EmbeddedRuleDefSyncInput[], opts: { touchRuleNodes?: boolean } = {}): Promise<void> {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const now = new Date().toISOString();
+    let changed = false;
+    for (const row of rows) {
+      const scope = typeof row.scope === "string" ? row.scope : "";
+      const ruleNodeId = typeof row.rule_node_id === "string" ? row.rule_node_id : "";
+      if (!scope || !ruleNodeId) continue;
+      const key = nodeKey(scope, ruleNodeId);
+      const updatedAt = normalizeIso(row.updated_at, now);
+      const record: EmbeddedRuleDefRecord = {
+        scope,
+        rule_node_id: ruleNodeId,
+        state: normalizeRuleState(row.state),
+        rule_scope: normalizeRuleScope(row.rule_scope),
+        target_agent_id: typeof row.target_agent_id === "string" ? row.target_agent_id : null,
+        target_team_id: typeof row.target_team_id === "string" ? row.target_team_id : null,
+        if_json: row.if_json ?? {},
+        then_json: row.then_json ?? {},
+        exceptions_json: Array.isArray(row.exceptions_json) ? row.exceptions_json : [],
+        positive_count: Number.isFinite(Number(row.positive_count)) ? Math.max(0, Number(row.positive_count)) : 0,
+        negative_count: Number.isFinite(Number(row.negative_count)) ? Math.max(0, Number(row.negative_count)) : 0,
+        commit_id: typeof row.commit_id === "string" && row.commit_id.trim().length > 0 ? row.commit_id : null,
+        updated_at: updatedAt,
+      };
+      this.ruleDefs.set(key, record);
+      changed = true;
+
+      if (opts.touchRuleNodes) {
+        const node = this.nodes.get(key);
+        if (node && node.type === "rule") {
+          node.updated_at = updatedAt;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed && this.autoPersist) await this.persistSnapshot();
   }
 
   async applyWrite(prepared: EmbeddedWritePrepared, out: EmbeddedWriteResult): Promise<void> {
@@ -745,6 +825,8 @@ export class EmbeddedMemoryRuntime {
             exceptions_json: slots["exceptions"] ?? [],
             positive_count: 0,
             negative_count: 0,
+            commit_id: out.commit_id,
+            updated_at: now,
           });
         }
       }
@@ -804,7 +886,29 @@ export class EmbeddedMemoryRuntime {
       });
     }
     for (const e of parsed.edges) this.edgesByUnique.set(edgeUpsertKey(e.scope, e.type, e.src_id, e.dst_id), e);
-    for (const r of parsed.rule_defs) this.ruleDefs.set(nodeKey(r.scope, r.rule_node_id), r);
+    for (const r of parsed.rule_defs) {
+      const key = nodeKey(r.scope, r.rule_node_id);
+      const linkedNode = this.nodes.get(key);
+      const fallbackTs = linkedNode?.updated_at ?? new Date().toISOString();
+      this.ruleDefs.set(key, {
+        scope: r.scope,
+        rule_node_id: r.rule_node_id,
+        state: normalizeRuleState((r as any).state),
+        rule_scope: normalizeRuleScope((r as any).rule_scope),
+        target_agent_id: typeof r.target_agent_id === "string" ? r.target_agent_id : null,
+        target_team_id: typeof r.target_team_id === "string" ? r.target_team_id : null,
+        if_json: r.if_json ?? {},
+        then_json: r.then_json ?? {},
+        exceptions_json: Array.isArray(r.exceptions_json) ? r.exceptions_json : [],
+        positive_count: Number.isFinite(Number((r as any).positive_count)) ? Math.max(0, Number((r as any).positive_count)) : 0,
+        negative_count: Number.isFinite(Number((r as any).negative_count)) ? Math.max(0, Number((r as any).negative_count)) : 0,
+        commit_id:
+          typeof (r as any).commit_id === "string" && String((r as any).commit_id).trim().length > 0
+            ? String((r as any).commit_id)
+            : (linkedNode?.commit_id ?? null),
+        updated_at: normalizeIso((r as any).updated_at, fallbackTs),
+      });
+    }
     if (Array.isArray(parsed.audit)) {
       for (const a of parsed.audit.slice(-5000)) this.audit.push(a);
     }

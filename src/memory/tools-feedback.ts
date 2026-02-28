@@ -14,7 +14,7 @@ import {
 import { ToolsFeedbackRequest } from "./schemas.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
-import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import type { EmbeddedMemoryRuntime, EmbeddedRuleDefSyncInput } from "../store/embedded-memory-runtime.js";
 
 type FeedbackOptions = {
   maxTextLen: number;
@@ -32,6 +32,8 @@ type DecisionRow = {
   policy_sha256: string;
   created_at: string;
 };
+
+type RuleDefSyncRow = EmbeddedRuleDefSyncInput;
 
 function isToolTouched(paths: string[]): boolean {
   for (const p of paths) {
@@ -373,7 +375,7 @@ export async function toolSelectionFeedback(
   }
 
   // Update aggregate stats for all attributed rules.
-  await client.query(
+  const ruleDefRes = await client.query<RuleDefSyncRow>(
     `
     UPDATE memory_rule_defs
     SET
@@ -381,9 +383,27 @@ export async function toolSelectionFeedback(
       negative_count = negative_count + CASE WHEN $2 = 'negative' THEN 1 ELSE 0 END,
       last_evaluated_at = now()
     WHERE scope = $1 AND rule_node_id = ANY($3::uuid[])
+    RETURNING
+      scope,
+      rule_node_id::text AS rule_node_id,
+      state::text AS state,
+      rule_scope::text AS rule_scope,
+      target_agent_id,
+      target_team_id,
+      if_json,
+      then_json,
+      exceptions_json,
+      positive_count,
+      negative_count,
+      commit_id::text AS commit_id,
+      updated_at::text AS updated_at
     `,
     [scope, parsed.outcome, uniq],
   );
+
+  if (opts.embeddedRuntime && ruleDefRes.rowCount) {
+    await opts.embeddedRuntime.syncRuleDefs(ruleDefRes.rows);
+  }
 
   return {
     ok: true,

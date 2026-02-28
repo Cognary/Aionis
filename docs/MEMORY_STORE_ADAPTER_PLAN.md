@@ -98,9 +98,10 @@ Completed in this phase:
 66. Added drift-oriented backend-parity history gates in `core-production-gate` (`persist_total_avg` delta and `dropped_nodes_max` delta between latest and previous run), with configurable workflow inputs and explicit observed/threshold fields in check output.
 67. Extended embedded local runtime beyond recall/write baseline for `sessions` + `packs`: added runtime-native `session events` read path and pack snapshot export path, wired API routes to prefer runtime when `MEMORY_STORE_BACKEND=embedded`, and fixed `packs/import` embedded runtime mirror propagation.
 68. Extended embedded runtime integration for policy/planner rule reads: `evaluateRules`/`evaluateRulesAppliedOnly` now support embedded rule candidate sources, and `tools/select` + `tools/feedback` + `planning/context`/`rules/evaluate` routes now pass embedded runtime through rule-evaluation paths.
+69. Added embedded rule write-side sync for policy/planner parity: `rules/state`, `feedback`, and `tools/feedback` now return updated `memory_rule_defs` rows and mirror them into embedded runtime (`state`, commit pointer, counters, timestamps), with contract-smoke coverage for active→feedback→disabled transitions.
 
 ## Next Steps
 
-1. Continue embedded runtime expansion for policy/planner write-side paths (for example `tools/feedback` execution decision/feedback persistence and rule state mutation parity) to reduce remaining Postgres coupling in embedded mode.
+1. Continue embedded runtime expansion for policy/planner write-side paths around execution-decision persistence (`memory_execution_decisions` + `memory_rule_feedback` parity/readbacks) to reduce remaining Postgres coupling in embedded mode.
 2. Calibrate drift thresholds from observed baseline windows (for example, p95 delta bands over last N runs) and promote selected warns to enforce mode.
 3. Keep local smoke command and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).

@@ -2605,6 +2605,7 @@ app.post("/v1/memory/feedback", async (req, reply) => {
     ruleFeedback(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
       maxTextLen: env.MAX_TEXT_LEN,
       piiRedaction: env.PII_REDACTION,
+      embeddedRuntime,
     }),
   );
   return reply.code(200).send(out);
@@ -2615,7 +2616,11 @@ app.post("/v1/memory/rules/state", async (req, reply) => {
   const body = withIdentityFromRequest(req, req.body, principal, "rules_state");
   await enforceRateLimit(req, reply, "write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
-  const out = await store.withTx((client) => updateRuleState(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID));
+  const out = await store.withTx((client) =>
+    updateRuleState(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+      embeddedRuntime,
+    }),
+  );
   return reply.code(200).send(out);
 });
 
