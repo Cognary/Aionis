@@ -65,6 +65,9 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: CI probe unit tests
+        run: npm run -s test:ci-probes
+
       - name: Root build
         run: npm run -s build
 

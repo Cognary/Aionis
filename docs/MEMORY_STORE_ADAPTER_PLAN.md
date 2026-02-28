@@ -83,6 +83,7 @@ Completed in this phase:
 51. Added shared policy/planner API probes (`scripts/ci/policy-planner-api-probes.sh`) and wired them into `backend-parity-smoke` + `core-production-gate` to validate `/v1/memory/rules/evaluate`, `/v1/memory/tools/select`, and `/v1/memory/planning/context` contract shape plus cross-endpoint consistency.
 52. Extended `sdk-ci` capability-negotiation smoke to also run shared policy/planner API probes, so SDK CI now covers capability + policy/planner contract checks together (and exposes probe output in failure diagnostics).
 53. Refactored CI probe implementation to shared Node modules (`scripts/ci/probe-common.mjs` + dedicated `*.mjs` entrypoints) while keeping `.sh` wrappers stable, reducing duplicated assertion code and simplifying future probe expansion.
+54. Added mock-based probe unit tests (`scripts/ci/probes.test.mjs`) and wired them into `sdk-ci` validate stage (`npm run test:ci-probes`) to catch probe-contract regressions before full backend matrix execution.
 
 ## Next Steps
 
