@@ -26,6 +26,8 @@ import type {
   RetryPolicy,
   RulesEvaluateInput,
   RulesEvaluateResponse,
+  ToolsDecisionInput,
+  ToolsDecisionResponse,
   ToolsFeedbackInput,
   ToolsFeedbackResponse,
   ToolsSelectInput,
@@ -202,6 +204,10 @@ export class AionisClient {
 
   async toolsSelect(input: ToolsSelectInput, opts?: RequestOptions): Promise<AionisResponse<ToolsSelectResponse>> {
     return this.requestPost<ToolsSelectInput, ToolsSelectResponse>("/v1/memory/tools/select", input, opts);
+  }
+
+  async toolsDecision(input: ToolsDecisionInput, opts?: RequestOptions): Promise<AionisResponse<ToolsDecisionResponse>> {
+    return this.requestPost<ToolsDecisionInput, ToolsDecisionResponse>("/v1/memory/tools/decision", input, opts);
   }
 
   async toolsFeedback(input: ToolsFeedbackInput, opts?: RequestOptions): Promise<AionisResponse<ToolsFeedbackResponse>> {

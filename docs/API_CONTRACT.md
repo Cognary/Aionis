@@ -1008,6 +1008,37 @@ Notes:
 
 ---
 
+### `POST /v1/memory/tools/decision`
+
+Read back a persisted execution decision by `decision_id` in the caller scope.
+This endpoint is intended for operator/runtime observability and provenance debug workflows.
+
+**Request**
+- `decision_id: string` (UUID, required)
+- `tenant_id?: string`
+- `scope?: string`
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `decision:`
+  - `decision_id: string`
+  - `decision_kind: "tools_select"`
+  - `run_id: string|null`
+  - `selected_tool: string|null`
+  - `candidates: string[]`
+  - `context_sha256: string`
+  - `policy_sha256: string`
+  - `source_rule_ids: string[]`
+  - `metadata: object`
+  - `created_at: string`
+  - `commit_id: string|null`
+
+Failure:
+- `404 decision_not_found_in_scope` when `decision_id` does not exist under the resolved `(tenant_id, scope)`.
+
+---
+
 ### `POST /v1/memory/tools/feedback`
 
 Feedback loop for tool selection decisions. This attributes an outcome to the matched rules and updates their

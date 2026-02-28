@@ -447,6 +447,14 @@ export const ToolsSelectRequest = z.object({
 
 export type ToolsSelectInput = z.infer<typeof ToolsSelectRequest>;
 
+export const ToolsDecisionRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  decision_id: UUID,
+});
+
+export type ToolsDecisionInput = z.infer<typeof ToolsDecisionRequest>;
+
 export const ToolsFeedbackRequest = z
   .object({
     tenant_id: z.string().min(1).optional(),

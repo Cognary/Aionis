@@ -354,6 +354,12 @@ export type ToolsSelectInput = {
   strict?: boolean;
 };
 
+export type ToolsDecisionInput = {
+  tenant_id?: string;
+  scope?: string;
+  decision_id: string;
+};
+
 export type ToolsFeedbackInput = {
   tenant_id?: string;
   scope?: string;
@@ -569,6 +575,26 @@ export type ToolsSelectResponse = {
     policy_sha256: string;
     source_rule_ids: string[];
     created_at: string | null;
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+};
+
+export type ToolsDecisionResponse = {
+  tenant_id: string;
+  scope: string;
+  decision: {
+    decision_id: string;
+    decision_kind: "tools_select";
+    run_id: string | null;
+    selected_tool: string | null;
+    candidates: string[];
+    context_sha256: string;
+    policy_sha256: string;
+    source_rule_ids: string[];
+    metadata: Record<string, unknown>;
+    created_at: string;
+    commit_id: string | null;
     [k: string]: unknown;
   };
   [k: string]: unknown;

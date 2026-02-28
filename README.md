@@ -171,6 +171,7 @@ docker run --rm -it \
 7. `POST /v1/memory/packs/import`
 8. `POST /v1/memory/find`
 9. `POST /v1/memory/recall_text`
+10. `POST /v1/memory/tools/decision`
 
 Note: `POST /v1/memory/packs/export` and `POST /v1/memory/packs/import` are operator/admin endpoints and require `X-Admin-Token`.
 
@@ -220,10 +221,14 @@ Use these before public traffic:
 3. real embedding provider (`minimax` or `openai`)
 4. set recall policy (`MEMORY_RECALL_PROFILE=strict_edges`) and optionally layer by tenant/endpoint via `MEMORY_RECALL_PROFILE_POLICY_JSON`
 5. enable adaptive queue-pressure downgrade if needed (`MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED=true`)
+6. use split-service topology for production; standalone image is local/demo only (see `Standalone to HA Runbook`)
 
 Operator docs:
 
 - [Operator Runbook](docs/OPERATOR_RUNBOOK.md)
+- [Standalone to HA Runbook](docs/STANDALONE_TO_HA_RUNBOOK.md)
+- [HA Failure Drill Template](docs/HA_FAILURE_DRILL_TEMPLATE.md)
+- [HA Failure Drill Sample](docs/HA_FAILURE_DRILL_SAMPLE.md)
 - [Prod Go-Live Gate](docs/PROD_GO_LIVE_GATE.md)
 - [Production Core Gate](docs/PRODUCTION_CORE_GATE.md)
 - [E2E Regression](docs/E2E_REGRESSION.md)

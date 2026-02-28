@@ -26,6 +26,9 @@ This is the public documentation index for Aionis Open Core.
 ## Deploy & Ops
 
 - [Operator Runbook](./OPERATOR_RUNBOOK.md)
+- [Standalone to HA Runbook](./STANDALONE_TO_HA_RUNBOOK.md)
+- [HA Failure Drill Template](./HA_FAILURE_DRILL_TEMPLATE.md)
+- [HA Failure Drill Sample](./HA_FAILURE_DRILL_SAMPLE.md)
 - [Prod Go-Live Gate](./PROD_GO_LIVE_GATE.md)
 - [Production Core Gate](./PRODUCTION_CORE_GATE.md)
 - [Two-Phase Migrations](./MIGRATIONS_TWO_PHASE.md)

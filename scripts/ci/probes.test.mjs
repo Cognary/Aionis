@@ -402,6 +402,8 @@ test("capability probe forces shadow soft-degrade when include flag is true", as
 });
 
 test("policy-planner probe marks planning as skipped on no_embedding_provider", async () => {
+  let selectedRunId = "";
+  let selectedTool = "tool_a";
   const mock = await createMockServer(async (req) => {
     if (req.path === "/v1/memory/write") {
       return {
@@ -430,6 +432,8 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
     }
     if (req.path === "/v1/memory/tools/select") {
       const cands = Array.isArray(req.body?.candidates) ? req.body.candidates.map((v) => String(v)) : ["tool_a"];
+      selectedRunId = String(req.body?.run_id ?? "");
+      selectedTool = cands[0] ?? "tool_a";
       return {
         status: 200,
         body: {
@@ -439,6 +443,30 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
             ordered: cands,
           },
           rules: {},
+        },
+      };
+    }
+    if (req.path === "/v1/memory/tools/decision") {
+      const decisionId = String(req.body?.decision_id ?? "");
+      if (!decisionId) return { status: 400, body: { error: "invalid_decision_id" } };
+      return {
+        status: 200,
+        body: {
+          tenant_id: String(req.body?.tenant_id ?? "default"),
+          scope: String(req.body?.scope ?? "default"),
+          decision: {
+            decision_id: decisionId,
+            decision_kind: "tools_select",
+            run_id: selectedRunId,
+            selected_tool: selectedTool,
+            candidates: [selectedTool],
+            context_sha256: "ctx",
+            policy_sha256: "policy",
+            source_rule_ids: [],
+            metadata: {},
+            created_at: new Date().toISOString(),
+            commit_id: null,
+          },
         },
       };
     }
@@ -494,6 +522,7 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
     assert.equal(parsed.ok, true);
     assert.equal(parsed.results.planning.skipped, true);
     assert.equal(parsed.results.planning.reason, "no_embedding_provider");
+    assert.equal(parsed.results.decision_readback.decision_kind, "tools_select");
     assert.equal(parsed.results.provenance.provided.decision_link_mode, "provided");
     assert.equal(parsed.results.provenance.inferred.decision_link_mode, "inferred");
     assert.equal(parsed.results.provenance.created_from_feedback.decision_link_mode, "created_from_feedback");
@@ -503,6 +532,8 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
 });
 
 test("policy-planner probe fails when planning/tools selected mismatch", async () => {
+  let selectedRunId = "";
+  let selectedTool = "tool_a";
   const mock = await createMockServer(async (req) => {
     if (req.path === "/v1/memory/write") {
       return {
@@ -531,12 +562,38 @@ test("policy-planner probe fails when planning/tools selected mismatch", async (
     }
     if (req.path === "/v1/memory/tools/select") {
       const cands = Array.isArray(req.body?.candidates) ? req.body.candidates.map((v) => String(v)) : ["tool_a", "tool_b"];
+      selectedRunId = String(req.body?.run_id ?? "");
+      selectedTool = cands[0] ?? "tool_a";
       return {
         status: 200,
         body: {
           decision: { decision_id: "decision_provided_2" },
           selection: { selected: cands[0] ?? null, ordered: cands },
           rules: {},
+        },
+      };
+    }
+    if (req.path === "/v1/memory/tools/decision") {
+      const decisionId = String(req.body?.decision_id ?? "");
+      if (!decisionId) return { status: 400, body: { error: "invalid_decision_id" } };
+      return {
+        status: 200,
+        body: {
+          tenant_id: String(req.body?.tenant_id ?? "default"),
+          scope: String(req.body?.scope ?? "default"),
+          decision: {
+            decision_id: decisionId,
+            decision_kind: "tools_select",
+            run_id: selectedRunId,
+            selected_tool: selectedTool,
+            candidates: [selectedTool, "tool_b"],
+            context_sha256: "ctx",
+            policy_sha256: "policy",
+            source_rule_ids: [],
+            metadata: {},
+            created_at: new Date().toISOString(),
+            commit_id: null,
+          },
         },
       };
     }

@@ -199,12 +199,6 @@ async function main() {
         reasons.push(`recent_distinct_runs >= ${minPromoteShadowDistinctRuns}`);
       else reasons.push(`recent_distinct_runs < ${minPromoteShadowDistinctRuns}`);
 
-      const eligible =
-        r.positive_count >= minPromoteShadowPositives &&
-        r.negative_count <= maxPromoteShadowNegatives &&
-        r.recent_distinct_runs >= minPromoteShadowDistinctRuns &&
-        confidence >= minPromoteShadowConfidence;
-
       const canaryRecommended = confidence < 0.75 || r.recent_total < canaryMinFeedback;
 
       return {
@@ -288,13 +282,6 @@ async function main() {
 
       if (r.recent_distinct_runs >= minPromoteDistinctRuns) reasons.push(`recent_distinct_runs >= ${minPromoteDistinctRuns}`);
       else reasons.push(`recent_distinct_runs < ${minPromoteDistinctRuns}`);
-
-      const eligible =
-        r.positive_count >= minPromotePositives &&
-        recentNegRatio <= maxPromoteNegRatio &&
-        score >= minPromoteScore &&
-        r.recent_distinct_runs >= minPromoteDistinctRuns &&
-        confidence >= minPromoteConfidence;
 
       const canaryRecommended = confidence < 0.8 || r.recent_total < canaryMinFeedback;
 

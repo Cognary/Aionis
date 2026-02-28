@@ -23,6 +23,7 @@ if TYPE_CHECKING:
         MemorySessionEventsListInput,
         MemoryWriteInput,
         RulesEvaluateInput,
+        ToolsDecisionInput,
         ToolsFeedbackInput,
         ToolsSelectInput,
     )
@@ -255,6 +256,9 @@ class AionisClient:
 
     def tools_select(self, payload: "ToolsSelectInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/tools/select", payload, request_options)
+
+    def tools_decision(self, payload: "ToolsDecisionInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/tools/decision", payload, request_options)
 
     def tools_feedback(self, payload: "ToolsFeedbackInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/tools/feedback", payload, request_options)

@@ -102,9 +102,58 @@ Completed in this phase:
 70. Extended embedded parity for execution-decision provenance: embedded runtime now mirrors `memory_execution_decisions` and `memory_rule_feedback` writes (including tools-select decision snapshots, tools-feedback linkage updates, and direct feedback rows), with runtime infer/get helpers and contract-smoke coverage.
 71. Added execution-decision provenance API probe coverage to shared `policy-planner-api-probes` (rule bootstrap + active promotion + tools/select decision capture + tools/feedback `provided/inferred/created_from_feedback` link-mode assertions), and covered probe behavior in `scripts/ci/probes.test.mjs`; this is now enforced by backend-parity/core-gate/sdk-ci workflows that already invoke the shared probe.
 72. Calibrated backend-parity history drift gates in `core-production-gate`: added rolling-window percentile-based threshold calibration (`persist_total_avg` / `dropped_nodes_max`) with configurable margins and effective-threshold reporting, plus `enforce_drift` mode to promote drift reasons from warn to fail independently of global history `enforce`.
+73. Added explicit execution-decision readback surface (`POST /v1/memory/tools/decision`) with typed `decision_not_found_in_scope` error, shared policy/planner probe assertions, and SDK support so operator/runtime flows can query persisted decision records by id directly.
+
+## Phase P2 Exit Criteria (Draft)
+
+Status: `defined, tracking`
+
+Phase P2 can be promoted from `phase_p2_in_progress` to `phase_p2_complete` when all checks below are green:
+
+1. API capability parity:
+   - shared capability probes pass for all backend capability profiles.
+   - shared policy/planner probes pass for all backend capability profiles.
+2. SDK parity:
+   - TypeScript and Python SDK smoke/tests pass against capability-enabled and capability-disabled profiles.
+   - SDK capability helper contracts (`backend_capability_unsupported`, strict shadow failure parser) match API contract.
+3. Contract and probe stability:
+   - `test:contract` and `test:ci-probes` pass in CI validate stages.
+   - probe output schema remains stable (covered by probe output tests).
+4. Embedded runtime safety guards:
+   - snapshot compaction/failure telemetry checks pass under backend parity workflow.
+   - drift checks in `core-production-gate` remain below fail thresholds for at least 7 consecutive daily runs.
+5. Observability minimum:
+   - decision provenance is queryable by id (`/v1/memory/tools/decision`) and verified in shared probes.
+
+## Phase P2 Exit Verification Matrix
+
+1. Local gate command:
+   - `npm run -s gate:memory-store-p2:local`
+   - script: `scripts/ci/memory-store-p2-exit-local.sh`
+2. Remote CI evidence command (requires `gh` auth):
+   - `npm run -s gate:memory-store-p2:remote`
+   - script: `scripts/ci/memory-store-p2-exit-remote-gh.sh`
+   - validates latest completed status of `Backend Parity Smoke` / `SDK CI` / `Core Production Gate`
+3. Release evidence command (local + remote):
+   - `npm run -s gate:memory-store-p2:release`
+   - script: `scripts/ci/memory-store-p2-release-check.sh`
+   - writes consolidated evidence summary under `artifacts/memory_store_p2_release/<run_id>/summary.json`
+4. CI workflow signals:
+   - `backend-parity-smoke.yml`: backend capability/profile parity + shared policy/planner probes
+   - `sdk-ci.yml`: SDK capability negotiation + probe unit tests + lint/build/release checks
+   - `core-production-gate.yml`: production core gate + shared capability/policy probes + telemetry history checks
+5. Current checklist state:
+   - local gate command present: `done`
+   - remote CI evidence gate command present: `done`
+   - release evidence workflow present: `done` (`.github/workflows/memory-store-p2-release-gate.yml`)
+   - release evidence gate command present: `done`
+   - latest remote gate sample (`2026-02-28`): `done` (`Backend Parity Smoke` / `SDK CI` / `Core Production Gate` all success)
+   - backend parity matrix enforced: `done`
+   - sdk-ci capability negotiation + probe tests: `done`
+   - production core gate + drift checks: `done (observe calibrated history window before phase close)`
 
 ## Next Steps
 
 1. Observe 1-2 weeks of calibrated gate outputs and tighten default calibration margins/percentile if false positives remain low.
 2. Keep local smoke command and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).
-3. Add dedicated API readback endpoint/probe for execution decisions if operator workflows require explicit query-by-id outside tools-feedback inference paths.
+3. Expand decision readback coverage with operator-facing examples/runbook snippets (incident replay, policy drift debugging) and add optional dashboard-oriented probe output fields if needed.

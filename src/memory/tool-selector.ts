@@ -37,7 +37,6 @@ export function applyToolPolicy(candidatesIn: string[], patch: PolicyPatch, opts
   const prefer = uniqKeepOrder(patch?.tool?.prefer ?? []);
 
   const allowSet = allow.length > 0 ? new Set(allow) : null;
-  const denied: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" }> = [];
 
   const applyAllowDeny = (useAllow: boolean) => {
     const deniedLocal: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" }> = [];

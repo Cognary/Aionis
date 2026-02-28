@@ -180,6 +180,43 @@ async function probeToolsFeedback({
   return out.body;
 }
 
+async function probeToolsDecisionReadback({ decisionId, expectedRunId, expectedSelectedTool }) {
+  const out = await postJson(
+    baseUrl,
+    "/v1/memory/tools/decision",
+    {
+      tenant_id: tenantId,
+      scope,
+      decision_id: decisionId,
+    },
+    headers,
+    label,
+  );
+  ensure(out.status === 200, `${label}: tools/decision must return 200 (got ${out.status})`);
+  ensure(out.body?.decision && typeof out.body.decision === "object", `${label}: tools/decision missing decision`);
+  ensure(
+    String(out.body?.decision?.decision_id ?? "") === String(decisionId),
+    `${label}: tools/decision decision_id mismatch`,
+  );
+  ensure(
+    String(out.body?.decision?.run_id ?? "") === String(expectedRunId),
+    `${label}: tools/decision run_id mismatch`,
+  );
+  ensure(
+    String(out.body?.decision?.selected_tool ?? "") === String(expectedSelectedTool),
+    `${label}: tools/decision selected_tool mismatch`,
+  );
+  ensure(
+    Array.isArray(out.body?.decision?.candidates),
+    `${label}: tools/decision missing decision.candidates[]`,
+  );
+  ensure(
+    String(out.body?.decision?.decision_kind ?? "") === "tools_select",
+    `${label}: tools/decision decision_kind must be tools_select`,
+  );
+  return out.body;
+}
+
 async function probePlanningContext() {
   const out = await postJson(
     baseUrl,
@@ -234,6 +271,11 @@ try {
   const tools = await probeToolsSelect();
   ensure(typeof tools?.decision?.decision_id === "string", `${label}: tools/select missing decision.decision_id`);
   ensure(typeof tools.selection?.selected === "string", `${label}: tools/select must choose a selected tool`);
+  const decision = await probeToolsDecisionReadback({
+    decisionId: String(tools.decision.decision_id),
+    expectedRunId: runId,
+    expectedSelectedTool: String(tools.selection.selected),
+  });
 
   const feedbackProvided = await probeToolsFeedback({
     selectedTool: String(tools.selection.selected),
@@ -306,6 +348,12 @@ try {
         selected: tools.selection?.selected ?? null,
         ordered_count: Array.isArray(tools.selection?.ordered) ? tools.selection.ordered.length : 0,
         decision_id: tools.decision?.decision_id ?? null,
+      },
+      decision_readback: {
+        decision_id: decision.decision?.decision_id ?? null,
+        decision_kind: decision.decision?.decision_kind ?? null,
+        run_id: decision.decision?.run_id ?? null,
+        selected_tool: decision.decision?.selected_tool ?? null,
       },
       provenance: {
         provided: {

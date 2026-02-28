@@ -105,6 +105,9 @@
     "bench:locomo": "python3 scripts/bench/locomo_aionis_gemini.py",
     "bench:aionis:v01": "python3 aionis-bench/run_v01.py",
     "gate:core:prod": "bash scripts/core-production-gate.sh",
+    "gate:memory-store-p2:local": "bash scripts/ci/memory-store-p2-exit-local.sh",
+    "gate:memory-store-p2:remote": "bash scripts/ci/memory-store-p2-exit-remote-gh.sh",
+    "gate:memory-store-p2:release": "bash scripts/ci/memory-store-p2-release-check.sh",
     "regression:oneclick": "bash scripts/regression-oneclick.sh",
     "preflight:prod": "bash scripts/prod-preflight.sh",
     "preflight:hosted": "bash scripts/hosted/preflight-hosted.sh",
@@ -133,7 +136,8 @@
     "mcp:aionis": "tsx src/mcp/aionis-mcp.ts",
     "mcp:smoke": "bash examples/mcp_stdio_smoke.sh",
     "langgraph:smoke": "bash examples/langgraph_adapter_smoke.sh",
-    "lint": "node -e \"console.log('no lint configured')\""
+    "lint": "eslint --cache --max-warnings=0 \"src/**/*.ts\" \"packages/sdk/src/**/*.ts\" \"scripts/**/*.mjs\"",
+    "lint:fix": "npm run -s lint -- --fix"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -143,9 +147,13 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "^9.38.0",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
+    "eslint": "^9.38.0",
+    "globals": "^16.5.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.46.2"
   }
 }

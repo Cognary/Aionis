@@ -82,7 +82,6 @@ async function main() {
 
   const legacyIds = legacyRes.rows.map((r) => r.id);
   const v2Ids = v2Res.rows.map((r) => r.id);
-  const legacySet = new Set(legacyIds);
   const v2Set = new Set(v2Ids);
   const overlapIds = legacyIds.filter((id) => v2Set.has(id));
 

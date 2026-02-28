@@ -1,0 +1,59 @@
+name: MemoryStore P2 Release Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      require_remote:
+        description: "Require remote workflow evidence gate"
+        required: false
+        default: true
+        type: boolean
+      max_age_hours:
+        description: "Max age (hours) for latest completed remote workflow runs"
+        required: false
+        default: "168"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  p2-release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run MemoryStore P2 release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run -s gate:memory-store-p2:release -- \
+            --require-remote "${{ github.event.inputs.require_remote || 'true' }}" \
+            --remote-args "--repo ${GITHUB_REPOSITORY} --branch main --max-age-hours ${{ github.event.inputs.max_age_hours || '168' }}"
+
+      - name: Upload release gate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-store-p2-release-gate
+          path: artifacts/memory_store_p2_release
+          if-no-files-found: warn

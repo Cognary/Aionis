@@ -7,6 +7,7 @@ node_modules
 **/.next
 dist
 *.tsbuildinfo
+.eslintcache
 .pytest_cache
 artifacts
 .tmp

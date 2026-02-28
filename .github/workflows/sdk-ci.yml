@@ -65,6 +65,9 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Lint
+        run: npm run -s lint
+
       - name: CI probe unit tests
         run: npm run -s test:ci-probes
 

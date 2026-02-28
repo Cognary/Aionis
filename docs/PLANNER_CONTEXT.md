@@ -86,6 +86,7 @@ bash examples/planning_context.sh "memory graph" psql curl bash \
 
 Use the same normalized context and pass a candidate tool list. The response includes `selection.selected` and `rules.applied.policy`.
 For provenance, pass `run_id` and persist returned `decision.decision_id`.
+If you need to read decision details later (for observability/replay debug), call `POST /v1/memory/tools/decision` with that `decision_id`.
 
 ```bash
 bash examples/tools_select.sh psql curl bash | jq '{selected:.selection.selected, ordered:.selection.ordered, policy:.rules.applied.policy.tool}'

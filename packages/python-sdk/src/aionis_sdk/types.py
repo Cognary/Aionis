@@ -255,6 +255,12 @@ class ToolsSelectInput(TypedDict, total=False):
     strict: bool
 
 
+class ToolsDecisionInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    decision_id: str
+
+
 class ToolsFeedbackInput(TypedDict, total=False):
     tenant_id: str
     scope: str
@@ -317,6 +323,26 @@ class ToolsFeedbackResponse(TypedDict, total=False):
     decision_policy_sha256: str
 
 
+class ToolsDecisionPayload(TypedDict, total=False):
+    decision_id: str
+    decision_kind: Literal["tools_select"]
+    run_id: Optional[str]
+    selected_tool: Optional[str]
+    candidates: List[str]
+    context_sha256: str
+    policy_sha256: str
+    source_rule_ids: List[str]
+    metadata: Dict[str, Any]
+    created_at: str
+    commit_id: Optional[str]
+
+
+class ToolsDecisionResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    decision: ToolsDecisionPayload
+
+
 __all__ = [
     "AionisResponse",
     "DecisionLinkMode",
@@ -336,6 +362,9 @@ __all__ = [
     "MemoryWriteInput",
     "RulesEvaluateInput",
     "Tier",
+    "ToolsDecisionInput",
+    "ToolsDecisionPayload",
+    "ToolsDecisionResponse",
     "ToolsFeedbackInput",
     "ToolsFeedbackResponse",
     "ToolsSelectDecision",

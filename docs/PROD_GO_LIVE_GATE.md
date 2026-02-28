@@ -8,6 +8,9 @@ Last updated: `2026-02-23`
 
 This document is the release gate for deciding whether Aionis can go to production traffic.
 
+For deployment topology boundaries and promotion sequencing (`standalone` -> split service -> HA),
+read [Standalone to HA Runbook](./STANDALONE_TO_HA_RUNBOOK.md) first.
+
 ## Release Decision
 
 Only mark **go** when all P0/P1 items are closed and all **production core gate** checks below pass.
@@ -32,6 +35,8 @@ Auxiliary benchmarks (`LongMemEval` / `LoCoMo`) are non-blocking regression evid
 - `npm run -s build`
 - `npm run -s test:contract`
 - `npm run -s docs:check`
+- `npm run -s gate:memory-store-p2:release` (includes local checks + remote CI evidence)
+  - evidence artifact: `artifacts/memory_store_p2_release/<run_id>/summary.json`
 
 3. Integrity gates
 - `npm run -s job:health-gate -- --strict-warnings --consistency-check-set scope`
