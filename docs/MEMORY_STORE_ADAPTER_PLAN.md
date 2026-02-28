@@ -101,9 +101,10 @@ Completed in this phase:
 69. Added embedded rule write-side sync for policy/planner parity: `rules/state`, `feedback`, and `tools/feedback` now return updated `memory_rule_defs` rows and mirror them into embedded runtime (`state`, commit pointer, counters, timestamps), with contract-smoke coverage for active→feedback→disabled transitions.
 70. Extended embedded parity for execution-decision provenance: embedded runtime now mirrors `memory_execution_decisions` and `memory_rule_feedback` writes (including tools-select decision snapshots, tools-feedback linkage updates, and direct feedback rows), with runtime infer/get helpers and contract-smoke coverage.
 71. Added execution-decision provenance API probe coverage to shared `policy-planner-api-probes` (rule bootstrap + active promotion + tools/select decision capture + tools/feedback `provided/inferred/created_from_feedback` link-mode assertions), and covered probe behavior in `scripts/ci/probes.test.mjs`; this is now enforced by backend-parity/core-gate/sdk-ci workflows that already invoke the shared probe.
+72. Calibrated backend-parity history drift gates in `core-production-gate`: added rolling-window percentile-based threshold calibration (`persist_total_avg` / `dropped_nodes_max`) with configurable margins and effective-threshold reporting, plus `enforce_drift` mode to promote drift reasons from warn to fail independently of global history `enforce`.
 
 ## Next Steps
 
-1. Calibrate drift thresholds from observed baseline windows (for example, p95 delta bands over last N runs) and promote selected warns to enforce mode.
+1. Observe 1-2 weeks of calibrated gate outputs and tighten default calibration margins/percentile if false positives remain low.
 2. Keep local smoke command and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).
 3. Add dedicated API readback endpoint/probe for execution decisions if operator workflows require explicit query-by-id outside tools-feedback inference paths.

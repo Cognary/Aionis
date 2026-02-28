@@ -53,6 +53,36 @@ on:
         required: false
         default: "8"
         type: string
+      backend_parity_history_enforce_drift:
+        description: "Promote drift delta violations to fail (even when history enforce is false)"
+        required: false
+        default: true
+        type: boolean
+      backend_parity_history_calibration_enabled:
+        description: "Auto-calibrate drift delta thresholds from recent successful backend-parity history window"
+        required: false
+        default: true
+        type: boolean
+      backend_parity_history_calibration_window_runs:
+        description: "Calibration window size (runs, excluding latest sample)"
+        required: false
+        default: "8"
+        type: string
+      backend_parity_history_calibration_percentile:
+        description: "Calibration percentile for delta bands (e.g. 95)"
+        required: false
+        default: "95"
+        type: string
+      backend_parity_history_calibration_margin_persist_total_avg_delta:
+        description: "Calibration margin added to persist_total_avg delta percentile"
+        required: false
+        default: "0.5"
+        type: string
+      backend_parity_history_calibration_margin_dropped_nodes_max_delta:
+        description: "Calibration margin added to dropped_nodes_max delta percentile"
+        required: false
+        default: "2"
+        type: string
   push:
     branches: ["main"]
     paths:
@@ -198,20 +228,38 @@ jobs:
           MAX_LATEST_FAILED_SAMPLES_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_max_latest_failed_samples || '0' }}"
           MAX_PERSIST_TOTAL_AVG_DELTA_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_max_persist_total_avg_delta || '2.0' }}"
           MAX_DROPPED_NODES_MAX_DELTA_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_max_dropped_nodes_max_delta || '8' }}"
+          ENFORCE_DRIFT_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_enforce_drift || 'true' }}"
+          CALIBRATION_ENABLED_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_calibration_enabled || 'true' }}"
+          CALIBRATION_WINDOW_RUNS_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_calibration_window_runs || '8' }}"
+          CALIBRATION_PERCENTILE_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_calibration_percentile || '95' }}"
+          CALIBRATION_MARGIN_PERSIST_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_calibration_margin_persist_total_avg_delta || '0.5' }}"
+          CALIBRATION_MARGIN_DROPPED_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_calibration_margin_dropped_nodes_max_delta || '2' }}"
 
           enforce="$(printf '%s' "${ENFORCE_INPUT}" | tr '[:upper:]' '[:lower:]')"
           if [[ "${enforce}" != "true" ]]; then enforce="false"; fi
+          enforce_drift="$(printf '%s' "${ENFORCE_DRIFT_INPUT}" | tr '[:upper:]' '[:lower:]')"
+          if [[ "${enforce_drift}" != "true" ]]; then enforce_drift="false"; fi
+          calibration_enabled="$(printf '%s' "${CALIBRATION_ENABLED_INPUT}" | tr '[:upper:]' '[:lower:]')"
+          if [[ "${calibration_enabled}" != "true" ]]; then calibration_enabled="false"; fi
 
           min_runs="${MIN_RUNS_INPUT}"
           max_failed_runs="${MAX_FAILED_RUNS_INPUT}"
           max_latest_failed_samples="${MAX_LATEST_FAILED_SAMPLES_INPUT}"
           max_persist_total_avg_delta="${MAX_PERSIST_TOTAL_AVG_DELTA_INPUT}"
           max_dropped_nodes_max_delta="${MAX_DROPPED_NODES_MAX_DELTA_INPUT}"
+          calibration_window_runs="${CALIBRATION_WINDOW_RUNS_INPUT}"
+          calibration_percentile="${CALIBRATION_PERCENTILE_INPUT}"
+          calibration_margin_persist_total_avg_delta="${CALIBRATION_MARGIN_PERSIST_INPUT}"
+          calibration_margin_dropped_nodes_max_delta="${CALIBRATION_MARGIN_DROPPED_INPUT}"
           [[ "${min_runs}" =~ ^[0-9]+$ ]] || min_runs="2"
           [[ "${max_failed_runs}" =~ ^[0-9]+$ ]] || max_failed_runs="0"
           [[ "${max_latest_failed_samples}" =~ ^[0-9]+$ ]] || max_latest_failed_samples="0"
           [[ "${max_persist_total_avg_delta}" =~ ^[0-9]+([.][0-9]+)?$ ]] || max_persist_total_avg_delta="2.0"
           [[ "${max_dropped_nodes_max_delta}" =~ ^[0-9]+([.][0-9]+)?$ ]] || max_dropped_nodes_max_delta="8"
+          [[ "${calibration_window_runs}" =~ ^[0-9]+$ ]] || calibration_window_runs="8"
+          [[ "${calibration_percentile}" =~ ^[0-9]+([.][0-9]+)?$ ]] || calibration_percentile="95"
+          [[ "${calibration_margin_persist_total_avg_delta}" =~ ^[0-9]+([.][0-9]+)?$ ]] || calibration_margin_persist_total_avg_delta="0.5"
+          [[ "${calibration_margin_dropped_nodes_max_delta}" =~ ^[0-9]+([.][0-9]+)?$ ]] || calibration_margin_dropped_nodes_max_delta="2"
 
           out_dir="artifacts/core_gate/backend_parity_history"
           mkdir -p "${out_dir}"
@@ -229,6 +277,10 @@ jobs:
           latest_dropped_nodes_max="null"
           previous_dropped_nodes_max="null"
           dropped_nodes_max_delta="null"
+          effective_max_persist_total_avg_delta="${max_persist_total_avg_delta}"
+          effective_max_dropped_nodes_max_delta="${max_dropped_nodes_max_delta}"
+          calibration_json='null'
+          drift_violations_count=0
           history_summary_file=""
 
           add_reason() {
@@ -299,17 +351,106 @@ jobs:
             awk -v a="${left}" -v b="${right}" 'BEGIN { exit !(a>b) }'
           }
 
-          if [[ "${persist_total_avg_delta}" != "null" ]] && compare_float_gt "${persist_total_avg_delta}" "${max_persist_total_avg_delta}"; then
+          if [[ "${calibration_enabled}" == "true" ]] && [[ -n "${history_summary_file}" && -f "${history_summary_file}" ]]; then
+            calibration_json="$(jq -c \
+              --argjson window_runs "${calibration_window_runs}" \
+              --argjson percentile "${calibration_percentile}" \
+              --argjson margin_persist "${calibration_margin_persist_total_avg_delta}" \
+              --argjson margin_dropped "${calibration_margin_dropped_nodes_max_delta}" \
+              '
+              def num_or_null(v): if (v | type) == "number" then v else null end;
+              def percentile(values; p):
+                (values | map(select(. != null)) | sort) as $vals
+                | if ($vals | length) == 0 then null
+                  else
+                    (($vals | length) as $n
+                      | ((((p / 100) * $n) | ceil) - 1) as $idx
+                      | $vals[
+                          if $idx < 0 then 0
+                          elif $idx >= $n then ($n - 1)
+                          else $idx
+                          end
+                        ])
+                  end;
+              (.series // []) as $series
+              | ($series | if length > 1 then .[0:-1] else [] end) as $baseline_all
+              | ($baseline_all
+                  | if ($window_runs > 0 and (length > $window_runs)) then .[(length - $window_runs):] else . end
+                ) as $baseline
+              | (
+                  [range(1; ($baseline | length)) as $i
+                    | (num_or_null($baseline[$i].persist_total_avg) as $cur
+                      | num_or_null($baseline[$i-1].persist_total_avg) as $prev
+                      | if ($cur != null and $prev != null) then ($cur - $prev) else null end)
+                  ]
+                  | map(select(. != null))
+                ) as $persist_deltas
+              | (
+                  [range(1; ($baseline | length)) as $i
+                    | (num_or_null($baseline[$i].dropped_nodes_max) as $cur
+                      | num_or_null($baseline[$i-1].dropped_nodes_max) as $prev
+                      | if ($cur != null and $prev != null) then ($cur - $prev) else null end)
+                  ]
+                  | map(select(. != null))
+                ) as $dropped_deltas
+              | (percentile($persist_deltas; $percentile)) as $persist_pctl
+              | (percentile($dropped_deltas; $percentile)) as $dropped_pctl
+              | {
+                  enabled: true,
+                  window_runs_requested: $window_runs,
+                  percentile: $percentile,
+                  baseline_runs: ($baseline | length),
+                  baseline_delta_pairs: {
+                    persist_total_avg: ($persist_deltas | length),
+                    dropped_nodes_max: ($dropped_deltas | length)
+                  },
+                  percentile_delta: {
+                    persist_total_avg: $persist_pctl,
+                    dropped_nodes_max: $dropped_pctl
+                  },
+                  margins: {
+                    persist_total_avg_delta: $margin_persist,
+                    dropped_nodes_max_delta: $margin_dropped
+                  },
+                  suggested: {
+                    max_persist_total_avg_delta: (if $persist_pctl == null then null else ($persist_pctl + $margin_persist) end),
+                    max_dropped_nodes_max_delta: (if $dropped_pctl == null then null else ($dropped_pctl + $margin_dropped) end)
+                  }
+                }
+              ' "${history_summary_file}")"
+
+            suggested_persist_total_avg_delta="$(jq -r '.suggested.max_persist_total_avg_delta // "null"' <<<"${calibration_json}")"
+            suggested_dropped_nodes_max_delta="$(jq -r '.suggested.max_dropped_nodes_max_delta // "null"' <<<"${calibration_json}")"
+
+            if [[ "${suggested_persist_total_avg_delta}" != "null" ]] \
+              && compare_float_gt "${suggested_persist_total_avg_delta}" "${effective_max_persist_total_avg_delta}"; then
+              effective_max_persist_total_avg_delta="${suggested_persist_total_avg_delta}"
+            fi
+            if [[ "${suggested_dropped_nodes_max_delta}" != "null" ]] \
+              && compare_float_gt "${suggested_dropped_nodes_max_delta}" "${effective_max_dropped_nodes_max_delta}"; then
+              effective_max_dropped_nodes_max_delta="${suggested_dropped_nodes_max_delta}"
+            fi
+          fi
+
+          if [[ "${persist_total_avg_delta}" != "null" ]] && compare_float_gt "${persist_total_avg_delta}" "${effective_max_persist_total_avg_delta}"; then
             add_reason "persist_total_avg_delta_above_threshold"
           fi
-          if [[ "${dropped_nodes_max_delta}" != "null" ]] && compare_float_gt "${dropped_nodes_max_delta}" "${max_dropped_nodes_max_delta}"; then
+          if [[ "${dropped_nodes_max_delta}" != "null" ]] && compare_float_gt "${dropped_nodes_max_delta}" "${effective_max_dropped_nodes_max_delta}"; then
             add_reason "dropped_nodes_max_delta_above_threshold"
           fi
 
           reasons_count="$(jq 'length' <<<"${reasons_json}")"
+          drift_violations_count="$(jq -r '
+            [
+              .[]
+              | select(. == "persist_total_avg_delta_above_threshold" or . == "dropped_nodes_max_delta_above_threshold")
+            ] | length
+          ' <<<"${reasons_json}")"
           if [[ "${reasons_count}" -gt 0 ]]; then
             status="warn"
             if [[ "${enforce}" == "true" ]]; then
+              status="fail"
+            elif [[ "${enforce_drift}" == "true" && "${drift_violations_count}" -gt 0 ]]; then
               status="fail"
             fi
           fi
@@ -317,6 +458,8 @@ jobs:
           jq -n \
             --arg status "${status}" \
             --argjson enforce "${enforce}" \
+            --argjson enforce_drift "${enforce_drift}" \
+            --argjson calibration_enabled "${calibration_enabled}" \
             --arg source_run_id "${source_run_id}" \
             --arg source_head_sha "${source_head_sha}" \
             --argjson runs_total "${runs_total}" \
@@ -327,6 +470,14 @@ jobs:
             --argjson max_latest_failed_samples "${max_latest_failed_samples}" \
             --argjson max_persist_total_avg_delta "${max_persist_total_avg_delta}" \
             --argjson max_dropped_nodes_max_delta "${max_dropped_nodes_max_delta}" \
+            --argjson effective_max_persist_total_avg_delta "${effective_max_persist_total_avg_delta}" \
+            --argjson effective_max_dropped_nodes_max_delta "${effective_max_dropped_nodes_max_delta}" \
+            --argjson calibration_window_runs "${calibration_window_runs}" \
+            --argjson calibration_percentile "${calibration_percentile}" \
+            --argjson calibration_margin_persist_total_avg_delta "${calibration_margin_persist_total_avg_delta}" \
+            --argjson calibration_margin_dropped_nodes_max_delta "${calibration_margin_dropped_nodes_max_delta}" \
+            --argjson drift_violations_count "${drift_violations_count}" \
+            --argjson calibration "${calibration_json}" \
             --argjson reasons "${reasons_json}" \
             --arg latest_persist_total_avg "${latest_persist_total_avg}" \
             --arg previous_persist_total_avg "${previous_persist_total_avg}" \
@@ -337,6 +488,7 @@ jobs:
             '{
               status: $status,
               enforce: $enforce,
+              enforce_drift: $enforce_drift,
               source_run_id: (if $source_run_id == "" then null else $source_run_id end),
               source_head_sha: (if $source_head_sha == "" then null else $source_head_sha end),
               thresholds: {
@@ -344,7 +496,19 @@ jobs:
                 max_failed_runs: $max_failed_runs,
                 max_latest_failed_samples: $max_latest_failed_samples,
                 max_persist_total_avg_delta: $max_persist_total_avg_delta,
-                max_dropped_nodes_max_delta: $max_dropped_nodes_max_delta
+                max_dropped_nodes_max_delta: $max_dropped_nodes_max_delta,
+                effective_max_persist_total_avg_delta: $effective_max_persist_total_avg_delta,
+                effective_max_dropped_nodes_max_delta: $effective_max_dropped_nodes_max_delta
+              },
+              calibration: {
+                enabled: $calibration_enabled,
+                requested: {
+                  window_runs: $calibration_window_runs,
+                  percentile: $calibration_percentile,
+                  margin_persist_total_avg_delta: $calibration_margin_persist_total_avg_delta,
+                  margin_dropped_nodes_max_delta: $calibration_margin_dropped_nodes_max_delta
+                },
+                observed: $calibration
               },
               observed: {
                 runs_total: $runs_total,
@@ -355,7 +519,8 @@ jobs:
                 persist_total_avg_delta: (if $persist_total_avg_delta == "null" then null else ($persist_total_avg_delta | tonumber) end),
                 latest_dropped_nodes_max: (if $latest_dropped_nodes_max == "null" then null else ($latest_dropped_nodes_max | tonumber) end),
                 previous_dropped_nodes_max: (if $previous_dropped_nodes_max == "null" then null else ($previous_dropped_nodes_max | tonumber) end),
-                dropped_nodes_max_delta: (if $dropped_nodes_max_delta == "null" then null else ($dropped_nodes_max_delta | tonumber) end)
+                dropped_nodes_max_delta: (if $dropped_nodes_max_delta == "null" then null else ($dropped_nodes_max_delta | tonumber) end),
+                drift_violations_count: $drift_violations_count
               },
               reasons: $reasons
             }' > "${check_file}"
@@ -363,7 +528,7 @@ jobs:
           cat "${check_file}"
 
           if [[ "${status}" == "fail" ]]; then
-            echo "backend parity telemetry history thresholds violated in enforce mode" >&2
+            echo "backend parity telemetry history thresholds violated in enforce/enforce_drift mode" >&2
             exit 1
           fi
 
