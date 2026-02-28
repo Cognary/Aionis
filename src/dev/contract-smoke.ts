@@ -19,6 +19,7 @@ import { ruleMatchesContext } from "../memory/rule-engine.js";
 import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
 import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
+import { toolSelectionFeedback } from "../memory/tools-feedback.js";
 import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 import { applyMemoryWrite } from "../memory/write.js";
 import {
@@ -365,6 +366,55 @@ class WriteAccessFixturePgClient {
     }
 
     throw new Error(`WriteAccessFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class ToolsFeedbackFixturePgClient {
+  private readonly decisionsByLookup: Array<any | null>;
+  private readonly adoptRunIdRowCount: number;
+  private decisionLookupCount = 0;
+
+  constructor(opts: { decisionsByLookup: Array<any | null>; adoptRunIdRowCount?: number }) {
+    this.decisionsByLookup = Array.isArray(opts.decisionsByLookup) ? opts.decisionsByLookup : [];
+    this.adoptRunIdRowCount = Math.max(0, Number(opts.adoptRunIdRowCount ?? 0));
+  }
+
+  async query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+
+    if (s.includes("FROM memory_execution_decisions") && s.includes("WHERE scope = $1") && s.includes("AND id = $2")) {
+      const idx = Math.min(this.decisionLookupCount, Math.max(0, this.decisionsByLookup.length - 1));
+      this.decisionLookupCount += 1;
+      const row = this.decisionsByLookup[idx] ?? null;
+      if (!row) return { rows: [] as T[], rowCount: 0 };
+      return { rows: [row as T], rowCount: 1 };
+    }
+
+    if (s.includes("UPDATE memory_execution_decisions") && s.includes("SET run_id = $1")) {
+      if (this.adoptRunIdRowCount > 0) {
+        const runId = typeof params?.[0] === "string" ? String(params[0]) : null;
+        return { rows: [{ run_id: runId } as any] as T[], rowCount: 1 };
+      }
+      return { rows: [] as T[], rowCount: 0 };
+    }
+
+    if (s.includes("SELECT id, commit_hash FROM memory_commits")) {
+      return { rows: [] as T[], rowCount: 0 };
+    }
+
+    if (s.includes("INSERT INTO memory_commits") && s.includes("RETURNING id")) {
+      return { rows: [{ id: "00000000-0000-0000-0000-000000000ff1" } as any] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_rule_feedback")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("UPDATE memory_rule_defs")) {
+      return { rows: [] as T[], rowCount: 0 };
+    }
+
+    throw new Error(`ToolsFeedbackFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
   }
 }
 
@@ -1407,6 +1457,117 @@ async function run() {
         decision_id: "not-a-uuid",
       }),
     /Invalid uuid/i,
+  );
+
+  const toolsFeedbackScope = "default";
+  const toolsFeedbackRuleNodeId = "00000000-0000-0000-0000-000000000fd1";
+  const toolsFeedbackDecisionId = "00000000-0000-0000-0000-000000000fd2";
+  const toolsFeedbackRuntime = createEmbeddedMemoryRuntime();
+  await toolsFeedbackRuntime.applyWrite(
+    {
+      scope: toolsFeedbackScope,
+      auto_embed_effective: false,
+      nodes: [
+        {
+          id: toolsFeedbackRuleNodeId,
+          scope: toolsFeedbackScope,
+          type: "rule",
+          tier: "hot",
+          memory_lane: "shared",
+          text_summary: "tools feedback contract rule",
+          slots: { if: {}, then: { tool: { allow: ["curl"] } }, exceptions: [] },
+          embedding: Array.from({ length: 8 }, () => 0.1),
+          embedding_model: "client",
+        },
+      ],
+      edges: [],
+    } as any,
+    {
+      commit_id: "00000000-0000-0000-0000-000000000fd3",
+      commit_hash: "tools-feedback-rule-commit",
+    } as any,
+  );
+  await toolsFeedbackRuntime.syncRuleDefs([
+    {
+      scope: toolsFeedbackScope,
+      rule_node_id: toolsFeedbackRuleNodeId,
+      state: "active",
+      rule_scope: "global",
+      target_agent_id: null,
+      target_team_id: null,
+      if_json: {},
+      then_json: { tool: { allow: ["curl"] } },
+      exceptions_json: [],
+      positive_count: 0,
+      negative_count: 0,
+      commit_id: "00000000-0000-0000-0000-000000000fd3",
+      updated_at: new Date().toISOString(),
+    },
+  ]);
+  const toolsFeedbackBaseRequest = {
+    tenant_id: "default",
+    scope: toolsFeedbackScope,
+    decision_id: toolsFeedbackDecisionId,
+    run_id: "run_feedback_request_1",
+    outcome: "positive" as const,
+    context: { agent: { id: "agent_a", team_id: "team_a" } },
+    candidates: ["curl", "psql"],
+    selected_tool: "curl",
+    include_shadow: false,
+    rules_limit: 50,
+    target: "tool" as const,
+    input_text: "tools feedback contract smoke",
+  };
+
+  // decision_id lookup must remain DB-authoritative even when embedded runtime has stale/missing rows.
+  await assert.rejects(
+    () =>
+      toolSelectionFeedback(
+        new ToolsFeedbackFixturePgClient({ decisionsByLookup: [null] }) as any,
+        toolsFeedbackBaseRequest,
+        "default",
+        "default",
+        { maxTextLen: 8000, piiRedaction: false, embeddedRuntime: toolsFeedbackRuntime },
+      ),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "decision_not_found_in_scope",
+  );
+
+  // run_id adoption must re-check DB row when UPDATE ... run_id IS NULL affects 0 rows.
+  const toolsFeedbackDecisionCreatedAt = new Date().toISOString();
+  await assert.rejects(
+    () =>
+      toolSelectionFeedback(
+        new ToolsFeedbackFixturePgClient({
+          decisionsByLookup: [
+            {
+              id: toolsFeedbackDecisionId,
+              scope: toolsFeedbackScope,
+              run_id: null,
+              selected_tool: "curl",
+              candidates_json: ["curl", "psql"],
+              context_sha256: "ctx_tools_feedback",
+              policy_sha256: "policy_tools_feedback",
+              created_at: toolsFeedbackDecisionCreatedAt,
+            },
+            {
+              id: toolsFeedbackDecisionId,
+              scope: toolsFeedbackScope,
+              run_id: "run_feedback_db_other",
+              selected_tool: "curl",
+              candidates_json: ["curl", "psql"],
+              context_sha256: "ctx_tools_feedback",
+              policy_sha256: "policy_tools_feedback",
+              created_at: toolsFeedbackDecisionCreatedAt,
+            },
+          ],
+          adoptRunIdRowCount: 0,
+        }) as any,
+        toolsFeedbackBaseRequest,
+        "default",
+        "default",
+        { maxTextLen: 8000, piiRedaction: false, embeddedRuntime: toolsFeedbackRuntime },
+      ),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "decision_run_id_mismatch",
   );
 
   const seedEventId = "00000000-0000-0000-0000-000000000001";

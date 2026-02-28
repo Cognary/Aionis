@@ -289,11 +289,7 @@ export async function toolSelectionFeedback(
   const candidatesJson = JSON.stringify(normalizedCandidates);
 
   let decision: DecisionRow | null = null;
-  if (parsed.decision_id && opts.embeddedRuntime) {
-    const embeddedDecision = opts.embeddedRuntime.getExecutionDecision({ scope, decision_id: parsed.decision_id });
-    if (embeddedDecision) decision = toDecisionRow(embeddedDecision);
-  }
-  if (parsed.decision_id && !decision) {
+  if (parsed.decision_id) {
     decision = await findDecisionById(client, scope, parsed.decision_id);
   }
   let decision_link_mode: "provided" | "inferred" | "created_from_feedback" = "provided";
@@ -376,17 +372,31 @@ export async function toolSelectionFeedback(
   }
 
   if (parsed.run_id && !decision!.run_id) {
-    await client.query(
+    const adoptRunRes = await client.query<{ run_id: string | null }>(
       `
       UPDATE memory_execution_decisions
       SET run_id = $1
       WHERE scope = $2
         AND id = $3
         AND run_id IS NULL
+      RETURNING run_id
       `,
       [parsed.run_id, scope, decision!.id],
     );
-    decision!.run_id = parsed.run_id;
+    if (adoptRunRes.rowCount) {
+      decision!.run_id = adoptRunRes.rows[0]?.run_id ?? parsed.run_id;
+    } else {
+      const dbDecision = await findDecisionById(client, scope, decision!.id);
+      if (!dbDecision) {
+        badRequest("decision_not_found_in_scope", "decision_id was not found in this scope", {
+          decision_id: decision!.id,
+          scope: tenancy.scope,
+          tenant_id: tenancy.tenant_id,
+        });
+      }
+      decision = dbDecision;
+      assertDecisionCompatible(decision, parsed, normalizedCandidates);
+    }
     if (opts.embeddedRuntime) {
       await opts.embeddedRuntime.syncExecutionDecisions([
         {
