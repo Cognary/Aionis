@@ -43,6 +43,16 @@ on:
         required: false
         default: "0"
         type: string
+      backend_parity_history_max_persist_total_avg_delta:
+        description: "Maximum latest-vs-previous delta for persist_total_avg"
+        required: false
+        default: "2.0"
+        type: string
+      backend_parity_history_max_dropped_nodes_max_delta:
+        description: "Maximum latest-vs-previous delta for dropped_nodes_max"
+        required: false
+        default: "8"
+        type: string
   push:
     branches: ["main"]
     paths:
@@ -186,6 +196,8 @@ jobs:
           MIN_RUNS_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_min_runs || '2' }}"
           MAX_FAILED_RUNS_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_max_failed_runs || '0' }}"
           MAX_LATEST_FAILED_SAMPLES_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_max_latest_failed_samples || '0' }}"
+          MAX_PERSIST_TOTAL_AVG_DELTA_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_max_persist_total_avg_delta || '2.0' }}"
+          MAX_DROPPED_NODES_MAX_DELTA_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_max_dropped_nodes_max_delta || '8' }}"
 
           enforce="$(printf '%s' "${ENFORCE_INPUT}" | tr '[:upper:]' '[:lower:]')"
           if [[ "${enforce}" != "true" ]]; then enforce="false"; fi
@@ -193,9 +205,13 @@ jobs:
           min_runs="${MIN_RUNS_INPUT}"
           max_failed_runs="${MAX_FAILED_RUNS_INPUT}"
           max_latest_failed_samples="${MAX_LATEST_FAILED_SAMPLES_INPUT}"
+          max_persist_total_avg_delta="${MAX_PERSIST_TOTAL_AVG_DELTA_INPUT}"
+          max_dropped_nodes_max_delta="${MAX_DROPPED_NODES_MAX_DELTA_INPUT}"
           [[ "${min_runs}" =~ ^[0-9]+$ ]] || min_runs="2"
           [[ "${max_failed_runs}" =~ ^[0-9]+$ ]] || max_failed_runs="0"
           [[ "${max_latest_failed_samples}" =~ ^[0-9]+$ ]] || max_latest_failed_samples="0"
+          [[ "${max_persist_total_avg_delta}" =~ ^[0-9]+([.][0-9]+)?$ ]] || max_persist_total_avg_delta="2.0"
+          [[ "${max_dropped_nodes_max_delta}" =~ ^[0-9]+([.][0-9]+)?$ ]] || max_dropped_nodes_max_delta="8"
 
           out_dir="artifacts/core_gate/backend_parity_history"
           mkdir -p "${out_dir}"
@@ -207,6 +223,12 @@ jobs:
           runs_total=0
           runs_with_failures=0
           latest_failed_samples=0
+          latest_persist_total_avg="null"
+          previous_persist_total_avg="null"
+          persist_total_avg_delta="null"
+          latest_dropped_nodes_max="null"
+          previous_dropped_nodes_max="null"
+          dropped_nodes_max_delta="null"
           history_summary_file=""
 
           add_reason() {
@@ -232,6 +254,26 @@ jobs:
                 runs_total="$(jq -r '.runs_total // 0' "${history_summary_file}")"
                 runs_with_failures="$(jq -r '.runs_with_failures // 0' "${history_summary_file}")"
                 latest_failed_samples="$(jq -r '.latest.failed_samples // 0' "${history_summary_file}")"
+                latest_persist_total_avg="$(jq -r '.latest.persist_total_avg // "null"' "${history_summary_file}")"
+                previous_persist_total_avg="$(jq -r 'if (.series | length) >= 2 then (.series[-2].persist_total_avg // "null") else "null" end' "${history_summary_file}")"
+                persist_total_avg_delta="$(jq -r '
+                  def num_or_null(v): if (v | type) == "number" then v else null end;
+                  if (.series | length) >= 2 then
+                    (num_or_null(.latest.persist_total_avg) as $l
+                      | num_or_null(.series[-2].persist_total_avg) as $p
+                      | if ($l != null and $p != null) then ($l - $p) else null end)
+                  else null end // "null"
+                ' "${history_summary_file}")"
+                latest_dropped_nodes_max="$(jq -r '.latest.dropped_nodes_max // "null"' "${history_summary_file}")"
+                previous_dropped_nodes_max="$(jq -r 'if (.series | length) >= 2 then (.series[-2].dropped_nodes_max // "null") else "null" end' "${history_summary_file}")"
+                dropped_nodes_max_delta="$(jq -r '
+                  def num_or_null(v): if (v | type) == "number" then v else null end;
+                  if (.series | length) >= 2 then
+                    (num_or_null(.latest.dropped_nodes_max) as $l
+                      | num_or_null(.series[-2].dropped_nodes_max) as $p
+                      | if ($l != null and $p != null) then ($l - $p) else null end)
+                  else null end // "null"
+                ' "${history_summary_file}")"
               else
                 add_reason "history_summary_missing_in_backend_parity_rollup_artifact"
               fi
@@ -249,6 +291,19 @@ jobs:
           fi
           if [[ "${latest_failed_samples}" -gt "${max_latest_failed_samples}" ]]; then
             add_reason "latest_failed_samples_above_threshold"
+          fi
+
+          compare_float_gt() {
+            local left="$1"
+            local right="$2"
+            awk -v a="${left}" -v b="${right}" 'BEGIN { exit !(a>b) }'
+          }
+
+          if [[ "${persist_total_avg_delta}" != "null" ]] && compare_float_gt "${persist_total_avg_delta}" "${max_persist_total_avg_delta}"; then
+            add_reason "persist_total_avg_delta_above_threshold"
+          fi
+          if [[ "${dropped_nodes_max_delta}" != "null" ]] && compare_float_gt "${dropped_nodes_max_delta}" "${max_dropped_nodes_max_delta}"; then
+            add_reason "dropped_nodes_max_delta_above_threshold"
           fi
 
           reasons_count="$(jq 'length' <<<"${reasons_json}")"
@@ -270,7 +325,15 @@ jobs:
             --argjson min_runs "${min_runs}" \
             --argjson max_failed_runs "${max_failed_runs}" \
             --argjson max_latest_failed_samples "${max_latest_failed_samples}" \
+            --argjson max_persist_total_avg_delta "${max_persist_total_avg_delta}" \
+            --argjson max_dropped_nodes_max_delta "${max_dropped_nodes_max_delta}" \
             --argjson reasons "${reasons_json}" \
+            --arg latest_persist_total_avg "${latest_persist_total_avg}" \
+            --arg previous_persist_total_avg "${previous_persist_total_avg}" \
+            --arg persist_total_avg_delta "${persist_total_avg_delta}" \
+            --arg latest_dropped_nodes_max "${latest_dropped_nodes_max}" \
+            --arg previous_dropped_nodes_max "${previous_dropped_nodes_max}" \
+            --arg dropped_nodes_max_delta "${dropped_nodes_max_delta}" \
             '{
               status: $status,
               enforce: $enforce,
@@ -279,11 +342,21 @@ jobs:
               thresholds: {
                 min_runs: $min_runs,
                 max_failed_runs: $max_failed_runs,
-                max_latest_failed_samples: $max_latest_failed_samples
+                max_latest_failed_samples: $max_latest_failed_samples,
+                max_persist_total_avg_delta: $max_persist_total_avg_delta,
+                max_dropped_nodes_max_delta: $max_dropped_nodes_max_delta
               },
-              runs_total: $runs_total,
-              runs_with_failures: $runs_with_failures,
-              latest_failed_samples: $latest_failed_samples,
+              observed: {
+                runs_total: $runs_total,
+                runs_with_failures: $runs_with_failures,
+                latest_failed_samples: $latest_failed_samples,
+                latest_persist_total_avg: (if $latest_persist_total_avg == "null" then null else ($latest_persist_total_avg | tonumber) end),
+                previous_persist_total_avg: (if $previous_persist_total_avg == "null" then null else ($previous_persist_total_avg | tonumber) end),
+                persist_total_avg_delta: (if $persist_total_avg_delta == "null" then null else ($persist_total_avg_delta | tonumber) end),
+                latest_dropped_nodes_max: (if $latest_dropped_nodes_max == "null" then null else ($latest_dropped_nodes_max | tonumber) end),
+                previous_dropped_nodes_max: (if $previous_dropped_nodes_max == "null" then null else ($previous_dropped_nodes_max | tonumber) end),
+                dropped_nodes_max_delta: (if $dropped_nodes_max_delta == "null" then null else ($dropped_nodes_max_delta | tonumber) end)
+              },
               reasons: $reasons
             }' > "${check_file}"
 
