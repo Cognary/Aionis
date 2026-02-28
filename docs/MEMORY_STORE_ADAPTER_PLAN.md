@@ -84,6 +84,7 @@ Completed in this phase:
 52. Extended `sdk-ci` capability-negotiation smoke to also run shared policy/planner API probes, so SDK CI now covers capability + policy/planner contract checks together (and exposes probe output in failure diagnostics).
 53. Refactored CI probe implementation to shared Node modules (`scripts/ci/probe-common.mjs` + dedicated `*.mjs` entrypoints) while keeping `.sh` wrappers stable, reducing duplicated assertion code and simplifying future probe expansion.
 54. Added mock-based probe unit tests (`scripts/ci/probes.test.mjs`) and wired them into `sdk-ci` validate stage (`npm run test:ci-probes`) to catch probe-contract regressions before full backend matrix execution.
+55. Added pure-function unit tests for shared probe helpers (`scripts/ci/probe-common.test.mjs`) covering env normalization, auth header composition, and strict admin-token guard behavior.
 
 ## Next Steps
 
