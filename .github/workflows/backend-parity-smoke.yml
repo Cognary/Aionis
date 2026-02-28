@@ -368,3 +368,55 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker compose down -v
+
+  telemetry-rollup:
+    name: telemetry-rollup
+    runs-on: ubuntu-latest
+    needs: parity-smoke
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download parity artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: backend-parity-artifacts-*
+          path: artifacts/backend_parity/downloaded
+          merge-multiple: false
+
+      - name: Build embedded snapshot telemetry rollup
+        run: |
+          set -euo pipefail
+          EMBEDDED_SNAPSHOT_TELEMETRY_ROLLUP_INPUT_DIR="artifacts/backend_parity/downloaded" \
+          EMBEDDED_SNAPSHOT_TELEMETRY_ROLLUP_OUTPUT="artifacts/backend_parity/rollup/summary.json" \
+          EMBEDDED_SNAPSHOT_TELEMETRY_ROLLUP_FAIL_ON_FAILED="true" \
+          node scripts/ci/embedded-snapshot-telemetry-rollup.mjs \
+            >/tmp/backend_parity_embedded_snapshot_rollup.json
+          cat /tmp/backend_parity_embedded_snapshot_rollup.json
+
+      - name: Publish rollup summary
+        if: always()
+        run: |
+          set +e
+          summary_file="artifacts/backend_parity/rollup/summary.json"
+          {
+            echo "## Backend Parity Embedded Snapshot Telemetry Rollup"
+            echo
+            if [[ -f "${summary_file}" ]]; then
+              jq '{ok, totals, profiles, deltas, failures}' "${summary_file}"
+            else
+              echo "summary not found"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload rollup artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-parity-rollup
+          path: |
+            /tmp/backend_parity_embedded_snapshot_rollup.json
+            artifacts/backend_parity/rollup/
+          retention-days: 14
+          if-no-files-found: warn

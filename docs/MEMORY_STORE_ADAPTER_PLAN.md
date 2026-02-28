@@ -92,9 +92,10 @@ Completed in this phase:
 60. Added forced shadow probe coverage: when `CAPABILITY_PROBE_INCLUDE_SHADOW_SOFT_DEGRADE=true`, capability probe must execute `/v1/memory/write` regardless of backend kind, while preserving typed soft-degrade contract assertions.
 61. Extracted shadow soft-degrade execution decision into shared helper (`shouldRunShadowSoftDegradeProbe`) and added matrix-style unit coverage for `true|false|auto` modes across backend/capability combinations.
 62. Added embedded snapshot telemetry export (`scripts/ci/embedded-snapshot-telemetry.mjs`) with threshold guards (persist delta, compaction non-growth, rounds, dropped nodes, failure/quarantine deltas), wired into `backend-parity-smoke` with per-profile artifact upload for timeline tracking.
+63. Added backend-parity telemetry rollup job (`telemetry-rollup`) plus rollup script (`embedded-snapshot-telemetry-rollup.mjs`) to aggregate per-profile telemetry artifacts into a run-level summary + artifact (`backend-parity-rollup`) for easier trend consumption.
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
-2. Extend embedded telemetry timeline aggregation from parity artifacts into cross-workflow trend reports (for example, periodic rollups in core gate/governance artifacts).
+2. Extend run-level telemetry rollups into cross-run trend reports (for example, periodic rollups in core gate/governance artifacts with week-over-week deltas).
 3. Keep local smoke command and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).
