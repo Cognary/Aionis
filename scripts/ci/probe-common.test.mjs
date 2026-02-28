@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { buildAuthHeaders, envString, getJson, parseTriState, postJson } from "./probe-common.mjs";
+import { buildAuthHeaders, envString, getJson, parseTriState, postJson, shouldRunShadowSoftDegradeProbe } from "./probe-common.mjs";
 
 function withEnv(overrides, fn) {
   const prev = {};
@@ -226,4 +226,17 @@ test("postJson throws labeled error when response is not JSON", async () => {
   } finally {
     await mock.close();
   }
+});
+
+test("shouldRunShadowSoftDegradeProbe follows include mode contract", () => {
+  assert.equal(shouldRunShadowSoftDegradeProbe("true", "postgres", true), true);
+  assert.equal(shouldRunShadowSoftDegradeProbe("true", "embedded", false), true);
+
+  assert.equal(shouldRunShadowSoftDegradeProbe("false", "embedded", false), false);
+  assert.equal(shouldRunShadowSoftDegradeProbe("false", "postgres", true), false);
+
+  assert.equal(shouldRunShadowSoftDegradeProbe("auto", "embedded", false), true);
+  assert.equal(shouldRunShadowSoftDegradeProbe("auto", "embedded", true), false);
+  assert.equal(shouldRunShadowSoftDegradeProbe("auto", "postgres", false), false);
+  assert.equal(shouldRunShadowSoftDegradeProbe("auto", "postgres", true), false);
 });

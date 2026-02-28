@@ -79,3 +79,9 @@ export function toProbeFailure(err) {
     message: String((err && err.message) || err),
   };
 }
+
+export function shouldRunShadowSoftDegradeProbe(includeMode, backend, shadowMirrorV2) {
+  if (includeMode === "true") return true;
+  if (includeMode === "false") return false;
+  return backend === "embedded" && shadowMirrorV2 === false;
+}

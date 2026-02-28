@@ -1,5 +1,15 @@
 import fs from "node:fs";
-import { buildAuthHeaders, ensure, envString, getJson, parseTriState, postJson, toProbeFailure, writeJson } from "./probe-common.mjs";
+import {
+  buildAuthHeaders,
+  ensure,
+  envString,
+  getJson,
+  parseTriState,
+  postJson,
+  shouldRunShadowSoftDegradeProbe,
+  toProbeFailure,
+  writeJson,
+} from "./probe-common.mjs";
 
 const label = "capability-api-probes";
 const baseUrl = envString("AIONIS_BASE_URL", `http://127.0.0.1:${envString("PORT", "3001")}`);
@@ -159,9 +169,7 @@ try {
   await probePacksExport(featureCaps, contract);
   await probePacksImport(featureCaps, contract);
 
-  const shouldProbeShadow =
-    includeShadowMode === "true" ||
-    (includeShadowMode === "auto" && backend === "embedded" && writeCaps.shadow_mirror_v2 === false);
+  const shouldProbeShadow = shouldRunShadowSoftDegradeProbe(includeShadowMode, backend, writeCaps.shadow_mirror_v2);
 
   if (shouldProbeShadow) {
     await probeShadowSoftDegrade();

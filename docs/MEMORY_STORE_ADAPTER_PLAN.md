@@ -90,6 +90,7 @@ Completed in this phase:
 58. Added `capability-api-probes` shadow soft-degrade mock coverage (auto mode on embedded without mirror capability), asserting probe execution and typed `shadow_dual_write` degraded contract fields.
 59. Added negative coverage for shadow soft-degrade probing: when `CAPABILITY_PROBE_INCLUDE_SHADOW_SOFT_DEGRADE=false`, capability probe must skip `/v1/memory/write` even under embedded+no-mirror conditions.
 60. Added forced shadow probe coverage: when `CAPABILITY_PROBE_INCLUDE_SHADOW_SOFT_DEGRADE=true`, capability probe must execute `/v1/memory/write` regardless of backend kind, while preserving typed soft-degrade contract assertions.
+61. Extracted shadow soft-degrade execution decision into shared helper (`shouldRunShadowSoftDegradeProbe`) and added matrix-style unit coverage for `true|false|auto` modes across backend/capability combinations.
 
 ## Next Steps
 
