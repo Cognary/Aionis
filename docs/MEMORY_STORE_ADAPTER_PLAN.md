@@ -86,6 +86,7 @@ Completed in this phase:
 54. Added mock-based probe unit tests (`scripts/ci/probes.test.mjs`) and wired them into `sdk-ci` validate stage (`npm run test:ci-probes`) to catch probe-contract regressions before full backend matrix execution.
 55. Added pure-function unit tests for shared probe helpers (`scripts/ci/probe-common.test.mjs`) covering env normalization, auth header composition, and strict admin-token guard behavior.
 56. Unified probe success/failure JSON output via shared helpers (`writeJson`, `toProbeFailure`) and added output-shape tests (`scripts/ci/probe-output.test.mjs`) to stabilize diagnostics payload format.
+57. Extended shared probe-helper tests to cover HTTP utility behavior (`getJson` / `postJson` success + non-JSON failure branches), ensuring labeled error contracts stay stable across probe callers.
 
 ## Next Steps
 

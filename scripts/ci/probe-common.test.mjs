@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import test from "node:test";
 
-import { buildAuthHeaders, envString, parseTriState } from "./probe-common.mjs";
+import { buildAuthHeaders, envString, getJson, parseTriState, postJson } from "./probe-common.mjs";
 
 function withEnv(overrides, fn) {
   const prev = {};
@@ -21,6 +22,54 @@ function withEnv(overrides, fn) {
       else process.env[k] = v;
     }
   }
+}
+
+function createMockServer(handler) {
+  return new Promise((resolve, reject) => {
+    const server = createServer(async (req, res) => {
+      try {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const raw = Buffer.concat(chunks).toString("utf8");
+        let body = null;
+        if (raw.trim().length > 0) {
+          body = JSON.parse(raw);
+        }
+        const out = await handler({
+          method: req.method || "GET",
+          path: req.url || "/",
+          headers: req.headers || {},
+          body,
+        });
+        const status = Number(out?.status ?? 200);
+        const payload = out?.body ?? {};
+        const contentType = out?.contentType ?? "application/json";
+        res.writeHead(status, { "content-type": contentType });
+        if (contentType === "application/json") {
+          res.end(JSON.stringify(payload));
+        } else {
+          res.end(String(out?.rawBody ?? ""));
+        }
+      } catch (err) {
+        res.writeHead(500, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "mock_server_error", message: String(err?.message || err) }));
+      }
+    });
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      if (!addr || typeof addr === "string") {
+        reject(new Error("failed to bind mock server"));
+        return;
+      }
+      resolve({
+        baseUrl: `http://127.0.0.1:${addr.port}`,
+        close: () =>
+          new Promise((resolveClose) => {
+            server.close(() => resolveClose());
+          }),
+      });
+    });
+  });
 }
 
 test("parseTriState normalizes true/false/auto", () => {
@@ -96,4 +145,85 @@ test("buildAuthHeaders requireAdmin=true throws when ADMIN_TOKEN missing", () =>
       );
     },
   );
+});
+
+test("getJson returns status + parsed JSON body", async () => {
+  const mock = await createMockServer(async (req) => {
+    if (req.path === "/health") {
+      return {
+        status: 200,
+        body: { ok: true, source: "mock" },
+      };
+    }
+    return { status: 404, body: { error: "not_found" } };
+  });
+  try {
+    const out = await getJson(mock.baseUrl, "/health", {}, "probe-common-test");
+    assert.equal(out.status, 200);
+    assert.deepEqual(out.body, { ok: true, source: "mock" });
+  } finally {
+    await mock.close();
+  }
+});
+
+test("postJson returns status + parsed JSON body", async () => {
+  const mock = await createMockServer(async (req) => {
+    if (req.path === "/echo" && req.method === "POST") {
+      return {
+        status: 201,
+        body: { ok: true, seen: req.body ?? null },
+      };
+    }
+    return { status: 404, body: { error: "not_found" } };
+  });
+  try {
+    const payload = { x: 1, y: "z" };
+    const out = await postJson(mock.baseUrl, "/echo", payload, {}, "probe-common-test");
+    assert.equal(out.status, 201);
+    assert.deepEqual(out.body, { ok: true, seen: payload });
+  } finally {
+    await mock.close();
+  }
+});
+
+test("getJson throws labeled error when response is not JSON", async () => {
+  const mock = await createMockServer(async (req) => {
+    if (req.path === "/plain") {
+      return {
+        status: 200,
+        contentType: "text/plain",
+        rawBody: "plain-text",
+      };
+    }
+    return { status: 404, body: { error: "not_found" } };
+  });
+  try {
+    await assert.rejects(
+      () => getJson(mock.baseUrl, "/plain", {}, "probe-common-test"),
+      /probe-common-test: \/plain must return JSON/,
+    );
+  } finally {
+    await mock.close();
+  }
+});
+
+test("postJson throws labeled error when response is not JSON", async () => {
+  const mock = await createMockServer(async (req) => {
+    if (req.path === "/plain" && req.method === "POST") {
+      return {
+        status: 200,
+        contentType: "text/plain",
+        rawBody: "plain-text",
+      };
+    }
+    return { status: 404, body: { error: "not_found" } };
+  });
+  try {
+    await assert.rejects(
+      () => postJson(mock.baseUrl, "/plain", { x: 1 }, {}, "probe-common-test"),
+      /probe-common-test: \/plain must return JSON/,
+    );
+  } finally {
+    await mock.close();
+  }
 });
