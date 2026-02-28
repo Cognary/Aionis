@@ -191,6 +191,78 @@ test("capability probe accepts typed disabled-capability errors", async () => {
   }
 });
 
+test("capability probe auto-runs shadow soft-degrade probe on embedded without mirror capability", async () => {
+  let shadowProbeCalls = 0;
+  const mock = await createMockServer(async (req) => {
+    if (req.path === "/health") {
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          memory_store_backend: "embedded",
+          memory_store_feature_capabilities: {
+            sessions_graph: true,
+            packs_export: true,
+            packs_import: true,
+          },
+          memory_store_write_capabilities: {
+            shadow_mirror_v2: false,
+          },
+          memory_store_capability_contract: {
+            sessions_graph: { failure_mode: "hard_fail", degraded_modes: ["feature_disabled"] },
+            packs_export: { failure_mode: "hard_fail", degraded_modes: ["feature_disabled"] },
+            packs_import: { failure_mode: "hard_fail", degraded_modes: ["feature_disabled"] },
+            shadow_mirror_v2: { failure_mode: "soft_degrade", degraded_modes: ["capability_unsupported", "mirror_failed"] },
+          },
+        },
+      };
+    }
+    if (req.path === "/v1/memory/sessions") {
+      return { status: 200, body: { session_id: "s-shadow-auto" } };
+    }
+    if (req.path === "/v1/memory/packs/export") {
+      return { status: 200, body: { manifest: { sha256: "shadow-auto-manifest" } } };
+    }
+    if (req.path === "/v1/memory/packs/import") {
+      return { status: 200, body: { verified: true, imported: false } };
+    }
+    if (req.path === "/v1/memory/write") {
+      shadowProbeCalls += 1;
+      return {
+        status: 200,
+        body: {
+          commit_id: "c-shadow-auto",
+          shadow_dual_write: {
+            enabled: true,
+            strict: false,
+            mirrored: false,
+            capability: "shadow_mirror_v2",
+            failure_mode: "soft_degrade",
+            degraded_mode: "capability_unsupported",
+            fallback_applied: true,
+          },
+        },
+      };
+    }
+    return { status: 404, body: { error: "not_found" } };
+  });
+
+  try {
+    const out = await runNodeScript("scripts/ci/capability-api-probes.mjs", {
+      AIONIS_BASE_URL: mock.baseUrl,
+      ADMIN_TOKEN: "test-admin-token",
+      CAPABILITY_PROBE_HEALTH_FILE: "/tmp/capability_probe_test_shadow_auto.json",
+    });
+    assert.equal(out.code, 0, out.stderr || out.stdout);
+    const parsed = JSON.parse(out.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.include_shadow_soft_degrade, true);
+    assert.equal(shadowProbeCalls, 1);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("policy-planner probe marks planning as skipped on no_embedding_provider", async () => {
   const mock = await createMockServer(async (req) => {
     if (req.path === "/v1/memory/rules/evaluate") {
