@@ -97,6 +97,32 @@ export async function selectTools(
   );
   const decision_created_at = decisionRes.rows[0]?.created_at ?? null;
 
+  if (opts.embeddedRuntime && decision_created_at) {
+    await opts.embeddedRuntime.syncExecutionDecisions([
+      {
+        id: decision_id,
+        scope: tenancy.scope_key,
+        decision_kind: "tools_select",
+        run_id: parsed.run_id ?? null,
+        selected_tool: selection.selected ?? null,
+        candidates_json: selection.candidates,
+        context_sha256,
+        policy_sha256,
+        source_rule_ids,
+        metadata_json: {
+          strict: parsed.strict,
+          include_shadow: parsed.include_shadow,
+          rules_limit: parsed.rules_limit,
+          matched_rules: rules.matched,
+          tool_conflicts_summary,
+          ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
+        },
+        created_at: decision_created_at,
+        commit_id: null,
+      },
+    ]);
+  }
+
   return {
     scope: rules.scope,
     tenant_id: rules.tenant_id,

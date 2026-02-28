@@ -14,7 +14,12 @@ import {
 import { ToolsFeedbackRequest } from "./schemas.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
-import type { EmbeddedMemoryRuntime, EmbeddedRuleDefSyncInput } from "../store/embedded-memory-runtime.js";
+import type {
+  EmbeddedExecutionDecisionView,
+  EmbeddedMemoryRuntime,
+  EmbeddedRuleDefSyncInput,
+  EmbeddedRuleFeedbackSyncInput,
+} from "../store/embedded-memory-runtime.js";
 
 type FeedbackOptions = {
   maxTextLen: number;
@@ -44,6 +49,19 @@ function isToolTouched(paths: string[]): boolean {
 
 function normalizeToolName(v: string): string {
   return String(v ?? "").trim();
+}
+
+function toDecisionRow(row: EmbeddedExecutionDecisionView): DecisionRow {
+  return {
+    id: row.id,
+    scope: row.scope,
+    run_id: row.run_id,
+    selected_tool: row.selected_tool,
+    candidates_json: row.candidates_json,
+    context_sha256: row.context_sha256,
+    policy_sha256: row.policy_sha256,
+    created_at: row.created_at,
+  };
 }
 
 async function findDecisionById(client: pg.PoolClient, scope: string, decisionId: string): Promise<DecisionRow | null> {
@@ -270,7 +288,14 @@ export async function toolSelectionFeedback(
   const policySha256 = hashPolicy((rules.applied as any)?.policy ?? {});
   const candidatesJson = JSON.stringify(normalizedCandidates);
 
-  let decision = parsed.decision_id ? await findDecisionById(client, scope, parsed.decision_id) : null;
+  let decision: DecisionRow | null = null;
+  if (parsed.decision_id && opts.embeddedRuntime) {
+    const embeddedDecision = opts.embeddedRuntime.getExecutionDecision({ scope, decision_id: parsed.decision_id });
+    if (embeddedDecision) decision = toDecisionRow(embeddedDecision);
+  }
+  if (parsed.decision_id && !decision) {
+    decision = await findDecisionById(client, scope, parsed.decision_id);
+  }
   let decision_link_mode: "provided" | "inferred" | "created_from_feedback" = "provided";
 
   if (parsed.decision_id) {
@@ -282,7 +307,21 @@ export async function toolSelectionFeedback(
       });
     }
   } else {
-    decision = await inferDecision(client, scope, parsed.run_id ?? null, selectedTool, candidatesJson, contextSha256);
+    if (opts.embeddedRuntime) {
+      const inferred = opts.embeddedRuntime.inferExecutionDecision({
+        scope,
+        run_id: parsed.run_id ?? null,
+        selected_tool: selectedTool,
+        candidates_json: normalizedCandidates,
+        context_sha256: contextSha256,
+      });
+      if (inferred) {
+        decision = toDecisionRow(inferred);
+      }
+    }
+    if (!decision) {
+      decision = await inferDecision(client, scope, parsed.run_id ?? null, selectedTool, candidatesJson, contextSha256);
+    }
     if (decision) {
       decision_link_mode = "inferred";
     } else {
@@ -296,11 +335,45 @@ export async function toolSelectionFeedback(
         policySha256,
         uniq,
       );
+      if (opts.embeddedRuntime) {
+        await opts.embeddedRuntime.syncExecutionDecisions([
+          {
+            id: decision.id,
+            scope,
+            decision_kind: "tools_select",
+            run_id: decision.run_id,
+            selected_tool: decision.selected_tool,
+            candidates_json: decision.candidates_json,
+            context_sha256: decision.context_sha256,
+            policy_sha256: decision.policy_sha256,
+            source_rule_ids: uniq,
+            metadata_json: { source: "feedback_derived" },
+            created_at: decision.created_at,
+            commit_id: null,
+          },
+        ]);
+      }
       decision_link_mode = "created_from_feedback";
     }
   }
 
   assertDecisionCompatible(decision!, parsed, normalizedCandidates);
+
+  if (opts.embeddedRuntime && decision) {
+    await opts.embeddedRuntime.syncExecutionDecisions([
+      {
+        id: decision.id,
+        scope,
+        decision_kind: "tools_select",
+        run_id: decision.run_id,
+        selected_tool: decision.selected_tool,
+        candidates_json: decision.candidates_json,
+        context_sha256: decision.context_sha256,
+        policy_sha256: decision.policy_sha256,
+        created_at: decision.created_at,
+      },
+    ]);
+  }
 
   if (parsed.run_id && !decision!.run_id) {
     await client.query(
@@ -314,6 +387,22 @@ export async function toolSelectionFeedback(
       [parsed.run_id, scope, decision!.id],
     );
     decision!.run_id = parsed.run_id;
+    if (opts.embeddedRuntime) {
+      await opts.embeddedRuntime.syncExecutionDecisions([
+        {
+          id: decision!.id,
+          scope,
+          decision_kind: "tools_select",
+          run_id: decision!.run_id,
+          selected_tool: decision!.selected_tool,
+          candidates_json: decision!.candidates_json,
+          context_sha256: decision!.context_sha256,
+          policy_sha256: decision!.policy_sha256,
+          created_at: decision!.created_at,
+          commit_id: null,
+        },
+      ]);
+    }
   }
 
   // Parent commit is optional for feedback events; use latest commit in scope as parent if present.
@@ -360,10 +449,30 @@ export async function toolSelectionFeedback(
       `,
       [commit_id, scope, decision!.id],
     );
+    if (opts.embeddedRuntime) {
+      await opts.embeddedRuntime.syncExecutionDecisions([
+        {
+          id: decision!.id,
+          scope,
+          decision_kind: "tools_select",
+          run_id: decision!.run_id,
+          selected_tool: decision!.selected_tool,
+          candidates_json: decision!.candidates_json,
+          context_sha256: decision!.context_sha256,
+          policy_sha256: decision!.policy_sha256,
+          source_rule_ids: uniq,
+          metadata_json: { source: "feedback_derived" },
+          created_at: decision!.created_at,
+          commit_id,
+        },
+      ]);
+    }
   }
 
   // Insert feedback rows (one per rule) to keep per-rule auditability.
   // Note: we intentionally attribute the same outcome to all matched rule sources for MVP simplicity.
+  const feedbackRowsForMirror: EmbeddedRuleFeedbackSyncInput[] = [];
+  const feedbackCreatedAt = new Date().toISOString();
   for (const rule_node_id of uniq) {
     const feedbackId = randomUUID();
     await client.query(
@@ -372,6 +481,22 @@ export async function toolSelectionFeedback(
        VALUES ($1, $2, $3, $4, $5, $6, 'tools_feedback', $7, $8)`,
       [feedbackId, scope, rule_node_id, parsed.run_id ?? null, parsed.outcome, note ?? null, decision!.id, commit_id],
     );
+    feedbackRowsForMirror.push({
+      id: feedbackId,
+      scope,
+      rule_node_id,
+      run_id: parsed.run_id ?? null,
+      outcome: parsed.outcome,
+      note: note ?? null,
+      source: "tools_feedback",
+      decision_id: decision!.id,
+      commit_id,
+      created_at: feedbackCreatedAt,
+    });
+  }
+
+  if (opts.embeddedRuntime && feedbackRowsForMirror.length > 0) {
+    await opts.embeddedRuntime.appendRuleFeedback(feedbackRowsForMirror);
   }
 
   // Update aggregate stats for all attributed rules.

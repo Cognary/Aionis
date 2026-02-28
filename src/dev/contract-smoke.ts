@@ -1046,6 +1046,65 @@ async function run() {
   ]);
   assert.equal(embeddedRuleRuntime.listRuleCandidates({ scope: embeddedRuleScope, limit: 10 }).length, 0);
 
+  const decisionScope = "tenant:parity::scope:embedded_decisions";
+  const decisionId = "00000000-0000-0000-0000-000000000ed1";
+  const decisionCreatedAt = new Date().toISOString();
+  await embeddedRuleRuntime.syncExecutionDecisions([
+    {
+      id: decisionId,
+      scope: decisionScope,
+      decision_kind: "tools_select",
+      run_id: "run_embedded_1",
+      selected_tool: "psql",
+      candidates_json: ["psql", "curl"],
+      context_sha256: "ctx_sha_1",
+      policy_sha256: "policy_sha_1",
+      source_rule_ids: [embeddedRuleNodeId],
+      metadata_json: { source: "contract_smoke" },
+      created_at: decisionCreatedAt,
+      commit_id: null,
+    },
+  ]);
+  const byId = embeddedRuleRuntime.getExecutionDecision({ scope: decisionScope, decision_id: decisionId });
+  assert.ok(byId);
+  assert.equal(byId?.selected_tool, "psql");
+
+  const inferredByRun = embeddedRuleRuntime.inferExecutionDecision({
+    scope: decisionScope,
+    run_id: "run_embedded_1",
+    selected_tool: "psql",
+    candidates_json: ["psql", "curl"],
+    context_sha256: "ctx_sha_1",
+  });
+  assert.equal(inferredByRun?.id, decisionId);
+
+  const inferredFallback = embeddedRuleRuntime.inferExecutionDecision({
+    scope: decisionScope,
+    run_id: null,
+    selected_tool: "psql",
+    candidates_json: ["psql", "curl"],
+    context_sha256: "ctx_sha_1",
+  });
+  assert.equal(inferredFallback?.id, decisionId);
+
+  await embeddedRuleRuntime.appendRuleFeedback([
+    {
+      id: "00000000-0000-0000-0000-000000000ef1",
+      scope: decisionScope,
+      rule_node_id: embeddedRuleNodeId,
+      run_id: "run_embedded_1",
+      outcome: "positive",
+      note: "ok",
+      source: "tools_feedback",
+      decision_id: decisionId,
+      commit_id: "00000000-0000-0000-0000-000000000ec9",
+    },
+  ]);
+  const mirroredFeedback = embeddedRuleRuntime.listRuleFeedback({ scope: decisionScope, limit: 5 });
+  assert.equal(mirroredFeedback.length, 1);
+  assert.equal(mirroredFeedback[0].source, "tools_feedback");
+  assert.equal(mirroredFeedback[0].decision_id, decisionId);
+
   const embeddedSnapshotPath = path.join(
     os.tmpdir(),
     `aionis_embedded_runtime_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,

@@ -97,6 +97,21 @@ export async function ruleFeedback(
      VALUES ($1, $2, $3, $4, $5, $6, 'rule_feedback', NULL, $7)`,
     [feedbackId, scope, parsed.rule_node_id, parsed.run_id ?? null, parsed.outcome, note ?? null, commit_id],
   );
+  if (opts.embeddedRuntime) {
+    await opts.embeddedRuntime.appendRuleFeedback([
+      {
+        id: feedbackId,
+        scope,
+        rule_node_id: parsed.rule_node_id,
+        run_id: parsed.run_id ?? null,
+        outcome: parsed.outcome,
+        note: note ?? null,
+        source: "rule_feedback",
+        decision_id: null,
+        commit_id,
+      },
+    ]);
+  }
 
   // Update aggregate stats.
   const ruleDefRes = await client.query<RuleDefSyncRow>(

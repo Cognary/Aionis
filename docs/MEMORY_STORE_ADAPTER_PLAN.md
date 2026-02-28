@@ -99,9 +99,10 @@ Completed in this phase:
 67. Extended embedded local runtime beyond recall/write baseline for `sessions` + `packs`: added runtime-native `session events` read path and pack snapshot export path, wired API routes to prefer runtime when `MEMORY_STORE_BACKEND=embedded`, and fixed `packs/import` embedded runtime mirror propagation.
 68. Extended embedded runtime integration for policy/planner rule reads: `evaluateRules`/`evaluateRulesAppliedOnly` now support embedded rule candidate sources, and `tools/select` + `tools/feedback` + `planning/context`/`rules/evaluate` routes now pass embedded runtime through rule-evaluation paths.
 69. Added embedded rule write-side sync for policy/planner parity: `rules/state`, `feedback`, and `tools/feedback` now return updated `memory_rule_defs` rows and mirror them into embedded runtime (`state`, commit pointer, counters, timestamps), with contract-smoke coverage for active→feedback→disabled transitions.
+70. Extended embedded parity for execution-decision provenance: embedded runtime now mirrors `memory_execution_decisions` and `memory_rule_feedback` writes (including tools-select decision snapshots, tools-feedback linkage updates, and direct feedback rows), with runtime infer/get helpers and contract-smoke coverage.
 
 ## Next Steps
 
-1. Continue embedded runtime expansion for policy/planner write-side paths around execution-decision persistence (`memory_execution_decisions` + `memory_rule_feedback` parity/readbacks) to reduce remaining Postgres coupling in embedded mode.
+1. Add backend-parity/API probe coverage for execution-decision provenance (for example tools-select decision readback + tools-feedback decision-link-mode parity under embedded capabilities) to lock in the new runtime mirror behavior.
 2. Calibrate drift thresholds from observed baseline windows (for example, p95 delta bands over last N runs) and promote selected warns to enforce mode.
 3. Keep local smoke command and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).

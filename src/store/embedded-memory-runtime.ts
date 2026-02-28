@@ -118,6 +118,36 @@ type EmbeddedRuleDefRecord = {
   updated_at: string;
 };
 
+type EmbeddedDecisionKind = "tools_select";
+
+type EmbeddedExecutionDecisionRecord = {
+  id: string;
+  scope: string;
+  decision_kind: EmbeddedDecisionKind;
+  run_id: string | null;
+  selected_tool: string | null;
+  candidates_json: string[];
+  context_sha256: string;
+  policy_sha256: string;
+  source_rule_ids: string[];
+  metadata_json: any;
+  created_at: string;
+  commit_id: string | null;
+};
+
+type EmbeddedRuleFeedbackRecord = {
+  id: string;
+  scope: string;
+  rule_node_id: string;
+  run_id: string | null;
+  outcome: "positive" | "negative" | "neutral";
+  note: string | null;
+  source: "rule_feedback" | "tools_feedback";
+  decision_id: string | null;
+  commit_id: string | null;
+  created_at: string;
+};
+
 type EmbeddedAuditRow = {
   scope: string;
   endpoint: "recall" | "recall_text";
@@ -136,6 +166,8 @@ type EmbeddedSnapshotV1 = {
   edges: EmbeddedEdgeRecord[];
   rule_defs: EmbeddedRuleDefRecord[];
   audit: EmbeddedAuditRow[];
+  execution_decisions?: EmbeddedExecutionDecisionRecord[];
+  rule_feedback?: EmbeddedRuleFeedbackRecord[];
 };
 
 type EmbeddedRuntimeOptions = {
@@ -310,7 +342,67 @@ export type EmbeddedRuleDefSyncInput = {
   updated_at: string;
 };
 
+export type EmbeddedExecutionDecisionView = {
+  id: string;
+  scope: string;
+  decision_kind: EmbeddedDecisionKind;
+  run_id: string | null;
+  selected_tool: string | null;
+  candidates_json: string[];
+  context_sha256: string;
+  policy_sha256: string;
+  source_rule_ids: string[];
+  metadata_json: any;
+  created_at: string;
+  commit_id: string | null;
+};
+
+export type EmbeddedExecutionDecisionSyncInput = {
+  id: string;
+  scope: string;
+  decision_kind: EmbeddedDecisionKind;
+  run_id: string | null;
+  selected_tool: string | null;
+  candidates_json: any;
+  context_sha256: string;
+  policy_sha256: string;
+  source_rule_ids?: string[] | null;
+  metadata_json?: any;
+  created_at: string;
+  commit_id?: string | null;
+};
+
+export type EmbeddedRuleFeedbackSyncInput = {
+  id: string;
+  scope: string;
+  rule_node_id: string;
+  run_id: string | null;
+  outcome: "positive" | "negative" | "neutral";
+  note: string | null;
+  source: "rule_feedback" | "tools_feedback";
+  decision_id: string | null;
+  commit_id?: string | null;
+  created_at?: string;
+};
+
+export type EmbeddedRuleFeedbackView = {
+  id: string;
+  scope: string;
+  rule_node_id: string;
+  run_id: string | null;
+  outcome: "positive" | "negative" | "neutral";
+  note: string | null;
+  source: "rule_feedback" | "tools_feedback";
+  decision_id: string | null;
+  commit_id: string | null;
+  created_at: string;
+};
+
 function nodeKey(scope: string, id: string): string {
+  return `${scope}::${id}`;
+}
+
+function decisionKey(scope: string, id: string): string {
   return `${scope}::${id}`;
 }
 
@@ -420,10 +512,52 @@ function normalizeIso(raw: unknown, fallback: string): string {
   return Number.isFinite(Date.parse(v)) ? v : fallback;
 }
 
+function normalizeDecisionKind(raw: unknown): EmbeddedDecisionKind {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (v === "tools_select") return "tools_select";
+  return "tools_select";
+}
+
+function normalizeToolName(raw: unknown): string | null {
+  const v = typeof raw === "string" ? raw.trim() : "";
+  return v.length > 0 ? v : null;
+}
+
+function normalizeCandidates(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const v = typeof item === "string" ? item.trim() : "";
+    if (!v || seen.has(v)) continue;
+    seen.add(v);
+    out.push(v);
+  }
+  return out;
+}
+
+function candidatesSignature(raw: unknown): string {
+  return JSON.stringify(normalizeCandidates(raw));
+}
+
+function normalizeRuleSource(raw: unknown): "rule_feedback" | "tools_feedback" {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (v === "tools_feedback") return "tools_feedback";
+  return "rule_feedback";
+}
+
+function normalizeRuleOutcome(raw: unknown): "positive" | "negative" | "neutral" {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (v === "positive" || v === "negative") return v;
+  return "neutral";
+}
+
 export class EmbeddedMemoryRuntime {
   private readonly nodes = new Map<string, EmbeddedNodeRecord>();
   private readonly edgesByUnique = new Map<string, EmbeddedEdgeRecord>();
   private readonly ruleDefs = new Map<string, EmbeddedRuleDefRecord>();
+  private readonly executionDecisionsById = new Map<string, EmbeddedExecutionDecisionRecord>();
+  private readonly ruleFeedback: EmbeddedRuleFeedbackRecord[] = [];
   private readonly audit: EmbeddedAuditRow[] = [];
   private readonly recallAccess: RecallStoreAccess;
   private readonly snapshotPath: string | null;
@@ -729,6 +863,165 @@ export class EmbeddedMemoryRuntime {
     return all.slice(0, Math.max(0, params.limit));
   }
 
+  getExecutionDecision(params: {
+    scope: string;
+    decision_id: string;
+  }): EmbeddedExecutionDecisionView | null {
+    const key = decisionKey(params.scope, params.decision_id);
+    const row = this.executionDecisionsById.get(key);
+    if (!row) return null;
+    return {
+      id: row.id,
+      scope: row.scope,
+      decision_kind: row.decision_kind,
+      run_id: row.run_id,
+      selected_tool: row.selected_tool,
+      candidates_json: row.candidates_json.slice(),
+      context_sha256: row.context_sha256,
+      policy_sha256: row.policy_sha256,
+      source_rule_ids: row.source_rule_ids.slice(),
+      metadata_json: row.metadata_json ?? {},
+      created_at: row.created_at,
+      commit_id: row.commit_id,
+    };
+  }
+
+  inferExecutionDecision(params: {
+    scope: string;
+    run_id: string | null;
+    selected_tool: string;
+    candidates_json: any;
+    context_sha256: string;
+    now_utc?: string;
+  }): EmbeddedExecutionDecisionView | null {
+    const selectedTool = normalizeToolName(params.selected_tool);
+    if (!selectedTool) return null;
+    const wantSig = candidatesSignature(params.candidates_json);
+
+    const all = Array.from(this.executionDecisionsById.values())
+      .filter((d) => d.scope === params.scope && d.decision_kind === "tools_select")
+      .sort((a, b) => compareCreatedAtDesc(a.created_at, b.created_at) || a.id.localeCompare(b.id));
+
+    if (params.run_id) {
+      const byRun = all.find(
+        (d) =>
+          d.run_id === params.run_id &&
+          d.selected_tool === selectedTool &&
+          d.context_sha256 === params.context_sha256 &&
+          candidatesSignature(d.candidates_json) === wantSig,
+      );
+      if (byRun) return this.getExecutionDecision({ scope: byRun.scope, decision_id: byRun.id });
+    }
+
+    const nowMs = Date.parse(params.now_utc ?? new Date().toISOString());
+    const minTs = Number.isFinite(nowMs) ? nowMs - 24 * 60 * 60 * 1000 : Number.NEGATIVE_INFINITY;
+    const fallback = all.find((d) => {
+      const createdMs = Date.parse(d.created_at);
+      if (Number.isFinite(minTs) && (!Number.isFinite(createdMs) || createdMs < minTs)) return false;
+      if (d.selected_tool !== selectedTool) return false;
+      if (d.context_sha256 !== params.context_sha256) return false;
+      if (candidatesSignature(d.candidates_json) !== wantSig) return false;
+      if (params.run_id && d.run_id !== null) return false;
+      return true;
+    });
+    if (!fallback) return null;
+    return this.getExecutionDecision({ scope: fallback.scope, decision_id: fallback.id });
+  }
+
+  async syncExecutionDecisions(rows: EmbeddedExecutionDecisionSyncInput[]): Promise<void> {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const now = new Date().toISOString();
+    let changed = false;
+    for (const row of rows) {
+      const scope = typeof row.scope === "string" ? row.scope : "";
+      const id = typeof row.id === "string" ? row.id : "";
+      if (!scope || !id) continue;
+      const key = decisionKey(scope, id);
+      const existing = this.executionDecisionsById.get(key);
+      const next: EmbeddedExecutionDecisionRecord = {
+        id,
+        scope,
+        decision_kind: normalizeDecisionKind(row.decision_kind ?? existing?.decision_kind),
+        run_id: typeof row.run_id === "string" && row.run_id.trim().length > 0 ? row.run_id : null,
+        selected_tool: normalizeToolName(row.selected_tool),
+        candidates_json: normalizeCandidates(row.candidates_json ?? existing?.candidates_json ?? []),
+        context_sha256:
+          typeof row.context_sha256 === "string" && row.context_sha256.trim().length > 0
+            ? row.context_sha256
+            : (existing?.context_sha256 ?? ""),
+        policy_sha256:
+          typeof row.policy_sha256 === "string" && row.policy_sha256.trim().length > 0
+            ? row.policy_sha256
+            : (existing?.policy_sha256 ?? ""),
+        source_rule_ids: Array.isArray(row.source_rule_ids)
+          ? row.source_rule_ids
+              .map((x) => (typeof x === "string" ? x.trim() : ""))
+              .filter((x) => x.length > 0)
+          : (existing?.source_rule_ids ?? []),
+        metadata_json: row.metadata_json ?? existing?.metadata_json ?? {},
+        created_at: normalizeIso(row.created_at, existing?.created_at ?? now),
+        commit_id:
+          typeof row.commit_id === "string" && row.commit_id.trim().length > 0
+            ? row.commit_id
+            : (existing?.commit_id ?? null),
+      };
+      this.executionDecisionsById.set(key, next);
+      changed = true;
+    }
+
+    if (this.executionDecisionsById.size > 10000) {
+      const keep = Array.from(this.executionDecisionsById.values())
+        .sort((a, b) => compareCreatedAtDesc(a.created_at, b.created_at) || a.id.localeCompare(b.id))
+        .slice(0, 10000);
+      const keepKeys = new Set(keep.map((d) => decisionKey(d.scope, d.id)));
+      for (const k of Array.from(this.executionDecisionsById.keys())) {
+        if (!keepKeys.has(k)) this.executionDecisionsById.delete(k);
+      }
+      changed = true;
+    }
+
+    if (changed && this.autoPersist) await this.persistSnapshot();
+  }
+
+  async appendRuleFeedback(rows: EmbeddedRuleFeedbackSyncInput[]): Promise<void> {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    let changed = false;
+    for (const row of rows) {
+      const scope = typeof row.scope === "string" ? row.scope : "";
+      const id = typeof row.id === "string" ? row.id : "";
+      const ruleNodeId = typeof row.rule_node_id === "string" ? row.rule_node_id : "";
+      if (!scope || !id || !ruleNodeId) continue;
+      this.ruleFeedback.push({
+        id,
+        scope,
+        rule_node_id: ruleNodeId,
+        run_id: typeof row.run_id === "string" && row.run_id.trim().length > 0 ? row.run_id : null,
+        outcome: normalizeRuleOutcome(row.outcome),
+        note: typeof row.note === "string" && row.note.trim().length > 0 ? row.note : null,
+        source: normalizeRuleSource(row.source),
+        decision_id: typeof row.decision_id === "string" && row.decision_id.trim().length > 0 ? row.decision_id : null,
+        commit_id: typeof row.commit_id === "string" && row.commit_id.trim().length > 0 ? row.commit_id : null,
+        created_at: normalizeIso(row.created_at, new Date().toISOString()),
+      });
+      changed = true;
+    }
+
+    if (this.ruleFeedback.length > 20000) {
+      this.ruleFeedback.splice(0, this.ruleFeedback.length - 20000);
+      changed = true;
+    }
+
+    if (changed && this.autoPersist) await this.persistSnapshot();
+  }
+
+  listRuleFeedback(params: { scope: string; limit: number }): EmbeddedRuleFeedbackView[] {
+    return this.ruleFeedback
+      .filter((row) => row.scope === params.scope)
+      .sort((a, b) => compareCreatedAtDesc(a.created_at, b.created_at) || b.id.localeCompare(a.id))
+      .slice(0, Math.max(0, params.limit))
+      .map((row) => ({ ...row }));
+  }
+
   async syncRuleDefs(rows: EmbeddedRuleDefSyncInput[], opts: { touchRuleNodes?: boolean } = {}): Promise<void> {
     if (!Array.isArray(rows) || rows.length === 0) return;
     const now = new Date().toISOString();
@@ -877,6 +1170,8 @@ export class EmbeddedMemoryRuntime {
     this.nodes.clear();
     this.edgesByUnique.clear();
     this.ruleDefs.clear();
+    this.executionDecisionsById.clear();
+    this.ruleFeedback.splice(0, this.ruleFeedback.length);
     this.audit.splice(0, this.audit.length);
 
     for (const n of parsed.nodes) {
@@ -911,6 +1206,52 @@ export class EmbeddedMemoryRuntime {
     }
     if (Array.isArray(parsed.audit)) {
       for (const a of parsed.audit.slice(-5000)) this.audit.push(a);
+    }
+    if (Array.isArray(parsed.execution_decisions)) {
+      for (const row of parsed.execution_decisions) {
+        const scope = typeof (row as any).scope === "string" ? String((row as any).scope) : "";
+        const id = typeof (row as any).id === "string" ? String((row as any).id) : "";
+        if (!scope || !id) continue;
+        const key = decisionKey(scope, id);
+        this.executionDecisionsById.set(key, {
+          id,
+          scope,
+          decision_kind: normalizeDecisionKind((row as any).decision_kind),
+          run_id: typeof (row as any).run_id === "string" ? String((row as any).run_id) : null,
+          selected_tool: normalizeToolName((row as any).selected_tool),
+          candidates_json: normalizeCandidates((row as any).candidates_json),
+          context_sha256: typeof (row as any).context_sha256 === "string" ? String((row as any).context_sha256) : "",
+          policy_sha256: typeof (row as any).policy_sha256 === "string" ? String((row as any).policy_sha256) : "",
+          source_rule_ids: Array.isArray((row as any).source_rule_ids)
+            ? (row as any).source_rule_ids
+                .map((x: unknown) => (typeof x === "string" ? x.trim() : ""))
+                .filter((x: string) => x.length > 0)
+            : [],
+          metadata_json: (row as any).metadata_json ?? {},
+          created_at: normalizeIso((row as any).created_at, new Date().toISOString()),
+          commit_id: typeof (row as any).commit_id === "string" ? String((row as any).commit_id) : null,
+        });
+      }
+    }
+    if (Array.isArray(parsed.rule_feedback)) {
+      for (const row of parsed.rule_feedback.slice(-20000)) {
+        const scope = typeof (row as any).scope === "string" ? String((row as any).scope) : "";
+        const id = typeof (row as any).id === "string" ? String((row as any).id) : "";
+        const ruleNodeId = typeof (row as any).rule_node_id === "string" ? String((row as any).rule_node_id) : "";
+        if (!scope || !id || !ruleNodeId) continue;
+        this.ruleFeedback.push({
+          id,
+          scope,
+          rule_node_id: ruleNodeId,
+          run_id: typeof (row as any).run_id === "string" ? String((row as any).run_id) : null,
+          outcome: normalizeRuleOutcome((row as any).outcome),
+          note: typeof (row as any).note === "string" ? String((row as any).note) : null,
+          source: normalizeRuleSource((row as any).source),
+          decision_id: typeof (row as any).decision_id === "string" ? String((row as any).decision_id) : null,
+          commit_id: typeof (row as any).commit_id === "string" ? String((row as any).commit_id) : null,
+          created_at: normalizeIso((row as any).created_at, new Date().toISOString()),
+        });
+      }
     }
   }
 
@@ -982,6 +1323,18 @@ export class EmbeddedMemoryRuntime {
       edges: Array.from(this.edgesByUnique.values()).map((e) => ({ ...e })),
       rule_defs: Array.from(this.ruleDefs.values()).map((r) => ({ ...r })),
       audit: this.audit.slice(-5000),
+      execution_decisions: Array.from(this.executionDecisionsById.values())
+        .sort((a, b) => compareCreatedAtAsc(a.created_at, b.created_at) || a.id.localeCompare(b.id))
+        .slice(-10000)
+        .map((row) => ({
+          ...row,
+          candidates_json: row.candidates_json.slice(),
+          source_rule_ids: row.source_rule_ids.slice(),
+          metadata_json: row.metadata_json ?? {},
+        })),
+      rule_feedback: this.ruleFeedback
+        .slice(-20000)
+        .map((row) => ({ ...row })),
     };
   }
 
