@@ -2,6 +2,10 @@ export function ensure(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
+export function writeJson(stream, payload) {
+  stream.write(`${JSON.stringify(payload, null, 2)}\n`);
+}
+
 export function envString(name, fallback = "") {
   const raw = process.env[name];
   if (typeof raw !== "string") return fallback;
@@ -66,4 +70,12 @@ export function parseTriState(raw) {
   if (normalized === "true") return "true";
   if (normalized === "false") return "false";
   return "auto";
+}
+
+export function toProbeFailure(err) {
+  return {
+    ok: false,
+    error: String((err && err.name) || "Error"),
+    message: String((err && err.message) || err),
+  };
 }

@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { buildAuthHeaders, ensure, envString, getJson, parseTriState, postJson } from "./probe-common.mjs";
+import { buildAuthHeaders, ensure, envString, getJson, parseTriState, postJson, toProbeFailure, writeJson } from "./probe-common.mjs";
 
 const label = "capability-api-probes";
 const baseUrl = envString("AIONIS_BASE_URL", `http://127.0.0.1:${envString("PORT", "3001")}`);
@@ -176,13 +176,9 @@ try {
     feature_capabilities: featureCaps,
     write_capabilities: writeCaps,
   };
-  process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+  writeJson(process.stdout, out);
 } catch (err) {
-  const out = {
-    ok: false,
-    error: String((err && err.name) || "Error"),
-    message: String((err && err.message) || err),
-  };
-  process.stderr.write(`${JSON.stringify(out, null, 2)}\n`);
+  const out = toProbeFailure(err);
+  writeJson(process.stderr, out);
   process.exit(1);
 }

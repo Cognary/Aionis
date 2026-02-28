@@ -1,4 +1,4 @@
-import { buildAuthHeaders, ensure, envString, postJson } from "./probe-common.mjs";
+import { buildAuthHeaders, ensure, envString, postJson, toProbeFailure, writeJson } from "./probe-common.mjs";
 
 const label = "policy-planner-api-probes";
 const baseUrl = envString("AIONIS_BASE_URL", `http://127.0.0.1:${envString("PORT", "3001")}`);
@@ -175,16 +175,12 @@ try {
               : 0,
             rules_considered: Number(planning.body.rules?.considered ?? 0),
             rules_matched: Number(planning.body.rules?.matched ?? 0),
-          },
+      },
     },
   };
-  process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+  writeJson(process.stdout, out);
 } catch (err) {
-  const out = {
-    ok: false,
-    error: String((err && err.name) || "Error"),
-    message: String((err && err.message) || err),
-  };
-  process.stderr.write(`${JSON.stringify(out, null, 2)}\n`);
+  const out = toProbeFailure(err);
+  writeJson(process.stderr, out);
   process.exit(1);
 }
