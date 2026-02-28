@@ -327,39 +327,33 @@ jobs:
 
             assertSdkOut("ts", tsOut);
             assertSdkOut("py", pyOut);
-
-            if (backend !== "embedded") process.exit(0);
-            const b = before.memory_store_embedded_snapshot_metrics || {};
-            const a = after.memory_store_embedded_snapshot_metrics || {};
-            const maxRounds = Number(after.memory_store_embedded_snapshot_compaction_max_rounds || "8");
-            const maxBytes = Number(after.memory_store_embedded_snapshot_max_bytes || "0");
-            const maxDroppedNodes = Number(process.env.EMBEDDED_SNAPSHOT_MAX_DROPPED_NODES_GUARD || "32");
-
-            if (typeof a.persist_total !== "number") throw new Error("embedded metrics missing persist_total");
-            if (a.persist_total < Number(b.persist_total || 0) + 1) {
-              throw new Error(`embedded persist_total did not advance after write: before=${b.persist_total} after=${a.persist_total}`);
-            }
-            if (typeof a.last_bytes_before_compaction !== "number" || typeof a.last_bytes_after_compaction !== "number") {
-              throw new Error("embedded metrics missing compaction byte counters");
-            }
-            if (a.last_bytes_after_compaction > a.last_bytes_before_compaction) {
-              throw new Error("embedded compaction should not increase snapshot size");
-            }
-            if (a.last_compaction && typeof a.last_compaction.rounds === "number" && a.last_compaction.rounds > maxRounds) {
-              throw new Error(`embedded compaction rounds exceeded guard: ${a.last_compaction.rounds} > ${maxRounds}`);
-            }
-            if (a.last_bytes_before_compaction > maxBytes && (!a.last_compaction || a.last_compaction.applied !== true)) {
-              throw new Error("embedded compaction should be marked applied when snapshot exceeds max bytes");
-            }
-            if (a.last_compaction && Number(a.last_compaction.dropped_nodes || 0) > maxDroppedNodes) {
-              throw new Error(
-                `embedded compaction dropped too many nodes in one persist: ${a.last_compaction.dropped_nodes} > ${maxDroppedNodes}`,
-              );
-            }
           '
+
+          BACKEND_PARITY_PROFILE="${{ matrix.profile }}" \
+          EMBEDDED_SNAPSHOT_TELEMETRY_BEFORE_FILE="/tmp/backend_parity_health.json" \
+          EMBEDDED_SNAPSHOT_TELEMETRY_AFTER_FILE="/tmp/backend_parity_health_after.json" \
+          EMBEDDED_SNAPSHOT_TELEMETRY_OUTPUT="/tmp/backend_parity_embedded_snapshot_telemetry.json" \
+          EMBEDDED_SNAPSHOT_TELEMETRY_TIMELINE_DIR="artifacts/backend_parity/${{ matrix.profile }}/embedded_snapshot" \
+          EMBEDDED_SNAPSHOT_MAX_DROPPED_NODES_GUARD="${EMBEDDED_SNAPSHOT_MAX_DROPPED_NODES_GUARD}" \
+          EMBEDDED_SNAPSHOT_MAX_PERSIST_FAILURES_DELTA_GUARD="0" \
+          EMBEDDED_SNAPSHOT_MAX_LOAD_QUARANTINED_DELTA_GUARD="0" \
+          node scripts/ci/embedded-snapshot-telemetry.mjs
 
           kill "${API_PID}" || true
           wait "${API_PID}" || true
+
+      - name: Upload parity artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-parity-artifacts-${{ matrix.profile }}
+          path: |
+            /tmp/backend_parity_capability_api_probe.json
+            /tmp/backend_parity_policy_planner_probe.json
+            /tmp/backend_parity_embedded_snapshot_telemetry.json
+            artifacts/backend_parity/${{ matrix.profile }}/
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Diagnostics on failure
         if: failure()
@@ -369,6 +363,7 @@ jobs:
           sed -n '1,220p' /tmp/backend_parity_api.log || true
           cat /tmp/backend_parity_capability_api_probe.json || true
           cat /tmp/backend_parity_policy_planner_probe.json || true
+          cat /tmp/backend_parity_embedded_snapshot_telemetry.json || true
 
       - name: Cleanup
         if: always()

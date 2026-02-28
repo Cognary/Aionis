@@ -4,7 +4,7 @@ title: "Memory Store Adapter Plan"
 
 # Memory Store Adapter Plan
 
-Last updated: `2026-02-27`  
+Last updated: `2026-02-28`  
 Status: `phase_p2_in_progress`
 
 ## Objective
@@ -91,9 +91,10 @@ Completed in this phase:
 59. Added negative coverage for shadow soft-degrade probing: when `CAPABILITY_PROBE_INCLUDE_SHADOW_SOFT_DEGRADE=false`, capability probe must skip `/v1/memory/write` even under embedded+no-mirror conditions.
 60. Added forced shadow probe coverage: when `CAPABILITY_PROBE_INCLUDE_SHADOW_SOFT_DEGRADE=true`, capability probe must execute `/v1/memory/write` regardless of backend kind, while preserving typed soft-degrade contract assertions.
 61. Extracted shadow soft-degrade execution decision into shared helper (`shouldRunShadowSoftDegradeProbe`) and added matrix-style unit coverage for `true|false|auto` modes across backend/capability combinations.
+62. Added embedded snapshot telemetry export (`scripts/ci/embedded-snapshot-telemetry.mjs`) with threshold guards (persist delta, compaction non-growth, rounds, dropped nodes, failure/quarantine deltas), wired into `backend-parity-smoke` with per-profile artifact upload for timeline tracking.
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
-2. Add runtime compaction telemetry export for long-run trend analysis (artifact timeline + alert thresholds), beyond smoke-level CI assertions.
+2. Extend embedded telemetry timeline aggregation from parity artifacts into cross-workflow trend reports (for example, periodic rollups in core gate/governance artifacts).
 3. Keep local smoke command and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).
