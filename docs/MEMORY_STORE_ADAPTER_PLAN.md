@@ -94,9 +94,10 @@ Completed in this phase:
 62. Added embedded snapshot telemetry export (`scripts/ci/embedded-snapshot-telemetry.mjs`) with threshold guards (persist delta, compaction non-growth, rounds, dropped nodes, failure/quarantine deltas), wired into `backend-parity-smoke` with per-profile artifact upload for timeline tracking.
 63. Added backend-parity telemetry rollup job (`telemetry-rollup`) plus rollup script (`embedded-snapshot-telemetry-rollup.mjs`) to aggregate per-profile telemetry artifacts into a run-level summary + artifact (`backend-parity-rollup`) for easier trend consumption.
 64. Added backend-parity cross-run telemetry history aggregation (`embedded-snapshot-telemetry-history.mjs`) in `telemetry-rollup`, downloading recent successful `backend-parity-rollup` artifacts to publish history stats (`runs_total`, failure trend, latest-run summary) into step summary + artifacts.
+65. Integrated backend-parity telemetry history checks into `core-production-gate` (summary ingestion + thresholded warn/fail control via workflow inputs), and surfaced check/history payloads in gate summaries/artifacts.
 
 ## Next Steps
 
 1. Expand embedded local runtime beyond recall/write baseline (rules evaluate, planning context, packs/session parity).
-2. Reuse telemetry history output in core/governance gates (for example, thresholded week-over-week drift checks and scheduled trend snapshots).
+2. Add drift-oriented thresholds on history metrics (for example, `persist_total_avg` and `dropped_nodes_max` week-over-week deltas) to move from static bounds to trend gates.
 3. Keep local smoke command and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).

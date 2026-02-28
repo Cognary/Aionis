@@ -23,6 +23,26 @@ on:
         required: false
         default: "0.05"
         type: string
+      backend_parity_history_enforce:
+        description: "Fail if backend parity history thresholds are violated"
+        required: false
+        default: false
+        type: boolean
+      backend_parity_history_min_runs:
+        description: "Minimum backend parity history runs required"
+        required: false
+        default: "2"
+        type: string
+      backend_parity_history_max_failed_runs:
+        description: "Maximum failed runs allowed in backend parity history"
+        required: false
+        default: "0"
+        type: string
+      backend_parity_history_max_latest_failed_samples:
+        description: "Maximum latest failed samples allowed in backend parity history"
+        required: false
+        default: "0"
+        type: string
   push:
     branches: ["main"]
     paths:
@@ -34,6 +54,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: core-production-gate-${{ github.ref }}
@@ -153,6 +174,126 @@ jobs:
             --strict-warnings \
             --out-dir "${out_dir}"
 
+      - name: Backend parity telemetry history check
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          ENFORCE_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_enforce || 'false' }}"
+          MIN_RUNS_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_min_runs || '2' }}"
+          MAX_FAILED_RUNS_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_max_failed_runs || '0' }}"
+          MAX_LATEST_FAILED_SAMPLES_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backend_parity_history_max_latest_failed_samples || '0' }}"
+
+          enforce="$(printf '%s' "${ENFORCE_INPUT}" | tr '[:upper:]' '[:lower:]')"
+          if [[ "${enforce}" != "true" ]]; then enforce="false"; fi
+
+          min_runs="${MIN_RUNS_INPUT}"
+          max_failed_runs="${MAX_FAILED_RUNS_INPUT}"
+          max_latest_failed_samples="${MAX_LATEST_FAILED_SAMPLES_INPUT}"
+          [[ "${min_runs}" =~ ^[0-9]+$ ]] || min_runs="2"
+          [[ "${max_failed_runs}" =~ ^[0-9]+$ ]] || max_failed_runs="0"
+          [[ "${max_latest_failed_samples}" =~ ^[0-9]+$ ]] || max_latest_failed_samples="0"
+
+          out_dir="artifacts/core_gate/backend_parity_history"
+          mkdir -p "${out_dir}"
+          check_file="${out_dir}/check.json"
+          reasons_json='[]'
+          status="ok"
+          source_run_id=""
+          source_head_sha=""
+          runs_total=0
+          runs_with_failures=0
+          latest_failed_samples=0
+          history_summary_file=""
+
+          add_reason() {
+            local reason="$1"
+            reasons_json="$(jq -c --arg reason "${reason}" '. + [$reason]' <<<"${reasons_json}")"
+          }
+
+          if latest_runs_json="$(gh run list --workflow "Backend Parity Smoke" --branch main --limit 20 --json databaseId,conclusion,headSha,createdAt 2>/tmp/core_gate_backend_parity_history_gh_list.err)"; then
+            source_run_id="$(jq -r '[.[] | select(.conclusion=="success")] | first | .databaseId // empty' <<<"${latest_runs_json}")"
+            source_head_sha="$(jq -r '[.[] | select(.conclusion=="success")] | first | .headSha // empty' <<<"${latest_runs_json}")"
+          else
+            add_reason "gh_run_list_failed"
+          fi
+
+          if [[ -z "${source_run_id}" ]]; then
+            add_reason "no_successful_backend_parity_run_found"
+          else
+            dl_dir="$(mktemp -d)"
+            if gh run download "${source_run_id}" -n backend-parity-rollup -D "${dl_dir}" >/tmp/core_gate_backend_parity_history_gh_download.log 2>&1; then
+              history_summary_file="$(find "${dl_dir}" -type f -path '*/history/summary.json' | head -n 1 || true)"
+              if [[ -n "${history_summary_file}" && -f "${history_summary_file}" ]]; then
+                cp "${history_summary_file}" "${out_dir}/history_summary_run_${source_run_id}.json"
+                runs_total="$(jq -r '.runs_total // 0' "${history_summary_file}")"
+                runs_with_failures="$(jq -r '.runs_with_failures // 0' "${history_summary_file}")"
+                latest_failed_samples="$(jq -r '.latest.failed_samples // 0' "${history_summary_file}")"
+              else
+                add_reason "history_summary_missing_in_backend_parity_rollup_artifact"
+              fi
+            else
+              add_reason "gh_run_download_backend_parity_rollup_failed"
+            fi
+            rm -rf "${dl_dir}" || true
+          fi
+
+          if [[ "${runs_total}" -lt "${min_runs}" ]]; then
+            add_reason "runs_total_below_min_threshold"
+          fi
+          if [[ "${runs_with_failures}" -gt "${max_failed_runs}" ]]; then
+            add_reason "runs_with_failures_above_threshold"
+          fi
+          if [[ "${latest_failed_samples}" -gt "${max_latest_failed_samples}" ]]; then
+            add_reason "latest_failed_samples_above_threshold"
+          fi
+
+          reasons_count="$(jq 'length' <<<"${reasons_json}")"
+          if [[ "${reasons_count}" -gt 0 ]]; then
+            status="warn"
+            if [[ "${enforce}" == "true" ]]; then
+              status="fail"
+            fi
+          fi
+
+          jq -n \
+            --arg status "${status}" \
+            --argjson enforce "${enforce}" \
+            --arg source_run_id "${source_run_id}" \
+            --arg source_head_sha "${source_head_sha}" \
+            --argjson runs_total "${runs_total}" \
+            --argjson runs_with_failures "${runs_with_failures}" \
+            --argjson latest_failed_samples "${latest_failed_samples}" \
+            --argjson min_runs "${min_runs}" \
+            --argjson max_failed_runs "${max_failed_runs}" \
+            --argjson max_latest_failed_samples "${max_latest_failed_samples}" \
+            --argjson reasons "${reasons_json}" \
+            '{
+              status: $status,
+              enforce: $enforce,
+              source_run_id: (if $source_run_id == "" then null else $source_run_id end),
+              source_head_sha: (if $source_head_sha == "" then null else $source_head_sha end),
+              thresholds: {
+                min_runs: $min_runs,
+                max_failed_runs: $max_failed_runs,
+                max_latest_failed_samples: $max_latest_failed_samples
+              },
+              runs_total: $runs_total,
+              runs_with_failures: $runs_with_failures,
+              latest_failed_samples: $latest_failed_samples,
+              reasons: $reasons
+            }' > "${check_file}"
+
+          cat "${check_file}"
+
+          if [[ "${status}" == "fail" ]]; then
+            echo "backend parity telemetry history thresholds violated in enforce mode" >&2
+            exit 1
+          fi
+
       - name: Publish summary
         if: always()
         shell: bash
@@ -160,6 +301,8 @@ jobs:
           set -euo pipefail
           summary_file="$(find artifacts/core_gate -type f -name summary.json | sort | tail -n 1 || true)"
           governance_summary_file="$(find artifacts/governance -type f -name summary.json | sort | tail -n 1 || true)"
+          backend_parity_history_check_file="artifacts/core_gate/backend_parity_history/check.json"
+          backend_parity_history_summary_file="$(find artifacts/core_gate/backend_parity_history -type f -name 'history_summary_run_*.json' | sort | tail -n 1 || true)"
           {
             echo "## Core Production Gate"
             echo
@@ -179,6 +322,24 @@ jobs:
               jq '.' "${governance_summary_file}"
             else
               echo "summary not found"
+            fi
+            echo
+            echo "## Backend Parity Telemetry History"
+            echo
+            if [[ -f "${backend_parity_history_check_file}" ]]; then
+              echo "check: \`${backend_parity_history_check_file}\`"
+              echo
+              jq '.' "${backend_parity_history_check_file}"
+            else
+              echo "check not found"
+            fi
+            echo
+            if [[ -n "${backend_parity_history_summary_file}" && -f "${backend_parity_history_summary_file}" ]]; then
+              echo "history summary: \`${backend_parity_history_summary_file}\`"
+              echo
+              jq '{ok, runs_total, runs_with_failures, latest, stats, failed_runs}' "${backend_parity_history_summary_file}"
+            else
+              echo "history summary not found"
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
@@ -201,6 +362,8 @@ jobs:
           mkdir -p /tmp/core_gate_diag
           cp /tmp/core_gate_capability_api_probe.json /tmp/core_gate_diag/capability_api_probe.json 2>/dev/null || true
           cp /tmp/core_gate_policy_planner_probe.json /tmp/core_gate_diag/policy_planner_api_probe.json 2>/dev/null || true
+          cp artifacts/core_gate/backend_parity_history/check.json /tmp/core_gate_diag/backend_parity_history_check.json 2>/dev/null || true
+          cp artifacts/core_gate/backend_parity_history/history_summary_run_*.json /tmp/core_gate_diag/ 2>/dev/null || true
           find artifacts/core_gate -type f -maxdepth 3 2>/dev/null | sort > /tmp/core_gate_diag/files.txt || true
           summary_file="$(find artifacts/core_gate -type f -name summary.json | sort | tail -n 1 || true)"
           if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then
