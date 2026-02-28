@@ -403,12 +403,24 @@ test("capability probe forces shadow soft-degrade when include flag is true", as
 
 test("policy-planner probe marks planning as skipped on no_embedding_provider", async () => {
   const mock = await createMockServer(async (req) => {
+    if (req.path === "/v1/memory/write") {
+      return {
+        status: 200,
+        body: {
+          commit_id: "c_seed_rule",
+          nodes: [{ id: String(req.body?.nodes?.[0]?.id ?? "rule-1"), type: "rule" }],
+        },
+      };
+    }
+    if (req.path === "/v1/memory/rules/state") {
+      return { status: 200, body: { commit_id: "c_rule_state" } };
+    }
     if (req.path === "/v1/memory/rules/evaluate") {
       return {
         status: 200,
         body: {
-          considered: 0,
-          matched: 0,
+          considered: 1,
+          matched: 1,
           active: [],
           shadow: [],
           applied: {},
@@ -417,14 +429,47 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
       };
     }
     if (req.path === "/v1/memory/tools/select") {
+      const cands = Array.isArray(req.body?.candidates) ? req.body.candidates.map((v) => String(v)) : ["tool_a"];
       return {
         status: 200,
         body: {
+          decision: { decision_id: "decision_provided_1" },
           selection: {
-            selected: "curl",
-            ordered: ["curl", "psql", "bash"],
+            selected: cands[0] ?? null,
+            ordered: cands,
           },
           rules: {},
+        },
+      };
+    }
+    if (req.path === "/v1/memory/tools/feedback") {
+      const feedbackRunId = String(req.body?.run_id ?? "");
+      if (req.body?.decision_id) {
+        return {
+          status: 200,
+          body: {
+            updated_rules: 1,
+            decision_id: "decision_provided_1",
+            decision_link_mode: "provided",
+          },
+        };
+      }
+      if (feedbackRunId.endsWith("_fresh")) {
+        return {
+          status: 200,
+          body: {
+            updated_rules: 1,
+            decision_id: "decision_created_1",
+            decision_link_mode: "created_from_feedback",
+          },
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          updated_rules: 1,
+          decision_id: "decision_provided_1",
+          decision_link_mode: "inferred",
         },
       };
     }
@@ -449,6 +494,9 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
     assert.equal(parsed.ok, true);
     assert.equal(parsed.results.planning.skipped, true);
     assert.equal(parsed.results.planning.reason, "no_embedding_provider");
+    assert.equal(parsed.results.provenance.provided.decision_link_mode, "provided");
+    assert.equal(parsed.results.provenance.inferred.decision_link_mode, "inferred");
+    assert.equal(parsed.results.provenance.created_from_feedback.decision_link_mode, "created_from_feedback");
   } finally {
     await mock.close();
   }
@@ -456,6 +504,18 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
 
 test("policy-planner probe fails when planning/tools selected mismatch", async () => {
   const mock = await createMockServer(async (req) => {
+    if (req.path === "/v1/memory/write") {
+      return {
+        status: 200,
+        body: {
+          commit_id: "c_seed_rule_2",
+          nodes: [{ id: String(req.body?.nodes?.[0]?.id ?? "rule-2"), type: "rule" }],
+        },
+      };
+    }
+    if (req.path === "/v1/memory/rules/state") {
+      return { status: 200, body: { commit_id: "c_rule_state_2" } };
+    }
     if (req.path === "/v1/memory/rules/evaluate") {
       return {
         status: 200,
@@ -470,22 +530,56 @@ test("policy-planner probe fails when planning/tools selected mismatch", async (
       };
     }
     if (req.path === "/v1/memory/tools/select") {
+      const cands = Array.isArray(req.body?.candidates) ? req.body.candidates.map((v) => String(v)) : ["tool_a", "tool_b"];
       return {
         status: 200,
         body: {
-          selection: { selected: "curl", ordered: ["curl", "psql", "bash"] },
+          decision: { decision_id: "decision_provided_2" },
+          selection: { selected: cands[0] ?? null, ordered: cands },
           rules: {},
         },
       };
     }
+    if (req.path === "/v1/memory/tools/feedback") {
+      const feedbackRunId = String(req.body?.run_id ?? "");
+      if (req.body?.decision_id) {
+        return {
+          status: 200,
+          body: {
+            updated_rules: 1,
+            decision_id: "decision_provided_2",
+            decision_link_mode: "provided",
+          },
+        };
+      }
+      if (feedbackRunId.endsWith("_fresh")) {
+        return {
+          status: 200,
+          body: {
+            updated_rules: 1,
+            decision_id: "decision_created_2",
+            decision_link_mode: "created_from_feedback",
+          },
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          updated_rules: 1,
+          decision_id: "decision_provided_2",
+          decision_link_mode: "inferred",
+        },
+      };
+    }
     if (req.path === "/v1/memory/planning/context") {
+      const cands = Array.isArray(req.body?.tool_candidates) ? req.body.tool_candidates.map((v) => String(v)) : ["tool_a", "tool_b"];
       return {
         status: 200,
         body: {
           query: { embedding_provider: "fake" },
           recall: { subgraph: { nodes: [] } },
           rules: { considered: 2, matched: 1 },
-          tools: { selection: { selected: "psql" } },
+          tools: { selection: { selected: cands[1] ?? "different_tool" } },
         },
       };
     }
