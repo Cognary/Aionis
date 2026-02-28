@@ -269,6 +269,26 @@ export type EmbeddedPackSnapshotView = {
   };
 };
 
+export type EmbeddedRuleCandidateView = {
+  rule_node_id: string;
+  state: "draft" | "shadow" | "active";
+  rule_scope: "global" | "team" | "agent";
+  target_agent_id: string | null;
+  target_team_id: string | null;
+  rule_memory_lane: "private" | "shared";
+  rule_owner_agent_id: string | null;
+  rule_owner_team_id: string | null;
+  if_json: any;
+  then_json: any;
+  exceptions_json: any;
+  positive_count: number;
+  negative_count: number;
+  rule_commit_id: string;
+  rule_summary: string | null;
+  rule_slots: any;
+  updated_at: string;
+};
+
 function nodeKey(scope: string, id: string): string {
   return `${scope}::${id}`;
 }
@@ -612,7 +632,7 @@ export class EmbeddedMemoryRuntime {
       commits = chosen.map((c) => ({
         id: c.id,
         parent_id: null,
-        input_sha256: "",
+        input_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
         actor: "embedded_runtime",
         model_version: null,
         prompt_version: null,
@@ -631,6 +651,42 @@ export class EmbeddedMemoryRuntime {
         commits: commitsHasMore,
       },
     };
+  }
+
+  listRuleCandidates(params: {
+    scope: string;
+    limit: number;
+    states?: Array<"shadow" | "active">;
+  }): EmbeddedRuleCandidateView[] {
+    const allowed = new Set<string>((params.states && params.states.length > 0 ? params.states : ["shadow", "active"]).map(String));
+    const all: EmbeddedRuleCandidateView[] = [];
+    for (const def of this.ruleDefs.values()) {
+      if (def.scope !== params.scope) continue;
+      if (!allowed.has(def.state)) continue;
+      const node = this.nodes.get(nodeKey(def.scope, def.rule_node_id));
+      if (!node) continue;
+      all.push({
+        rule_node_id: def.rule_node_id,
+        state: def.state,
+        rule_scope: def.rule_scope,
+        target_agent_id: def.target_agent_id,
+        target_team_id: def.target_team_id,
+        rule_memory_lane: node.memory_lane,
+        rule_owner_agent_id: node.owner_agent_id,
+        rule_owner_team_id: node.owner_team_id,
+        if_json: def.if_json,
+        then_json: def.then_json,
+        exceptions_json: def.exceptions_json,
+        positive_count: def.positive_count,
+        negative_count: def.negative_count,
+        rule_commit_id: node.commit_id ?? "",
+        rule_summary: node.text_summary ?? null,
+        rule_slots: node.slots ?? {},
+        updated_at: node.updated_at,
+      });
+    }
+    all.sort((a, b) => compareCreatedAtDesc(a.updated_at, b.updated_at) || a.rule_node_id.localeCompare(b.rule_node_id));
+    return all.slice(0, Math.max(0, params.limit));
   }
 
   async applyWrite(prepared: EmbeddedWritePrepared, out: EmbeddedWriteResult): Promise<void> {

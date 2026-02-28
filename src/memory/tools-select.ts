@@ -10,6 +10,7 @@ import { ToolsSelectRequest } from "./schemas.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { applyToolPolicy } from "./tool-selector.js";
+import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 
 function summarizeToolConflicts(explain: any): string[] {
   const conflicts = Array.isArray(explain?.conflicts) ? explain.conflicts : [];
@@ -28,7 +29,13 @@ function summarizeToolConflicts(explain: any): string[] {
   return out;
 }
 
-export async function selectTools(client: pg.PoolClient, body: unknown, defaultScope: string, defaultTenantId: string) {
+export async function selectTools(
+  client: pg.PoolClient,
+  body: unknown,
+  defaultScope: string,
+  defaultTenantId: string,
+  opts: { embeddedRuntime?: EmbeddedMemoryRuntime | null } = {},
+) {
   const parsed = ToolsSelectRequest.parse(body);
   const tenancy = resolveTenantScope(
     { scope: parsed.scope, tenant_id: parsed.tenant_id },
@@ -43,7 +50,7 @@ export async function selectTools(client: pg.PoolClient, body: unknown, defaultS
     context: parsed.context,
     include_shadow: parsed.include_shadow,
     limit: parsed.rules_limit,
-  });
+  }, { embeddedRuntime: opts.embeddedRuntime ?? null });
 
   const selection = applyToolPolicy(normalizedCandidates, rules.applied.policy, { strict: parsed.strict });
 

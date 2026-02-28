@@ -1935,6 +1935,7 @@ app.post("/v1/memory/recall", async (req, reply) => {
           },
           env.MEMORY_SCOPE,
           env.MEMORY_TENANT_ID,
+          { embeddedRuntime },
         );
 
         (base as any).rules = {
@@ -2198,6 +2199,7 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
           },
           env.MEMORY_SCOPE,
           env.MEMORY_TENANT_ID,
+          { embeddedRuntime },
         );
         (base as any).rules = {
           scope: rulesRes.scope,
@@ -2473,6 +2475,7 @@ app.post("/v1/memory/planning/context", async (req, reply) => {
         },
         env.MEMORY_SCOPE,
         env.MEMORY_TENANT_ID,
+        { embeddedRuntime },
       );
 
       let tools: any = null;
@@ -2491,6 +2494,7 @@ app.post("/v1/memory/planning/context", async (req, reply) => {
           },
           env.MEMORY_SCOPE,
           env.MEMORY_TENANT_ID,
+          { embeddedRuntime },
         );
       }
 
@@ -2626,7 +2630,7 @@ app.post("/v1/memory/rules/evaluate", async (req, reply) => {
   let out: any;
   try {
     out = await store.withClient(async (client) => {
-      return await evaluateRules(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID);
+      return await evaluateRules(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, { embeddedRuntime });
     });
   } finally {
     gate.release();
@@ -2645,7 +2649,7 @@ app.post("/v1/memory/tools/select", async (req, reply) => {
   let out: any;
   try {
     out = await store.withClient(async (client) => {
-      return await selectTools(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID);
+      return await selectTools(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, { embeddedRuntime });
     });
   } finally {
     gate.release();
@@ -2664,6 +2668,7 @@ app.post("/v1/memory/tools/feedback", async (req, reply) => {
     toolSelectionFeedback(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
       maxTextLen: env.MAX_TEXT_LEN,
       piiRedaction: env.PII_REDACTION,
+      embeddedRuntime,
     }),
   );
   return reply.code(200).send(out);

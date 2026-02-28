@@ -4,6 +4,7 @@ import { ruleMatchesContext } from "./rule-engine.js";
 import { buildAppliedPolicy, parsePolicyPatch, type PolicyPatch } from "./rule-policy.js";
 import { computeEffectiveToolPolicy } from "./tool-policy.js";
 import { resolveTenantScope } from "./tenant.js";
+import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 
 type RuleRow = {
   rule_node_id: string;
@@ -32,6 +33,10 @@ type RuleRankMeta = {
   weight: number;
   specificity: number;
   condition_paths: string[];
+};
+
+type EvaluateRulesOptions = {
+  embeddedRuntime?: EmbeddedMemoryRuntime | null;
 };
 
 function isPlainObject(v: any): v is Record<string, any> {
@@ -238,15 +243,7 @@ function buildConflictExplain(
   return out;
 }
 
-export async function evaluateRules(client: pg.PoolClient, body: unknown, defaultScope: string, defaultTenantId: string) {
-  const parsed = RulesEvaluateRequest.parse(body);
-  const tenancy = resolveTenantScope(
-    { scope: parsed.scope, tenant_id: parsed.tenant_id },
-    { defaultScope, defaultTenantId },
-  );
-  const scope = tenancy.scope_key;
-
-  // Fetch candidate rules (shadow/active only). Explicit select list; never fetch embeddings here.
+async function queryRuleRows(client: pg.PoolClient, scope: string, limit: number): Promise<RuleRow[]> {
   const rr = await client.query<RuleRow>(
     `
     SELECT
@@ -274,8 +271,62 @@ export async function evaluateRules(client: pg.PoolClient, body: unknown, defaul
     ORDER BY d.updated_at DESC
     LIMIT $2
     `,
-    [scope, parsed.limit],
+    [scope, limit],
   );
+  return rr.rows;
+}
+
+async function loadRuleRows(
+  client: pg.PoolClient,
+  scope: string,
+  limit: number,
+  embeddedRuntime: EmbeddedMemoryRuntime | null | undefined,
+): Promise<RuleRow[]> {
+  if (embeddedRuntime) {
+    return embeddedRuntime
+      .listRuleCandidates({
+        scope,
+        limit,
+        states: ["shadow", "active"],
+      })
+      .map((r) => ({
+        rule_node_id: r.rule_node_id,
+        state: r.state,
+        rule_scope: r.rule_scope,
+        target_agent_id: r.target_agent_id,
+        target_team_id: r.target_team_id,
+        rule_memory_lane: r.rule_memory_lane,
+        rule_owner_agent_id: r.rule_owner_agent_id,
+        rule_owner_team_id: r.rule_owner_team_id,
+        if_json: r.if_json,
+        then_json: r.then_json,
+        exceptions_json: r.exceptions_json,
+        positive_count: r.positive_count,
+        negative_count: r.negative_count,
+        rule_commit_id: r.rule_commit_id,
+        rule_summary: r.rule_summary,
+        rule_slots: r.rule_slots,
+        updated_at: r.updated_at,
+      }));
+  }
+  return await queryRuleRows(client, scope, limit);
+}
+
+export async function evaluateRules(
+  client: pg.PoolClient,
+  body: unknown,
+  defaultScope: string,
+  defaultTenantId: string,
+  opts: EvaluateRulesOptions = {},
+) {
+  const parsed = RulesEvaluateRequest.parse(body);
+  const tenancy = resolveTenantScope(
+    { scope: parsed.scope, tenant_id: parsed.tenant_id },
+    { defaultScope, defaultTenantId },
+  );
+  const scope = tenancy.scope_key;
+
+  const rows = await loadRuleRows(client, scope, parsed.limit, opts.embeddedRuntime);
 
   const ctx = parsed.context;
   const ctxAgentId = contextAgentId(ctx);
@@ -293,7 +344,7 @@ export async function evaluateRules(client: pg.PoolClient, body: unknown, defaul
   let filtered_by_condition = 0;
   let legacy_unowned_private_detected = 0;
 
-  for (const r of rr.rows) {
+  for (const r of rows) {
     if (!scopeRuleMatchesContext(r, ctx)) {
       filtered_by_scope += 1;
       continue;
@@ -436,7 +487,7 @@ export async function evaluateRules(client: pg.PoolClient, body: unknown, defaul
   return {
     scope: tenancy.scope,
     tenant_id: tenancy.tenant_id,
-    considered: rr.rowCount ?? rr.rows.length,
+    considered: rows.length,
     matched: active.length + shadow.length,
     skipped_invalid_then,
     invalid_then_sample,
@@ -445,7 +496,7 @@ export async function evaluateRules(client: pg.PoolClient, body: unknown, defaul
     agent_visibility_summary: {
       agent: { id: ctxAgentId, team_id: ctxTeamId },
       rule_scope: {
-        scanned: rr.rowCount ?? rr.rows.length,
+        scanned: rows.length,
         filtered_by_scope,
         filtered_by_lane,
         filtered_by_condition,
@@ -483,6 +534,7 @@ export async function evaluateRules(client: pg.PoolClient, body: unknown, defaul
 export async function evaluateRulesAppliedOnly(
   client: pg.PoolClient,
   params: { scope: string; tenant_id?: string; context: any; include_shadow: boolean; limit: number; default_tenant_id?: string },
+  opts: EvaluateRulesOptions = {},
 ) {
   const tenancy = resolveTenantScope(
     { scope: params.scope, tenant_id: params.tenant_id },
@@ -492,35 +544,7 @@ export async function evaluateRulesAppliedOnly(
   const ctxAgentId = contextAgentId(params.context);
   const ctxTeamId = contextTeamId(params.context);
   const laneStatus = laneEnforcementStatus(ctxAgentId, ctxTeamId);
-  const rr = await client.query<RuleRow>(
-    `
-    SELECT
-      d.rule_node_id,
-      d.state::text AS state,
-      d.rule_scope::text AS rule_scope,
-      d.target_agent_id,
-      d.target_team_id,
-      n.memory_lane::text AS rule_memory_lane,
-      n.owner_agent_id AS rule_owner_agent_id,
-      n.owner_team_id AS rule_owner_team_id,
-      d.if_json,
-      d.then_json,
-      d.exceptions_json,
-      d.positive_count,
-      d.negative_count,
-      d.commit_id::text AS rule_commit_id,
-      n.text_summary AS rule_summary,
-      n.slots AS rule_slots,
-      d.updated_at::text AS updated_at
-    FROM memory_rule_defs d
-    JOIN memory_nodes n ON n.id = d.rule_node_id AND n.scope = d.scope
-    WHERE d.scope = $1
-      AND d.state IN ('shadow', 'active')
-    ORDER BY d.updated_at DESC
-    LIMIT $2
-    `,
-    [scope, params.limit],
-  );
+  const rows = await loadRuleRows(client, scope, params.limit, opts.embeddedRuntime);
 
   const activeForMerge: Array<{ rule_node_id: string; commit_id: string; rank: RuleRankMeta; then_patch: PolicyPatch }> = [];
   const shadowForMerge: Array<{ rule_node_id: string; commit_id: string; rank: RuleRankMeta; then_patch: PolicyPatch }> = [];
@@ -532,7 +556,7 @@ export async function evaluateRulesAppliedOnly(
   let filtered_by_condition = 0;
   let legacy_unowned_private_detected = 0;
 
-  for (const r of rr.rows) {
+  for (const r of rows) {
     if (!scopeRuleMatchesContext(r, params.context)) {
       filtered_by_scope += 1;
       continue;
@@ -637,14 +661,14 @@ export async function evaluateRulesAppliedOnly(
   return {
     scope: tenancy.scope,
     tenant_id: tenancy.tenant_id,
-    considered: rr.rowCount ?? rr.rows.length,
+    considered: rows.length,
     matched: activeForMerge.length + shadowForMerge.length,
     skipped_invalid_then,
     invalid_then_sample,
     agent_visibility_summary: {
       agent: { id: ctxAgentId, team_id: ctxTeamId },
       rule_scope: {
-        scanned: rr.rowCount ?? rr.rows.length,
+        scanned: rows.length,
         filtered_by_scope,
         filtered_by_lane,
         filtered_by_condition,

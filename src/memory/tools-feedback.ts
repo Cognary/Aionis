@@ -14,10 +14,12 @@ import {
 import { ToolsFeedbackRequest } from "./schemas.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
+import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 
 type FeedbackOptions = {
   maxTextLen: number;
   piiRedaction: boolean;
+  embeddedRuntime?: EmbeddedMemoryRuntime | null;
 };
 
 type DecisionRow = {
@@ -231,7 +233,7 @@ export async function toolSelectionFeedback(
     context: parsed.context,
     include_shadow: parsed.include_shadow,
     limit: parsed.rules_limit,
-  });
+  }, { embeddedRuntime: opts.embeddedRuntime ?? null });
 
   const activeSources: Array<{ rule_node_id: string; state: "active" | "shadow"; commit_id: string; touched_paths: string[] }> =
     ((rules.applied as any)?.sources as any[]) ?? [];

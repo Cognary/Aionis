@@ -97,9 +97,10 @@ Completed in this phase:
 65. Integrated backend-parity telemetry history checks into `core-production-gate` (summary ingestion + thresholded warn/fail control via workflow inputs), and surfaced check/history payloads in gate summaries/artifacts.
 66. Added drift-oriented backend-parity history gates in `core-production-gate` (`persist_total_avg` delta and `dropped_nodes_max` delta between latest and previous run), with configurable workflow inputs and explicit observed/threshold fields in check output.
 67. Extended embedded local runtime beyond recall/write baseline for `sessions` + `packs`: added runtime-native `session events` read path and pack snapshot export path, wired API routes to prefer runtime when `MEMORY_STORE_BACKEND=embedded`, and fixed `packs/import` embedded runtime mirror propagation.
+68. Extended embedded runtime integration for policy/planner rule reads: `evaluateRules`/`evaluateRulesAppliedOnly` now support embedded rule candidate sources, and `tools/select` + `tools/feedback` + `planning/context`/`rules/evaluate` routes now pass embedded runtime through rule-evaluation paths.
 
 ## Next Steps
 
-1. Continue embedded runtime expansion for policy/planner paths (`rules/evaluate`, `tools/select`, `planning/context`) to reduce remaining Postgres coupling in embedded mode.
+1. Continue embedded runtime expansion for policy/planner write-side paths (for example `tools/feedback` execution decision/feedback persistence and rule state mutation parity) to reduce remaining Postgres coupling in embedded mode.
 2. Calibrate drift thresholds from observed baseline windows (for example, p95 delta bands over last N runs) and promote selected warns to enforce mode.
 3. Keep local smoke command and SDK helper snippets aligned with future strict-failure contract evolution (error/details schema).
