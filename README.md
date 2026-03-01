@@ -9,7 +9,7 @@ Aionis gives your agents durable memory with real APIs, operational guardrails, 
 1. Durable memory graph (`nodes + edges + commits`) with auditable commit lineage
 2. LLM-ready retrieval API (`/v1/memory/recall_text`)
 3. Async embedding pipeline (write path remains available under embedding pressure)
-4. Policy loop (`rules/evaluate`, `tools/select`, `tools/feedback`)
+4. Feedback-driven policy loop (`rules/evaluate`, `tools/select`, `tools/feedback`)
 5. Multi-tenant scope isolation (`tenant_id + scope`)
 6. TypeScript/Python SDKs + Docker runtime
 7. Production guardrails (preflight, consistency checks, regression/perf gates)
@@ -21,6 +21,40 @@ Most agent memory offerings stop at retrieval. Aionis is built for production wo
 1. `Verifiable`: source-of-record write path + commit chain for audit/replay
 2. `Operable`: explicit production preflight/gate workflow instead of best-effort scripts
 3. `Memory -> Policy`: memory affects planner/tool behavior with traceable feedback loops
+
+## Adaptive Policy Loop (What "Self-Learning" Means In Aionis)
+
+Aionis does not claim unconstrained autonomous learning. It implements bounded, auditable adaptation:
+
+1. Execution feedback is captured with `run_id` and `decision_id` linkage (`/v1/memory/tools/feedback`)
+2. Active rules influence runtime tool decisions (`/v1/memory/tools/select`) with explainable source-rule traces
+3. Rule lifecycle is controlled (`draft` / `shadow` / `active`), so policy changes are reviewable and governable
+4. Weekly evidence gates verify signal quality, replayability, and governance posture before release
+
+Primary references:
+
+- [Differentiation Evidence](docs/DIFFERENTIATION_EVIDENCE.md)
+- [Execution Loop Gate](docs/EXECUTION_LOOP_GATE.md)
+- [Governance Weekly Report](docs/GOVERNANCE_WEEKLY_REPORT.md)
+- [Policy Adaptation Gate](docs/POLICY_ADAPTATION_GATE.md)
+- [Rule Lifecycle](docs/RULE_LIFECYCLE.md)
+
+## Policy-Loop Benchmark Snapshot (XMB-006, 2026-03-01)
+
+From weekly strict evidence pack (`artifacts/evidence/weekly/2026-W09_local_verify_04`):
+
+| Metric | Retrieval-only baseline | Policy loop | Delta |
+| --- | --- | --- | --- |
+| Success rate | 0.50 | 1.00 | +0.50 |
+| Selection switches | 19 | 0 | -19 |
+| Feedback link coverage | n/a | 1.00 | +1.00 |
+| Source rule coverage | n/a | 1.00 | +1.00 |
+
+Reproduce in one command:
+
+```bash
+npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
+```
 
 ## Benchmark Snapshot (2026-03-01)
 

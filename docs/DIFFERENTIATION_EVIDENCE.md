@@ -9,6 +9,11 @@ This runbook turns two claims into executable evidence:
 1. Aionis policy loop outperforms retrieval-only behavior on success/stability/controllability.
 2. Governance, replay, and audit are visible operational capabilities (not docs-only).
 
+Terminology note:
+
+1. "Self-learning" in Aionis means feedback-driven policy adaptation with explicit guardrails.
+2. It is not unconstrained autonomous model training.
+
 ## Evidence Axes
 
 1. Success: task/tool outcome correctness under repeated runs.

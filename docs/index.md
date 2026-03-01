@@ -27,6 +27,8 @@ features:
     details: Preflight checks, consistency jobs, production gates, and runbooks built into the delivery flow.
   - title: Memory -> Policy
     details: Rules, tool selection, and feedback turn memory into executable behavior, not only retrieval text.
+  - title: Feedback-Driven Adaptation
+    details: A bounded "self-learning" loop: execution feedback updates governable rule behavior with audit traces.
   - title: API + SDK Ready
     details: Stable API contract with TypeScript and Python SDKs for fast product integration.
   - title: Multi-tenant Scope Isolation
@@ -40,6 +42,21 @@ features:
 1. Most memory products stop at retrieval. Aionis also gives you auditability and operational controls.
 2. Write-path reliability is protected with derived-async architecture, so memory writes do not depend on embedding availability.
 3. You get production evidence gates, not only feature endpoints.
+
+## Adaptive Policy Loop (Self-Learning, But Governed)
+
+In Aionis, "self-learning" means feedback-driven policy adaptation under guardrails:
+
+1. Decision path: `/v1/memory/tools/select` chooses tools based on active rules and context.
+2. Feedback path: `/v1/memory/tools/feedback` links outcomes back to `run_id` and `decision_id`.
+3. Governance path: execution-loop + weekly governance gates verify coverage, drift, and replayability before release.
+
+Reference docs:
+
+1. [Differentiation Evidence](./DIFFERENTIATION_EVIDENCE.md)
+2. [Execution Loop Gate](./EXECUTION_LOOP_GATE.md)
+3. [Governance Weekly Report](./GOVERNANCE_WEEKLY_REPORT.md)
+4. [Policy Adaptation Gate](./POLICY_ADAPTATION_GATE.md)
 
 ## Product Entry Points
 
@@ -110,6 +127,20 @@ Data source and methodology:
 
 1. [Performance Baseline](./PERFORMANCE_BASELINE.md)
 2. [Production Core Gate](./PRODUCTION_CORE_GATE.md)
+
+Policy-loop benchmark snapshot (`XMB-006`, `2026-03-01`):
+
+1. baseline success rate: `0.50`
+2. policy-loop success rate: `1.00`
+3. success gain: `+0.50`
+4. selection switches: `19 -> 0`
+5. feedback/source-rule coverage: `1.00 / 1.00`
+
+Reproduce:
+
+```bash
+npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
+```
 
 ## Integration + Distribution
 
