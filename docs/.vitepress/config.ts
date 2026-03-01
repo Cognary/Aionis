@@ -42,7 +42,7 @@ export default defineConfig({
       { text: "API", link: "/API_CONTRACT" },
       { text: "SDK", link: "/SDK" },
       { text: "Ops", link: "/OPERATOR_RUNBOOK" },
-      { text: "Integrations", link: "/OPENWORK_INTEGRATION" },
+      { text: "Integrations", link: "/MCP_INTEGRATION" },
       { text: "GitHub", link: "https://github.com/Cognary/Aionis" },
     ],
     sidebar: [
@@ -91,6 +91,7 @@ export default defineConfig({
       {
         text: "Integrations",
         items: [
+          { text: "MCP Integration", link: "/MCP_INTEGRATION" },
           { text: "OpenWork", link: "/OPENWORK_INTEGRATION" },
           { text: "LangGraph", link: "/LANGGRAPH_INTEGRATION" },
         ],

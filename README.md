@@ -208,6 +208,7 @@ Release docs:
 
 Docs:
 
+- [MCP Integration](docs/MCP_INTEGRATION.md)
 - [OpenWork Integration](docs/OPENWORK_INTEGRATION.md)
 - [LangGraph Integration](docs/LANGGRAPH_INTEGRATION.md)
 

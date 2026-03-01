@@ -111,8 +111,9 @@ Data source and methodology:
 1. npm SDK: [@aionis/sdk](https://www.npmjs.com/package/@aionis/sdk)
 2. PyPI SDK: [aionis-sdk](https://pypi.org/project/aionis-sdk/)
 3. Docker image: [ghcr.io/cognary/aionis](https://github.com/orgs/cognary/packages/container/package/aionis)
-4. OpenWork integration: [OPENWORK_INTEGRATION](./OPENWORK_INTEGRATION.md)
-5. LangGraph integration: [LANGGRAPH_INTEGRATION](./LANGGRAPH_INTEGRATION.md)
+4. MCP integration: [MCP_INTEGRATION](./MCP_INTEGRATION.md)
+5. OpenWork integration: [OPENWORK_INTEGRATION](./OPENWORK_INTEGRATION.md)
+6. LangGraph integration: [LANGGRAPH_INTEGRATION](./LANGGRAPH_INTEGRATION.md)
 
 ## Interactive Evidence Playground
 

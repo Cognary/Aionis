@@ -6,6 +6,8 @@ title: "OpenWork (OpenCode Desktop) Integration"
 
 This project exposes an **MCP server** so OpenWork/OpenCode can call Aionis Memory Graph as tools.
 
+For a client-agnostic MCP overview, see [MCP Integration](./MCP_INTEGRATION.md).
+
 ## What You Get
 
 - `aionis_memory_remember`: write one memory node (default type=event)

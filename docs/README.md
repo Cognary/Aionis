@@ -46,7 +46,8 @@ This is the public documentation index for Aionis.
 
 ## Integrations
 
-- [OpenWork (MCP)](./OPENWORK_INTEGRATION.md)
+- [MCP Integration](./MCP_INTEGRATION.md)
+- [OpenWork (OpenCode Desktop)](./OPENWORK_INTEGRATION.md)
 - [LangGraph](./LANGGRAPH_INTEGRATION.md)
 
 ## Scope Notes
