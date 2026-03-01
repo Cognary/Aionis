@@ -22,8 +22,8 @@ Last updated: `2026-03-01`
 
 | SDK | SDK version | API contract baseline | Core methods | Error model | Retry + request_id | Status |
 |---|---|---|---|---|---|---|
-| `@aionis/sdk` (TypeScript) | `0.2.0` (`0.2.x`) | `docs/API_CONTRACT.md` (2026-03-01) | `write/recall/recallText/find/createSession/writeEvent/listSessionEvents/packExport/packImport/rulesEvaluate/toolsSelect/toolsDecision/toolsFeedback + control* admin APIs` | `AionisApiError` + `AionisNetworkError` | yes | current |
-| `aionis-sdk` (Python) | `0.2.0` (`0.2.x`) | `docs/API_CONTRACT.md` (2026-03-01) | `write/recall/recall_text/find/create_session/write_event/list_session_events/pack_export/pack_import/rules_evaluate/tools_select/tools_decision/tools_feedback + control_* admin APIs` | `AionisApiError` + `AionisNetworkError` | yes | current |
+| `@aionis/sdk` (TypeScript) | `0.2.1` (`0.2.x`) | `docs/API_CONTRACT.md` (2026-03-01) | `write/recall/recallText/find/createSession/writeEvent/listSessionEvents/packExport/packImport/rulesEvaluate/toolsSelect/toolsDecision/toolsFeedback + control* admin APIs` | `AionisApiError` + `AionisNetworkError` | yes | current |
+| `aionis-sdk` (Python) | `0.2.1` (`0.2.x`) | `docs/API_CONTRACT.md` (2026-03-01) | `write/recall/recall_text/find/create_session/write_event/list_session_events/pack_export/pack_import/rules_evaluate/tools_select/tools_decision/tools_feedback + control_* admin APIs` | `AionisApiError` + `AionisNetworkError` | yes | current |
 
 ## Backward compatibility notes
 

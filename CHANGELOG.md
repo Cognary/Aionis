@@ -4,6 +4,14 @@ All notable changes to Aionis core are documented in this file.
 
 The format is based on Keep a Changelog and this project follows SemVer for tagged core releases.
 
+## [0.2.1] - 2026-03-01
+
+### Changed
+
+1. Promoted post-`v0.2.0` stability hardening to release baseline, including Ops console route/middleware safeguards and e2e smoke reliability fixes.
+2. Extended admin/control API and SDK parity coverage into the default CI line so capability negotiation checks are enforced outside parity-only workflows.
+3. Added perf gate refinements for profile comparison, including a stable benchmark profile and tighter preflight behavior for phase-4 smoke and consistency checks.
+
 ## [0.1.2] - 2026-02-22
 
 ### Changed

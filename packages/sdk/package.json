@@ -1,6 +1,6 @@
 {
   "name": "@aionis/sdk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "TypeScript SDK for Aionis Memory Graph API",
   "type": "module",
   "main": "dist/index.js",

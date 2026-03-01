@@ -44,11 +44,11 @@ curl -fsS http://localhost:3001/health
 ```
 
 - Current release baseline:
-  - Core: `v0.2.0` (latest tagged release)
-  - TypeScript SDK: `0.2.0`
-  - Python SDK: `0.2.0`
-  - Docker main: `v0.2.0`
-  - Standalone Docker line: `standalone-v0.2.0`
+  - Core: `v0.2.1` (latest tagged release)
+  - TypeScript SDK: `0.2.1`
+  - Python SDK: `0.2.1`
+  - Docker main: `v0.2.1`
+  - Standalone Docker line: `standalone-v0.2.1`
 - Hosted / managed control-plane runbooks are intentionally not part of this public documentation set.
 
 ## Evidence Playground

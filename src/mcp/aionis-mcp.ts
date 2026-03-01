@@ -331,7 +331,7 @@ async function handle(env: Env, msg: JsonRpcRequest) {
         },
         serverInfo: {
           name: "aionis-memory-graph",
-          version: "0.1.2",
+          version: "0.2.1",
         },
       });
     }

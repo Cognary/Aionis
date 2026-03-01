@@ -79,7 +79,7 @@ npm run docs:check
 
 ## Public Release Baseline
 
-1. Core release tag: `v0.2.0` (latest tagged release)
-2. npm SDK: `0.2.0`
-3. PyPI SDK: `0.2.0`
-4. Docker line: `v0.2.0` (main), `standalone-v0.2.0` (standalone)
+1. Core release tag: `v0.2.1` (latest tagged release)
+2. npm SDK: `0.2.1`
+3. PyPI SDK: `0.2.1`
+4. Docker line: `v0.2.1` (main), `standalone-v0.2.1` (standalone)

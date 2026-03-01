@@ -17,7 +17,7 @@ Use it as a reference for expected level of detail; replace all values with your
 4. Scope/tenant sample: `tenant=default`, `scope=default`
 5. Owner: `platform-oncall`
 6. Observers: `backend-lead`, `sre-lead`
-7. Release/tag: `core=v0.2.0`, `docker=v0.2.0`
+7. Release/tag: `core=v0.2.1`, `docker=v0.2.1`
 
 ## Preconditions
 
