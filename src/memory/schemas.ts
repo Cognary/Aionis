@@ -5,6 +5,22 @@ export const UUID = z.string().uuid();
 export const NodeType = z.enum(["event", "entity", "topic", "rule", "evidence", "concept", "procedure", "self_model"]);
 export const EdgeType = z.enum(["part_of", "related_to", "derived_from"]);
 
+const QueryBoolean = z.preprocess((v) => {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") {
+    if (v === 1) return true;
+    if (v === 0) return false;
+    return v;
+  }
+  if (typeof v === "string") {
+    const raw = v.trim().toLowerCase();
+    if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") return true;
+    if (raw === "0" || raw === "false" || raw === "no" || raw === "off" || raw === "") return false;
+    return v;
+  }
+  return v;
+}, z.boolean());
+
 export const WriteNode = z.object({
   id: UUID.optional(),
   client_id: z.string().min(1).optional(),
@@ -261,9 +277,9 @@ export const MemorySessionEventsListRequest = z.object({
   session_id: z.string().min(1).max(128),
   consumer_agent_id: z.string().min(1).optional(),
   consumer_team_id: z.string().min(1).optional(),
-  include_meta: z.coerce.boolean().default(false),
-  include_slots: z.coerce.boolean().default(false),
-  include_slots_preview: z.coerce.boolean().default(false),
+  include_meta: QueryBoolean.default(false),
+  include_slots: QueryBoolean.default(false),
+  include_slots_preview: QueryBoolean.default(false),
   slots_preview_keys: z.coerce.number().int().positive().max(50).default(10),
   limit: z.coerce.number().int().positive().max(200).default(20),
   offset: z.coerce.number().int().min(0).max(200000).default(0),

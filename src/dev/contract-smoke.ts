@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { MemoryRecallRequest, PlanningContextRequest, ToolsFeedbackRequest, ToolsSelectRequest } from "../memory/schemas.js";
+import { MemoryRecallRequest, MemorySessionEventsListRequest, PlanningContextRequest, ToolsFeedbackRequest, ToolsSelectRequest } from "../memory/schemas.js";
 import { HttpError } from "../util/http.js";
 import { requireAdminTokenHeader } from "../util/admin_auth.js";
 import { resolveTenantScope } from "../memory/tenant.js";
 import { loadEnv } from "../config.js";
 import { CAPABILITY_CONTRACT, capabilityContract } from "../capability-contract.js";
+import { createAuthResolver } from "../util/auth.js";
 import {
   createApiKeyPrincipalResolver,
   normalizeControlAlertRouteTarget,
@@ -36,6 +38,17 @@ import { asPostgresMemoryStore, createMemoryStore } from "../store/memory-store.
 import { createEmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 
 type QueryResult<T> = { rows: T[]; rowCount: number };
+
+function encodeBase64UrlJson(v: unknown): string {
+  return Buffer.from(JSON.stringify(v), "utf8").toString("base64url");
+}
+
+function signHs256Jwt(payload: Record<string, unknown>, secret: string): string {
+  const header = encodeBase64UrlJson({ alg: "HS256", typ: "JWT" });
+  const body = encodeBase64UrlJson(payload);
+  const sig = createHmac("sha256", secret).update(`${header}.${body}`).digest("base64url");
+  return `${header}.${body}.${sig}`;
+}
 
 class FakePgClient {
   private readonly fixtures: {
@@ -1422,6 +1435,28 @@ async function run() {
     () => MemoryRecallRequest.parse({ query_embedding: [0], max_edges: 101 }),
     /less than or equal to 100/i,
   );
+  const sessionFlagsFalse = MemorySessionEventsListRequest.parse({
+    session_id: "s1",
+    include_meta: "false",
+    include_slots: "0",
+    include_slots_preview: "off",
+  });
+  assert.equal(sessionFlagsFalse.include_meta, false);
+  assert.equal(sessionFlagsFalse.include_slots, false);
+  assert.equal(sessionFlagsFalse.include_slots_preview, false);
+  const sessionFlagsTrue = MemorySessionEventsListRequest.parse({
+    session_id: "s1",
+    include_meta: "true",
+    include_slots: "1",
+    include_slots_preview: "on",
+  });
+  assert.equal(sessionFlagsTrue.include_meta, true);
+  assert.equal(sessionFlagsTrue.include_slots, true);
+  assert.equal(sessionFlagsTrue.include_slots_preview, true);
+  assert.throws(
+    () => MemorySessionEventsListRequest.parse({ session_id: "s1", include_meta: "not_bool" }),
+    /Expected boolean/i,
+  );
 
   // Tenant/scope namespace safety: prevent default-tenant scope collisions with tenant-derived scope keys.
   assert.throws(
@@ -1821,6 +1856,29 @@ async function run() {
     (err: any) => err instanceof HttpError && err.statusCode === 401 && err.code === "unauthorized_admin",
   );
   assert.doesNotThrow(() => requireAdminTokenHeader({ "x-admin-token": "admin-secret" }, "admin-secret"));
+
+  // Hybrid auth mode semantics: invalid API key must not block a valid JWT fallback.
+  const nowSec = Math.floor(Date.now() / 1000);
+  const jwtSecret = "contract-smoke-secret";
+  const validJwt = signHs256Jwt({ tenant_id: "tenant_jwt", sub: "agent_jwt", exp: nowSec + 300 }, jwtSecret);
+  const authOr = createAuthResolver({
+    mode: "api_key_or_jwt",
+    apiKeysJson: JSON.stringify({
+      api_valid: { tenant_id: "tenant_key", agent_id: "agent_key", team_id: null, role: "member" },
+    }),
+    jwtHs256Secret: jwtSecret,
+    jwtClockSkewSec: 0,
+    jwtRequireExp: true,
+  });
+  const viaApiKey = authOr.resolve({ "x-api-key": "api_valid" });
+  assert.equal(viaApiKey?.source, "api_key");
+  const viaJwtFallback = authOr.resolve({
+    "x-api-key": "api_invalid",
+    authorization: `Bearer ${validJwt}`,
+  });
+  assert.equal(viaJwtFallback?.source, "jwt");
+  assert.equal(viaJwtFallback?.tenant_id, "tenant_jwt");
+  assert.equal(authOr.resolve({ "x-api-key": "api_invalid" }), null);
 
   // Control alert route target hardening (HTTPS + SSRF guard + channel host constraints).
   assert.equal(

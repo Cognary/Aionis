@@ -15,7 +15,7 @@ type JsonRpcResponse =
   | { jsonrpc: "2.0"; id: JsonRpcId; error: { code: number; message: string; data?: unknown } };
 
 const EnvSchema = z.object({
-  AIONIS_BASE_URL: z.string().default("http://localhost:3005"),
+  AIONIS_BASE_URL: z.string().default("http://localhost:3001"),
   AIONIS_SCOPE: z.string().min(1).default("default"),
   AIONIS_ADMIN_TOKEN: z.string().optional(),
   AIONIS_API_KEY: z.string().optional(),
