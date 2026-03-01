@@ -378,6 +378,177 @@ export type ToolsFeedbackInput = {
   input_sha256?: string;
 };
 
+export type ControlTenantInput = {
+  tenant_id: string;
+  display_name?: string | null;
+  status?: "active" | "suspended";
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlTenantsQuery = {
+  status?: "active" | "suspended";
+  limit?: number;
+  offset?: number;
+};
+
+export type ControlProjectInput = {
+  project_id: string;
+  tenant_id: string;
+  display_name?: string | null;
+  status?: "active" | "archived";
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlApiKeyInput = {
+  tenant_id: string;
+  project_id?: string | null;
+  label?: string | null;
+  role?: string | null;
+  agent_id?: string | null;
+  team_id?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlApiKeysQuery = {
+  tenant_id?: string;
+  project_id?: string;
+  status?: "active" | "revoked";
+  limit?: number;
+  offset?: number;
+};
+
+export type ControlApiKeysStaleQuery = {
+  max_age_days?: number;
+  warn_age_days?: number;
+  rotation_window_days?: number;
+  limit?: number;
+};
+
+export type ControlApiKeyRotateInput = {
+  label?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlAlertRouteInput = {
+  tenant_id: string;
+  channel: "webhook" | "slack_webhook" | "pagerduty_events";
+  label?: string | null;
+  events?: string[];
+  status?: "active" | "disabled";
+  target: string;
+  secret?: string | null;
+  headers?: Record<string, string>;
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlAlertRoutesQuery = {
+  tenant_id?: string;
+  channel?: "webhook" | "slack_webhook" | "pagerduty_events";
+  status?: "active" | "disabled";
+  limit?: number;
+  offset?: number;
+};
+
+export type ControlAlertRouteStatusInput = {
+  status: "active" | "disabled";
+};
+
+export type ControlAlertDeliveriesQuery = {
+  tenant_id?: string;
+  event_type?: string;
+  status?: "sent" | "failed" | "skipped";
+  limit?: number;
+  offset?: number;
+};
+
+export type ControlIncidentPublishJobInput = {
+  tenant_id: string;
+  run_id: string;
+  source_dir: string;
+  target: string;
+  max_attempts?: number;
+  metadata?: Record<string, unknown>;
+};
+
+export type ControlIncidentPublishJobsQuery = {
+  tenant_id?: string;
+  status?: "pending" | "processing" | "succeeded" | "failed" | "dead_letter";
+  limit?: number;
+  offset?: number;
+};
+
+export type ControlIncidentPublishReplayInput = {
+  tenant_id?: string;
+  statuses?: Array<"failed" | "dead_letter">;
+  ids?: string[];
+  limit?: number;
+  reset_attempts?: boolean;
+  reason?: string;
+  dry_run?: boolean;
+  allow_all_tenants?: boolean;
+};
+
+export type ControlTenantQuotaInput = {
+  recall_rps: number;
+  recall_burst: number;
+  write_rps: number;
+  write_burst: number;
+  write_max_wait_ms: number;
+  debug_embed_rps: number;
+  debug_embed_burst: number;
+  recall_text_embed_rps: number;
+  recall_text_embed_burst: number;
+  recall_text_embed_max_wait_ms: number;
+};
+
+export type ControlAuditEventsQuery = {
+  tenant_id?: string;
+  action?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type ControlTenantDiagnosticsQuery = {
+  scope?: string;
+  window_minutes?: number;
+};
+
+export type ControlIncidentPublishRollupQuery = {
+  window_hours?: number;
+  sample_limit?: number;
+};
+
+export type ControlIncidentPublishSloQuery = {
+  window_hours?: number;
+  baseline_hours?: number;
+  min_jobs?: number;
+  adaptive_multiplier?: number;
+  failure_rate_floor?: number;
+  dead_letter_rate_floor?: number;
+  backlog_warning_abs?: number;
+  dead_letter_backlog_warning_abs?: number;
+  dead_letter_backlog_critical_abs?: number;
+};
+
+export type ControlTenantTimeseriesQuery = {
+  endpoint?: "write" | "recall" | "recall_text";
+  window_hours?: number;
+  limit?: number;
+  offset?: number;
+  cursor?: string;
+};
+
+export type ControlTenantKeyUsageQuery = {
+  endpoint?: "write" | "recall" | "recall_text";
+  window_hours?: number;
+  baseline_hours?: number;
+  min_requests?: number;
+  zscore_threshold?: number;
+  limit?: number;
+  offset?: number;
+  cursor?: string;
+};
+
 export type MemoryWriteResponse = {
   tenant_id?: string;
   scope?: string;
@@ -611,5 +782,110 @@ export type ToolsFeedbackResponse = {
   decision_id?: string;
   decision_link_mode?: "provided" | "inferred" | "created_from_feedback";
   decision_policy_sha256?: string;
+  [k: string]: unknown;
+};
+
+export type ControlTenantResponse = {
+  ok: boolean;
+  tenant: Record<string, unknown>;
+};
+
+export type ControlTenantsResponse = {
+  ok: boolean;
+  tenants: Array<Record<string, unknown>>;
+};
+
+export type ControlProjectResponse = {
+  ok: boolean;
+  project: Record<string, unknown>;
+};
+
+export type ControlApiKeyResponse = {
+  ok: boolean;
+  key: Record<string, unknown>;
+};
+
+export type ControlApiKeysResponse = {
+  ok: boolean;
+  keys: Array<Record<string, unknown>>;
+};
+
+export type ControlApiKeysStaleResponse = {
+  ok?: boolean;
+  [k: string]: unknown;
+};
+
+export type ControlAlertRouteResponse = {
+  ok: boolean;
+  route: Record<string, unknown>;
+};
+
+export type ControlAlertRoutesResponse = {
+  ok: boolean;
+  routes: Array<Record<string, unknown>>;
+};
+
+export type ControlAlertDeliveriesResponse = {
+  ok: boolean;
+  deliveries: Array<Record<string, unknown>>;
+};
+
+export type ControlIncidentPublishJobResponse = {
+  ok: boolean;
+  job: Record<string, unknown>;
+};
+
+export type ControlIncidentPublishJobsResponse = {
+  ok: boolean;
+  jobs: Array<Record<string, unknown>>;
+};
+
+export type ControlIncidentPublishReplayResponse = {
+  ok: boolean;
+  [k: string]: unknown;
+};
+
+export type ControlTenantQuotaResponse = {
+  ok: boolean;
+  quota: Record<string, unknown>;
+};
+
+export type ControlTenantQuotaDeleteResponse = {
+  ok: boolean;
+  deleted: boolean;
+};
+
+export type ControlAuditEventsResponse = {
+  ok: boolean;
+  events: Array<Record<string, unknown>>;
+};
+
+export type ControlTenantDashboardResponse = {
+  ok: boolean;
+  dashboard: Record<string, unknown>;
+};
+
+export type ControlTenantDiagnosticsResponse = {
+  ok: boolean;
+  diagnostics: Record<string, unknown>;
+};
+
+export type ControlIncidentPublishRollupResponse = {
+  ok: boolean;
+  rollup: Record<string, unknown>;
+};
+
+export type ControlIncidentPublishSloResponse = {
+  ok: boolean;
+  report: Record<string, unknown>;
+};
+
+export type ControlTenantTimeseriesResponse = {
+  ok?: boolean;
+  [k: string]: unknown;
+};
+
+export type ControlTenantKeyUsageResponse = {
+  ok?: boolean;
   [k: string]: unknown;
 };

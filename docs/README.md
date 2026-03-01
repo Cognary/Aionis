@@ -9,6 +9,8 @@ This is the public documentation index for Aionis Open Core.
 ## Getting Started
 
 - [Documentation Home](./index.md)
+- [Aionis Onepage](./AIONIS_ONEPAGE.md)
+- [Aionis Onepage (Public)](./AIONIS_ONEPAGE_PUBLIC.md)
 - [5-Minute Developer Onboarding](./ONBOARDING_5MIN.md)
 - [Architecture](./ARCHITECTURE.md)
 - [Open Core Boundary](./OPEN_CORE_BOUNDARY.md)

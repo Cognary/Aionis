@@ -54,9 +54,20 @@ If you set custom headers manually, the SDK will not override existing auth head
 9. `packImport`
 10. `rulesEvaluate`
 11. `toolsSelect`
-12. `toolsFeedback`
-13. `health`
-14. `getCapabilityContract`
+12. `toolsDecision`
+13. `toolsFeedback`
+14. `health`
+15. `getCapabilityContract`
+
+Admin/control methods (require `admin_token`):
+
+1. `controlUpsertTenant`, `controlListTenants`, `controlUpsertProject`
+2. `controlCreateApiKey`, `controlListApiKeys`, `controlListStaleApiKeys`, `controlRevokeApiKey`, `controlRotateApiKey`
+3. `controlCreateAlertRoute`, `controlListAlertRoutes`, `controlUpdateAlertRouteStatus`, `controlListAlertDeliveries`
+4. `controlEnqueueIncidentPublishJob`, `controlListIncidentPublishJobs`, `controlReplayIncidentPublishJobs`
+5. `controlUpsertTenantQuota`, `controlGetTenantQuota`, `controlDeleteTenantQuota`
+6. `controlListAuditEvents`, `controlGetTenantDashboard`, `controlGetTenantDiagnostics`
+7. `controlGetTenantIncidentPublishRollup`, `controlGetTenantIncidentPublishSlo`, `controlGetTenantTimeseries`, `controlGetTenantKeyUsage`
 
 ## Error model
 

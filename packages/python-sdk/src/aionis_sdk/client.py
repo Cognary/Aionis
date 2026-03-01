@@ -11,8 +11,28 @@ from urllib import error, request
 
 if TYPE_CHECKING:
     from .types import (
+        ControlAlertDeliveriesQuery,
+        ControlAlertRouteInput,
+        ControlAlertRoutesQuery,
+        ControlAlertRouteStatusInput,
+        ControlApiKeyInput,
+        ControlApiKeysQuery,
+        ControlApiKeysStaleQuery,
+        ControlApiKeyRotateInput,
+        ControlAuditEventsQuery,
+        ControlIncidentPublishJobInput,
+        ControlIncidentPublishJobsQuery,
+        ControlIncidentPublishReplayInput,
+        ControlIncidentPublishRollupQuery,
+        ControlIncidentPublishSloQuery,
+        ControlProjectInput,
+        ControlTenantDiagnosticsQuery,
+        ControlTenantInput,
+        ControlTenantKeyUsageQuery,
+        ControlTenantQuotaInput,
+        ControlTenantsQuery,
+        ControlTenantTimeseriesQuery,
         BackendCapabilityErrorDetails,
-        ShadowDualWriteStrictFailureDetails,
         MemoryEventWriteInput,
         MemoryFindInput,
         MemoryPackExportInput,
@@ -26,6 +46,7 @@ if TYPE_CHECKING:
         ToolsDecisionInput,
         ToolsFeedbackInput,
         ToolsSelectInput,
+        ShadowDualWriteStrictFailureDetails,
     )
 
 
@@ -279,6 +300,205 @@ class AionisClient:
             "status": out.get("status"),
             "request_id": out.get("request_id"),
         }
+
+    def control_upsert_tenant(self, payload: "ControlTenantInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/tenants", payload, request_options)
+
+    def control_list_tenants(
+        self,
+        query: Optional["ControlTenantsQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/tenants", query or {}, request_options, method="GET")
+
+    def control_upsert_project(self, payload: "ControlProjectInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/projects", payload, request_options)
+
+    def control_create_api_key(self, payload: "ControlApiKeyInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/api-keys", payload, request_options)
+
+    def control_list_api_keys(
+        self,
+        query: Optional["ControlApiKeysQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/api-keys", query or {}, request_options, method="GET")
+
+    def control_list_stale_api_keys(
+        self,
+        query: Optional["ControlApiKeysStaleQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/api-keys/stale", query or {}, request_options, method="GET")
+
+    def control_revoke_api_key(self, key_id: str, **request_options: Any) -> Dict[str, Any]:
+        sid = str(key_id or "").strip()
+        if not sid:
+            raise ValueError("key_id is required")
+        path = f"/v1/admin/control/api-keys/{quote(sid, safe='')}/revoke"
+        return self._request(path, {}, request_options)
+
+    def control_rotate_api_key(
+        self,
+        key_id: str,
+        payload: Optional["ControlApiKeyRotateInput"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(key_id or "").strip()
+        if not sid:
+            raise ValueError("key_id is required")
+        path = f"/v1/admin/control/api-keys/{quote(sid, safe='')}/rotate"
+        return self._request(path, payload or {}, request_options)
+
+    def control_create_alert_route(self, payload: "ControlAlertRouteInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/alerts/routes", payload, request_options)
+
+    def control_list_alert_routes(
+        self,
+        query: Optional["ControlAlertRoutesQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/alerts/routes", query or {}, request_options, method="GET")
+
+    def control_update_alert_route_status(
+        self,
+        route_id: str,
+        payload: "ControlAlertRouteStatusInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(route_id or "").strip()
+        if not sid:
+            raise ValueError("route_id is required")
+        path = f"/v1/admin/control/alerts/routes/{quote(sid, safe='')}/status"
+        return self._request(path, payload, request_options)
+
+    def control_list_alert_deliveries(
+        self,
+        query: Optional["ControlAlertDeliveriesQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/alerts/deliveries", query or {}, request_options, method="GET")
+
+    def control_enqueue_incident_publish_job(
+        self,
+        payload: "ControlIncidentPublishJobInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/incident-publish/jobs", payload, request_options)
+
+    def control_list_incident_publish_jobs(
+        self,
+        query: Optional["ControlIncidentPublishJobsQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/incident-publish/jobs", query or {}, request_options, method="GET")
+
+    def control_replay_incident_publish_jobs(
+        self,
+        payload: "ControlIncidentPublishReplayInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/incident-publish/jobs/replay", payload, request_options)
+
+    def control_upsert_tenant_quota(
+        self,
+        tenant_id: str,
+        payload: "ControlTenantQuotaInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/tenant-quotas/{quote(sid, safe='')}"
+        return self._request(path, payload, request_options, method="PUT")
+
+    def control_get_tenant_quota(self, tenant_id: str, **request_options: Any) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/tenant-quotas/{quote(sid, safe='')}"
+        return self._request(path, {}, request_options, method="GET")
+
+    def control_delete_tenant_quota(self, tenant_id: str, **request_options: Any) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/tenant-quotas/{quote(sid, safe='')}"
+        return self._request(path, {}, request_options, method="DELETE")
+
+    def control_list_audit_events(
+        self,
+        query: Optional["ControlAuditEventsQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/audit-events", query or {}, request_options, method="GET")
+
+    def control_get_tenant_dashboard(self, tenant_id: str, **request_options: Any) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/dashboard/tenant/{quote(sid, safe='')}"
+        return self._request(path, {}, request_options, method="GET")
+
+    def control_get_tenant_diagnostics(
+        self,
+        tenant_id: str,
+        query: Optional["ControlTenantDiagnosticsQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/diagnostics/tenant/{quote(sid, safe='')}"
+        return self._request(path, query or {}, request_options, method="GET")
+
+    def control_get_tenant_incident_publish_rollup(
+        self,
+        tenant_id: str,
+        query: Optional["ControlIncidentPublishRollupQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/dashboard/tenant/{quote(sid, safe='')}/incident-publish-rollup"
+        return self._request(path, query or {}, request_options, method="GET")
+
+    def control_get_tenant_incident_publish_slo(
+        self,
+        tenant_id: str,
+        query: Optional["ControlIncidentPublishSloQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/dashboard/tenant/{quote(sid, safe='')}/incident-publish-slo"
+        return self._request(path, query or {}, request_options, method="GET")
+
+    def control_get_tenant_timeseries(
+        self,
+        tenant_id: str,
+        query: Optional["ControlTenantTimeseriesQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/dashboard/tenant/{quote(sid, safe='')}/timeseries"
+        return self._request(path, query or {}, request_options, method="GET")
+
+    def control_get_tenant_key_usage(
+        self,
+        tenant_id: str,
+        query: Optional["ControlTenantKeyUsageQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/dashboard/tenant/{quote(sid, safe='')}/key-usage"
+        return self._request(path, query or {}, request_options, method="GET")
 
     def _request(
         self,

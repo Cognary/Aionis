@@ -36,6 +36,7 @@ export default defineConfig({
   themeConfig: {
     logo: "/logo.svg",
     nav: [
+      { text: "Website", link: "https://aionisos.com" },
       { text: "Start", link: "/ONBOARDING_5MIN" },
       { text: "Concepts", link: "/ARCHITECTURE" },
       { text: "API", link: "/API_CONTRACT" },

@@ -343,8 +343,200 @@ class ToolsDecisionResponse(TypedDict, total=False):
     decision: ToolsDecisionPayload
 
 
+class ControlTenantInput(TypedDict, total=False):
+    tenant_id: str
+    display_name: Optional[str]
+    status: Literal["active", "suspended"]
+    metadata: Dict[str, Any]
+
+
+class ControlTenantsQuery(TypedDict, total=False):
+    status: Literal["active", "suspended"]
+    limit: int
+    offset: int
+
+
+class ControlProjectInput(TypedDict, total=False):
+    project_id: str
+    tenant_id: str
+    display_name: Optional[str]
+    status: Literal["active", "archived"]
+    metadata: Dict[str, Any]
+
+
+class ControlApiKeyInput(TypedDict, total=False):
+    tenant_id: str
+    project_id: Optional[str]
+    label: Optional[str]
+    role: Optional[str]
+    agent_id: Optional[str]
+    team_id: Optional[str]
+    metadata: Dict[str, Any]
+
+
+class ControlApiKeysQuery(TypedDict, total=False):
+    tenant_id: str
+    project_id: str
+    status: Literal["active", "revoked"]
+    limit: int
+    offset: int
+
+
+class ControlApiKeysStaleQuery(TypedDict, total=False):
+    max_age_days: int
+    warn_age_days: int
+    rotation_window_days: int
+    limit: int
+
+
+class ControlApiKeyRotateInput(TypedDict, total=False):
+    label: Optional[str]
+    metadata: Dict[str, Any]
+
+
+class ControlAlertRouteInput(TypedDict, total=False):
+    tenant_id: str
+    channel: Literal["webhook", "slack_webhook", "pagerduty_events"]
+    label: Optional[str]
+    events: List[str]
+    status: Literal["active", "disabled"]
+    target: str
+    secret: Optional[str]
+    headers: Dict[str, str]
+    metadata: Dict[str, Any]
+
+
+class ControlAlertRoutesQuery(TypedDict, total=False):
+    tenant_id: str
+    channel: Literal["webhook", "slack_webhook", "pagerduty_events"]
+    status: Literal["active", "disabled"]
+    limit: int
+    offset: int
+
+
+class ControlAlertRouteStatusInput(TypedDict, total=False):
+    status: Literal["active", "disabled"]
+
+
+class ControlAlertDeliveriesQuery(TypedDict, total=False):
+    tenant_id: str
+    event_type: str
+    status: Literal["sent", "failed", "skipped"]
+    limit: int
+    offset: int
+
+
+class ControlIncidentPublishJobInput(TypedDict, total=False):
+    tenant_id: str
+    run_id: str
+    source_dir: str
+    target: str
+    max_attempts: int
+    metadata: Dict[str, Any]
+
+
+class ControlIncidentPublishJobsQuery(TypedDict, total=False):
+    tenant_id: str
+    status: Literal["pending", "processing", "succeeded", "failed", "dead_letter"]
+    limit: int
+    offset: int
+
+
+class ControlIncidentPublishReplayInput(TypedDict, total=False):
+    tenant_id: str
+    statuses: List[Literal["failed", "dead_letter"]]
+    ids: List[str]
+    limit: int
+    reset_attempts: bool
+    reason: str
+    dry_run: bool
+    allow_all_tenants: bool
+
+
+class ControlTenantQuotaInput(TypedDict, total=False):
+    recall_rps: float
+    recall_burst: int
+    write_rps: float
+    write_burst: int
+    write_max_wait_ms: int
+    debug_embed_rps: float
+    debug_embed_burst: int
+    recall_text_embed_rps: float
+    recall_text_embed_burst: int
+    recall_text_embed_max_wait_ms: int
+
+
+class ControlAuditEventsQuery(TypedDict, total=False):
+    tenant_id: str
+    action: str
+    limit: int
+    offset: int
+
+
+class ControlTenantDiagnosticsQuery(TypedDict, total=False):
+    scope: str
+    window_minutes: int
+
+
+class ControlIncidentPublishRollupQuery(TypedDict, total=False):
+    window_hours: int
+    sample_limit: int
+
+
+class ControlIncidentPublishSloQuery(TypedDict, total=False):
+    window_hours: int
+    baseline_hours: int
+    min_jobs: int
+    adaptive_multiplier: float
+    failure_rate_floor: float
+    dead_letter_rate_floor: float
+    backlog_warning_abs: int
+    dead_letter_backlog_warning_abs: int
+    dead_letter_backlog_critical_abs: int
+
+
+class ControlTenantTimeseriesQuery(TypedDict, total=False):
+    endpoint: Literal["write", "recall", "recall_text"]
+    window_hours: int
+    limit: int
+    offset: int
+    cursor: str
+
+
+class ControlTenantKeyUsageQuery(TypedDict, total=False):
+    endpoint: Literal["write", "recall", "recall_text"]
+    window_hours: int
+    baseline_hours: int
+    min_requests: int
+    zscore_threshold: float
+    limit: int
+    offset: int
+    cursor: str
+
+
 __all__ = [
     "AionisResponse",
+    "ControlAlertDeliveriesQuery",
+    "ControlAlertRouteInput",
+    "ControlAlertRoutesQuery",
+    "ControlAlertRouteStatusInput",
+    "ControlApiKeyInput",
+    "ControlApiKeysQuery",
+    "ControlApiKeysStaleQuery",
+    "ControlApiKeyRotateInput",
+    "ControlAuditEventsQuery",
+    "ControlIncidentPublishJobInput",
+    "ControlIncidentPublishJobsQuery",
+    "ControlIncidentPublishReplayInput",
+    "ControlIncidentPublishRollupQuery",
+    "ControlIncidentPublishSloQuery",
+    "ControlProjectInput",
+    "ControlTenantDiagnosticsQuery",
+    "ControlTenantInput",
+    "ControlTenantKeyUsageQuery",
+    "ControlTenantQuotaInput",
+    "ControlTenantsQuery",
+    "ControlTenantTimeseriesQuery",
     "DecisionLinkMode",
     "FeedbackOutcome",
     "MemoryEdgeInput",

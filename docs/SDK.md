@@ -26,9 +26,20 @@ title: "Aionis SDK (TypeScript + Python)"
 9. `packImport`
 10. `rulesEvaluate`
 11. `toolsSelect`
-12. `toolsFeedback`
-13. `health`
-14. `getCapabilityContract` / `get_capability_contract`
+12. `toolsDecision`
+13. `toolsFeedback`
+14. `health`
+15. `getCapabilityContract` / `get_capability_contract`
+
+admin/control 方法（需 `admin_token`）：
+
+1. tenant/project: `controlUpsertTenant`, `controlListTenants`, `controlUpsertProject`
+2. api keys: `controlCreateApiKey`, `controlListApiKeys`, `controlListStaleApiKeys`, `controlRevokeApiKey`, `controlRotateApiKey`
+3. alerts: `controlCreateAlertRoute`, `controlListAlertRoutes`, `controlUpdateAlertRouteStatus`, `controlListAlertDeliveries`
+4. incident publish: `controlEnqueueIncidentPublishJob`, `controlListIncidentPublishJobs`, `controlReplayIncidentPublishJobs`
+5. tenant quota: `controlUpsertTenantQuota`, `controlGetTenantQuota`, `controlDeleteTenantQuota`
+6. observability: `controlListAuditEvents`, `controlGetTenantDashboard`, `controlGetTenantDiagnostics`
+7. dashboard deep views: `controlGetTenantIncidentPublishRollup`, `controlGetTenantIncidentPublishSlo`, `controlGetTenantTimeseries`, `controlGetTenantKeyUsage`
 
 并内置：
 

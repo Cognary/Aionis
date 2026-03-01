@@ -86,9 +86,20 @@ client.tools_feedback(feedback_payload)
 9. `pack_import`
 10. `rules_evaluate`
 11. `tools_select`
-12. `tools_feedback`
-13. `health`
-14. `get_capability_contract`
+12. `tools_decision`
+13. `tools_feedback`
+14. `health`
+15. `get_capability_contract`
+
+Admin/control methods (require `admin_token`):
+
+1. `control_upsert_tenant`, `control_list_tenants`, `control_upsert_project`
+2. `control_create_api_key`, `control_list_api_keys`, `control_list_stale_api_keys`, `control_revoke_api_key`, `control_rotate_api_key`
+3. `control_create_alert_route`, `control_list_alert_routes`, `control_update_alert_route_status`, `control_list_alert_deliveries`
+4. `control_enqueue_incident_publish_job`, `control_list_incident_publish_jobs`, `control_replay_incident_publish_jobs`
+5. `control_upsert_tenant_quota`, `control_get_tenant_quota`, `control_delete_tenant_quota`
+6. `control_list_audit_events`, `control_get_tenant_dashboard`, `control_get_tenant_diagnostics`
+7. `control_get_tenant_incident_publish_rollup`, `control_get_tenant_incident_publish_slo`, `control_get_tenant_timeseries`, `control_get_tenant_key_usage`
 
 ## Error model
 

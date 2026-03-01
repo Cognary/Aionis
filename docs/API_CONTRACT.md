@@ -595,6 +595,166 @@ Notes:
 
 ---
 
+### `POST /v1/admin/control/tenants`
+
+Upsert tenant control-plane metadata.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Request**
+- `tenant_id: string`
+- `display_name?: string|null`
+- `status?: "active"|"suspended"` (default `"active"`)
+- `metadata?: Record<string,unknown>`
+
+**Response**
+- `ok: true`
+- `tenant: { tenant_id, display_name, status, metadata, created_at, updated_at }`
+
+---
+
+### `GET /v1/admin/control/tenants`
+
+List tenants.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `status?: "active"|"suspended"`
+- `limit?: number`
+- `offset?: number`
+
+**Response**
+- `ok: true`
+- `tenants: Tenant[]`
+
+---
+
+### `POST /v1/admin/control/projects`
+
+Upsert project metadata under a tenant.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Request**
+- `project_id: string`
+- `tenant_id: string`
+- `display_name?: string|null`
+- `status?: "active"|"archived"` (default `"active"`)
+- `metadata?: Record<string,unknown>`
+
+**Response**
+- `ok: true`
+- `project: { project_id, tenant_id, display_name, status, metadata, created_at, updated_at }`
+
+---
+
+### `POST /v1/admin/control/api-keys`
+
+Create one API key for tenant/project scope.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Request**
+- `tenant_id: string`
+- `project_id?: string|null`
+- `label?: string|null`
+- `role?: string|null`
+- `agent_id?: string|null`
+- `team_id?: string|null`
+- `metadata?: Record<string,unknown>`
+
+**Response**
+- `ok: true`
+- `key:`
+  - includes DB metadata (`id`, `tenant_id`, `project_id`, `key_prefix`, `status`, ...)
+  - includes one-time plaintext `api_key` (only returned at creation/rotation)
+
+---
+
+### `GET /v1/admin/control/api-keys`
+
+List API keys.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `tenant_id?: string`
+- `project_id?: string`
+- `status?: "active"|"revoked"`
+- `limit?: number`
+- `offset?: number`
+
+**Response**
+- `ok: true`
+- `keys: ApiKey[]`
+
+---
+
+### `GET /v1/admin/control/api-keys/stale`
+
+List stale key signals and rotation gaps.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `max_age_days?: number` (default `30`)
+- `warn_age_days?: number` (default `21`)
+- `rotation_window_days?: number` (default `30`)
+- `limit?: number`
+
+**Response**
+- `ok: boolean`
+- `checked_at: string`
+- `thresholds: { max_age_days, warn_age_days, rotation_window_days }`
+- `stale: { count, sample[] }`
+- `warning_window: { count, sample[] }`
+- `active_by_tenant[]`
+- `recent_rotations_by_tenant[]`
+- `tenants_without_recent_rotation[]`
+
+When control schema is not ready:
+- `ok: false`
+- `error: "control_plane_schema_missing"`
+
+---
+
+### `POST /v1/admin/control/api-keys/:id/revoke`
+
+Revoke one active API key.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Response**
+- `200`: `{ ok: true, key: ApiKey }`
+- `404`: `{ error: "not_found" }`
+
+---
+
+### `POST /v1/admin/control/api-keys/:id/rotate`
+
+Rotate one active API key (create new + revoke old).
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Request**
+- `label?: string|null`
+- `metadata?: Record<string,unknown>`
+
+**Response**
+- `200`: `{ ok: true, key: { rotated, revoked, api_key } }`
+- `404`: `{ error: "not_found" }`
+
+---
+
 ### `GET /v1/admin/control/diagnostics/tenant/:tenant_id`
 
 Structured operability snapshot for recall pipeline + outbox health.
@@ -673,6 +833,42 @@ List alert routes.
 
 ---
 
+### `POST /v1/admin/control/alerts/routes/:id/status`
+
+Update route status.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Request**
+- `status: "active"|"disabled"`
+
+**Response**
+- `200`: `{ ok: true, route: AlertRoute }`
+- `404`: `{ error: "not_found" }`
+
+---
+
+### `GET /v1/admin/control/alerts/deliveries`
+
+List alert delivery records.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `tenant_id?: string`
+- `event_type?: string`
+- `status?: "sent"|"failed"|"skipped"`
+- `limit?: number`
+- `offset?: number`
+
+**Response**
+- `ok: true`
+- `deliveries: AlertDelivery[]`
+
+---
+
 ### `POST /v1/admin/control/incident-publish/jobs`
 
 Enqueue one incident bundle publish job.
@@ -745,9 +941,204 @@ Replay failed/dead-letter incident publish jobs.
 **Response**
 - `ok: true`
 - `dry_run: boolean`
-- `selected_count: number`
-- `updated_count: number`
-- `sample: IncidentPublishJob[]`
+- `replayed_count: number`
+- `candidate_count: number`
+- `jobs_sample: IncidentPublishJob[]`
+
+---
+
+### `PUT /v1/admin/control/tenant-quotas/:tenant_id`
+
+Upsert per-tenant quota profile.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Request**
+- `recall_rps: number`
+- `recall_burst: integer`
+- `write_rps: number`
+- `write_burst: integer`
+- `write_max_wait_ms: integer`
+- `debug_embed_rps: number`
+- `debug_embed_burst: integer`
+- `recall_text_embed_rps: number`
+- `recall_text_embed_burst: integer`
+- `recall_text_embed_max_wait_ms: integer`
+
+**Response**
+- `ok: true`
+- `quota: TenantQuotaProfile`
+
+---
+
+### `GET /v1/admin/control/tenant-quotas/:tenant_id`
+
+Read tenant quota profile.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Response**
+- `200`: `{ ok: true, quota: TenantQuotaProfile }`
+- `404`: `{ error: "not_found" }`
+
+---
+
+### `DELETE /v1/admin/control/tenant-quotas/:tenant_id`
+
+Delete tenant quota profile.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Response**
+- `ok: true`
+- `deleted: boolean`
+
+---
+
+### `GET /v1/admin/control/audit-events`
+
+List control audit events.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `tenant_id?: string`
+- `action?: string`
+- `limit?: number`
+- `offset?: number`
+
+**Response**
+- `ok: true`
+- `events: AuditEvent[]`
+
+---
+
+### `GET /v1/admin/control/dashboard/tenant/:tenant_id`
+
+Tenant dashboard summary snapshot.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Response**
+- `ok: true`
+- `dashboard:`
+  - `tenant`
+  - `api_keys: { active, revoked }`
+  - `quota_profile`
+  - `data_plane: { nodes, edges, active_rules, recalls_24h, commits_24h }`
+  - `outbox: { pending, retrying, failed }`
+
+When schema is not ready, dashboard may include:
+- `warning: "schema_not_ready_for_dashboard"`
+
+---
+
+### `GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-rollup`
+
+Incident publish operational rollup.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `window_hours?: number` (default `168`)
+- `sample_limit?: number`
+
+**Response**
+- `ok: boolean`
+- `rollup:`
+  - `tenant_id`, `window_hours`, `generated_at`
+  - `jobs: { total, status_counts, failed_or_dead_letter }`
+  - `replay: { replay_events, preview_events, replayed_count, candidate_count }`
+  - `failed_sample[]`
+
+---
+
+### `GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-slo`
+
+Incident publish SLO snapshot with adaptive thresholds.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `window_hours?: number`
+- `baseline_hours?: number`
+- `min_jobs?: number`
+- `adaptive_multiplier?: number`
+- `failure_rate_floor?: number`
+- `dead_letter_rate_floor?: number`
+- `backlog_warning_abs?: number`
+- `dead_letter_backlog_warning_abs?: number`
+- `dead_letter_backlog_critical_abs?: number`
+
+**Response**
+- `ok: boolean`
+- `report:`
+  - `snapshot`
+  - `thresholds`
+  - `metrics`
+  - `degraded: boolean`
+  - `severity: "warning"|"critical"|null`
+  - `warning_signals[]`
+  - `critical_signals[]`
+
+---
+
+### `GET /v1/admin/control/dashboard/tenant/:tenant_id/timeseries`
+
+Request telemetry timeseries.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `endpoint?: "write"|"recall"|"recall_text"`
+- `window_hours?: number`
+- `limit?: number`
+- `offset?: number`
+- `cursor?: string`
+
+**Response**
+- `ok: boolean`
+- `tenant_id`
+- `series[]` (bucketed rows with `total`, `server_errors`, `throttled`, `error_rate`, `latency_p50/p95/p99`)
+- `budget[]` (endpoint-level error-budget summary)
+- `page`, `retention`, `snapshot`, `cursor.next`
+
+---
+
+### `GET /v1/admin/control/dashboard/tenant/:tenant_id/key-usage`
+
+API key usage anomaly report.
+
+**Headers**
+- `X-Admin-Token: <ADMIN_TOKEN>`
+
+**Query**
+- `endpoint?: "write"|"recall"|"recall_text"`
+- `window_hours?: number`
+- `baseline_hours?: number`
+- `min_requests?: number`
+- `zscore_threshold?: number`
+- `limit?: number`
+- `offset?: number`
+- `cursor?: string`
+
+**Response**
+- `ok: boolean`
+- `tenant_id`
+- `items[]` with:
+  - `api_key_prefix`, `endpoint`
+  - `recent`, `baseline`
+  - `anomaly: { is_anomaly, reasons[], traffic_ratio, latency_zscore }`
+- `anomalies.count_in_page`
+- `page`, `retention`, `snapshot`, `cursor.next`
 
 ---
 
@@ -1074,7 +1465,7 @@ verification stats (`positive_count` / `negative_count`) for ordering and govern
 
 ## Verification Stamp
 
-- Last reviewed: `2026-02-23`
+- Last reviewed: `2026-03-01`
 - Verification commands:
   - `npm run test:contract`
   - `npm run docs:check`

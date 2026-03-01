@@ -94,6 +94,12 @@ Optional:
 make value-dashboard
 ```
 
+Legacy JSON snapshot (script output):
+
+```bash
+make value-dashboard-json
+```
+
 ## Fast Start Paths
 
 ### A) Hosted API (fastest for builders)
@@ -239,7 +245,55 @@ Hosted operations and managed control-plane automation are intentionally not par
 
 ## Documentation Hub
 
+- [Aionis Onepage](docs/AIONIS_ONEPAGE.md)
 - [Docs Index](docs/README.md)
+
+## Public Website (Next.js)
+
+`apps/www` is the public-facing marketing website (Next.js), while `docs/` remains VitePress docs.
+
+```bash
+npm run -s www:dev
+npm run -s www:build
+npm run -s www:start
+```
+
+## Ops Console (Next.js, internal)
+
+`apps/ops` is an internal control/monitoring console over existing `admin/control` APIs, including an explicit write-actions page at `/actions`.
+
+```bash
+npm run -s ops:dev
+npm run -s ops:build
+npm run -s ops:start
+```
+
+Required env:
+
+```bash
+AIONIS_BASE_URL=http://127.0.0.1:3001
+AIONIS_ADMIN_TOKEN=your-admin-token
+```
+
+Optional Ops access gate (Basic Auth):
+
+```bash
+OPS_BASIC_AUTH_ENABLED=true
+OPS_BASIC_AUTH_USER=ops
+OPS_BASIC_AUTH_PASS=change-me
+```
+
+Optional Ops IP allowlist gate:
+
+```bash
+OPS_IP_ALLOWLIST=127.0.0.1,::1,10.0.0.0/8
+```
+
+Optional dangerous-write gate (default safe):
+
+```bash
+OPS_DANGEROUS_ACTIONS_ENABLED=false
+```
 
 ## Technical Reference (Previous README)
 
