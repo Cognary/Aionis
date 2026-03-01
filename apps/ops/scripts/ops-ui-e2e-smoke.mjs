@@ -10,9 +10,41 @@ const HOST = "127.0.0.1";
 const PORT = Number(process.env.OPS_E2E_PORT || 3310);
 const BASE_URL = `http://${HOST}:${PORT}`;
 const START_TIMEOUT_MS = 60_000;
+const STOP_GRACE_MS = 5_000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForChildExit(child, timeoutMs) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return true;
+  return await new Promise((resolve) => {
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      child.off("exit", onExit);
+      resolve(ok);
+    };
+    const onExit = () => finish(true);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    child.once("exit", onExit);
+  });
+}
+
+async function stopChildProcess(child) {
+  if (!child) return;
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  try {
+    child.kill("SIGTERM");
+  } catch {}
+  const exitedAfterTerm = await waitForChildExit(child, STOP_GRACE_MS);
+  if (exitedAfterTerm) return;
+  try {
+    child.kill("SIGKILL");
+  } catch {}
+  await waitForChildExit(child, STOP_GRACE_MS);
 }
 
 async function waitForHttpReady(url, timeoutMs = START_TIMEOUT_MS) {
@@ -245,11 +277,7 @@ async function run() {
       await browser.close().catch(() => {});
     }
     rmSync(fixtures.dir, { recursive: true, force: true });
-    if (!child.killed) {
-      child.kill("SIGTERM");
-      await sleep(500);
-      if (!child.killed) child.kill("SIGKILL");
-    }
+    await stopChildProcess(child);
   }
 }
 
