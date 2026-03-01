@@ -6,54 +6,58 @@ Aionis gives your agents durable memory with real APIs, operational guardrails, 
 
 ## Open Core Boundary
 
-This repository is the Open Core public repo, and hosted capabilities are separated by an explicit boundary:
+This repository is the Open Core memory-kernel repo:
 
 1. Public: kernel, API/SDK contracts, derived async baseline, rules baseline, runbooks/specs
 2. Private: hosted control-plane implementation, billing/metering internals, enterprise IAM/compliance internals, managed ops internals
 
-Boundary spec:
+For full boundary details:
 
 - [Open Core Boundary](docs/OPEN_CORE_BOUNDARY.md)
 
-## Narrative Canon (Fixed)
+## Key Features
 
-1. Main narrative: `Verifiable / Operable Memory Kernel`
-2. Pillars: `Audit-first`, `Derived async`, `Memory -> Policy`
-3. Release template: `Problem -> Architecture Principles -> Evidence -> Boundaries -> Next Step`
-
-Narrative docs:
-
-- [Narrative Canon](docs/NARRATIVE_CANON.md)
-- [Packaging Plan](docs/PACKAGING_PLAN.md)
-- [OpenViking Borrow Plan](docs/OPENVIKING_BORROW_PLAN.md)
-- [Release Narrative Template](docs/RELEASE_NARRATIVE_TEMPLATE.md)
-- [Technical Release Material](docs/RELEASE_MATERIAL_TECHNICAL.md)
-- [Product Release Material](docs/RELEASE_MATERIAL_PRODUCT.md)
-- [Business Release Material](docs/RELEASE_MATERIAL_BUSINESS.md)
-
-## Packaging and Narrative Operations
-
-Aionis public packaging follows one repeatable structure:
-
-1. `Problem`
-2. `Architecture Principles`
-3. `Evidence`
-4. `Boundaries`
-5. `Next Step`
-
-Execution source:
-
-- [Packaging Plan](docs/PACKAGING_PLAN.md)
+1. Durable memory graph (`nodes + edges + commits`) with auditable commit lineage
+2. LLM-ready retrieval API (`/v1/memory/recall_text`)
+3. Async embedding pipeline (write path remains available under embedding pressure)
+4. Policy loop (`rules/evaluate`, `tools/select`, `tools/feedback`)
+5. Multi-tenant scope isolation (`tenant_id + scope`)
+6. TypeScript/Python SDKs + Docker runtime
+7. Production guardrails (preflight, consistency checks, regression/perf gates)
 
 ## Why Aionis
 
-Most agent memory demos stop at a vector store. Aionis is built for real workloads:
+Most agent memory offerings stop at retrieval. Aionis is built for production workloads:
 
-1. Structured memory graph (`nodes + edges + commits`)
-2. Retrieval that returns **LLM-ready context text** (`/v1/memory/recall_text`)
-3. Async embedding backfill + outbox worker (write path stays available)
-4. Rule engine for planner/tool behavior (`rules/evaluate`, `tools/select`, `tools/feedback`)
-5. Production checks (health gate, consistency checks, regression scripts)
+1. `Verifiable`: source-of-record write path + commit chain for audit/replay
+2. `Operable`: explicit production preflight/gate workflow instead of best-effort scripts
+3. `Memory -> Policy`: memory affects planner/tool behavior with traceable feedback loops
+
+## Benchmark Snapshot (2026-03-01)
+
+Latest production sign-off run (100k scale):
+
+| Scale | Recall p95 | Recall p99 | Write p95 | Write p99 | Recall fail% | Write fail% | SLO |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 100000 events | 51.42 ms | 61.16 ms | 182.5 ms | 240.2 ms | 0% | 0% | pass |
+
+SLO baseline:
+
+1. Recall p95 < `300ms`
+2. Write p95 < `500ms`
+3. Error rate <= `0%`
+
+Reproduce:
+
+```bash
+npm run -s preflight:prod
+PERF_PROFILE=perf_gate SCALES=100000 npm run perf:phase-d-matrix
+```
+
+Related docs:
+
+- [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
+- [Production Core Gate](docs/PRODUCTION_CORE_GATE.md)
 
 ## What You Can Ship
 
