@@ -70,6 +70,8 @@ Optional IP allowlist gate:
 
 ```bash
 OPS_IP_ALLOWLIST=127.0.0.1,::1,10.0.0.0/8
+# Trusted reverse proxies allowed to supply X-Forwarded-For / X-Real-IP:
+OPS_TRUSTED_PROXY_CIDRS=10.0.0.0/8,192.168.0.0/16
 ```
 
 Notes:
@@ -77,7 +79,8 @@ Notes:
 - Comma-separated values.
 - Supports exact IP (`127.0.0.1`, `::1`) and IPv4 CIDR (`10.0.0.0/8`).
 - When set, requests not in allowlist return `403` before auth checks.
-- Reverse-proxy deployments should pass trusted `x-forwarded-for`/`x-real-ip` headers.
+- `x-forwarded-for` / `x-real-ip` are trusted only when the direct peer IP is in `OPS_TRUSTED_PROXY_CIDRS`.
+- In `NODE_ENV=production`, setting `OPS_IP_ALLOWLIST` without `OPS_TRUSTED_PROXY_CIDRS` fails closed at startup.
 
 Optional dangerous write gate:
 

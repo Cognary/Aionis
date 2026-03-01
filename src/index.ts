@@ -362,17 +362,23 @@ type RecallHardCapResolution = {
 const globalRecallProfileDefaults = RECALL_PROFILE_DEFAULTS[env.MEMORY_RECALL_PROFILE];
 const recallProfilePolicy = parseRecallProfilePolicy(env.MEMORY_RECALL_PROFILE_POLICY_JSON);
 
-// Basic CORS support for browser-based playground/developer UIs.
-// Configure with CORS_ALLOW_ORIGINS (comma-separated).
-// Defaults:
-// - dev/ci: "*"
-// - prod: disabled unless explicitly configured
-const CORS_ALLOW_ORIGINS = (process.env.CORS_ALLOW_ORIGINS ?? (env.APP_ENV === "prod" ? "" : "*"))
-  .split(",")
-  .map((x) => x.trim())
-  .filter(Boolean);
-const CORS_ALLOW_HEADERS = "content-type,x-api-key,x-tenant-id,authorization,x-request-id";
-const CORS_ALLOW_METHODS = "GET,POST,OPTIONS";
+function parseCorsOrigins(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+// CORS is route-scoped:
+// - memory routes: browser clients for public POST APIs
+// - admin routes: disabled by default; opt-in for internal console origins only
+const CORS_MEMORY_ALLOW_ORIGINS = parseCorsOrigins(process.env.CORS_ALLOW_ORIGINS ?? (env.APP_ENV === "prod" ? "" : "*"));
+const CORS_ADMIN_ALLOW_ORIGINS = parseCorsOrigins(process.env.CORS_ADMIN_ALLOW_ORIGINS ?? "");
+const CORS_MEMORY_ALLOW_HEADERS = "content-type,x-api-key,x-tenant-id,authorization,x-request-id";
+const CORS_MEMORY_ALLOW_METHODS = "POST,OPTIONS";
+const CORS_ADMIN_ALLOW_HEADERS = "content-type,authorization,x-admin-token,x-request-id";
+const CORS_ADMIN_ALLOW_METHODS = "GET,POST,PUT,DELETE,OPTIONS";
+const CORS_ADMIN_ROUTE_METHODS = new Set(["GET", "POST", "PUT", "DELETE"]);
 const TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT = new Map<string, "write" | "recall" | "recall_text">([
   ["/v1/memory/write", "write"],
   ["/v1/memory/sessions", "write"],
@@ -386,15 +392,61 @@ const TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT = new Map<string, "write" | "recall" | 
   ["/v1/memory/tools/decision", "recall"],
 ]);
 
-function resolveCorsAllowOrigin(origin: string | null): string | null {
-  if (CORS_ALLOW_ORIGINS.includes("*")) return "*";
+function resolveCorsAllowOrigin(origin: string | null, allowOrigins: string[]): string | null {
+  if (allowOrigins.includes("*")) return "*";
   if (!origin) return null;
-  return CORS_ALLOW_ORIGINS.includes(origin) ? origin : null;
+  return allowOrigins.includes(origin) ? origin : null;
 }
 
 function routePath(req: any): string {
   const raw = String(req?.routeOptions?.url ?? req?.routerPath ?? req?.url ?? "");
   return raw.split("?")[0] ?? raw;
+}
+
+function requestHeader(req: any, name: string): string | null {
+  const raw = req?.headers?.[name];
+  if (typeof raw === "string") return raw;
+  if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === "string") return raw[0];
+  return null;
+}
+
+type CorsPolicy = {
+  allow_origins: string[];
+  allow_methods: string;
+  allow_headers: string;
+  expose_headers: string;
+};
+
+function resolveCorsPolicy(req: any): CorsPolicy | null {
+  const path = routePath(req);
+  const method = String(req?.method ?? "").toUpperCase();
+  const preflightMethod = String(requestHeader(req, "access-control-request-method") ?? "").trim().toUpperCase();
+
+  if (path.startsWith("/v1/memory/")) {
+    const isMemoryCorsMethod = method === "POST" || (method === "OPTIONS" && preflightMethod === "POST");
+    if (!isMemoryCorsMethod) return null;
+    return {
+      allow_origins: CORS_MEMORY_ALLOW_ORIGINS,
+      allow_methods: CORS_MEMORY_ALLOW_METHODS,
+      allow_headers: CORS_MEMORY_ALLOW_HEADERS,
+      expose_headers: "x-request-id",
+    };
+  }
+
+  if (path.startsWith("/v1/admin/")) {
+    if (CORS_ADMIN_ALLOW_ORIGINS.length === 0) return null;
+    const isAdminCorsMethod = CORS_ADMIN_ROUTE_METHODS.has(method);
+    const isAdminPreflight = method === "OPTIONS" && CORS_ADMIN_ROUTE_METHODS.has(preflightMethod);
+    if (!isAdminCorsMethod && !isAdminPreflight) return null;
+    return {
+      allow_origins: CORS_ADMIN_ALLOW_ORIGINS,
+      allow_methods: CORS_ADMIN_ALLOW_METHODS,
+      allow_headers: CORS_ADMIN_ALLOW_HEADERS,
+      expose_headers: "x-request-id",
+    };
+  }
+
+  return null;
 }
 
 function telemetryEndpointFromRequest(req: any): "write" | "recall" | "recall_text" | null {
@@ -875,7 +927,8 @@ app.log.info(
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     trust_proxy: env.TRUST_PROXY,
-    cors_allow_origins: CORS_ALLOW_ORIGINS,
+    cors_memory_allow_origins: CORS_MEMORY_ALLOW_ORIGINS,
+    cors_admin_allow_origins: CORS_ADMIN_ALLOW_ORIGINS,
     auth_mode: env.MEMORY_AUTH_MODE,
     tenant_quota_enabled: env.TENANT_QUOTA_ENABLED,
     control_tenant_quota_cache_ttl_ms: env.CONTROL_TENANT_QUOTA_CACHE_TTL_MS,
@@ -941,13 +994,14 @@ app.addHook("onRequest", async (req, reply) => {
   reply.header("x-request-id", req.id);
 
   const origin = typeof req.headers.origin === "string" ? req.headers.origin : null;
-  const allowOrigin = resolveCorsAllowOrigin(origin);
-  if (allowOrigin) {
+  const corsPolicy = resolveCorsPolicy(req);
+  const allowOrigin = corsPolicy ? resolveCorsAllowOrigin(origin, corsPolicy.allow_origins) : null;
+  if (allowOrigin && corsPolicy) {
     reply.header("access-control-allow-origin", allowOrigin);
     if (allowOrigin !== "*") reply.header("vary", "Origin");
-    reply.header("access-control-allow-methods", CORS_ALLOW_METHODS);
-    reply.header("access-control-allow-headers", CORS_ALLOW_HEADERS);
-    reply.header("access-control-expose-headers", "x-request-id");
+    reply.header("access-control-allow-methods", corsPolicy.allow_methods);
+    reply.header("access-control-allow-headers", corsPolicy.allow_headers);
+    reply.header("access-control-expose-headers", corsPolicy.expose_headers);
     reply.header("access-control-max-age", "600");
   }
 

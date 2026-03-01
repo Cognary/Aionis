@@ -171,14 +171,16 @@ export function createAuthResolver(args: {
         const apiKey = firstHeader(headers["x-api-key"]);
         if (apiKey) {
           const rec = apiKeys.get(apiKey);
-          if (!rec) return null;
-          return {
-            tenant_id: rec.tenant_id,
-            agent_id: rec.agent_id,
-            team_id: rec.team_id,
-            role: rec.role,
-            source: "api_key",
-          };
+          if (rec) {
+            return {
+              tenant_id: rec.tenant_id,
+              agent_id: rec.agent_id,
+              team_id: rec.team_id,
+              role: rec.role,
+              source: "api_key",
+            };
+          }
+          if (mode === "api_key") return null;
         }
         if (mode === "api_key") return null;
       }

@@ -29,7 +29,9 @@ Auxiliary benchmarks (`LongMemEval` / `LoCoMo`) are non-blocking regression evid
 - `TENANT_QUOTA_ENABLED=true`
 - `RATE_LIMIT_BYPASS_LOOPBACK=false`
 - If deployed behind reverse proxy/load-balancer, set `TRUST_PROXY=true` and verify real client IP attribution.
-- Set `CORS_ALLOW_ORIGINS` to explicit production allowlist (do not rely on wildcard behavior).
+- Set route-scoped CORS allowlists explicitly:
+  - `CORS_ALLOW_ORIGINS` for memory POST routes.
+  - keep `CORS_ADMIN_ALLOW_ORIGINS` empty by default; only set for trusted internal admin-console origins.
 
 2. Build and contract
 - `npm run -s build`

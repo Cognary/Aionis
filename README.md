@@ -224,10 +224,12 @@ Use these before public traffic:
 
 1. set `AIONIS_MODE=service` (or `AIONIS_MODE=cloud`)
 2. configure auth credentials (`MEMORY_API_KEYS_JSON` and/or JWT secret depending on mode)
+   - in `api_key_or_jwt` mode, either a valid API key or a valid JWT is accepted
 3. real embedding provider (`minimax` or `openai`)
 4. set recall policy (`MEMORY_RECALL_PROFILE=strict_edges`) and optionally layer by tenant/endpoint via `MEMORY_RECALL_PROFILE_POLICY_JSON`
 5. enable adaptive queue-pressure downgrade if needed (`MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED=true`)
-6. use split-service topology for production; standalone image is local/demo only (see `Standalone to HA Runbook`)
+6. set route-scoped CORS allowlists (`CORS_ALLOW_ORIGINS` for memory POST routes, `CORS_ADMIN_ALLOW_ORIGINS` for admin routes if needed)
+7. use split-service topology for production; standalone image is local/demo only (see `Standalone to HA Runbook`)
 
 Operator docs:
 
@@ -287,6 +289,8 @@ Optional Ops IP allowlist gate:
 
 ```bash
 OPS_IP_ALLOWLIST=127.0.0.1,::1,10.0.0.0/8
+# Required in production when OPS_IP_ALLOWLIST is set (fail-closed):
+OPS_TRUSTED_PROXY_CIDRS=10.0.0.0/8,192.168.0.0/16
 ```
 
 Optional dangerous-write gate (default safe):
