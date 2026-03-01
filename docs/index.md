@@ -28,7 +28,7 @@ features:
   - title: Memory -> Policy
     details: Rules, tool selection, and feedback turn memory into executable behavior, not only retrieval text.
   - title: Feedback-Driven Adaptation
-    details: A bounded "self-learning" loop: execution feedback updates governable rule behavior with audit traces.
+    details: 'A bounded "self-learning" loop: execution feedback updates governable rule behavior with audit traces.'
   - title: API + SDK Ready
     details: Stable API contract with TypeScript and Python SDKs for fast product integration.
   - title: Multi-tenant Scope Isolation
