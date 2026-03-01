@@ -52,6 +52,8 @@ Generated files:
 5. `max_tenant_negative_ratio_drift = 0.30`
 6. `tenant_drift_min_feedback = 5`
 
+Cross-tenant drift checks are enforced only when at least two tenants meet `tenant_drift_min_feedback`.
+
 Override with flags when needed:
 
 ```bash

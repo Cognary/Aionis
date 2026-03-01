@@ -47,6 +47,8 @@ npm run -s job:execution-loop-gate -- --scope default --strict-warnings
 12. `--max-tenant-negative-ratio-drift <ratio>`: max allowed negative-ratio spread across tenants (default `0.3`)
 13. `--max-tenant-active-rule-count-drift <n>`: max active-rule count spread across tenants (default `20`)
 
+Cross-tenant drift checks are enforced only when at least two tenants meet `cross-tenant-drift-min-feedback`.
+
 ## Health Gate Integration
 
 Use within health gate:

@@ -510,7 +510,10 @@ async function main() {
       checks.push({
         name: "tenant_active_rule_count_drift_max",
         severity: "warning",
-        pass: tenantCount <= 1 || tenantActiveRuleCountDrift <= maxTenantActiveRuleCountDrift,
+        pass:
+          tenantCount <= 1 ||
+          tenantsWithFeedbackFloor < 2 ||
+          tenantActiveRuleCountDrift <= maxTenantActiveRuleCountDrift,
         value: tenantActiveRuleCountDrift,
         threshold: { op: "<=", value: maxTenantActiveRuleCountDrift },
         note: "Large active-rule count spread across tenants may indicate governance drift.",

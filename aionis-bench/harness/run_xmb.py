@@ -280,7 +280,13 @@ def case_policy_loop_vs_retrieval_only(args, cfg: Dict[str, Any] | None = None) 
         s_recall, _ = http_post_json(
             args.base_url,
             "/v1/memory/recall_text",
-            {"scope": scope, "query_text": recall_query, "limit": 5},
+            {
+                "scope": scope,
+                "query_text": recall_query,
+                "limit": 5,
+                "consumer_agent_id": "bench_agent",
+                "consumer_team_id": "bench_team",
+            },
             headers,
             args.timeout_sec,
         )

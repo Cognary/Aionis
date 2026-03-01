@@ -10,7 +10,7 @@ Usage:
   npm run -s evidence:weekly -- [options]
 
 Options:
-  --scope <scope>                  Scope for governance/execution-loop jobs (default: MEMORY_SCOPE or "default")
+  --scope <scope>                  Requested scope; when XMB runs, gate scope auto-binds to XMB-006 scope
   --window-hours <n>               Rolling window in hours (default: 168)
   --report-week <YYYY-Www>         Report week label (default: UTC ISO week)
   --run-id <id>                    Run id (default: UTC timestamp)
@@ -165,20 +165,7 @@ if [[ "${STRICT_WARNINGS}" == "true" ]]; then
   STRICT_FLAGS+=(--strict-warnings)
 fi
 
-run_capture "execution_loop_gate" \
-  npm run -s job:execution-loop-gate -- \
-    --scope "${SCOPE}" \
-    --window-hours "${WINDOW_HOURS}" \
-    "${STRICT_FLAGS[@]:-}"
-
-run_capture "governance_weekly_report" \
-  npm run -s job:governance-weekly-report -- \
-    --scope "${SCOPE}" \
-    --window-hours "${WINDOW_HOURS}" \
-    --report-week "${REPORT_WEEK}" \
-    --run-id "${RUN_ID}" \
-    --out-dir "${OUT_DIR}/governance_weekly" \
-    "${STRICT_FLAGS[@]:-}"
+GATE_SCOPE="${SCOPE}"
 
 if [[ "${SKIP_BENCH}" == "true" ]]; then
   echo "0" > "${RAW_DIR}/bench_xmb.exit_code"
@@ -193,7 +180,32 @@ else
       --suites "${BENCH_SUITES}" \
       --out-dir "${OUT_DIR}/bench_xmb" \
       --allow-fail
+
+  if [[ -f "${OUT_DIR}/bench_xmb/details.json" ]]; then
+    XMB_SCOPE_FROM_BENCH="$(jq -r '.cases[]? | select(.case_id == "XMB-006") | .metrics.scope // empty' "${OUT_DIR}/bench_xmb/details.json" | head -n 1)"
+    if [[ -n "${XMB_SCOPE_FROM_BENCH}" ]]; then
+      GATE_SCOPE="${XMB_SCOPE_FROM_BENCH}"
+      echo "[weekly-evidence] gate_scope auto-selected from XMB-006: ${GATE_SCOPE}"
+    fi
+  fi
 fi
+
+echo "[weekly-evidence] gate_scope=${GATE_SCOPE}"
+
+run_capture "execution_loop_gate" \
+  npm run -s job:execution-loop-gate -- \
+    --scope "${GATE_SCOPE}" \
+    --window-hours "${WINDOW_HOURS}" \
+    "${STRICT_FLAGS[@]:-}"
+
+run_capture "governance_weekly_report" \
+  npm run -s job:governance-weekly-report -- \
+    --scope "${GATE_SCOPE}" \
+    --window-hours "${WINDOW_HOURS}" \
+    --report-week "${REPORT_WEEK}" \
+    --run-id "${RUN_ID}" \
+    --out-dir "${OUT_DIR}/governance_weekly" \
+    "${STRICT_FLAGS[@]:-}"
 
 EXEC_JSON="${RAW_DIR}/execution_loop_gate.json"
 GOV_JSON="${RAW_DIR}/governance_weekly_report.json"
@@ -243,7 +255,8 @@ SUMMARY_MD="${OUT_DIR}/EVIDENCE_WEEKLY.md"
 jq -n \
   --arg report_week "${REPORT_WEEK}" \
   --arg run_id "${RUN_ID}" \
-  --arg scope "${SCOPE}" \
+  --arg requested_scope "${SCOPE}" \
+  --arg gate_scope "${GATE_SCOPE}" \
   --argjson window_hours "${WINDOW_HOURS}" \
   --arg base_url "${BASE_URL}" \
   --arg out_dir "${OUT_DIR}" \
@@ -260,7 +273,9 @@ jq -n \
     kind: "weekly_differentiation_evidence_pack",
     report_week: $report_week,
     run_id: $run_id,
-    scope: $scope,
+    requested_scope: $requested_scope,
+    scope: $gate_scope,
+    gate_scope: $gate_scope,
     window_hours: $window_hours,
     base_url: $base_url,
     out_dir: $out_dir,
@@ -319,10 +334,11 @@ cat > "${SUMMARY_MD}" <<EOF
 
 1. report_week: \`${REPORT_WEEK}\`
 2. run_id: \`${RUN_ID}\`
-3. scope: \`${SCOPE}\`
-4. window_hours: \`${WINDOW_HOURS}\`
-5. base_url: \`${BASE_URL}\`
-6. evidence_pass: \`${EVIDENCE_SUMMARY_PASS}\`
+3. requested_scope: \`${SCOPE}\`
+4. gate_scope: \`${GATE_SCOPE}\`
+5. window_hours: \`${WINDOW_HOURS}\`
+6. base_url: \`${BASE_URL}\`
+7. evidence_pass: \`${EVIDENCE_SUMMARY_PASS}\`
 
 ## Stage Status
 

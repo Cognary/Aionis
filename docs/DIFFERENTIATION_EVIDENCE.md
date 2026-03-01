@@ -75,6 +75,11 @@ Run one command to collect benchmark + execution loop + governance weekly eviden
 npm run -s evidence:weekly -- --scope default --window-hours 168
 ```
 
+Notes:
+
+1. The script runs XMB first, then executes gates on the XMB-006 scope to guarantee auditable same-run evidence.
+2. `requested_scope` is preserved in summary, while `gate_scope` records the actual scope used by gate checks.
+
 Main outputs:
 
 1. `artifacts/evidence/weekly/<report_week>_<run_id>/EVIDENCE_SUMMARY.json`
