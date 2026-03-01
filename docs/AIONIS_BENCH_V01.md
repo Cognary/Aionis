@@ -4,7 +4,7 @@ title: "AionisBench v0.1"
 
 # AionisBench v0.1
 
-AionisBench v0.1 is the production-oriented benchmark harness for Aionis Open Core.
+AionisBench v0.1 is the production-oriented benchmark harness for Aionis.
 
 Core proof goals:
 

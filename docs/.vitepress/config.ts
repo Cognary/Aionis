@@ -52,7 +52,6 @@ export default defineConfig({
           { text: "Docs Home", link: "/index" },
           { text: "5-Minute Onboarding", link: "/ONBOARDING_5MIN" },
           { text: "Architecture", link: "/ARCHITECTURE" },
-          { text: "Open Core Boundary", link: "/OPEN_CORE_BOUNDARY" },
           { text: "Docs Index", link: "/README" },
         ],
       },
@@ -74,6 +73,7 @@ export default defineConfig({
         text: "Operations",
         items: [
           { text: "Operator Runbook", link: "/OPERATOR_RUNBOOK" },
+          { text: "Ops Console", link: "/OPS_CONSOLE" },
           { text: "Abstraction Policy Runbook", link: "/ABSTRACTION_POLICY_RUNBOOK" },
           { text: "Consolidation Replay Runbook", link: "/CONSOLIDATION_REPLAY_RUNBOOK" },
           { text: "Prod Go-Live Gate", link: "/PROD_GO_LIVE_GATE" },
@@ -113,7 +113,7 @@ export default defineConfig({
     },
     socialLinks: [{ icon: "github", link: "https://github.com/Cognary/Aionis" }],
     footer: {
-      message: "Aionis Open Core Documentation",
+      message: "Aionis Documentation",
       copyright: "Copyright © Cognary",
     },
     search: {

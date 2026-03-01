@@ -24,14 +24,14 @@ Target state:
 
 In scope:
 
-1. Open Core API and recall path.
+1. Public API and recall path.
 2. Context rendering and compaction policy.
 3. SDK input type alignment (TypeScript + Python).
 4. Operator/docs/runbook updates.
 
 Out of scope:
 
-1. Hosted-only internal policy engine.
+1. Internal policy engine outside this repository scope.
 2. Model-specific semantic summarization service.
 3. Breaking response schema changes.
 

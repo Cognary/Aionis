@@ -4,17 +4,6 @@
 
 Aionis gives your agents durable memory with real APIs, operational guardrails, and fast integration paths.
 
-## Open Core Boundary
-
-This repository is the Open Core memory-kernel repo:
-
-1. Public: kernel, API/SDK contracts, derived async baseline, rules baseline, runbooks/specs
-2. Private: hosted control-plane implementation, billing/metering internals, enterprise IAM/compliance internals, managed ops internals
-
-For full boundary details:
-
-- [Open Core Boundary](docs/OPEN_CORE_BOUNDARY.md)
-
 ## Key Features
 
 1. Durable memory graph (`nodes + edges + commits`) with auditable commit lineage
@@ -247,8 +236,6 @@ Operator docs:
 - [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
 - [LongMemEval Gate](docs/LONGMEMEVAL_GATE.md)
 
-Hosted operations and managed control-plane automation are intentionally not part of this Open Core repository.
-
 ## Documentation Hub
 
 - [Aionis Onepage](docs/AIONIS_ONEPAGE.md)
@@ -257,6 +244,10 @@ Hosted operations and managed control-plane automation are intentionally not par
 ## Ops Console (Next.js, internal)
 
 `apps/ops` is an internal control/monitoring console over existing `admin/control` APIs, including an explicit write-actions page at `/actions`.
+
+Docs:
+
+- [Ops Console](docs/OPS_CONSOLE.md)
 
 ```bash
 npm run -s ops:dev

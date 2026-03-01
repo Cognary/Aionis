@@ -4,7 +4,7 @@ title: "Docs Index"
 
 # Docs Index
 
-This is the public documentation index for Aionis Open Core.
+This is the public documentation index for Aionis.
 
 ## Getting Started
 
@@ -13,7 +13,6 @@ This is the public documentation index for Aionis Open Core.
 - [Aionis Onepage (Public)](./AIONIS_ONEPAGE_PUBLIC.md)
 - [5-Minute Developer Onboarding](./ONBOARDING_5MIN.md)
 - [Architecture](./ARCHITECTURE.md)
-- [Open Core Boundary](./OPEN_CORE_BOUNDARY.md)
 
 ## API & SDK
 
@@ -28,6 +27,7 @@ This is the public documentation index for Aionis Open Core.
 ## Deploy & Ops
 
 - [Operator Runbook](./OPERATOR_RUNBOOK.md)
+- [Ops Console](./OPS_CONSOLE.md)
 - [Standalone to HA Runbook](./STANDALONE_TO_HA_RUNBOOK.md)
 - [HA Failure Drill Template](./HA_FAILURE_DRILL_TEMPLATE.md)
 - [HA Failure Drill Sample](./HA_FAILURE_DRILL_SAMPLE.md)
@@ -60,8 +60,7 @@ This is the public documentation index for Aionis Open Core.
 
 ## Scope Notes
 
-This documentation set covers the Open Core surface (kernel, API/SDK contracts, and public operations/evidence gates).
-Managed/hosted control-plane runbooks and GTM execution docs are intentionally not published here.
+This documentation set covers product capabilities, API/SDK contracts, and operations/evidence gates.
 
 ## Maintenance
 

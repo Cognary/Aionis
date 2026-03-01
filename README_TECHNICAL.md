@@ -98,7 +98,7 @@ This repo includes the docs site toolchain:
 
 1. Docs site toolchain: `docs-site` (VitePress; sources live under `docs/`)
 
-Note: `apps/marketing` may contain local build artifacts in some environments, but the source app is not part of this Open Core checkout.
+Note: `apps/marketing` may contain local build artifacts in some environments, but the source app is not included in this repository.
 
 Dev:
 

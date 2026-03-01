@@ -27,7 +27,7 @@ Applies to:
 
 Out of scope:
 
-1. Hosted-only infra controls (private repo runbooks)
+1. Infrastructure controls outside this repository runbooks
 2. LLM-provider latency (bench harness side)
 
 ## Plan Phases

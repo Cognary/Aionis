@@ -81,17 +81,6 @@ npm run -s docker:run:standalone
 3. PyPI: `0.2.1`
 4. Docker: `v0.2.1` / `standalone-v0.2.1`
 
-## 开源边界（Open Core）
-
-公开：kernel、API/SDK 合约、异步派生基线、规则基线、公共 runbook/spec。  
-私有：托管控制面实现、计费/企业 IAM/内部运维自动化等。
-
-这让 Aionis 同时具备：
-
-1. 公共标准化与生态可集成性
-2. 托管服务可持续演进空间
-
 ## 一句话总结
 
 **Aionis 不是“记忆插件”，而是可上线、可治理、可演进的 Agent Memory Kernel。**
-

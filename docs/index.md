@@ -28,7 +28,7 @@ features:
 
 ## Platform Snapshot
 
-- Open Core focus: single-tenant memory kernel with production-grade operability primitives.
+- Platform focus: production-grade memory kernel with operability primitives.
 - Release artifacts:
   - npm: [@aionis/sdk](https://www.npmjs.com/package/@aionis/sdk)
   - PyPI: [aionis-sdk](https://pypi.org/project/aionis-sdk/)
@@ -49,7 +49,6 @@ curl -fsS http://localhost:3001/health
   - Python SDK: `0.2.1`
   - Docker main: `v0.2.1`
   - Standalone Docker line: `standalone-v0.2.1`
-- Hosted / managed control-plane runbooks are intentionally not part of this public documentation set.
 
 ## Evidence Playground
 
@@ -92,6 +91,7 @@ Primary references:
   - [Rule Lifecycle](./RULE_LIFECYCLE.md)
 - SRE / Operations:
   - [Operator Runbook](./OPERATOR_RUNBOOK.md)
+  - [Ops Console](./OPS_CONSOLE.md)
   - [E2E Regression Checklist](./E2E_REGRESSION.md)
   - [Performance Baseline](./PERFORMANCE_BASELINE.md)
 - Release Manager:

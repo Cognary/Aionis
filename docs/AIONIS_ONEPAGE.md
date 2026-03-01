@@ -80,19 +80,7 @@ Last updated: `2026-02-28`
 
 CI 层面已形成：`backend-parity-smoke` + `sdk-ci` + `core-production-gate` 组合门禁。
 
-## 8) Open Core 边界（你能公开什么）
-
-公开（Open Core）：
-
-1. 内核模型、API/SDK 合约、异步派生基线、规则基线、公共 runbook/spec。
-
-私有（Hosted/Enterprise）：
-
-1. 控制面实现、计费与配额变现、企业 IAM/合规模块、托管运维内部自动化。
-
-这保证了“标准公开 + 托管护城河”并存。
-
-## 9) 当前发布基线（已对齐）
+## 8) 当前发布基线（已对齐）
 
 1. Core: `v0.2.1`
 2. npm SDK: `@aionis/sdk@0.2.1`
@@ -100,7 +88,7 @@ CI 层面已形成：`backend-parity-smoke` + `sdk-ci` + `core-production-gate` 
 4. Docker: `ghcr.io/cognary/aionis:v0.2.1`
 5. Standalone Docker: `ghcr.io/cognary/aionis:standalone-v0.2.1`
 
-## 10) 一句话评估
+## 9) 一句话评估
 
 Aionis 当前状态可以概括为：
 
@@ -108,7 +96,7 @@ Aionis 当前状态可以概括为：
 2. **可扩展**：从本地轻量形态平滑升级到 HA 生产形态。  
 3. **可演进**：MemoryStore adapter 仍在 P2 收口期，但方向明确且有持续验证体系。
 
-## 11) 入口命令（最短路径）
+## 10) 入口命令（最短路径）
 
 ```bash
 git clone https://github.com/Cognary/Aionis
@@ -130,4 +118,3 @@ References:
 5. `docs/PRODUCTION_CORE_GATE.md`
 6. `docs/MEMORY_STORE_ADAPTER_PLAN.md`
 7. `docs/LITE_STANDALONE_AND_RECALL_PLAN.md`
-8. `docs/OPEN_CORE_BOUNDARY.md`

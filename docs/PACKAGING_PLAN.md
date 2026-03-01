@@ -73,7 +73,7 @@ Landing flow:
 Required pages:
 
 1. Home
-2. Open Core model
+2. Product capability model
 3. Docs gateway
 4. Pricing / contact
 
@@ -85,12 +85,11 @@ Top-level sections:
 2. API + SDK
 3. Production Operations
 4. Narrative + Release Materials
-5. Boundary (Open Core vs Hosted)
+5. Scope and limitations
 
 Non-public docs policy:
 
-1. Internal GTM/hosted operator internals stay in private repo.
-2. Public docs keep product-facing and operator-safe content only.
+1. Public docs keep product-facing and operator-safe content only.
 
 ## Release Evidence Standard
 
@@ -100,7 +99,7 @@ Each release should include:
 2. Health gate + consistency check summary
 3. Performance SLO summary
 4. Compression KPI summary
-5. Boundary + known limitations
+5. Scope + known limitations
 6. Next-step plan
 
 ## Execution Phases
@@ -113,7 +112,7 @@ Deliverables:
 
 1. Narrative canon fixed in docs
 2. Release template fixed
-3. Boundary docs linked
+3. Scope template linked
 
 ## Phase 2 - Surface Unification
 

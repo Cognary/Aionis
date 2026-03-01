@@ -8,7 +8,7 @@ Last updated: `2026-02-19`
 
 ## Strategic Decision
 
-Adopt `Open Core + Hosted + Kernel Control` as the default operating model.
+Adopt `Kernel Standard + Managed Service + Execution Control` as the default operating model.
 
 ## Positioning
 
@@ -24,9 +24,9 @@ The primary value claim is not "higher memory accuracy." The primary claim is:
 
 ## Three-Layer Model
 
-## Layer 1: Open Source Kernel (must stay open)
+## Layer 1: Public Kernel Foundation
 
-Open capabilities:
+Foundation capabilities:
 
 1. Single-tenant memory kernel
 2. Commit-chain and replayable history
@@ -41,16 +41,16 @@ Role in strategy:
 
 1. Establish kernel standard
 2. Attract infra builders
-3. Drive GitHub distribution
+3. Drive ecosystem distribution
 4. Build technical authority
 
-Boundary rule:
+Quality rule:
 
 Do not intentionally cripple Layer 1 into demo-only quality.
 
-## Layer 2: Hosted Aionis (primary revenue)
+## Layer 2: Managed Aionis Service (primary revenue)
 
-Hosted/closed capabilities:
+Managed service capabilities:
 
 1. Multi-tenant isolation and enterprise identity controls
 2. SLO/HA operations and managed reliability
@@ -65,7 +65,7 @@ Role in strategy:
 1. Convert production demand into recurring revenue
 2. Reduce adoption friction for teams that need managed operations
 
-Boundary rule:
+Monetization rule:
 
 Charge for scale, governance, and managed operations; do not hide core kernel truth.
 
@@ -84,19 +84,19 @@ Role in strategy:
 1. Category leadership beyond "memory feature"
 2. Durable moat through control-plane depth and ecosystem lock-in
 
-## Product Boundary Matrix
+## Product Packaging Matrix
 
-1. Always open:
+1. Kernel baseline:
    write/recall contract, commit-chain invariants, base rule model, migration format
-2. Hosted differentiators:
+2. Managed differentiators:
    tenancy, HA/SLO operations, observability, governance controls, compliance tooling
 3. Future platform differentiators:
    execution substrate integration and policy-driven autonomous operation
 
 ## Revenue Model
 
-1. Free OSS kernel for adoption and standard setting
-2. Hosted usage tiers for production workloads
+1. Free community kernel for adoption and standard setting
+2. Managed usage tiers for production workloads
 3. Enterprise plans for governance/compliance/SLO commitments
 4. Future platform pricing for execution-memory control plane
 
@@ -110,20 +110,20 @@ Required evidence bundle:
 
 1. Passing gates/checks commands
 2. Artifact versions (GitHub/Docker/npm/PyPI)
-3. Explicit boundary statement (what is not solved in this release)
+3. Explicit release-scope statement (what is not solved in this release)
 
 ## Key Risks and Controls
 
 1. Risk: Open layer too weak -> no standardization momentum
    Control: keep production single-tenant capabilities open
-2. Risk: Hosted value unclear -> low paid conversion
-   Control: enforce strict open/hosted boundary by governance and operations depth
+2. Risk: Managed-service value unclear -> low paid conversion
+   Control: enforce clear product packaging by governance and operations depth
 3. Risk: Overclaim narrative -> trust loss
    Control: lead with verifiability/operability evidence, not generic accuracy claims
 
 ## Next 90 Days
 
-1. Publish open/hosted boundary page on website and docs
+1. Publish product capability and release-scope pages on website and docs
 2. Standardize release notes to evidence template
-3. Define hosted packaging by tenant scale and governance requirements
+3. Define managed-service packaging by tenant scale and governance requirements
 4. Add quarterly platform milestones for Layer 3 proof points

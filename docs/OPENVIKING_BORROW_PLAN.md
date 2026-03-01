@@ -16,7 +16,7 @@ Goal:
 
 1. Do not replace Postgres + commit-chain as source of record.
 2. Do not relax API contract safety defaults (embedding/debug boundaries).
-3. Do not move hosted/private implementation details back into Open Core repo.
+3. Do not move internal implementation details into public docs or API examples.
 4. New abstraction layers must remain backward-compatible with existing `write/recall/recall_text` contracts.
 
 ## Borrow Items (Priority-Ordered)
