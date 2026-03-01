@@ -49,15 +49,6 @@ This is the public documentation index for Aionis.
 - [OpenWork (MCP)](./OPENWORK_INTEGRATION.md)
 - [LangGraph](./LANGGRAPH_INTEGRATION.md)
 
-## Narrative (Optional)
-
-- [Narrative Canon](./NARRATIVE_CANON.md)
-- [Packaging Plan](./PACKAGING_PLAN.md)
-- [Release Narrative Template](./RELEASE_NARRATIVE_TEMPLATE.md)
-- [Technical Release Material](./RELEASE_MATERIAL_TECHNICAL.md)
-- [Product Release Material](./RELEASE_MATERIAL_PRODUCT.md)
-- [Business Release Material](./RELEASE_MATERIAL_BUSINESS.md)
-
 ## Scope Notes
 
 This documentation set covers product capabilities, API/SDK contracts, and operations/evidence gates.

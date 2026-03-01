@@ -36,7 +36,7 @@ export default defineConfig({
   themeConfig: {
     logo: "/logo.svg",
     nav: [
-      { text: "Website", link: "https://aionisos.com" },
+      { text: "Why Aionis", link: "/index#why-teams-choose-aionis" },
       { text: "Start", link: "/ONBOARDING_5MIN" },
       { text: "Concepts", link: "/ARCHITECTURE" },
       { text: "API", link: "/API_CONTRACT" },
@@ -86,17 +86,6 @@ export default defineConfig({
           { text: "Adaptive Compression Plan", link: "/ADAPTIVE_COMPRESSION_PLAN" },
           { text: "Governance Weekly Report", link: "/GOVERNANCE_WEEKLY_REPORT" },
           { text: "Docker Release", link: "/DOCKER_RELEASE" },
-        ],
-      },
-      {
-        text: "Narrative (Optional)",
-        items: [
-          { text: "Narrative Canon", link: "/NARRATIVE_CANON" },
-          { text: "Packaging Plan", link: "/PACKAGING_PLAN" },
-          { text: "Release Narrative Template", link: "/RELEASE_NARRATIVE_TEMPLATE" },
-          { text: "Technical Release Material", link: "/RELEASE_MATERIAL_TECHNICAL" },
-          { text: "Product Release Material", link: "/RELEASE_MATERIAL_PRODUCT" },
-          { text: "Business Release Material", link: "/RELEASE_MATERIAL_BUSINESS" },
         ],
       },
       {

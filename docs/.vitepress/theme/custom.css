@@ -148,7 +148,105 @@
   opacity: 0.8;
 }
 
+.aionis-home-grid {
+  margin: 1rem 0 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.aionis-home-card {
+  display: block;
+  text-decoration: none;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.95) 0%, rgba(241, 245, 249, 0.96) 100%);
+  padding: 1rem;
+  color: inherit;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.aionis-home-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(29, 78, 216, 0.4);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.1);
+}
+
+.aionis-home-card h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.aionis-home-card p {
+  margin: 0.5rem 0 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  opacity: 0.82;
+}
+
+.aionis-home-card span {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.dark .aionis-home-card {
+  border-color: rgba(148, 163, 184, 0.25);
+  background: linear-gradient(165deg, rgba(15, 23, 42, 0.7) 0%, rgba(2, 6, 23, 0.72) 100%);
+}
+
+.dark .aionis-home-card:hover {
+  border-color: rgba(96, 165, 250, 0.55);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.45);
+}
+
+.dark .aionis-home-card span {
+  color: #7dd3fc;
+}
+
+.aionis-benchmark-grid {
+  margin: 0.95rem 0 1rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.aionis-benchmark-grid article {
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 0.65rem 0.75rem;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.aionis-benchmark-grid span {
+  display: block;
+  font-size: 0.76rem;
+  opacity: 0.72;
+}
+
+.aionis-benchmark-grid strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.dark .aionis-benchmark-grid article {
+  border-color: rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.62);
+}
+
 @media (max-width: 768px) {
+  .aionis-home-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .aionis-benchmark-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .aionis-lab-grid {
     grid-template-columns: 1fr;
   }
