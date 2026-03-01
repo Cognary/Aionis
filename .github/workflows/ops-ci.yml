@@ -1,0 +1,45 @@
+name: Ops CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/ops/**"
+      - "scripts/ci/ops-*.test.mjs"
+      - ".github/workflows/ops-ci.yml"
+  pull_request:
+    paths:
+      - "apps/ops/**"
+      - "scripts/ci/ops-*.test.mjs"
+      - ".github/workflows/ops-ci.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/ops/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix apps/ops ci
+
+      - name: Install Playwright Chromium
+        run: npx --prefix apps/ops playwright install --with-deps chromium
+
+      - name: Run ops smoke suite
+        run: node --test scripts/ci/ops-*.test.mjs
+
+      - name: Run ops browser e2e smoke
+        run: npm --prefix apps/ops run test:e2e:smoke
+
+      - name: Build ops console
+        run: npm --prefix apps/ops run build
