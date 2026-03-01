@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -36,14 +36,27 @@ async function waitForChildExit(child, timeoutMs) {
 async function stopChildProcess(child) {
   if (!child) return;
   if (child.exitCode !== null || child.signalCode !== null) return;
-  try {
-    child.kill("SIGTERM");
-  } catch {}
+  const canGroupKill = process.platform !== "win32" && Number.isFinite(child.pid) && child.pid > 0;
+  if (canGroupKill) {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {}
+  } else {
+    try {
+      child.kill("SIGTERM");
+    } catch {}
+  }
   const exitedAfterTerm = await waitForChildExit(child, STOP_GRACE_MS);
   if (exitedAfterTerm) return;
-  try {
-    child.kill("SIGKILL");
-  } catch {}
+  if (canGroupKill) {
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch {}
+  } else {
+    try {
+      child.kill("SIGKILL");
+    } catch {}
+  }
   await waitForChildExit(child, STOP_GRACE_MS);
 }
 
@@ -127,15 +140,18 @@ function startOpsServer() {
     OPS_IP_ALLOWLIST: "",
     NEXT_TELEMETRY_DISABLED: "1",
   };
-  const child = spawn(
-    process.platform === "win32" ? "npx.cmd" : "npx",
-    ["next", "dev", "--hostname", HOST, "--port", String(PORT)],
-    {
-      cwd: process.cwd(),
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
+  const nextBin = path.join(process.cwd(), "node_modules", "next", "dist", "bin", "next");
+  const hasLocalNextBin = existsSync(nextBin);
+  const cmd = hasLocalNextBin ? process.execPath : process.platform === "win32" ? "npx.cmd" : "npx";
+  const args = hasLocalNextBin
+    ? [nextBin, "dev", "--hostname", HOST, "--port", String(PORT)]
+    : ["next", "dev", "--hostname", HOST, "--port", String(PORT)];
+  const child = spawn(cmd, args, {
+    cwd: process.cwd(),
+    env,
+    detached: process.platform !== "win32",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 
   const logs = [];
   const onData = (chunk) => {
@@ -282,3 +298,4 @@ async function run() {
 }
 
 await run();
+process.exit(process.exitCode || 0);
