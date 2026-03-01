@@ -10,15 +10,19 @@ export default function ActionsPage() {
   return (
     <div className="ops-page">
       <section className="hero panel">
-        <p className="kicker">Aionis Control Actions</p>
-        <h1>Admin Write Operations</h1>
-        <p className="muted">
-          Execute high-signal admin operations from one place. This page uses Ops server-side token forwarding and only
-          targets documented `/v1/admin/control/*` endpoints.
-        </p>
-        <p className="muted">
-          Workflow: run preview (dry-run) first, confirm risk level, then execute write path and jump to audit trace.
-        </p>
+        <div>
+          <p className="kicker">Aionis Control Actions</p>
+          <h1>Admin Write Operations</h1>
+          <p className="muted">
+            Execute high-signal admin operations from one place. This page uses Ops server-side token forwarding and only
+            targets documented `/v1/admin/control/*` endpoints.
+          </p>
+        </div>
+        <div className="hero-note">
+          <p className="muted">
+            Workflow: run preview (dry-run) first, confirm risk level, then execute write path and jump to audit trace.
+          </p>
+        </div>
       </section>
       <section className={`panel ${dangerousActionsEnabled ? "" : "warning"}`}>
         <h3>Dangerous Actions</h3>

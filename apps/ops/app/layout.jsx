@@ -1,16 +1,17 @@
-import { Bricolage_Grotesque, IBM_Plex_Mono } from "next/font/google";
+import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { siteConfig } from "@/app/lib";
 import "./globals.css";
 import Link from "next/link";
 
-const headline = Bricolage_Grotesque({
+const headline = Space_Grotesk({
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-headline"
 });
 
-const mono = IBM_Plex_Mono({
+const mono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400", "500", "600"],
   variable: "--font-mono"
 });
 
@@ -32,9 +33,12 @@ export default function RootLayout({ children }) {
         <header className="topbar">
           <div className="shell topbar-inner">
             <div className="brand-block">
-              <p className="eyebrow">Aionis Internal Ops</p>
-              <p className="title">Control Console</p>
-              <p className="env-pill" aria-label="app environment">env: {appEnv}</p>
+              <div className="brand-mark" aria-hidden="true">A</div>
+              <div className="brand-copy">
+                <p className="eyebrow">Aionis Ops</p>
+                <p className="title">Control Surface</p>
+                <p className="env-pill" aria-label="app environment">env: {appEnv}</p>
+              </div>
             </div>
             <nav className="appnav" aria-label="Ops pages">
               <Link href="/">Dashboard</Link>
