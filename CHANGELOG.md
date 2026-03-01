@@ -4,6 +4,13 @@ All notable changes to Aionis core are documented in this file.
 
 The format is based on Keep a Changelog and this project follows SemVer for tagged core releases.
 
+## [0.2.2] - 2026-03-02
+
+### Changed
+
+1. Promoted all post-`v0.2.1` production updates to release baseline, including evidence-pack gate hardening, MCP/docs consistency fixes, and Ops console decision-first UI refresh.
+2. Unified coordinated distribution baseline to `0.2.2` across core, npm, PyPI, and Docker release lanes.
+
 ## [0.2.1] - 2026-03-01
 
 ### Changed
