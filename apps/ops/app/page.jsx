@@ -10,10 +10,18 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const HIGH_RISK_HINTS = ["delete", "replay"];
+
 function StatusChip({ result }) {
   if (result?.skipped) return <span className="status status-skip">Skipped</span>;
   if (result?.ok) return <span className="status status-ok">OK {result.status}</span>;
   return <span className="status status-err">ERR {result?.status || 0}</span>;
+}
+
+function isHighRiskAction(action) {
+  const raw = String(action || "").trim().toLowerCase();
+  if (!raw) return false;
+  return HIGH_RISK_HINTS.some((hint) => raw.includes(hint));
 }
 
 function EndpointOptions({ endpointFilter }) {
@@ -116,6 +124,9 @@ export default async function OpsDashboardPage({ searchParams }) {
   const timeseriesRows = Array.isArray(timeseries?.series) ? timeseries.series.slice(0, 24) : [];
   const keyUsageRows = Array.isArray(keyUsage?.items) ? keyUsage.items.slice(0, 16) : [];
   const rollupFailedSample = Array.isArray(rollup?.failed_sample) ? rollup.failed_sample : [];
+  const highRiskAuditCount = auditEvents.filter((event) => isHighRiskAction(event?.action)).length;
+  const keyAnomalyCount = keyUsageRows.filter((row) => row?.anomaly?.is_anomaly === true).length;
+  const incidentDegraded = Boolean(slo?.degraded);
 
   const adminSkipped = [dashboardResult, diagnosticsResult, rollupResult, sloResult, timeseriesResult, keyUsageResult, auditResult].some(
     (result) => result.skipped
@@ -125,37 +136,63 @@ export default async function OpsDashboardPage({ searchParams }) {
     <div className="ops-page">
       <section className="hero panel">
         <div>
-          <p className="kicker">Aionis Runtime Surface</p>
-          <h1>Tenant Control & Monitoring</h1>
+          <p className="kicker">Runtime Control Surface</p>
+          <h1>Tenant Ops Dashboard</h1>
           <p className="muted">
-            Read-only console on top of existing `admin/control` APIs. Use it to inspect runtime health, recall pipeline,
-            telemetry drift, and incident publish signals without touching production write paths.
+            Decision-first snapshot for on-call and release review. Focus on incident risk, recall/write reliability, and
+            governance drift before drilling into detailed telemetry tables.
           </p>
         </div>
 
-        <form className="filters" action="/" method="GET">
-          <label>
-            tenant_id
-            <input type="text" name="tenant_id" defaultValue={query.tenantId} maxLength={128} />
-          </label>
-          <label>
-            scope (optional)
-            <input type="text" name="scope" defaultValue={query.scope} maxLength={256} />
-          </label>
-          <label>
-            window_minutes
-            <input type="number" name="window_minutes" defaultValue={query.windowMinutes} min={5} max={1440} />
-          </label>
-          <label>
-            window_hours
-            <input type="number" name="window_hours" defaultValue={query.windowHours} min={1} max={720} />
-          </label>
-          <label>
-            endpoint filter
-            <EndpointOptions endpointFilter={query.endpointFilter} />
-          </label>
-          <button type="submit">Refresh Snapshot</button>
-        </form>
+        <details className="filter-drawer" open>
+          <summary>Filters</summary>
+          <form className="filters" action="/" method="GET">
+            <label>
+              tenant_id
+              <input type="text" name="tenant_id" defaultValue={query.tenantId} maxLength={128} />
+            </label>
+            <label>
+              scope (optional)
+              <input type="text" name="scope" defaultValue={query.scope} maxLength={256} />
+            </label>
+            <label>
+              window_minutes
+              <input type="number" name="window_minutes" defaultValue={query.windowMinutes} min={5} max={1440} />
+            </label>
+            <label>
+              window_hours
+              <input type="number" name="window_hours" defaultValue={query.windowHours} min={1} max={720} />
+            </label>
+            <label>
+              endpoint filter
+              <EndpointOptions endpointFilter={query.endpointFilter} />
+            </label>
+            <button type="submit">Refresh Snapshot</button>
+          </form>
+        </details>
+      </section>
+
+      <section className="priority-grid">
+        <article className={`panel stat priority ${incidentDegraded ? "priority-high" : "priority-ok"}`}>
+          <p>incident publish</p>
+          <h3>{incidentDegraded ? "Degraded" : "Healthy"}</h3>
+          <StatusChip result={sloResult} />
+        </article>
+        <article className={`panel stat priority ${Number(diagnostics?.outbox?.totals?.failed || 0) > 0 ? "priority-high" : "priority-ok"}`}>
+          <p>outbox failed</p>
+          <h3>{formatNumber(diagnostics?.outbox?.totals?.failed)}</h3>
+          <StatusChip result={diagnosticsResult} />
+        </article>
+        <article className={`panel stat priority ${highRiskAuditCount > 0 ? "priority-warn" : "priority-ok"}`}>
+          <p>high-risk audit writes</p>
+          <h3>{formatNumber(highRiskAuditCount)}</h3>
+          <StatusChip result={auditResult} />
+        </article>
+        <article className={`panel stat priority ${keyAnomalyCount > 0 ? "priority-warn" : "priority-ok"}`}>
+          <p>api key anomalies</p>
+          <h3>{formatNumber(keyAnomalyCount)}</h3>
+          <StatusChip result={keyUsageResult} />
+        </article>
       </section>
 
       <section className="grid-4">

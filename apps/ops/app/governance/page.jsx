@@ -106,9 +106,9 @@ export default async function GovernancePage({ searchParams }) {
 
   const commandScope = query.scope || "default";
   const commandLines = [
-    `npm run -s job:execution-loop-gate -- --scope ${commandScope} --strict-warnings`,
-    `npm run -s job:governance-weekly-report -- --scope ${commandScope} --strict-warnings`,
-    "npm run -s bench:aionis:v01 -- --suites xmb"
+    `npm run -s evidence:weekly -- --scope ${commandScope} --window-hours ${query.windowHours} --strict`,
+    "jq '.summary' artifacts/evidence/weekly/*/EVIDENCE_SUMMARY.json | tail -n 40",
+    "npm run -s bench:aionis:v01 -- --suites xmb --allow-fail"
   ].join("\n");
 
   const adminSkipped = !hasAdminToken || dashboardResult.skipped || diagnosticsResult.skipped || auditResult.skipped;
@@ -117,7 +117,7 @@ export default async function GovernancePage({ searchParams }) {
     <div className="ops-page">
       <section className="hero panel">
         <div>
-          <p className="kicker">Aionis Governance Surface</p>
+          <p className="kicker">Governance Control Surface</p>
           <h1>Governance, Replay, and Audit</h1>
           <p className="muted">
             Operational view for execution-loop health and traceability. Use this page to inspect rule execution signals,
@@ -125,29 +125,32 @@ export default async function GovernancePage({ searchParams }) {
           </p>
         </div>
 
-        <form className="filters" action="/governance" method="GET">
-          <label>
-            tenant_id
-            <input type="text" name="tenant_id" defaultValue={query.tenantId} maxLength={128} />
-          </label>
-          <label>
-            scope (optional)
-            <input type="text" name="scope" defaultValue={query.scope} maxLength={256} />
-          </label>
-          <label>
-            window_hours
-            <input type="number" name="window_hours" defaultValue={query.windowHours} min={1} max={720} />
-          </label>
-          <label>
-            audit_limit
-            <input type="number" name="audit_limit" defaultValue={query.auditLimit} min={10} max={500} />
-          </label>
-          <label>
-            decision_id (optional)
-            <input type="text" name="decision_id" defaultValue={query.decisionId} maxLength={128} />
-          </label>
-          <button type="submit">Refresh Governance View</button>
-        </form>
+        <details className="filter-drawer" open>
+          <summary>Filters</summary>
+          <form className="filters" action="/governance" method="GET">
+            <label>
+              tenant_id
+              <input type="text" name="tenant_id" defaultValue={query.tenantId} maxLength={128} />
+            </label>
+            <label>
+              scope (optional)
+              <input type="text" name="scope" defaultValue={query.scope} maxLength={256} />
+            </label>
+            <label>
+              window_hours
+              <input type="number" name="window_hours" defaultValue={query.windowHours} min={1} max={720} />
+            </label>
+            <label>
+              audit_limit
+              <input type="number" name="audit_limit" defaultValue={query.auditLimit} min={10} max={500} />
+            </label>
+            <label>
+              decision_id (optional)
+              <input type="text" name="decision_id" defaultValue={query.decisionId} maxLength={128} />
+            </label>
+            <button type="submit">Refresh Governance View</button>
+          </form>
+        </details>
       </section>
 
       {adminSkipped ? (
@@ -160,7 +163,7 @@ export default async function GovernancePage({ searchParams }) {
         </section>
       ) : null}
 
-      <section className="grid-4">
+      <section className="priority-grid">
         <article className="panel stat">
           <p>active rules</p>
           <h3>{formatNumber(dashboard?.data_plane?.active_rules)}</h3>

@@ -94,32 +94,35 @@ export default async function OpsAuditPage({ searchParams }) {
           </p>
         </div>
 
-        <form className="filters" action="/audit" method="GET">
-          <label>
-            tenant_id
-            <input type="text" name="tenant_id" defaultValue={query.tenantId} maxLength={128} />
-          </label>
-          <label>
-            action (exact, optional)
-            <input type="text" name="action" defaultValue={query.action} maxLength={128} placeholder="tenant_quota.delete" />
-          </label>
-          <label>
-            limit
-            <input type="number" name="limit" defaultValue={query.limit} min={1} max={500} />
-          </label>
-          <label>
-            offset
-            <input type="number" name="offset" defaultValue={query.offset} min={0} max={100000} />
-          </label>
-          <label>
-            write_only
-            <select name="write_only" defaultValue={query.writeOnly ? "1" : "0"}>
-              <option value="1">on (recommended)</option>
-              <option value="0">off (show all)</option>
-            </select>
-          </label>
-          <button type="submit">Refresh Audit</button>
-        </form>
+        <details className="filter-drawer" open>
+          <summary>Filters</summary>
+          <form className="filters" action="/audit" method="GET">
+            <label>
+              tenant_id
+              <input type="text" name="tenant_id" defaultValue={query.tenantId} maxLength={128} />
+            </label>
+            <label>
+              action (exact, optional)
+              <input type="text" name="action" defaultValue={query.action} maxLength={128} placeholder="tenant_quota.delete" />
+            </label>
+            <label>
+              limit
+              <input type="number" name="limit" defaultValue={query.limit} min={1} max={500} />
+            </label>
+            <label>
+              offset
+              <input type="number" name="offset" defaultValue={query.offset} min={0} max={100000} />
+            </label>
+            <label>
+              write_only
+              <select name="write_only" defaultValue={query.writeOnly ? "1" : "0"}>
+                <option value="1">on (recommended)</option>
+                <option value="0">off (show all)</option>
+              </select>
+            </label>
+            <button type="submit">Refresh Audit</button>
+          </form>
+        </details>
       </section>
 
       <section className="grid-4">

@@ -24,15 +24,17 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+  const appEnv = process.env.APP_ENV?.trim() || "local";
   return (
     <html lang="en" className={`${headline.variable} ${mono.variable}`}>
       <body>
         <div className="ambient" aria-hidden="true" />
         <header className="topbar">
           <div className="shell topbar-inner">
-            <div>
+            <div className="brand-block">
               <p className="eyebrow">Aionis Internal Ops</p>
-              <p className="title">Control & Observability Console</p>
+              <p className="title">Control Console</p>
+              <p className="env-pill" aria-label="app environment">env: {appEnv}</p>
             </div>
             <nav className="appnav" aria-label="Ops pages">
               <Link href="/">Dashboard</Link>
@@ -40,11 +42,7 @@ export default function RootLayout({ children }) {
               <Link href="/actions">Actions</Link>
               <Link href="/audit">Audit</Link>
             </nav>
-            <nav className="toplinks" aria-label="Top links">
-              <a href={siteConfig.websiteUrl} target="_blank" rel="noreferrer">Website</a>
-              <a href={siteConfig.docsUrl} target="_blank" rel="noreferrer">Docs</a>
-              <a href={siteConfig.apiContractUrl} target="_blank" rel="noreferrer">API Contract</a>
-            </nav>
+            <a className="docs-link" href={siteConfig.docsUrl} target="_blank" rel="noreferrer">Open Docs</a>
           </div>
         </header>
         <main className="shell">{children}</main>
