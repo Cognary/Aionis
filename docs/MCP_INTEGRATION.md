@@ -8,8 +8,8 @@ Aionis exposes an MCP server so MCP-capable clients can call memory operations a
 
 ## Tools Exposed
 
-1. `aionis_memory_remember`: write one memory node (default `type=event`)
-2. `aionis_memory_recall_text`: return compact, LLM-ready context text
+1. `memory_remember`: write one memory node (default `type=event`)
+2. `memory_recall_text`: return compact, LLM-ready context text
 
 ## Prerequisites
 
@@ -65,8 +65,8 @@ Example local MCP config:
 
 ## Recommended Usage Pattern
 
-1. Call `aionis_memory_recall_text` before planning/execution for non-trivial tasks.
-2. Call `aionis_memory_remember` after task completion to persist outcomes.
+1. Call `memory_recall_text` before planning/execution for non-trivial tasks.
+2. Call `memory_remember` after task completion to persist outcomes.
 
 ## Related Docs
 

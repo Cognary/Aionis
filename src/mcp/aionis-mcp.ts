@@ -89,35 +89,39 @@ async function postJson(env: Env, path: string, body: unknown) {
   }
 }
 
-const ToolRememberArgs = z.object({
-  scope: z.string().min(1).optional(),
-  client_id: z.string().min(1).optional(),
-  type: z.enum(["event", "entity", "topic", "rule"]).default("event"),
-  memory_lane: z.enum(["private", "shared"]).optional(),
-  producer_agent_id: z.string().min(1).optional(),
-  owner_agent_id: z.string().min(1).optional(),
-  owner_team_id: z.string().min(1).optional(),
-  title: z.string().min(1).optional(),
-  text: z.string().min(1),
-  slots: z.record(z.unknown()).optional(),
-  auto_embed: z.boolean().optional(),
-  force_reembed: z.boolean().optional(),
-  trigger_topic_cluster: z.boolean().optional(),
-  topic_cluster_async: z.boolean().optional(),
-});
+const ToolRememberArgs = z
+  .object({
+    scope: z.string().min(1).optional(),
+    client_id: z.string().min(1).optional(),
+    type: z.enum(["event", "entity", "topic", "rule"]).default("event"),
+    memory_lane: z.enum(["private", "shared"]).optional(),
+    producer_agent_id: z.string().min(1).optional(),
+    owner_agent_id: z.string().min(1).optional(),
+    owner_team_id: z.string().min(1).optional(),
+    title: z.string().min(1).optional(),
+    text: z.string().min(1),
+    slots: z.record(z.unknown()).optional(),
+    auto_embed: z.boolean().optional(),
+    force_reembed: z.boolean().optional(),
+    trigger_topic_cluster: z.boolean().optional(),
+    topic_cluster_async: z.boolean().optional(),
+  })
+  .strict();
 
-const ToolRecallTextArgs = z.object({
-  scope: z.string().min(1).optional(),
-  query_text: z.string().min(1),
-  consumer_agent_id: z.string().min(1).optional(),
-  consumer_team_id: z.string().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  neighborhood_hops: z.coerce.number().int().min(1).max(2).optional(),
-  max_nodes: z.coerce.number().int().min(1).max(200).optional(),
-  max_edges: z.coerce.number().int().min(0).max(100).optional(),
-  min_edge_weight: z.coerce.number().min(0).max(1).optional(),
-  min_edge_confidence: z.coerce.number().min(0).max(1).optional(),
-});
+const ToolRecallTextArgs = z
+  .object({
+    scope: z.string().min(1).optional(),
+    query_text: z.string().min(1),
+    consumer_agent_id: z.string().min(1).optional(),
+    consumer_team_id: z.string().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional(),
+    neighborhood_hops: z.coerce.number().int().min(1).max(2).optional(),
+    max_nodes: z.coerce.number().int().min(1).max(200).optional(),
+    max_edges: z.coerce.number().int().min(0).max(100).optional(),
+    min_edge_weight: z.coerce.number().min(0).max(1).optional(),
+    min_edge_confidence: z.coerce.number().min(0).max(1).optional(),
+  })
+  .strict();
 
 type ToolDef = {
   name: string;
@@ -284,6 +288,7 @@ async function toolsCall(env: Env, params: unknown) {
       name: z.string().min(1),
       arguments: z.unknown().optional(),
     })
+    .strict()
     .safeParse(params);
   if (!p.success) {
     return {
@@ -376,7 +381,8 @@ async function main() {
       try {
         parsed = JSON.parse(trimmed);
       } catch (e) {
-        // Parse error: no id to reply with reliably.
+        // Parse error replies with id=null per JSON-RPC.
+        err(null, -32700, "Parse error");
         console.error("mcp_parse_error", (e as Error).message);
         return;
       }

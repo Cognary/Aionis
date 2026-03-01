@@ -10,8 +10,8 @@ For a client-agnostic MCP overview, see [MCP Integration](./MCP_INTEGRATION.md).
 
 ## What You Get
 
-- `aionis_memory_remember`: write one memory node (default type=event)
-- `aionis_memory_recall_text`: recall a compact, LLM-friendly text context
+- `memory_remember`: write one memory node (default type=event)
+- `memory_recall_text`: recall a compact, LLM-friendly text context
 
 Embeddings are **derived artifacts**: the MCP tool will not block on embeddings, and it never returns embeddings.
 
@@ -73,5 +73,5 @@ If your Aionis API requires admin-gated operations, you can also set:
 
 To get consistent behavior, tell your agent to:
 
-- call `aionis_memory_recall_text` before planning/executing when the task is non-trivial
-- call `aionis_memory_remember` after finishing a run to store outcomes/decisions
+- call `memory_recall_text` before planning/executing when the task is non-trivial
+- call `memory_remember` after finishing a run to store outcomes/decisions
