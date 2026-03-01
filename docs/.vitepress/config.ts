@@ -80,6 +80,7 @@ export default defineConfig({
           { text: "Production Core Gate", link: "/PRODUCTION_CORE_GATE" },
           { text: "E2E Regression", link: "/E2E_REGRESSION" },
           { text: "Two-Phase Migrations", link: "/MIGRATIONS_TWO_PHASE" },
+          { text: "Benchmark Snapshot", link: "/BENCHMARK_SNAPSHOT_PUBLIC" },
           { text: "Performance Baseline", link: "/PERFORMANCE_BASELINE" },
           { text: "Recall Tail Latency Plan", link: "/RECALL_TAIL_LATENCY_PLAN" },
           { text: "AionisBench v0.1", link: "/AIONIS_BENCH_V01" },

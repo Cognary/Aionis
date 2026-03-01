@@ -79,6 +79,7 @@ PERF_PROFILE=perf_gate SCALES=100000 npm run perf:phase-d-matrix
 
 Related docs:
 
+- [Benchmark Snapshot (Public)](docs/BENCHMARK_SNAPSHOT_PUBLIC.md)
 - [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
 - [Production Core Gate](docs/PRODUCTION_CORE_GATE.md)
 

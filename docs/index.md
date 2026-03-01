@@ -15,7 +15,7 @@ hero:
       link: /index#why-teams-choose-aionis
     - theme: alt
       text: Benchmark Snapshot
-      link: /index#benchmark-snapshot
+      link: /BENCHMARK_SNAPSHOT_PUBLIC
     - theme: alt
       text: API Contract
       link: /API_CONTRACT
@@ -91,6 +91,11 @@ Reference docs:
     <p>Run reproducible A/B proof for policy-loop value and collect governance/replay/audit evidence.</p>
     <span>Open evidence runbook</span>
   </a>
+  <a class="aionis-home-card" href="/BENCHMARK_SNAPSHOT_PUBLIC">
+    <h3>Benchmark Snapshot</h3>
+    <p>Public benchmark disclosure with scope statement, metric definitions, artifacts, and one-command reproduction.</p>
+    <span>Open benchmark page</span>
+  </a>
   <a class="aionis-home-card" href="/README">
     <h3>Full Docs Catalog</h3>
     <p>Browse all runbooks, plans, integration guides, and release materials.</p>
@@ -125,8 +130,9 @@ Reference docs:
 
 Data source and methodology:
 
-1. [Performance Baseline](./PERFORMANCE_BASELINE.md)
-2. [Production Core Gate](./PRODUCTION_CORE_GATE.md)
+1. [Benchmark Snapshot (Public)](./BENCHMARK_SNAPSHOT_PUBLIC.md)
+2. [Performance Baseline](./PERFORMANCE_BASELINE.md)
+3. [Production Core Gate](./PRODUCTION_CORE_GATE.md)
 
 Policy-loop benchmark snapshot (`XMB-006`, `2026-03-01`):
 

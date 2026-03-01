@@ -39,6 +39,7 @@ This is the public documentation index for Aionis.
 
 ## Performance & Evidence
 
+- [Benchmark Snapshot (Public)](./BENCHMARK_SNAPSHOT_PUBLIC.md)
 - [Performance Baseline](./PERFORMANCE_BASELINE.md)
 - [Recall Tail Latency Plan](./RECALL_TAIL_LATENCY_PLAN.md)
 - [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
