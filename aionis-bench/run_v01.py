@@ -43,7 +43,7 @@ def run_suite(cmd: List[str], env: Dict[str, str]) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run AionisBench v0.1 (6 core cases)")
+    parser = argparse.ArgumentParser(description="Run AionisBench v0.1 (7 core cases)")
     parser.add_argument("--base-url", default=os.environ.get("AIONIS_BASE_URL", f"http://127.0.0.1:{os.environ.get('PORT', '3001')}"))
     parser.add_argument("--scope-prefix", default="aionisbench")
     parser.add_argument("--api-key", default=os.environ.get("API_KEY", os.environ.get("PERF_API_KEY", "")))

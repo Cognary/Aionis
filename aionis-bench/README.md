@@ -14,7 +14,8 @@ AionisBench v0.1 is the minimum reproducible benchmark suite aligned to Aionis c
 3. `GMB-003` Topic DRAFT formation and derived edge traceability.
 4. `GMB-004` Budgeted graph expansion beats strict vector-only budget.
 5. `XMB-005` ACTIVE rule changes tool selection with explainability.
-6. `EAB-006` Replay determinism summary hash stable across 3 runs.
+6. `XMB-006` A/B: policy loop vs retrieval-only heuristic (success/stability/controllability deltas).
+7. `EAB-006` Replay determinism summary hash stable across 3 runs.
 
 ## Run
 

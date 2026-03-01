@@ -9,8 +9,9 @@ title: "Ops Console"
 It provides:
 
 1. `Dashboard` (`/`): runtime + tenant monitoring snapshot.
-2. `Audit` (`/audit`): write-focused control audit stream.
-3. `Actions` (`/actions`): explicit admin write operations with safety gates.
+2. `Governance` (`/governance`): execution-loop snapshot + decision replay inspector + audit risk slice.
+3. `Audit` (`/audit`): write-focused control audit stream.
+4. `Actions` (`/actions`): explicit admin write operations with safety gates.
 
 ## Page Map
 
@@ -47,6 +48,15 @@ Focused view over `GET /v1/admin/control/audit-events`:
 3. Supports focus by `request_id` and quick copy actions.
 4. Actor/action/resource/request_id tuples are shown in one table.
 
+### Governance (`/governance`)
+
+Operationalized evidence surface for memory-policy execution:
+
+1. Execution-loop snapshot from diagnostics (`recall_text` error/latency + outbox state).
+2. Audit risk slice (write-like/high-risk/replay action counts).
+3. Decision replay inspector via `POST /v1/memory/tools/decision`.
+4. One-screen evidence commands for governance gates and benchmark runs.
+
 ### Actions (`/actions`)
 
 Allow-listed write operations:
@@ -73,6 +83,14 @@ AIONIS_ADMIN_TOKEN=your-admin-token
 ```
 
 `AIONIS_ADMIN_TOKEN` can fall back to `ADMIN_TOKEN`.
+
+Optional memory-auth headers (for decision replay lookup):
+
+```bash
+AIONIS_API_KEY=your-memory-api-key
+# or
+AIONIS_AUTH_BEARER=Bearer <jwt>
+```
 
 Optional Basic Auth:
 

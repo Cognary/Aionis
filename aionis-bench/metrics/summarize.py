@@ -54,6 +54,36 @@ def to_markdown(run_id: str, details: Dict[str, Any], summary: Dict[str, Any]) -
         lines.append(
             f"| `{c.get('case_id')}` | {c.get('pillar')} | {'yes' if c.get('ok') else 'no'} | {c.get('name')} |"
         )
+    xmb_ab = None
+    for c in details.get("cases", []):
+        if str(c.get("case_id") or "") == "XMB-006":
+            xmb_ab = c
+            break
+    if isinstance(xmb_ab, dict):
+        m = xmb_ab.get("metrics") or {}
+        baseline = m.get("baseline") or {}
+        policy = m.get("policy_loop") or {}
+        delta = m.get("delta") or {}
+        lines.append("")
+        lines.append("## Policy Loop A/B (XMB-006)")
+        lines.append("")
+        lines.append("| metric | retrieval-only baseline | Aionis policy loop | delta |")
+        lines.append("|---|---:|---:|---:|")
+        lines.append(
+            f"| success_rate | {baseline.get('success_rate', 'n/a')} | {policy.get('success_rate', 'n/a')} | {delta.get('success_rate_gain', 'n/a')} |"
+        )
+        lines.append(
+            f"| selection_switches | {baseline.get('selection_switches', 'n/a')} | {policy.get('selection_switches', 'n/a')} | {delta.get('selection_switch_reduction', 'n/a')} |"
+        )
+        lines.append(
+            f"| curl_second_success_rate | {baseline.get('curl_second_success_rate', 'n/a')} | {policy.get('curl_second_success_rate', 'n/a')} | {delta.get('curl_second_success_gain', 'n/a')} |"
+        )
+        lines.append(
+            f"| feedback_link_coverage | n/a | {policy.get('feedback_link_coverage', 'n/a')} | n/a |"
+        )
+        lines.append(
+            f"| source_rule_coverage | n/a | {policy.get('source_rule_coverage', 'n/a')} | n/a |"
+        )
     failed = summary.get("failed_case_ids") or []
     if failed:
         lines.append("")
@@ -105,6 +135,16 @@ def main() -> None:
         "by_pillar": by_pillar,
         "artifacts": details.get("artifacts"),
     }
+    xmb_ab = next((c for c in cases if str(c.get("case_id") or "") == "XMB-006"), None)
+    if isinstance(xmb_ab, dict):
+        m = xmb_ab.get("metrics") or {}
+        summary["xmb_ab"] = {
+            "baseline_success_rate": (m.get("baseline") or {}).get("success_rate"),
+            "policy_success_rate": (m.get("policy_loop") or {}).get("success_rate"),
+            "success_rate_gain": (m.get("delta") or {}).get("success_rate_gain"),
+            "feedback_link_coverage": (m.get("policy_loop") or {}).get("feedback_link_coverage"),
+            "source_rule_coverage": (m.get("policy_loop") or {}).get("source_rule_coverage"),
+        }
 
     report = to_markdown(str(details.get("run_id")), details, summary)
     write_json(Path(args.out_summary_json), summary)

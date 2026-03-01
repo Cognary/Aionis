@@ -69,6 +69,11 @@ features:
     <p>Blocking release gate covering integrity, contract, performance, and operability checks.</p>
     <span>Review go-live criteria</span>
   </a>
+  <a class="aionis-home-card" href="/DIFFERENTIATION_EVIDENCE">
+    <h3>Differentiation Evidence</h3>
+    <p>Run reproducible A/B proof for policy-loop value and collect governance/replay/audit evidence.</p>
+    <span>Open evidence runbook</span>
+  </a>
   <a class="aionis-home-card" href="/README">
     <h3>Full Docs Catalog</h3>
     <p>Browse all runbooks, plans, integration guides, and release materials.</p>

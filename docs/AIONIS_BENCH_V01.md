@@ -20,7 +20,8 @@ Core proof goals:
 3. `GMB-003` topic DRAFT formation + derived edge traceability.
 4. `GMB-004` graph expansion under budget outperforms strict vector-only budget.
 5. `XMB-005` ACTIVE rule overrides tool selection with explainability.
-6. `EAB-006` replay determinism summary hash stable across 3 runs.
+6. `XMB-006` A/B: policy loop vs retrieval-only heuristic (success/stability/controllability deltas).
+7. `EAB-006` replay determinism summary hash stable across 3 runs.
 
 ## Repo Layout
 

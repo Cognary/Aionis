@@ -43,6 +43,7 @@ This is the public documentation index for Aionis.
 - [Recall Tail Latency Plan](./RECALL_TAIL_LATENCY_PLAN.md)
 - [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
 - [AionisBench v0.1](./AIONIS_BENCH_V01.md)
+- [Differentiation Evidence](./DIFFERENTIATION_EVIDENCE.md)
 
 ## Integrations
 

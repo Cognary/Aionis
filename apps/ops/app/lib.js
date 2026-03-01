@@ -62,6 +62,16 @@ export function readAuditQuery(searchParams) {
   };
 }
 
+export function readGovernanceQuery(searchParams) {
+  return {
+    tenantId: normalizeText(searchParams?.tenant_id, "default"),
+    scope: normalizeText(searchParams?.scope, ""),
+    windowHours: normalizeInt(searchParams?.window_hours, 168, 1, 24 * 30),
+    decisionId: normalizeText(searchParams?.decision_id, ""),
+    auditLimit: normalizeInt(searchParams?.audit_limit, 100, 10, 500)
+  };
+}
+
 export function withQuery(path, query = {}) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) {
@@ -81,9 +91,38 @@ function parseMaybeJson(text) {
   }
 }
 
-export async function fetchOps(path, { admin = false } = {}) {
+function normalizeBearer(raw) {
+  const v = String(raw || "").trim();
+  if (!v) return "";
+  return /^Bearer\s+/i.test(v) ? v : `Bearer ${v}`;
+}
+
+function resolveMemoryAuthHeaders() {
+  const apiKey =
+    process.env.AIONIS_API_KEY?.trim() ||
+    process.env.API_KEY?.trim() ||
+    process.env.PERF_API_KEY?.trim() ||
+    "";
+  const bearer = normalizeBearer(
+    process.env.AIONIS_AUTH_BEARER?.trim() ||
+    process.env.AUTH_BEARER?.trim() ||
+    process.env.PERF_AUTH_BEARER?.trim() ||
+    "",
+  );
+  const headers = {};
+  if (apiKey) headers["x-api-key"] = apiKey;
+  if (bearer) headers.authorization = bearer;
+  return {
+    headers,
+    hasApiKey: Boolean(apiKey),
+    hasBearer: Boolean(bearer)
+  };
+}
+
+async function requestOps(path, { method = "GET", body, admin = false, memoryAuth = false } = {}) {
   const baseUrl = process.env.AIONIS_BASE_URL?.trim() || DEFAULT_BASE_URL;
   const adminToken = process.env.AIONIS_ADMIN_TOKEN?.trim() || process.env.ADMIN_TOKEN?.trim() || "";
+  const memoryAuthState = resolveMemoryAuthHeaders();
 
   if (admin && !adminToken) {
     return {
@@ -100,11 +139,13 @@ export async function fetchOps(path, { admin = false } = {}) {
     accept: "application/json"
   };
   if (admin) headers["x-admin-token"] = adminToken;
+  if (memoryAuth) Object.assign(headers, memoryAuthState.headers);
 
   try {
     const response = await fetch(`${baseUrl}${path}`, {
-      method: "GET",
+      method,
       headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store"
     });
     const text = await response.text();
@@ -117,6 +158,12 @@ export async function fetchOps(path, { admin = false } = {}) {
       path,
       baseUrl,
       data,
+      auth: memoryAuth
+        ? {
+            has_api_key: memoryAuthState.hasApiKey,
+            has_bearer: memoryAuthState.hasBearer
+          }
+        : undefined,
       error: response.ok ? null : data?.error || `http_${response.status}`
     };
   } catch (error) {
@@ -126,9 +173,23 @@ export async function fetchOps(path, { admin = false } = {}) {
       skipped: false,
       path,
       baseUrl,
+      auth: memoryAuth
+        ? {
+            has_api_key: memoryAuthState.hasApiKey,
+            has_bearer: memoryAuthState.hasBearer
+          }
+        : undefined,
       error: error instanceof Error ? error.message : "network_error"
     };
   }
+}
+
+export async function fetchOps(path, { admin = false } = {}) {
+  return requestOps(path, { method: "GET", admin, memoryAuth: false });
+}
+
+export async function postOps(path, body, { admin = false, memoryAuth = false } = {}) {
+  return requestOps(path, { method: "POST", body, admin, memoryAuth });
 }
 
 export function formatNumber(input) {

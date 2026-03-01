@@ -15,6 +15,13 @@ Dashboard page (`/`) over existing APIs:
 - `GET /v1/admin/control/dashboard/tenant/:tenant_id/incident-publish-slo`
 - `GET /v1/admin/control/audit-events`
 
+Governance page (`/governance`):
+
+- `GET /v1/admin/control/dashboard/tenant/:tenant_id`
+- `GET /v1/admin/control/diagnostics/tenant/:tenant_id`
+- `GET /v1/admin/control/audit-events`
+- `POST /v1/memory/tools/decision` (decision replay lookup)
+
 Audit page (`/audit`):
 
 - Focused view over `GET /v1/admin/control/audit-events`
@@ -52,6 +59,14 @@ AIONIS_ADMIN_TOKEN=your-admin-token
 ```
 
 `AIONIS_ADMIN_TOKEN` can also fallback to `ADMIN_TOKEN`.
+
+Optional memory-auth headers for decision replay lookup in `/governance`:
+
+```bash
+AIONIS_API_KEY=your-memory-api-key
+# or
+AIONIS_AUTH_BEARER=Bearer <jwt>
+```
 
 Optional Basic Auth gate for Ops UI/API:
 
