@@ -4,12 +4,14 @@ title: "Open Core Boundary"
 
 # Open Core Boundary
 
-Last updated: `2026-02-21`
+Last updated: `2026-03-01`
 
 ## Decision
 
-Aionis keeps **one public GitHub repository** as the Open Core source of truth.
-No repository split is required at this stage.
+Aionis uses a **two-repository model**:
+
+1. Open Core repository: `https://github.com/Cognary/Aionis`
+2. Hosted/private repository: `https://github.com/Cognary/aionis-hosted`
 
 Commercial/hosted differentiation is implemented by **capability boundary**, not by renaming or re-creating the OSS repo.
 

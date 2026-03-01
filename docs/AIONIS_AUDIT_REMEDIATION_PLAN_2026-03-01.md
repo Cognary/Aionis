@@ -12,7 +12,7 @@ Last updated: `2026-03-01`
 
 ### P2（中优先级）
 
-1. `apps/www` 联系表单限流信任 `x-forwarded-for`，并存在高基数 key 导致内存增长风险。
+1. 官网联系入口限流信任 `x-forwarded-for`，并存在高基数 key 导致内存增长风险（该实现已迁移至私有仓维护）。
 2. `z.coerce.boolean()` 对 `"false"` / `"0"` 解析为 `true`，会导致会话事件查询参数语义偏差。
 3. CORS 全局配置与真实路由需求不一致，存在误配置风险。
 
@@ -55,10 +55,10 @@ Last updated: `2026-03-01`
 - [x] 对应文档更新（README、Ops README、`.env.example`、Go-Live Gate）。
 - [x] 回归补充（Ops middleware 单测、contract-smoke auth 断言）。
 
-### Phase 2（待执行，建议本周完成）
+### Phase 2（已完成）
 
 - [x] 依赖安全修复：升级 `fastify` 至无漏洞版本并重跑全量回归。
-- [x] `apps/www` 联系表单限流重构：默认不信任代理头，且引入 key 回收策略（TTL/LRU + max keys）。
+- [x] 联系入口限流重构：默认不信任代理头，且引入 key 回收策略（TTL/LRU + max keys）；对应实现在私有仓 `aionis-hosted`。
 - [x] 会话查询参数布尔解析修正（显式字符串映射，不使用 `z.coerce.boolean()`）。
 
 ### Phase 3（待执行，文档一致性）
@@ -99,10 +99,6 @@ Last updated: `2026-03-01`
 - `docs/PROD_GO_LIVE_GATE.md`
 
 4. Phase 2 补充修复：
-- `apps/www/app/lib/contact-guard.mjs`
-- `apps/www/app/api/contact/route.js`
-- `apps/www/README.md`
-- `scripts/ci/www-contact-rate-limit.test.mjs`
 - `src/memory/schemas.ts`
 - `package.json`
 - `package-lock.json`

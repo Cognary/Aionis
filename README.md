@@ -250,16 +250,6 @@ Hosted operations and managed control-plane automation are intentionally not par
 - [Aionis Onepage](docs/AIONIS_ONEPAGE.md)
 - [Docs Index](docs/README.md)
 
-## Public Website (Next.js)
-
-`apps/www` is the public-facing marketing website (Next.js), while `docs/` remains VitePress docs.
-
-```bash
-npm run -s www:dev
-npm run -s www:build
-npm run -s www:start
-```
-
 ## Ops Console (Next.js, internal)
 
 `apps/ops` is an internal control/monitoring console over existing `admin/control` APIs, including an explicit write-actions page at `/actions`.
