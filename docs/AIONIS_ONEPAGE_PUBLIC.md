@@ -76,10 +76,10 @@ npm run -s docker:run:standalone
 
 当前发布基线：
 
-1. Core: `v0.2.1`
-2. npm: `0.2.1`
-3. PyPI: `0.2.1`
-4. Docker: `v0.2.1` / `standalone-v0.2.1`
+1. Core: `v0.2.2`
+2. npm: `0.2.2`
+3. PyPI: `0.2.2`
+4. Docker: `v0.2.2` / `standalone-v0.2.2`
 
 ## 一句话总结
 

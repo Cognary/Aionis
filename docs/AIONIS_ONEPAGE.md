@@ -82,11 +82,11 @@ CI 层面已形成：`backend-parity-smoke` + `sdk-ci` + `core-production-gate` 
 
 ## 8) 当前发布基线（已对齐）
 
-1. Core: `v0.2.1`
-2. npm SDK: `@aionis/sdk@0.2.1`
-3. PyPI SDK: `aionis-sdk==0.2.1`
-4. Docker: `ghcr.io/cognary/aionis:v0.2.1`
-5. Standalone Docker: `ghcr.io/cognary/aionis:standalone-v0.2.1`
+1. Core: `v0.2.2`
+2. npm SDK: `@aionis/sdk@0.2.2`
+3. PyPI SDK: `aionis-sdk==0.2.2`
+4. Docker: `ghcr.io/cognary/aionis:v0.2.2`
+5. Standalone Docker: `ghcr.io/cognary/aionis:standalone-v0.2.2`
 
 ## 9) 一句话评估
 
