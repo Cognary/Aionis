@@ -180,10 +180,10 @@ npm run job:private-rule-owner-backfill -- --limit 5000
 npm run -s job:governance-weekly-report -- --scope default --window-hours 168
 ```
 
-For release gate:
+For release gate (benchmark + governance + execution loop in one strict pack):
 
 ```bash
-npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --strict-warnings
+npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
 ```
 
 4. Rule promotion governance check before lifecycle transition:

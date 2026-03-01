@@ -43,6 +43,8 @@ Auxiliary benchmarks (`LongMemEval` / `LoCoMo`) are non-blocking regression evid
 3. Integrity gates
 - `npm run -s job:health-gate -- --strict-warnings --consistency-check-set scope`
 - `npm run -s job:consistency-check:cross-tenant -- --strict-warnings`
+- `npm run -s evidence:weekly -- --scope default --window-hours 168 --strict`
+  - evidence artifact: `artifacts/evidence/weekly/<report_week>_<run_id>/EVIDENCE_SUMMARY.json`
 
 4. SDK and packaging
 - `npm run -s sdk:build`

@@ -14,11 +14,12 @@ Blocking metrics:
 3. Pack roundtrip: export -> verify import -> import -> re-import singleton check
 4. Control-plane input safety (optional): control admin validation smoke
 5. Availability and SLO: recall/write perf benchmark thresholds
-6. Compression KPI (optional blocking): context compression ratio + retain metrics
-7. Abstraction quality counters (non-blocking): clustering + compression signals from health gate
-8. Rule conflict resolution report (optional blocking): winner/loser delta against baseline
-9. Consolidation health SLO (optional blocking): candidate depth + apply/redirect completeness
-10. Replay determinism report (optional blocking): combined consolidation+abstraction fingerprint stability
+6. Weekly differentiation evidence pack (`evidence:weekly --strict`): benchmark + execution-loop + governance gates
+7. Compression KPI (optional blocking): context compression ratio + retain metrics
+8. Abstraction quality counters (non-blocking): clustering + compression signals from health gate
+9. Rule conflict resolution report (optional blocking): winner/loser delta against baseline
+10. Consolidation health SLO (optional blocking): candidate depth + apply/redirect completeness
+11. Replay determinism report (optional blocking): combined consolidation+abstraction fingerprint stability
 
 Auxiliary only (non-blocking):
 1. LongMemEval
@@ -61,6 +62,7 @@ The gate now compares API `/health.database_target_hash` and local `DATABASE_URL
 
 Artifacts:
 - `artifacts/core_gate/<run_id>/summary.json`
+- `artifacts/evidence/ci/<github_run_id>_<github_run_attempt>/EVIDENCE_SUMMARY.json`
 - `artifacts/core_gate/<run_id>/06_health_gate_scope.json`
 - `artifacts/core_gate/<run_id>/07_consistency_cross_tenant.json`
 - `artifacts/core_gate/<run_id>/07b_pack_roundtrip_gate.json`

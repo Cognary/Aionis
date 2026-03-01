@@ -93,7 +93,7 @@ GitHub Actions wiring:
 1. Weekly scheduled export:
    `.github/workflows/governance-weekly-report.yml`
 2. Production release gate integration:
-   `.github/workflows/core-production-gate.yml`
+   `.github/workflows/core-production-gate.yml` (via `evidence:weekly --strict`, includes governance stage artifact)
 
 ## Verification Stamp
 

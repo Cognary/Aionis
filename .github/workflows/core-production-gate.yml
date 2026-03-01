@@ -203,15 +203,18 @@ jobs:
             --write-p95-max-ms "${WRITE_P95_INPUT}" \
             --error-rate-max "${ERROR_RATE_INPUT}"
 
-      - name: Run governance weekly report gate
+      - name: Run weekly differentiation evidence gate
         shell: bash
         run: |
           set -euo pipefail
-          out_dir="artifacts/governance/ci/${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
-          npm run -s job:governance-weekly-report -- \
+          out_dir="artifacts/evidence/ci/${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          run_id="ci_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          npm run -s evidence:weekly -- \
             --scope default \
+            --base-url "http://localhost:3001" \
             --window-hours 168 \
-            --strict-warnings \
+            --strict \
+            --run-id "${run_id}" \
             --out-dir "${out_dir}"
 
       - name: Backend parity telemetry history check
@@ -538,7 +541,9 @@ jobs:
         run: |
           set -euo pipefail
           summary_file="$(find artifacts/core_gate -type f -name summary.json | sort | tail -n 1 || true)"
-          governance_summary_file="$(find artifacts/governance -type f -name summary.json | sort | tail -n 1 || true)"
+          evidence_summary_file="$(find artifacts/evidence -type f -name EVIDENCE_SUMMARY.json | sort | tail -n 1 || true)"
+          evidence_weekly_md_file="$(find artifacts/evidence -type f -name EVIDENCE_WEEKLY.md | sort | tail -n 1 || true)"
+          evidence_governance_summary_file="$(find artifacts/evidence -type f -path '*/governance_weekly/summary.json' | sort | tail -n 1 || true)"
           backend_parity_history_check_file="artifacts/core_gate/backend_parity_history/check.json"
           backend_parity_history_summary_file="$(find artifacts/core_gate/backend_parity_history -type f -name 'history_summary_run_*.json' | sort | tail -n 1 || true)"
           {
@@ -552,14 +557,28 @@ jobs:
               echo "summary not found"
             fi
             echo
-            echo "## Governance Weekly Report Gate"
+            echo "## Weekly Differentiation Evidence Gate"
             echo
-            if [[ -n "${governance_summary_file}" && -f "${governance_summary_file}" ]]; then
-              echo "summary: \`${governance_summary_file}\`"
+            if [[ -n "${evidence_summary_file}" && -f "${evidence_summary_file}" ]]; then
+              echo "summary: \`${evidence_summary_file}\`"
               echo
-              jq '.' "${governance_summary_file}"
+              jq '.' "${evidence_summary_file}"
             else
               echo "summary not found"
+            fi
+            echo
+            if [[ -n "${evidence_governance_summary_file}" && -f "${evidence_governance_summary_file}" ]]; then
+              echo "governance summary: \`${evidence_governance_summary_file}\`"
+              echo
+              jq '.' "${evidence_governance_summary_file}"
+            else
+              echo "summary not found"
+            fi
+            echo
+            if [[ -n "${evidence_weekly_md_file}" && -f "${evidence_weekly_md_file}" ]]; then
+              echo "weekly markdown: \`${evidence_weekly_md_file}\`"
+            else
+              echo "weekly markdown not found"
             fi
             echo
             echo "## Backend Parity Telemetry History"
@@ -588,7 +607,7 @@ jobs:
           name: core-production-gate-artifacts
           path: |
             artifacts/core_gate/
-            artifacts/governance/
+            artifacts/evidence/
           retention-days: 14
           if-no-files-found: warn
 
@@ -602,6 +621,8 @@ jobs:
           cp /tmp/core_gate_policy_planner_probe.json /tmp/core_gate_diag/policy_planner_api_probe.json 2>/dev/null || true
           cp artifacts/core_gate/backend_parity_history/check.json /tmp/core_gate_diag/backend_parity_history_check.json 2>/dev/null || true
           cp artifacts/core_gate/backend_parity_history/history_summary_run_*.json /tmp/core_gate_diag/ 2>/dev/null || true
+          cp artifacts/evidence/ci/*/EVIDENCE_SUMMARY.json /tmp/core_gate_diag/evidence_summary.json 2>/dev/null || true
+          cp artifacts/evidence/ci/*/EVIDENCE_WEEKLY.md /tmp/core_gate_diag/evidence_weekly.md 2>/dev/null || true
           find artifacts/core_gate -type f -maxdepth 3 2>/dev/null | sort > /tmp/core_gate_diag/files.txt || true
           summary_file="$(find artifacts/core_gate -type f -name summary.json | sort | tail -n 1 || true)"
           if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then
