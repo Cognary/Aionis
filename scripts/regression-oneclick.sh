@@ -275,6 +275,13 @@ else
   echo "[4.6/7] control admin validation smoke (skipped)"
 fi
 
+echo "[4.7/7] private-lane owner backfill"
+if ! npm run -s job:private-lane-owner-backfill -- --scope "${MEMORY_SCOPE:-default}" > "${OUT_DIR}/04_private_lane_owner_backfill.json" 2>&1; then
+  echo "[regression] private-lane owner backfill failed, log follows:" >&2
+  sed -n '1,220p' "${OUT_DIR}/04_private_lane_owner_backfill.json" >&2 || true
+  exit 1
+fi
+
 echo "[5/7] consistency + health gate"
 if ! npm run -s job:consistency-check -- --strict-warnings > "${OUT_DIR}/05_consistency.json" 2>&1; then
   echo "[regression] consistency-check failed, log follows:" >&2

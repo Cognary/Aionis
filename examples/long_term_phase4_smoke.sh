@@ -73,6 +73,21 @@ case "${AUTH_MODE}" in
     ;;
 esac
 
+call_memory_post() {
+  local endpoint="$1"
+  local payload="$2"
+  local curl_args=(
+    -sS
+    "localhost:${PORT}${endpoint}"
+    -H 'content-type: application/json'
+  )
+  if [[ ${#AUTH_ARGS[@]} -gt 0 ]]; then
+    curl_args+=("${AUTH_ARGS[@]}")
+  fi
+  curl_args+=(--data-binary "$payload")
+  curl "${curl_args[@]}"
+}
+
 if ! curl -fsS "localhost:${PORT}/health" >/dev/null; then
   echo "API is not reachable at localhost:${PORT}. Start server first (npm run dev)." >&2
   exit 1
@@ -101,7 +116,7 @@ write_payload="$(
     }'
 )"
 
-write_json="$(curl -sS "localhost:${PORT}/v1/memory/write" -H 'content-type: application/json' "${AUTH_ARGS[@]}" --data-binary "$write_payload")"
+write_json="$(call_memory_post "/v1/memory/write" "$write_payload")"
 node_id="$(echo "$write_json" | jq -r '.nodes[0].id // empty')"
 if [[ -z "$node_id" ]]; then
   echo "write failed:" >&2
@@ -131,7 +146,7 @@ rehydrate_payload="$(
     }'
 )"
 
-rehydrate_json="$(curl -sS "localhost:${PORT}/v1/memory/archive/rehydrate" -H 'content-type: application/json' "${AUTH_ARGS[@]}" --data-binary "$rehydrate_payload")"
+rehydrate_json="$(call_memory_post "/v1/memory/archive/rehydrate" "$rehydrate_payload")"
 
 echo
 echo "== rehydrate summary =="
@@ -153,7 +168,7 @@ activate_payload="$(
     }'
 )"
 
-activate_json="$(curl -sS "localhost:${PORT}/v1/memory/nodes/activate" -H 'content-type: application/json' "${AUTH_ARGS[@]}" --data-binary "$activate_payload")"
+activate_json="$(call_memory_post "/v1/memory/nodes/activate" "$activate_payload")"
 
 echo
 echo "== activate summary =="
