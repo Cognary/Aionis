@@ -146,6 +146,13 @@ Profile behavior summary:
 - `worker_slo`: lightweight recall benchmark + extra write pass with `embed_on_write=true` to create outbox backlog before worker throughput measurement.
 - `compression_slo`: recall benchmark with compression KPI sampling (`--compression-check=true`) for token-budget compaction quality tracking.
 
+Throughput profile presets (`scripts/env/apply-throughput-profile.sh`):
+
+- `lite`: conservative local profile.
+- `prod`: production-like throughput defaults.
+- `benchmark`: high-throughput stress profile.
+- `perf_gate`: stable production-gate profile with low benchmark concurrency + planner PGOPTIONS for deterministic SLO verification.
+
 ## 5) Worker Throughput Benchmark
 
 ```bash

@@ -51,6 +51,7 @@ AUTO_ADAPT_RATE_LIMIT="${AUTO_ADAPT_RATE_LIMIT:-}"
 MAX_RATE_LIMIT_RETRIES="${MAX_RATE_LIMIT_RETRIES:-4}"
 PACE_STEP_MS="${PACE_STEP_MS:-25}"
 PACE_MAX_MS="${PACE_MAX_MS:-2000}"
+BENCH_PGOPTIONS="${BENCH_PGOPTIONS:-${PGOPTIONS:-}}"
 SLO_RECALL_P95_MS="${SLO_RECALL_P95_MS:-300}"
 SLO_WRITE_P95_MS="${SLO_WRITE_P95_MS:-500}"
 SLO_MAX_ERROR_RATE="${SLO_MAX_ERROR_RATE:-0}"
@@ -157,6 +158,9 @@ echo "[phase-d] benchmark mode: ${BENCH_MODE}"
 echo "[phase-d] scope strategy: ${SCOPE_STRATEGY} (reset mode: ${RESET_MODE})"
 echo "[phase-d] reset impl: ${RESET_IMPL} (purge mode: ${RESET_PURGE_MODE}, allow fallback delete: ${RESET_PURGE_ALLOW_FALLBACK_DELETE}, fail on delete: ${RESET_PURGE_FAIL_ON_DELETE})"
 echo "[phase-d] rate-limit adapt: ${AUTO_ADAPT_RATE_LIMIT} (max retries: ${MAX_RATE_LIMIT_RETRIES}, pace ms: ${BENCH_PACE_MS})"
+if [[ -n "${BENCH_PGOPTIONS}" ]]; then
+  echo "[phase-d] benchmark pgoptions: ${BENCH_PGOPTIONS}"
+fi
 echo "[phase-d] compression check: ${COMPRESSION_CHECK} (samples: ${COMPRESSION_SAMPLES}, token budget: ${COMPRESSION_TOKEN_BUDGET}, profile: ${COMPRESSION_PROFILE})"
 if [[ -n "${BENCH_FAIL_ON_TRANSPORT_ERROR_RATE}" ]]; then
   echo "[phase-d] transport error gate threshold: ${BENCH_FAIL_ON_TRANSPORT_ERROR_RATE}"
@@ -289,7 +293,11 @@ for scale in $(echo "${SCALES}" | tr ',' ' '); do
     if [[ -n "${BENCH_FAIL_ON_TRANSPORT_ERROR_RATE}" ]]; then
       bench_cmd+=(--fail-on-transport-error-rate "${BENCH_FAIL_ON_TRANSPORT_ERROR_RATE}")
     fi
-    "${bench_cmd[@]}" | tee "${bench_file}"
+    if [[ -n "${BENCH_PGOPTIONS}" ]]; then
+      PGOPTIONS="${BENCH_PGOPTIONS}" "${bench_cmd[@]}" | tee "${bench_file}"
+    else
+      "${bench_cmd[@]}" | tee "${bench_file}"
+    fi
 
     cp "${bench_file}" "${OUT_DIR}/benchmark_${scale}_attempt$((bench_attempt + 1)).json"
 

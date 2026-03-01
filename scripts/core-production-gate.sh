@@ -75,6 +75,7 @@ PERF_COMPRESSION_SAMPLES="${PERF_COMPRESSION_SAMPLES:-20}"
 PERF_COMPRESSION_TOKEN_BUDGET="${PERF_COMPRESSION_TOKEN_BUDGET:-1400}"
 PERF_COMPRESSION_PROFILE="${PERF_COMPRESSION_PROFILE:-balanced}"
 PERF_COMPRESSION_QUERY_TEXT="${PERF_COMPRESSION_QUERY_TEXT:-memory graph perf compression}"
+PERF_PGOPTIONS="${PERF_PGOPTIONS:-${PGOPTIONS:-}}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -123,6 +124,7 @@ while [[ $# -gt 0 ]]; do
     --perf-compression-token-budget) PERF_COMPRESSION_TOKEN_BUDGET="${2:-}"; shift 2 ;;
     --perf-compression-profile) PERF_COMPRESSION_PROFILE="${2:-}"; shift 2 ;;
     --perf-compression-query-text) PERF_COMPRESSION_QUERY_TEXT="${2:-}"; shift 2 ;;
+    --perf-pgoptions) PERF_PGOPTIONS="${2:-}"; shift 2 ;;
     --require-partition-ready) CORE_GATE_REQUIRE_PARTITION_READY="${2:-}"; shift 2 ;;
     --partition-scope) CORE_GATE_PARTITION_SCOPE="${2:-}"; shift 2 ;;
     --partition-tenant-id) CORE_GATE_PARTITION_TENANT_ID="${2:-}"; shift 2 ;;
@@ -189,6 +191,7 @@ Options:
   --perf-compression-token-budget <n> Compression context token budget (default: 1400)
   --perf-compression-profile <name>  Compression profile: balanced|aggressive (default: balanced)
   --perf-compression-query-text <t>  Compression benchmark query text
+  --perf-pgoptions <value>          Optional PGOPTIONS passed to perf benchmark subprocess
   --require-partition-ready <bool>   Run partition cutover readiness as blocking step (default: false)
   --partition-scope <scope>          Scope for partition readiness (default: --scope)
   --partition-tenant-id <tenant>     Tenant for partition readiness (default: --tenant-id)
@@ -723,7 +726,9 @@ compression_total_pairs="0"
 if [[ "${RUN_PERF}" == "true" ]]; then
   perf_json_path="${OUT_DIR}/08_perf_benchmark.json"
   run_step "perf_benchmark" "${perf_json_path}" \
-    npm run -s job:perf-benchmark -- \
+    env \
+      PGOPTIONS="${PERF_PGOPTIONS}" \
+      npm run -s job:perf-benchmark -- \
       --base-url "${BASE_URL}" \
       --scope "${SCOPE}" \
       --tenant-id "${TENANT_ID}" \
