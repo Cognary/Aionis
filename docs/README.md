@@ -44,6 +44,7 @@ This is the public documentation index for Aionis.
 - [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
 - [AionisBench v0.1](./AIONIS_BENCH_V01.md)
 - [Differentiation Evidence](./DIFFERENTIATION_EVIDENCE.md)
+- [Weekly Evidence Template](./EVIDENCE_WEEKLY_TEMPLATE.md)
 
 ## Integrations
 

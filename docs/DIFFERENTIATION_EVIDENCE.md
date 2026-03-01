@@ -67,6 +67,27 @@ Ops UI page map:
 3. `/actions`: guarded admin write actions
 4. `/governance`: execution-loop signals + decision replay inspector
 
+## One-Click Weekly Pack
+
+Run one command to collect benchmark + execution loop + governance weekly evidence:
+
+```bash
+npm run -s evidence:weekly -- --scope default --window-hours 168
+```
+
+Main outputs:
+
+1. `artifacts/evidence/weekly/<report_week>_<run_id>/EVIDENCE_SUMMARY.json`
+2. `artifacts/evidence/weekly/<report_week>_<run_id>/EVIDENCE_WEEKLY.md`
+3. `artifacts/evidence/weekly/<report_week>_<run_id>/governance_weekly/summary.json`
+4. `artifacts/evidence/weekly/<report_week>_<run_id>/bench_xmb/summary.json`
+
+Optional strict mode:
+
+```bash
+npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
+```
+
 Recommended production checks:
 
 ```bash
@@ -75,3 +96,7 @@ npm run -s job:governance-weekly-report -- --scope default --strict-warnings
 ```
 
 These outputs should be attached to release reviews together with benchmark artifacts.
+
+For manual executive write-up format, use:
+
+1. [Weekly Evidence Template](./EVIDENCE_WEEKLY_TEMPLATE.md)
