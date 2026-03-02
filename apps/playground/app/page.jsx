@@ -22,6 +22,11 @@ const DEFAULT_CONNECTION = {
 
 const DEFAULT_SCENARIO = SCENARIO_PRESETS[0]?.key || "";
 const DEFAULT_FLOW_PRESET = FLOW_PRESETS[0]?.key || "";
+const CHAIN_STATUS_FILTERS = [
+  { key: "all", label: "all" },
+  { key: "ok", label: "ok only" },
+  { key: "fail", label: "failed only" }
+];
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -262,6 +267,23 @@ function evaluateStepAssert(entry, stepAssert) {
   return { ok: true, reason: "" };
 }
 
+function buildFlowReport(rows, stepsCount, startedAt, stoppedReason = "") {
+  const okSteps = rows.filter((item) => item.ok).length;
+  const failedSteps = rows.length - okSteps;
+  const assertFailed = rows.filter((item) => item.assert_ok === false).length;
+  return {
+    started_at: startedAt,
+    completed_at: new Date().toISOString(),
+    steps_total: stepsCount,
+    steps_executed: rows.length,
+    steps_ok: okSteps,
+    steps_failed: failedSteps,
+    steps_assert_failed: assertFailed,
+    stopped_reason: stoppedReason,
+    rows
+  };
+}
+
 function computeRuntimeContext(history) {
   const context = {
     request_id: "",
@@ -326,7 +348,10 @@ export default function PlaygroundPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [flowError, setFlowError] = useState("");
   const [flowRunNote, setFlowRunNote] = useState("");
+  const [flowReport, setFlowReport] = useState(null);
   const [shareNote, setShareNote] = useState("");
+  const [chainStatusFilter, setChainStatusFilter] = useState("all");
+  const [chainOperationFilter, setChainOperationFilter] = useState("all");
 
   const runtimeContext = useMemo(() => computeRuntimeContext(history), [history]);
   const active = useMemo(() => history.find((item) => item.id === activeId) || history[0] || null, [history, activeId]);
@@ -355,6 +380,19 @@ export default function PlaygroundPage() {
     if (!active || !previousSameOperation) return [];
     return collectDiff(previousSameOperation.data, active.data);
   }, [active, previousSameOperation]);
+
+  const filteredHistory = useMemo(() => {
+    return history.filter((item) => {
+      const statusOk =
+        chainStatusFilter === "all"
+          ? true
+          : chainStatusFilter === "ok"
+            ? item.ok
+            : !item.ok;
+      const operationOk = chainOperationFilter === "all" ? true : item.operation === chainOperationFilter;
+      return statusOk && operationOk;
+    });
+  }, [history, chainStatusFilter, chainOperationFilter]);
 
   function getOperationTemplate(nextOperation, nextConnection = connection, nextScenario = scenarioPreset) {
     let payload = defaultPayloadFor(nextOperation);
@@ -413,6 +451,7 @@ export default function PlaygroundPage() {
     setErrorMessage("");
     setFlowError("");
     setFlowRunNote("");
+    setFlowReport(null);
 
     let payload = null;
     try {
@@ -435,6 +474,7 @@ export default function PlaygroundPage() {
     setErrorMessage("");
     setFlowError("");
     setFlowRunNote("");
+    setFlowReport(null);
 
     let steps = [];
     try {
@@ -446,6 +486,10 @@ export default function PlaygroundPage() {
 
     setRunning(true);
     let flowRuntime = { ...runtimeContext };
+    const startedAt = new Date().toISOString();
+    const rows = [];
+    let stoppedReason = "";
+    let latestAssertError = "";
 
     try {
       for (let i = 0; i < steps.length; i += 1) {
@@ -460,16 +504,27 @@ export default function PlaygroundPage() {
           run_id: entry.run_id || flowRuntime.run_id
         };
 
+        const assertResult = evaluateStepAssert(entry, step.assert);
+        rows.push({
+          step: i + 1,
+          operation: step.operation,
+          status: entry.status,
+          ok: entry.ok,
+          duration_ms: entry.duration_ms,
+          request_id: entry.request_id || "",
+          assert_ok: assertResult.ok,
+          assert_reason: assertResult.reason || ""
+        });
+
         if (!entry.ok && flowStopOnHttpFail) {
-          setFlowRunNote(`stopped at step ${i + 1}: http failure`);
+          stoppedReason = `stopped at step ${i + 1}: http failure`;
           break;
         }
 
-        const assertResult = evaluateStepAssert(entry, step.assert);
         if (!assertResult.ok) {
-          setFlowError(`step ${i + 1} (${step.operation}) assert failed: ${assertResult.reason}`);
+          latestAssertError = `step ${i + 1} (${step.operation}) assert failed: ${assertResult.reason}`;
           if (flowStopOnAssertFail) {
-            setFlowRunNote(`stopped at step ${i + 1}: assert failed`);
+            stoppedReason = `stopped at step ${i + 1}: assert failed`;
             break;
           }
         }
@@ -477,6 +532,9 @@ export default function PlaygroundPage() {
     } catch (error) {
       setFlowError(error instanceof Error ? error.message : "flow execution failed");
     } finally {
+      setFlowReport(buildFlowReport(rows, steps.length, startedAt, stoppedReason));
+      if (latestAssertError) setFlowError(latestAssertError);
+      if (stoppedReason) setFlowRunNote(stoppedReason);
       setRunning(false);
     }
   }
@@ -678,6 +736,7 @@ export default function PlaygroundPage() {
               setErrorMessage("");
               setFlowError("");
               setFlowRunNote("");
+              setFlowReport(null);
             }}
             disabled={history.length === 0 || running}
           >
@@ -872,37 +931,94 @@ export default function PlaygroundPage() {
               </p>
               {flowError ? <p className="error">{flowError}</p> : null}
               {flowRunNote ? <p className="note-line">{flowRunNote}</p> : null}
+              {flowReport ? (
+                <div className="flow-report">
+                  <div className="flow-report-head">
+                    <strong>Latest Flow Report</strong>
+                    <span className="mono tiny">
+                      {flowReport.steps_executed}/{flowReport.steps_total} steps
+                    </span>
+                  </div>
+                  <div className="flow-report-metrics">
+                    <span>ok: {flowReport.steps_ok}</span>
+                    <span>failed: {flowReport.steps_failed}</span>
+                    <span>assert failed: {flowReport.steps_assert_failed}</span>
+                  </div>
+                  {flowReport.stopped_reason ? (
+                    <p className="tiny muted">stop reason: <span className="mono">{flowReport.stopped_reason}</span></p>
+                  ) : (
+                    <p className="tiny muted">completed without early-stop gate.</p>
+                  )}
+                  {flowReport.rows.length > 0 ? (
+                    <div className="flow-report-list">
+                      {flowReport.rows.map((row) => (
+                        <div key={`${row.step}-${row.operation}-${row.request_id}`} className={`flow-report-row ${row.assert_ok ? "" : "warn"}`}>
+                          <span className="mono tiny">#{row.step} {row.operation}</span>
+                          <span className={`status ${row.ok ? "ok" : "err"}`}>{row.status || "ERR"}</span>
+                          <span className="mono tiny">{row.duration_ms} ms</span>
+                          <span className={`status ${row.assert_ok ? "ok" : "err"}`}>{row.assert_ok ? "assert ok" : "assert fail"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </article>
 
           <article className="panel">
             <div className="panel-head">
               <h2>Request Chain</h2>
-              <span className="tag">{history.length} items</span>
+              <span className="tag">{filteredHistory.length}/{history.length} items</span>
             </div>
             {history.length === 0 ? (
               <p className="muted">No requests yet. Run an operation or flow.</p>
             ) : (
-              <div className="chain-list">
-                {history.map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    className={`chain-item ${active?.id === item.id ? "active" : ""}`}
-                    onClick={() => setActiveId(item.id)}
-                  >
-                    <div>
-                      <p className="mono">{item.operation}</p>
-                      <p className="tiny muted">{item.method} {item.path}</p>
-                    </div>
-                    <div className="chain-meta">
-                      <span className={`status ${item.ok ? "ok" : "err"}`}>{item.status || "ERR"}</span>
-                      <span className="mono tiny">{item.duration_ms} ms</span>
-                      <span className="mono tiny">{item.request_id || "no-request-id"}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="filters-row">
+                  <label className="filter-field">
+                    status
+                    <select value={chainStatusFilter} onChange={(event) => setChainStatusFilter(event.target.value)}>
+                      {CHAIN_STATUS_FILTERS.map((item) => (
+                        <option key={item.key} value={item.key}>{item.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="filter-field">
+                    operation
+                    <select value={chainOperationFilter} onChange={(event) => setChainOperationFilter(event.target.value)}>
+                      <option value="all">all</option>
+                      {OPERATION_LIST.map((item) => (
+                        <option key={item.key} value={item.key}>{item.key}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {filteredHistory.length === 0 ? (
+                  <p className="muted tiny">No matching requests under current filters.</p>
+                ) : (
+                  <div className="chain-list">
+                    {filteredHistory.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        className={`chain-item ${active?.id === item.id ? "active" : ""}`}
+                        onClick={() => setActiveId(item.id)}
+                      >
+                        <div>
+                          <p className="mono">{item.operation}</p>
+                          <p className="tiny muted">{item.method} {item.path}</p>
+                        </div>
+                        <div className="chain-meta">
+                          <span className={`status ${item.ok ? "ok" : "err"}`}>{item.status || "ERR"}</span>
+                          <span className="mono tiny">{item.duration_ms} ms</span>
+                          <span className="mono tiny">{item.request_id || "no-request-id"}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </article>
         </div>

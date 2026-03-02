@@ -327,6 +327,59 @@ textarea {
   gap: 0.8rem;
 }
 
+.flow-report {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.flow-report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.flow-report-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.flow-report-metrics span {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.12rem 0.46rem;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+.flow-report-list {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.flow-report-row {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f9fbff;
+  padding: 0.42rem;
+  display: grid;
+  grid-template-columns: minmax(140px, 1.2fr) auto auto auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.flow-report-row.warn {
+  border-color: rgba(180, 35, 24, 0.34);
+  background: rgba(254, 235, 235, 0.62);
+}
+
 .checkbox-row {
   display: inline-flex;
   align-items: center;
@@ -349,6 +402,23 @@ textarea {
   max-height: 650px;
   overflow: auto;
   padding-right: 0.12rem;
+}
+
+.filters-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.54rem;
+  margin-bottom: 0.54rem;
+}
+
+.filter-field {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.filter-field select {
+  font-size: 0.76rem;
+  padding: 0.45rem 0.54rem;
 }
 
 .chain-item {
@@ -443,5 +513,13 @@ pre {
 
   .status-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .flow-report-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filters-row {
+    grid-template-columns: 1fr;
   }
 }
