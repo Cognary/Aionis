@@ -4,6 +4,13 @@ All notable changes to `aionis-sdk` will be documented in this file.
 
 The format is based on Keep a Changelog and this package follows SemVer.
 
+## [0.2.3] - 2026-03-02
+
+### Changed
+
+1. Added complete context orchestration coverage for `POST /v1/memory/context/assemble` flow updates, including layered output and diagnostics-aligned `TypedDict` surfaces.
+2. Updated Playground/API payload alignment support and release metadata for coordinated `0.2.3` channel rollout.
+
 ## [0.2.2] - 2026-03-02
 
 ### Changed

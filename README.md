@@ -222,11 +222,11 @@ Full contract:
 
 ## Current Release Baseline
 
-1. Core (GitHub release tag): `v0.2.2` (latest tagged release)
-2. TypeScript SDK (npm): `0.2.2`
-3. Python SDK (PyPI): `0.2.2`
-4. Docker main image tag line: `v0.2.2`
-5. Docker standalone image tag line: `standalone-v0.2.2`
+1. Core (GitHub release tag): `v0.2.3` (latest tagged release)
+2. TypeScript SDK (npm): `0.2.3`
+3. Python SDK (PyPI): `0.2.3`
+4. Docker main image tag line: `v0.2.3`
+5. Docker standalone image tag line: `standalone-v0.2.3`
 6. Docs site: `https://doc.aionisos.com/`
 
 Release docs:

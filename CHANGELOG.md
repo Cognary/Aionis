@@ -4,6 +4,14 @@ All notable changes to Aionis core are documented in this file.
 
 The format is based on Keep a Changelog and this project follows SemVer for tagged core releases.
 
+## [0.2.3] - 2026-03-02
+
+### Changed
+
+1. Promoted post-`v0.2.2` production updates into a new release baseline, including context orchestration API hardening and dual-layer diagnostics/telemetry coverage.
+2. Advanced Playground and Ops usability with the new three-pane workflow UI, bilingual controls, and API-template contract alignment.
+3. Updated docs/runbooks and release metadata to the coordinated `0.2.3` baseline across core, npm, PyPI, and Docker channels.
+
 ## [0.2.2] - 2026-03-02
 
 ### Changed
