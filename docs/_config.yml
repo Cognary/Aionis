@@ -79,3 +79,5 @@ docs_navigation:
         url: /STABILITY_ROADMAP/
       - label: Long-Term Memory Roadmap
         url: /LONG_TERM_MEMORY_ROADMAP/
+      - label: URI Expansion Plan
+        url: /URI_EXPANSION_PLAN/

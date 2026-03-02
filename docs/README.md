@@ -57,6 +57,7 @@ This is the complete Aionis documentation catalog, organized by user journey.
 2. [API Contract](./API_CONTRACT.md)
 3. [SDK Guide](./SDK.md)
 4. [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)
+5. [URI Expansion Plan](./URI_EXPANSION_PLAN.md)
 
 ## 7) Benchmarks & Evidence
 

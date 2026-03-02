@@ -11,6 +11,7 @@ Specification and compatibility source for implementation teams.
 1. [API Contract](./API_CONTRACT.md)
 2. [SDK Guide](./SDK.md)
 3. [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)
+4. [URI Expansion Plan](./URI_EXPANSION_PLAN.md)
 
 ## Policy/Planner Reference
 

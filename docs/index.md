@@ -63,4 +63,5 @@ Use the docs in this order:
 2. [Embedding Setup](./EMBEDDING_SETUP.md)
 3. [Playground](./PLAYGROUND.md)
 4. [API Contract](./API_CONTRACT.md)
-5. [Docs Index](./README.md)
+5. [URI Expansion Plan](./URI_EXPANSION_PLAN.md)
+6. [Docs Index](./README.md)
