@@ -22,6 +22,18 @@ const DEFAULT_CONNECTION = {
 
 const DEFAULT_SCENARIO = SCENARIO_PRESETS[0]?.key || "";
 const DEFAULT_FLOW_PRESET = FLOW_PRESETS[0]?.key || "";
+const LLM_CONFIG_STORAGE_KEY = "aionis_playground_llm_config_v1";
+const CHAT_SESSION_STORAGE_KEY = "aionis_playground_chat_sessions_v1";
+const CHAT_SESSION_ACTIVE_KEY = "aionis_playground_chat_active_session_v1";
+const DEFAULT_CHAT_CONFIG = {
+  provider: "openai_compatible",
+  base_url: "https://api.openai.com/v1",
+  model: "gpt-4.1-mini",
+  api_key: "",
+  temperature: 0.3,
+  max_tokens: 800,
+  system_prompt: "You are an assistant helping validate Aionis memory and policy workflows."
+};
 const CHAIN_STATUS_FILTERS = [
   { key: "all", label: "all" },
   { key: "ok", label: "ok only" },
@@ -284,6 +296,49 @@ function buildFlowReport(rows, stepsCount, startedAt, stoppedReason = "") {
   };
 }
 
+function downloadTextFile(filename, text, contentType = "text/plain;charset=utf-8") {
+  if (typeof window === "undefined") return;
+  const blob = new Blob([text], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function mdCell(input) {
+  return String(input ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+function flowReportToMarkdown(report) {
+  const lines = [
+    "# Aionis Playground Flow Report",
+    "",
+    `- started_at: ${report.started_at}`,
+    `- completed_at: ${report.completed_at}`,
+    `- steps_total: ${report.steps_total}`,
+    `- steps_executed: ${report.steps_executed}`,
+    `- steps_ok: ${report.steps_ok}`,
+    `- steps_failed: ${report.steps_failed}`,
+    `- steps_assert_failed: ${report.steps_assert_failed}`,
+    `- stopped_reason: ${report.stopped_reason || "none"}`,
+    "",
+    "| step | operation | status | ok | duration_ms | request_id | assert_ok | assert_reason |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |"
+  ];
+
+  for (const row of report.rows || []) {
+    lines.push(
+      `| ${mdCell(row.step)} | ${mdCell(row.operation)} | ${mdCell(row.status)} | ${mdCell(row.ok)} | ${mdCell(row.duration_ms)} | ${mdCell(row.request_id)} | ${mdCell(row.assert_ok)} | ${mdCell(row.assert_reason)} |`
+    );
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 function computeRuntimeContext(history) {
   const context = {
     request_id: "",
@@ -299,6 +354,44 @@ function computeRuntimeContext(history) {
   }
 
   return context;
+}
+
+function makeId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function makeSessionTitle(text) {
+  const raw = String(text || "").trim().replace(/\s+/g, " ");
+  if (!raw) return "Untitled chat";
+  return raw.length > 34 ? `${raw.slice(0, 34)}...` : raw;
+}
+
+function makeChatSession(title = "Untitled chat") {
+  return {
+    id: makeId("chat"),
+    title,
+    created_at: new Date().toISOString(),
+    messages: []
+  };
+}
+
+function extractRecallText(data) {
+  if (!data || typeof data !== "object") return "";
+  if (typeof data.context_text === "string" && data.context_text.trim()) return data.context_text.trim();
+  if (typeof data.text === "string" && data.text.trim()) return data.text.trim();
+  if (Array.isArray(data.items) && data.items.length > 0) {
+    const lines = data.items
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          return String(item.text || item.summary || item.content || "").trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
+    if (lines.length > 0) return lines.join("\n");
+  }
+  return JSON.stringify(data, null, 2);
 }
 
 function encodeShareState(state) {
@@ -335,6 +428,8 @@ function decodeShareState(token) {
 
 export default function PlaygroundPage() {
   const [connection, setConnection] = useState(DEFAULT_CONNECTION);
+  const [llmConfig, setLlmConfig] = useState(DEFAULT_CHAT_CONFIG);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [scenarioPreset, setScenarioPreset] = useState(DEFAULT_SCENARIO);
   const [operation, setOperation] = useState("write");
   const [payloadText, setPayloadText] = useState(pretty(defaultPayloadFor("write")));
@@ -345,16 +440,31 @@ export default function PlaygroundPage() {
   const [history, setHistory] = useState([]);
   const [activeId, setActiveId] = useState("");
   const [running, setRunning] = useState(false);
+  const [chatRunning, setChatRunning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [flowError, setFlowError] = useState("");
   const [flowRunNote, setFlowRunNote] = useState("");
   const [flowReport, setFlowReport] = useState(null);
+  const [flowReportNote, setFlowReportNote] = useState("");
   const [shareNote, setShareNote] = useState("");
+  const [inspectNote, setInspectNote] = useState("");
+  const [chatNote, setChatNote] = useState("");
+  const [chatError, setChatError] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [chatUseRecallContext, setChatUseRecallContext] = useState(true);
+  const [chatAutoWriteMemory, setChatAutoWriteMemory] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("llm");
   const [chainStatusFilter, setChainStatusFilter] = useState("all");
   const [chainOperationFilter, setChainOperationFilter] = useState("all");
+  const [chatSessions, setChatSessions] = useState(() => [makeChatSession("Session 1")]);
+  const [activeSessionId, setActiveSessionId] = useState("");
 
   const runtimeContext = useMemo(() => computeRuntimeContext(history), [history]);
   const active = useMemo(() => history.find((item) => item.id === activeId) || history[0] || null, [history, activeId]);
+  const activeChatSession = useMemo(
+    () => chatSessions.find((item) => item.id === activeSessionId) || chatSessions[0] || null,
+    [chatSessions, activeSessionId]
+  );
 
   const metrics = useMemo(() => {
     const total = history.length;
@@ -393,6 +503,74 @@ export default function PlaygroundPage() {
       return statusOk && operationOk;
     });
   }, [history, chainStatusFilter, chainOperationFilter]);
+
+  function updateSessionById(sessionId, updater) {
+    setChatSessions((prev) => prev.map((item) => (item.id === sessionId ? updater(item) : item)));
+  }
+
+  function appendMessage(sessionId, message) {
+    updateSessionById(sessionId, (session) => {
+      const nextTitle = session.messages.length === 0 && message.role === "user"
+        ? makeSessionTitle(message.content)
+        : session.title;
+      return {
+        ...session,
+        title: nextTitle,
+        messages: [...session.messages, message]
+      };
+    });
+  }
+
+  function createSession() {
+    const next = makeChatSession(`Session ${chatSessions.length + 1}`);
+    setChatSessions((prev) => [next, ...prev]);
+    setActiveSessionId(next.id);
+    setChatInput("");
+    setChatError("");
+    setChatNote("");
+  }
+
+  function removeActiveSession() {
+    if (!activeChatSession) return;
+    setChatSessions((prev) => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((item) => item.id !== activeChatSession.id);
+      const replacement = next[0]?.id || "";
+      setActiveSessionId(replacement);
+      return next;
+    });
+    setChatError("");
+    setChatNote("");
+  }
+
+  async function copyText(value) {
+    const text = String(value || "");
+    if (!text || text === "-") return false;
+
+    if (typeof window === "undefined") return false;
+    if (navigator?.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand("copy");
+      textarea.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
 
   function getOperationTemplate(nextOperation, nextConnection = connection, nextScenario = scenarioPreset) {
     let payload = defaultPayloadFor(nextOperation);
@@ -452,6 +630,7 @@ export default function PlaygroundPage() {
     setFlowError("");
     setFlowRunNote("");
     setFlowReport(null);
+    setFlowReportNote("");
 
     let payload = null;
     try {
@@ -475,6 +654,7 @@ export default function PlaygroundPage() {
     setFlowError("");
     setFlowRunNote("");
     setFlowReport(null);
+    setFlowReportNote("");
 
     let steps = [];
     try {
@@ -582,6 +762,8 @@ export default function PlaygroundPage() {
     setErrorMessage("");
     setFlowError("");
     setFlowRunNote("");
+    setFlowReport(null);
+    setFlowReportNote("");
   }
 
   function exportSession() {
@@ -615,6 +797,225 @@ export default function PlaygroundPage() {
     anchor.remove();
     URL.revokeObjectURL(url);
   }
+
+  function exportFlowReportJson() {
+    if (!flowReport) return;
+    const payload = {
+      exported_at: new Date().toISOString(),
+      flow_preset: flowPreset,
+      flow_options: {
+        stop_on_http_fail: flowStopOnHttpFail,
+        stop_on_assert_fail: flowStopOnAssertFail
+      },
+      report: flowReport
+    };
+    downloadTextFile(
+      `aionis-flow-report-${Date.now()}.json`,
+      JSON.stringify(payload, null, 2),
+      "application/json"
+    );
+    setFlowReportNote("Flow report JSON exported.");
+  }
+
+  function exportFlowReportMarkdown() {
+    if (!flowReport) return;
+    downloadTextFile(
+      `aionis-flow-report-${Date.now()}.md`,
+      flowReportToMarkdown(flowReport),
+      "text/markdown;charset=utf-8"
+    );
+    setFlowReportNote("Flow report Markdown exported.");
+  }
+
+  async function copyActiveId(kind, value) {
+    const ok = await copyText(value);
+    if (!ok) {
+      setInspectNote(`Copy ${kind} failed.`);
+      return;
+    }
+    setInspectNote(`Copied ${kind}.`);
+  }
+
+  async function sendChatMessage() {
+    const prompt = String(chatInput || "").trim();
+    if (!prompt || chatRunning) return;
+    if (!activeChatSession) return;
+
+    setChatError("");
+    setChatNote("");
+    setInspectNote("");
+
+    const userMessage = {
+      id: makeId("msg"),
+      role: "user",
+      content: prompt,
+      at: new Date().toISOString()
+    };
+    const baselineMessages = [...(activeChatSession.messages || []), userMessage];
+    appendMessage(activeChatSession.id, userMessage);
+    setChatInput("");
+
+    setChatRunning(true);
+    try {
+      let memoryContext = "";
+      if (chatUseRecallContext) {
+        const recallTemplate = getOperationTemplate("recall_text");
+        const recallPayload = {
+          ...recallTemplate,
+          query_text: prompt
+        };
+        const recallEntry = await executeOne("recall_text", materializePayload(recallPayload));
+        if (recallEntry.ok) {
+          memoryContext = extractRecallText(recallEntry.data);
+          if (memoryContext) setChatNote("Injected recall_text context into prompt.");
+        } else {
+          setChatNote("recall_text failed; continue without memory context.");
+        }
+      }
+
+      const messages = [];
+      if (llmConfig.system_prompt?.trim()) {
+        messages.push({ role: "system", content: llmConfig.system_prompt.trim() });
+      }
+      if (memoryContext) {
+        messages.push({
+          role: "system",
+          content: `Aionis memory context:\n${memoryContext}`
+        });
+      }
+      messages.push(
+        ...baselineMessages
+          .filter((item) => item.role === "user" || item.role === "assistant")
+          .slice(-20)
+          .map((item) => ({ role: item.role, content: item.content }))
+      );
+
+      const response = await fetch("/api/playground/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          config: llmConfig,
+          messages
+        })
+      });
+
+      const result = await response.json().catch(() => null);
+      if (!result || result.ok !== true) {
+        throw new Error(result?.error || "llm_chat_failed");
+      }
+
+      const assistantText = String(result.text || "").trim() || "(empty response)";
+      const assistantMessage = {
+        id: makeId("msg"),
+        role: "assistant",
+        content: assistantText,
+        at: new Date().toISOString(),
+        meta: {
+          model: result.model || llmConfig.model,
+          usage: result.usage || null
+        }
+      };
+      appendMessage(activeChatSession.id, assistantMessage);
+
+      if (chatAutoWriteMemory) {
+        const writeTemplate = getOperationTemplate("write");
+        const writePayload = {
+          ...writeTemplate,
+          input_text: `User: ${prompt}\nAssistant: ${assistantText}`,
+          nodes: [
+            {
+              client_id: makeId("chat_turn"),
+              type: "interaction",
+              text_summary: `User asked: ${prompt.slice(0, 120)}`
+            }
+          ],
+          edges: []
+        };
+        await executeOne("write", materializePayload(writePayload));
+        setChatNote((prev) => `${prev ? `${prev} ` : ""}Auto-wrote this turn into memory.`.trim());
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "chat_send_failed";
+      setChatError(message);
+      appendMessage(activeChatSession.id, {
+        id: makeId("msg"),
+        role: "assistant",
+        content: `Chat error: ${message}`,
+        at: new Date().toISOString(),
+        meta: { error: true }
+      });
+    } finally {
+      setChatRunning(false);
+    }
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const rawConfig = window.localStorage.getItem(LLM_CONFIG_STORAGE_KEY);
+      if (rawConfig) {
+        const parsed = JSON.parse(rawConfig);
+        if (parsed && typeof parsed === "object") {
+          setLlmConfig((prev) => ({
+            ...prev,
+            ...parsed
+          }));
+        }
+      }
+    } catch {
+      // ignore local storage read errors
+    }
+
+    try {
+      const rawSessions = window.localStorage.getItem(CHAT_SESSION_STORAGE_KEY);
+      const rawActive = window.localStorage.getItem(CHAT_SESSION_ACTIVE_KEY);
+      if (rawSessions) {
+        const parsed = JSON.parse(rawSessions);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const normalized = parsed
+            .filter((item) => item && typeof item === "object" && typeof item.id === "string")
+            .map((item) => ({
+              id: item.id,
+              title: typeof item.title === "string" ? item.title : "Untitled chat",
+              created_at: typeof item.created_at === "string" ? item.created_at : new Date().toISOString(),
+              messages: Array.isArray(item.messages) ? item.messages : []
+            }));
+          if (normalized.length > 0) {
+            setChatSessions(normalized);
+            if (rawActive && normalized.some((item) => item.id === rawActive)) {
+              setActiveSessionId(rawActive);
+            } else {
+              setActiveSessionId(normalized[0].id);
+            }
+            return;
+          }
+        }
+      }
+    } catch {
+      // ignore local storage read errors
+    }
+
+    setActiveSessionId((prev) => prev || chatSessions[0]?.id || "");
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(LLM_CONFIG_STORAGE_KEY, JSON.stringify(llmConfig));
+  }, [llmConfig]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(chatSessions));
+  }, [chatSessions]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!activeSessionId && chatSessions[0]?.id) {
+      setActiveSessionId(chatSessions[0].id);
+      return;
+    }
+    if (activeSessionId) window.localStorage.setItem(CHAT_SESSION_ACTIVE_KEY, activeSessionId);
+  }, [activeSessionId, chatSessions]);
 
   function buildShareState() {
     return {
@@ -702,151 +1103,295 @@ export default function PlaygroundPage() {
     setShareNote("Loaded config from share link.");
   }, []);
 
+  useEffect(() => {
+    setInspectNote("");
+  }, [activeId]);
+
   return (
-    <div className="pg-page">
-      <section className="panel hero">
-        <div>
-          <p className="kicker">Interactive API Lab</p>
-          <h1>Aionis Playground v3</h1>
-          <p className="muted">
-            End-to-end surface for memory write/recall, rules, tool selection, feedback, and decision replay.
-            Includes scenario presets, flow runner, runtime variable injection, assertions, share links, and response diff.
-          </p>
-          {shareNote ? <p className="note-line">{shareNote}</p> : null}
+    <div className="oa-layout">
+      <aside className="oa-pane oa-left">
+        <div className="oa-brand">
+          <p className="kicker">Aionis Playground</p>
+          <h1>Chat + Memory Lab</h1>
         </div>
-        <div className="hero-actions">
-          <button type="button" onClick={runCurrent} disabled={running}>
-            {running ? "Running..." : "Run Operation"}
-          </button>
-          <button type="button" className="ghost" onClick={runFlow} disabled={running}>
-            {running ? "Running..." : "Run Flow"}
-          </button>
-          <button type="button" className="ghost" onClick={copyShareLink} disabled={running}>
-            Copy Share Link
-          </button>
-          <button type="button" className="ghost" onClick={exportSession} disabled={history.length === 0 || running}>
-            Export Session JSON
-          </button>
-          <button
-            type="button"
-            className="ghost danger"
-            onClick={() => {
-              setHistory([]);
-              setActiveId("");
-              setErrorMessage("");
-              setFlowError("");
-              setFlowRunNote("");
-              setFlowReport(null);
-            }}
-            disabled={history.length === 0 || running}
-          >
-            Clear History
-          </button>
-        </div>
-      </section>
 
-      <section className="status-strip">
-        <article className="metric-card">
-          <span>Total</span>
-          <strong>{metrics.total}</strong>
-        </article>
-        <article className="metric-card ok">
-          <span>Success</span>
-          <strong>{metrics.success}</strong>
-        </article>
-        <article className="metric-card err">
-          <span>Failed</span>
-          <strong>{metrics.failed}</strong>
-        </article>
-        <article className="metric-card">
-          <span>Avg Latency</span>
-          <strong>{metrics.avgLatency} ms</strong>
-        </article>
-        <article className="metric-card">
-          <span>last.request_id</span>
-          <strong className="mono tiny-strong">{runtimeContext.request_id || "-"}</strong>
-        </article>
-        <article className="metric-card">
-          <span>last.decision_id</span>
-          <strong className="mono tiny-strong">{runtimeContext.decision_id || "-"}</strong>
-        </article>
-        <article className="metric-card">
-          <span>last.run_id</span>
-          <strong className="mono tiny-strong">{runtimeContext.run_id || "-"}</strong>
-        </article>
-      </section>
+        <section className="oa-section">
+          <div className="panel-head">
+            <h2>Scenario</h2>
+          </div>
+          <label>
+            scenario preset
+            <select value={scenarioPreset} onChange={(event) => setScenarioPreset(event.target.value)}>
+              {SCENARIO_PRESETS.map((item) => (
+                <option key={item.key} value={item.key}>{item.label}</option>
+              ))}
+            </select>
+          </label>
+          <p className="muted tiny">{SCENARIO_PRESET_MAP[scenarioPreset]?.description || ""}</p>
+          <button type="button" className="ghost" onClick={applyScenarioPreset} disabled={running || chatRunning}>Apply preset</button>
+        </section>
 
-      <section className="workspace-grid">
-        <div className="left-stack">
-          <article className="panel">
-            <div className="panel-head">
-              <h2>Connection + Scenario</h2>
-              <span className="tag">runtime</span>
+        <section className="oa-section">
+          <div className="panel-head">
+            <h2>Sessions</h2>
+            <span className="tag">{chatSessions.length}</span>
+          </div>
+          <div className="inline-actions">
+            <button type="button" className="ghost" onClick={createSession} disabled={chatRunning}>New</button>
+            <button type="button" className="ghost danger" onClick={removeActiveSession} disabled={chatSessions.length <= 1 || chatRunning}>Delete</button>
+          </div>
+          <div className="session-list">
+            {chatSessions.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={`session-item ${activeChatSession?.id === item.id ? "active" : ""}`}
+                onClick={() => setActiveSessionId(item.id)}
+              >
+                <span>{item.title}</span>
+                <span className="tiny mono">{item.messages.length}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="oa-section oa-grow">
+          <div className="panel-head">
+            <h2>History</h2>
+            <span className="tag">{filteredHistory.length}/{history.length}</span>
+          </div>
+          <div className="filters-row">
+            <label className="filter-field">
+              status
+              <select value={chainStatusFilter} onChange={(event) => setChainStatusFilter(event.target.value)}>
+                {CHAIN_STATUS_FILTERS.map((item) => (
+                  <option key={item.key} value={item.key}>{item.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="filter-field">
+              operation
+              <select value={chainOperationFilter} onChange={(event) => setChainOperationFilter(event.target.value)}>
+                <option value="all">all</option>
+                {OPERATION_LIST.map((item) => (
+                  <option key={item.key} value={item.key}>{item.key}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {filteredHistory.length === 0 ? (
+            <p className="muted tiny">No matching requests.</p>
+          ) : (
+            <div className="chain-list">
+              {filteredHistory.map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  className={`chain-item ${active?.id === item.id ? "active" : ""}`}
+                  onClick={() => setActiveId(item.id)}
+                >
+                  <div>
+                    <p className="mono">{item.operation}</p>
+                    <p className="tiny muted">{item.status || "ERR"} · {item.duration_ms}ms</p>
+                  </div>
+                </button>
+              ))}
             </div>
-            <div className="form-grid">
-              <label>
-                scenario preset
-                <select value={scenarioPreset} onChange={(event) => setScenarioPreset(event.target.value)}>
-                  {SCENARIO_PRESETS.map((item) => (
-                    <option key={item.key} value={item.key}>{item.label}</option>
-                  ))}
-                </select>
+          )}
+        </section>
+      </aside>
+
+      <section className="oa-pane oa-center">
+        <header className="oa-center-head">
+          <div>
+            <p className="kicker">Session</p>
+            <h2>{activeChatSession?.title || "Untitled chat"}</h2>
+            <p className="muted tiny">req <span className="mono">{runtimeContext.request_id || "-"}</span> · dec <span className="mono">{runtimeContext.decision_id || "-"}</span> · run <span className="mono">{runtimeContext.run_id || "-"}</span></p>
+          </div>
+          <div className="inline-actions">
+            <button type="button" onClick={runCurrent} disabled={running || chatRunning}>{running ? "Running..." : "Run op"}</button>
+            <button type="button" className="ghost" onClick={runFlow} disabled={running || chatRunning}>{running ? "Running..." : "Run flow"}</button>
+          </div>
+        </header>
+
+        <div className="oa-metrics">
+          <span>Total {metrics.total}</span>
+          <span>OK {metrics.success}</span>
+          <span>Fail {metrics.failed}</span>
+          <span>Avg {metrics.avgLatency}ms</span>
+        </div>
+
+        <div className="oa-chat-surface">
+          <div className="chat-thread">
+            {(activeChatSession?.messages || []).length === 0 ? (
+              <p className="muted tiny">Start a conversation to test memory-grounded behavior.</p>
+            ) : (
+              activeChatSession.messages.map((message) => (
+                <article key={message.id} className={`chat-bubble ${message.role}`}>
+                  <div className="chat-meta">
+                    <span>{message.role}</span>
+                    <span className="mono tiny">{message.at || "-"}</span>
+                  </div>
+                  <p>{message.content}</p>
+                  {message.meta?.model ? <p className="tiny muted">model: <span className="mono">{message.meta.model}</span></p> : null}
+                </article>
+              ))
+            )}
+          </div>
+
+          <details className="oa-inspector" open={Boolean(active)}>
+            <summary>Inspector</summary>
+            {!active ? (
+              <p className="muted tiny">Select one request from history.</p>
+            ) : (
+              <div className="inspect-block">
+                <p className="tiny muted">request_id: <span className="mono">{active.request_id || "-"}</span></p>
+                <p className="tiny muted">decision_id: <span className="mono">{active.decision_id || "-"}</span></p>
+                <p className="tiny muted">run_id: <span className="mono">{active.run_id || "-"}</span></p>
+                <div className="inline-actions mini-actions">
+                  <button type="button" className="ghost" onClick={() => copyActiveId("request_id", active.request_id)} disabled={!active.request_id}>Copy request_id</button>
+                  <button type="button" className="ghost" onClick={() => copyActiveId("decision_id", active.decision_id)} disabled={!active.decision_id}>Copy decision_id</button>
+                  <button type="button" className="ghost" onClick={() => copyActiveId("run_id", active.run_id)} disabled={!active.run_id}>Copy run_id</button>
+                </div>
+                {inspectNote ? <p className="note-line">{inspectNote}</p> : null}
+                {active.error ? <p className="error">error: {active.error}</p> : null}
+                <details>
+                  <summary>request payload</summary>
+                  <pre>{pretty(active.payload)}</pre>
+                </details>
+                <details>
+                  <summary>response body</summary>
+                  <pre>{pretty(active.data)}</pre>
+                </details>
+                <details>
+                  <summary>response diff</summary>
+                  {!previousSameOperation ? (
+                    <p className="muted tiny">No previous response for this operation.</p>
+                  ) : responseDiff.length === 0 ? (
+                    <p className="muted tiny">No structural diff detected.</p>
+                  ) : (
+                    <div className="diff-list">
+                      {responseDiff.slice(0, 20).map((item) => (
+                        <div className="diff-item" key={`${item.path}-${JSON.stringify(item.after)}`}>
+                          <p className="mono tiny"><strong>{item.path}</strong></p>
+                          <p className="tiny muted">before: <span className="mono">{JSON.stringify(item.before)}</span></p>
+                          <p className="tiny muted">after: <span className="mono">{JSON.stringify(item.after)}</span></p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </details>
+              </div>
+            )}
+          </details>
+        </div>
+
+        <form
+          className="composer"
+          onSubmit={(event) => {
+            event.preventDefault();
+            sendChatMessage();
+          }}
+        >
+          <textarea
+            rows={3}
+            placeholder="Message..."
+            value={chatInput}
+            onChange={(event) => setChatInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                sendChatMessage();
+              }
+            }}
+          />
+          <div className="composer-foot">
+            <div className="toggle-row">
+              <label className="checkbox-row">
+                <input type="checkbox" checked={chatUseRecallContext} onChange={(event) => setChatUseRecallContext(event.target.checked)} />
+                use recall
               </label>
-              <p className="muted tiny">{SCENARIO_PRESET_MAP[scenarioPreset]?.description || ""}</p>
-              <button type="button" className="ghost" onClick={applyScenarioPreset} disabled={running}>Apply Scenario Preset</button>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={chatAutoWriteMemory} onChange={(event) => setChatAutoWriteMemory(event.target.checked)} />
+                auto write
+              </label>
+            </div>
+            <button type="submit" disabled={chatRunning || running || !chatInput.trim()}>{chatRunning ? "Sending..." : "Send"}</button>
+          </div>
+          {chatNote ? <p className="note-line">{chatNote}</p> : null}
+          {chatError ? <p className="error">{chatError}</p> : null}
+        </form>
+      </section>
+
+      <aside className="oa-pane oa-right">
+        <div className="oa-tabs">
+          {["llm", "connection", "operation", "flow", "export"].map((tab) => (
+            <button
+              type="button"
+              key={tab}
+              className={`tab-btn ${settingsTab === tab ? "active" : ""}`}
+              onClick={() => setSettingsTab(tab)}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        <div className="oa-tab-panel">
+          {settingsTab === "llm" ? (
+            <div className="form-grid compact">
+              <label>
+                provider
+                <input value={llmConfig.provider} onChange={(event) => setLlmConfig((prev) => ({ ...prev, provider: event.target.value }))} />
+              </label>
               <label>
                 base_url
-                <input
-                  value={connection.base_url}
-                  onChange={(event) => setConnection((prev) => ({ ...prev, base_url: event.target.value }))}
-                  placeholder="http://127.0.0.1:3001"
-                />
+                <input value={llmConfig.base_url} onChange={(event) => setLlmConfig((prev) => ({ ...prev, base_url: event.target.value }))} />
               </label>
               <label>
-                tenant_id (default)
-                <input
-                  value={connection.tenant_id}
-                  onChange={(event) => setConnection((prev) => ({ ...prev, tenant_id: event.target.value }))}
-                />
+                model
+                <input value={llmConfig.model} onChange={(event) => setLlmConfig((prev) => ({ ...prev, model: event.target.value }))} />
               </label>
               <label>
-                scope (default)
+                api_key
                 <input
-                  value={connection.scope}
-                  onChange={(event) => setConnection((prev) => ({ ...prev, scope: event.target.value }))}
+                  type={showApiKey ? "text" : "password"}
+                  value={llmConfig.api_key}
+                  onChange={(event) => setLlmConfig((prev) => ({ ...prev, api_key: event.target.value }))}
+                  placeholder="sk-..."
                 />
               </label>
+              <div className="inline-actions">
+                <button type="button" className="ghost" onClick={() => setShowApiKey((prev) => !prev)}>{showApiKey ? "Hide" : "Show"}</button>
+                <button type="button" className="ghost danger" onClick={() => setLlmConfig((prev) => ({ ...prev, api_key: "" }))}>Clear</button>
+              </div>
               <label>
-                x-api-key (optional)
-                <input
-                  value={connection.api_key}
-                  onChange={(event) => setConnection((prev) => ({ ...prev, api_key: event.target.value }))}
-                  placeholder="ak_live_..."
-                />
+                temperature
+                <input type="number" min="0" max="2" step="0.1" value={llmConfig.temperature} onChange={(event) => setLlmConfig((prev) => ({ ...prev, temperature: Number(event.target.value) }))} />
               </label>
               <label>
-                bearer token (optional)
-                <input
-                  value={connection.bearer_token}
-                  onChange={(event) => setConnection((prev) => ({ ...prev, bearer_token: event.target.value }))}
-                  placeholder="Bearer ... or raw token"
-                />
+                max_tokens
+                <input type="number" min="1" step="1" value={llmConfig.max_tokens} onChange={(event) => setLlmConfig((prev) => ({ ...prev, max_tokens: Number(event.target.value) }))} />
               </label>
               <label>
-                x-admin-token (optional)
-                <input
-                  value={connection.admin_token}
-                  onChange={(event) => setConnection((prev) => ({ ...prev, admin_token: event.target.value }))}
-                />
+                system prompt
+                <textarea rows={5} value={llmConfig.system_prompt} onChange={(event) => setLlmConfig((prev) => ({ ...prev, system_prompt: event.target.value }))} />
               </label>
             </div>
-          </article>
+          ) : null}
 
-          <article className="panel">
-            <div className="panel-head">
-              <h2>Operation + Payload</h2>
-              <span className="tag">request builder</span>
+          {settingsTab === "connection" ? (
+            <div className="form-grid compact">
+              <label>base_url<input value={connection.base_url} onChange={(event) => setConnection((prev) => ({ ...prev, base_url: event.target.value }))} /></label>
+              <label>tenant_id<input value={connection.tenant_id} onChange={(event) => setConnection((prev) => ({ ...prev, tenant_id: event.target.value }))} /></label>
+              <label>scope<input value={connection.scope} onChange={(event) => setConnection((prev) => ({ ...prev, scope: event.target.value }))} /></label>
+              <label>x-api-key<input value={connection.api_key} onChange={(event) => setConnection((prev) => ({ ...prev, api_key: event.target.value }))} /></label>
+              <label>bearer token<input value={connection.bearer_token} onChange={(event) => setConnection((prev) => ({ ...prev, bearer_token: event.target.value }))} /></label>
+              <label>x-admin-token<input value={connection.admin_token} onChange={(event) => setConnection((prev) => ({ ...prev, admin_token: event.target.value }))} /></label>
             </div>
+          ) : null}
+
+          {settingsTab === "operation" ? (
             <div className="form-grid compact">
               <label>
                 operation
@@ -866,24 +1411,18 @@ export default function PlaygroundPage() {
               <p className="muted tiny">{OPERATION_MAP[operation]?.description || ""}</p>
               <label>
                 payload JSON
-                <textarea value={payloadText} onChange={(event) => setPayloadText(event.target.value)} rows={14} />
+                <textarea value={payloadText} onChange={(event) => setPayloadText(event.target.value)} rows={10} />
               </label>
               <div className="inline-actions">
-                <button type="button" className="ghost" onClick={() => resetPayload(operation)} disabled={running}>Reset Template</button>
-                <button type="button" className="ghost" onClick={injectTenantScope} disabled={running}>Inject tenant/scope</button>
-                <button type="button" className="ghost" onClick={injectRuntimeVars} disabled={running}>Inject runtime vars</button>
+                <button type="button" className="ghost" onClick={() => resetPayload(operation)} disabled={running || chatRunning}>Reset</button>
+                <button type="button" className="ghost" onClick={injectTenantScope} disabled={running || chatRunning}>Inject tenant/scope</button>
+                <button type="button" className="ghost" onClick={injectRuntimeVars} disabled={running || chatRunning}>Inject runtime</button>
               </div>
               {errorMessage ? <p className="error">{errorMessage}</p> : null}
             </div>
-          </article>
-        </div>
+          ) : null}
 
-        <div className="mid-stack">
-          <article className="panel">
-            <div className="panel-head">
-              <h2>Step Flow</h2>
-              <span className="tag">orchestrator</span>
-            </div>
+          {settingsTab === "flow" ? (
             <div className="form-grid compact">
               <label>
                 flow preset
@@ -902,171 +1441,71 @@ export default function PlaygroundPage() {
                   ))}
                 </select>
               </label>
-              <p className="muted tiny">{FLOW_PRESET_MAP[flowPreset]?.description || ""}</p>
               <label>
-                flow JSON (string op or {`{ operation, payload, assert }`})
-                <textarea value={flowText} onChange={(event) => setFlowText(event.target.value)} rows={10} />
+                flow JSON
+                <textarea value={flowText} onChange={(event) => setFlowText(event.target.value)} rows={8} />
               </label>
               <div className="toggle-row">
                 <label className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={flowStopOnHttpFail}
-                    onChange={(event) => setFlowStopOnHttpFail(event.target.checked)}
-                  />
+                  <input type="checkbox" checked={flowStopOnHttpFail} onChange={(event) => setFlowStopOnHttpFail(event.target.checked)} />
                   stop on HTTP failure
                 </label>
                 <label className="checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={flowStopOnAssertFail}
-                    onChange={(event) => setFlowStopOnAssertFail(event.target.checked)}
-                  />
+                  <input type="checkbox" checked={flowStopOnAssertFail} onChange={(event) => setFlowStopOnAssertFail(event.target.checked)} />
                   stop on assert failure
                 </label>
               </div>
-              <p className="muted tiny">
-                Assert fields per step: <span className="mono">expect_ok</span>, <span className="mono">require_decision_id</span>,
-                <span className="mono"> require_request_id</span>, <span className="mono">max_duration_ms</span>, <span className="mono">error_includes</span>.
-              </p>
               {flowError ? <p className="error">{flowError}</p> : null}
               {flowRunNote ? <p className="note-line">{flowRunNote}</p> : null}
               {flowReport ? (
                 <div className="flow-report">
                   <div className="flow-report-head">
-                    <strong>Latest Flow Report</strong>
-                    <span className="mono tiny">
-                      {flowReport.steps_executed}/{flowReport.steps_total} steps
-                    </span>
+                    <strong>Flow report</strong>
+                    <span className="mono tiny">{flowReport.steps_executed}/{flowReport.steps_total}</span>
                   </div>
                   <div className="flow-report-metrics">
                     <span>ok: {flowReport.steps_ok}</span>
                     <span>failed: {flowReport.steps_failed}</span>
                     <span>assert failed: {flowReport.steps_assert_failed}</span>
                   </div>
-                  {flowReport.stopped_reason ? (
-                    <p className="tiny muted">stop reason: <span className="mono">{flowReport.stopped_reason}</span></p>
-                  ) : (
-                    <p className="tiny muted">completed without early-stop gate.</p>
-                  )}
-                  {flowReport.rows.length > 0 ? (
-                    <div className="flow-report-list">
-                      {flowReport.rows.map((row) => (
-                        <div key={`${row.step}-${row.operation}-${row.request_id}`} className={`flow-report-row ${row.assert_ok ? "" : "warn"}`}>
-                          <span className="mono tiny">#{row.step} {row.operation}</span>
-                          <span className={`status ${row.ok ? "ok" : "err"}`}>{row.status || "ERR"}</span>
-                          <span className="mono tiny">{row.duration_ms} ms</span>
-                          <span className={`status ${row.assert_ok ? "ok" : "err"}`}>{row.assert_ok ? "assert ok" : "assert fail"}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
+                  <div className="inline-actions">
+                    <button type="button" className="ghost" onClick={exportFlowReportJson} disabled={running || chatRunning}>Export JSON</button>
+                    <button type="button" className="ghost" onClick={exportFlowReportMarkdown} disabled={running || chatRunning}>Export MD</button>
+                  </div>
+                  {flowReportNote ? <p className="note-line">{flowReportNote}</p> : null}
                 </div>
               ) : null}
             </div>
-          </article>
+          ) : null}
 
-          <article className="panel">
-            <div className="panel-head">
-              <h2>Request Chain</h2>
-              <span className="tag">{filteredHistory.length}/{history.length} items</span>
+          {settingsTab === "export" ? (
+            <div className="form-grid compact">
+              <div className="inline-actions">
+                <button type="button" className="ghost" onClick={copyShareLink} disabled={running || chatRunning}>Copy share link</button>
+                <button type="button" className="ghost" onClick={exportSession} disabled={history.length === 0 || running || chatRunning}>Export session JSON</button>
+              </div>
+              <button
+                type="button"
+                className="ghost danger"
+                onClick={() => {
+                  setHistory([]);
+                  setActiveId("");
+                  setErrorMessage("");
+                  setFlowError("");
+                  setFlowRunNote("");
+                  setFlowReport(null);
+                  setFlowReportNote("");
+                  setInspectNote("");
+                }}
+                disabled={history.length === 0 || running || chatRunning}
+              >
+                Clear history
+              </button>
+              {shareNote ? <p className="note-line">{shareNote}</p> : null}
             </div>
-            {history.length === 0 ? (
-              <p className="muted">No requests yet. Run an operation or flow.</p>
-            ) : (
-              <>
-                <div className="filters-row">
-                  <label className="filter-field">
-                    status
-                    <select value={chainStatusFilter} onChange={(event) => setChainStatusFilter(event.target.value)}>
-                      {CHAIN_STATUS_FILTERS.map((item) => (
-                        <option key={item.key} value={item.key}>{item.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="filter-field">
-                    operation
-                    <select value={chainOperationFilter} onChange={(event) => setChainOperationFilter(event.target.value)}>
-                      <option value="all">all</option>
-                      {OPERATION_LIST.map((item) => (
-                        <option key={item.key} value={item.key}>{item.key}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {filteredHistory.length === 0 ? (
-                  <p className="muted tiny">No matching requests under current filters.</p>
-                ) : (
-                  <div className="chain-list">
-                    {filteredHistory.map((item) => (
-                      <button
-                        type="button"
-                        key={item.id}
-                        className={`chain-item ${active?.id === item.id ? "active" : ""}`}
-                        onClick={() => setActiveId(item.id)}
-                      >
-                        <div>
-                          <p className="mono">{item.operation}</p>
-                          <p className="tiny muted">{item.method} {item.path}</p>
-                        </div>
-                        <div className="chain-meta">
-                          <span className={`status ${item.ok ? "ok" : "err"}`}>{item.status || "ERR"}</span>
-                          <span className="mono tiny">{item.duration_ms} ms</span>
-                          <span className="mono tiny">{item.request_id || "no-request-id"}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </article>
+          ) : null}
         </div>
-
-        <article className="panel">
-          <div className="panel-head">
-            <h2>Response Inspector + Diff</h2>
-            {active ? <span className={`status ${active.ok ? "ok" : "err"}`}>{active.status || "ERR"}</span> : <span className="tag">idle</span>}
-          </div>
-          {!active ? (
-            <p className="muted">Select a request in the chain to inspect payload and response.</p>
-          ) : (
-            <div className="inspect-block">
-              <p className="tiny muted">request_id: <span className="mono">{active.request_id || "-"}</span></p>
-              <p className="tiny muted">operation: <span className="mono">{active.operation}</span></p>
-              <p className="tiny muted">timestamp: <span className="mono">{active.at}</span></p>
-              {active.error ? <p className="error">error: {active.error}</p> : null}
-              <details open>
-                <summary>request payload</summary>
-                <pre>{pretty(active.payload)}</pre>
-              </details>
-              <details open>
-                <summary>response body</summary>
-                <pre>{pretty(active.data)}</pre>
-              </details>
-              <details open>
-                <summary>response diff vs previous same operation</summary>
-                {!previousSameOperation ? (
-                  <p className="muted tiny">No previous response for this operation yet.</p>
-                ) : responseDiff.length === 0 ? (
-                  <p className="muted tiny">No structural diff detected.</p>
-                ) : (
-                  <div className="diff-list">
-                    {responseDiff.slice(0, 40).map((item) => (
-                      <div className="diff-item" key={`${item.path}-${JSON.stringify(item.after)}`}>
-                        <p className="mono tiny"><strong>{item.path}</strong></p>
-                        <p className="tiny muted">before: <span className="mono">{JSON.stringify(item.before)}</span></p>
-                        <p className="tiny muted">after: <span className="mono">{JSON.stringify(item.after)}</span></p>
-                      </div>
-                    ))}
-                    {responseDiff.length > 40 ? <p className="tiny muted">...truncated to first 40 diff entries.</p> : null}
-                  </div>
-                )}
-              </details>
-            </div>
-          )}
-        </article>
-      </section>
+      </aside>
     </div>
   );
 }

@@ -20,16 +20,18 @@ The playground focuses on these routes:
 
 ## Included capabilities
 
-1. Connection settings in UI (`base_url`, `tenant_id`, `scope`, API key, bearer token, admin token).
-2. Scenario presets (`Support Triage`, `Sales Follow-up`, `Personal Assistant`) to seed tenant/scope + payload defaults.
-3. Per-operation payload editor with JSON templates and runtime variable injection (`\{\{last.decision_id\}\}`, `\{\{last.request_id\}\}`, `\{\{last.run_id\}\}`, `\{\{connection.*\}\}`).
-4. Step Flow orchestrator with editable flow JSON and reusable flow presets (including closed-loop policy flow).
-5. Per-step flow assertions (`expect_ok`, `require_decision_id`, `require_request_id`, `max_duration_ms`, `error_includes`) with optional stop-on-fail behavior.
-6. Share link export (`?pg=...`) for reproducible, non-secret config handoff.
-7. Latest flow report panel with executed/failed/assert-failed counters and per-step outcome rows.
-8. Request chain timeline with status, duration, and `request_id`, plus filters by status/operation.
-9. Response inspector with structural diff against previous response of the same operation.
-10. One-click session export to JSON for replay or issue reports.
+1. Three-pane console layout: left navigation/history, center chat + inspector, right run settings.
+2. LLM settings panel (`provider`, `base_url`, `model`, `api_key`, `temperature`, `max_tokens`, `system_prompt`) with local persistence.
+3. Built-in chat session manager (new/delete/switch sessions) and multi-turn chat thread.
+4. Optional `recall_text` context injection before each chat turn.
+5. Optional auto-write of chat turns into memory (`write` route) for fast self-learning simulation.
+6. Connection settings in UI (`base_url`, `tenant_id`, `scope`, API key, bearer token, admin token).
+7. Scenario presets (`Support Triage`, `Sales Follow-up`, `Personal Assistant`) to seed tenant/scope + payload defaults.
+8. Per-operation payload editor with JSON templates and runtime variable injection (`\{\{last.decision_id\}\}`, `\{\{last.request_id\}\}`, `\{\{last.run_id\}\}`, `\{\{connection.*\}\}`).
+9. Step Flow orchestrator with editable flow JSON and reusable flow presets (including closed-loop policy flow).
+10. Per-step flow assertions (`expect_ok`, `require_decision_id`, `require_request_id`, `max_duration_ms`, `error_includes`) with optional stop-on-fail behavior.
+11. Latest flow report panel plus one-click export as JSON/Markdown.
+12. Share link export (`?pg=...`), request chain filters, response diff inspector, and session export.
 
 ## Run locally
 
