@@ -4,60 +4,73 @@ title: "Docs Index"
 
 # Docs Index
 
-This is the public documentation index for Aionis.
+This is the complete Aionis documentation catalog, organized by user journey.
 
-## Getting Started
+## 1) Start
 
-- [Documentation Home](./index.md)
-- [Aionis Onepage](./AIONIS_ONEPAGE.md)
-- [Aionis Onepage (Public)](./AIONIS_ONEPAGE_PUBLIC.md)
-- [5-Minute Developer Onboarding](./ONBOARDING_5MIN.md)
-- [Embedding Setup](./EMBEDDING_SETUP.md)
-- [Architecture](./ARCHITECTURE.md)
+1. [Documentation Home](./index.md)
+2. [Get Started](./GET_STARTED.md)
+3. [Core Differentiators](./CORE_DIFFERENTIATORS.md)
+4. [5-Minute Onboarding](./ONBOARDING_5MIN.md)
+5. [Embedding Setup](./EMBEDDING_SETUP.md)
 
-## API & SDK
+## 2) Build Memory
 
-- [API Contract](./API_CONTRACT.md)
-- [SDK Guide](./SDK.md)
-- [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)
-- [Planner Context](./PLANNER_CONTEXT.md)
-- [Rule Lifecycle](./RULE_LIFECYCLE.md)
-- [Execution Loop Gate](./EXECUTION_LOOP_GATE.md)
-- [Policy Adaptation Gate](./POLICY_ADAPTATION_GATE.md)
+1. [Build Memory](./BUILD_MEMORY.md)
+2. [Playground](./PLAYGROUND.md)
+3. [Planner Context](./PLANNER_CONTEXT.md)
+4. [Architecture](./ARCHITECTURE.md)
 
-## Deploy & Ops
+## 3) Control & Policy
 
-- [Operator Runbook](./OPERATOR_RUNBOOK.md)
-- [Ops Console](./OPS_CONSOLE.md)
-- [Playground](./PLAYGROUND.md)
-- [Standalone to HA Runbook](./STANDALONE_TO_HA_RUNBOOK.md)
-- [HA Failure Drill Template](./HA_FAILURE_DRILL_TEMPLATE.md)
-- [HA Failure Drill Sample](./HA_FAILURE_DRILL_SAMPLE.md)
-- [Prod Go-Live Gate](./PROD_GO_LIVE_GATE.md)
-- [Production Core Gate](./PRODUCTION_CORE_GATE.md)
-- [Two-Phase Migrations](./MIGRATIONS_TWO_PHASE.md)
-- [Docker Release Runbook](./DOCKER_RELEASE.md)
-- [E2E Regression Checklist](./E2E_REGRESSION.md)
+1. [Control & Policy](./CONTROL_POLICY.md)
+2. [Rule Lifecycle](./RULE_LIFECYCLE.md)
+3. [Execution Loop Gate](./EXECUTION_LOOP_GATE.md)
+4. [Policy Adaptation Gate](./POLICY_ADAPTATION_GATE.md)
+5. [Rule Promotion Governance](./RULE_PROMOTION_GOVERNANCE.md)
+6. [Rule Conflict Report](./RULE_CONFLICT_REPORT.md)
 
-## Performance & Evidence
+## 4) Operate
 
-- [Benchmark Snapshot (Public)](./BENCHMARK_SNAPSHOT_PUBLIC.md)
-- [Performance Baseline](./PERFORMANCE_BASELINE.md)
-- [Recall Tail Latency Plan](./RECALL_TAIL_LATENCY_PLAN.md)
-- [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
-- [AionisBench v0.1](./AIONIS_BENCH_V01.md)
-- [Differentiation Evidence](./DIFFERENTIATION_EVIDENCE.md)
-- [Weekly Evidence Template](./EVIDENCE_WEEKLY_TEMPLATE.md)
+1. [Operate](./OPERATE.md)
+2. [Operator Runbook](./OPERATOR_RUNBOOK.md)
+3. [Ops Console](./OPS_CONSOLE.md)
+4. [Production Core Gate](./PRODUCTION_CORE_GATE.md)
+5. [Prod Go-Live Gate](./PROD_GO_LIVE_GATE.md)
+6. [E2E Regression Checklist](./E2E_REGRESSION.md)
+7. [Standalone to HA Runbook](./STANDALONE_TO_HA_RUNBOOK.md)
+8. [HA Failure Drill Template](./HA_FAILURE_DRILL_TEMPLATE.md)
+9. [HA Failure Drill Sample](./HA_FAILURE_DRILL_SAMPLE.md)
 
-## Integrations
+## 5) Integrations
 
-- [MCP Integration](./MCP_INTEGRATION.md)
-- [OpenWork (OpenCode Desktop)](./OPENWORK_INTEGRATION.md)
-- [LangGraph](./LANGGRAPH_INTEGRATION.md)
+1. [Integrations Overview](./INTEGRATIONS.md)
+2. [MCP Integration](./MCP_INTEGRATION.md)
+3. [OpenWork (OpenCode Desktop)](./OPENWORK_INTEGRATION.md)
+4. [LangGraph](./LANGGRAPH_INTEGRATION.md)
 
-## Scope Notes
+## 6) Reference
 
-This documentation set covers product capabilities, API/SDK contracts, and operations/evidence gates.
+1. [Reference](./REFERENCE.md)
+2. [API Contract](./API_CONTRACT.md)
+3. [SDK Guide](./SDK.md)
+4. [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)
+
+## 7) Benchmarks & Evidence
+
+1. [Benchmarks](./BENCHMARKS.md)
+2. [Benchmark Snapshot (Public)](./BENCHMARK_SNAPSHOT_PUBLIC.md)
+3. [Performance Baseline](./PERFORMANCE_BASELINE.md)
+4. [AionisBench v0.1](./AIONIS_BENCH_V01.md)
+5. [Differentiation Evidence](./DIFFERENTIATION_EVIDENCE.md)
+6. [Governance Weekly Report](./GOVERNANCE_WEEKLY_REPORT.md)
+
+## Website & Tooling
+
+1. Publish workflow: `.github/workflows/docs-pages.yml`
+2. VitePress config: `docs/.vitepress/config.ts`
+3. Theme override: `docs/.vitepress/theme/custom.css`
+4. URL: `https://doc.aionisos.com/`
 
 ## Maintenance
 
@@ -65,17 +78,3 @@ This documentation set covers product capabilities, API/SDK contracts, and opera
 npm --prefix docs-site run dev
 npm run docs:check
 ```
-
-## Docs Website (GitHub Pages)
-
-- Publish workflow: `.github/workflows/docs-pages.yml`
-- VitePress config: `docs/.vitepress/config.ts`
-- Theme override: `docs/.vitepress/theme/custom.css`
-- URL: `https://doc.aionisos.com/`
-
-## Public Release Baseline
-
-1. Core release tag: `v0.2.2` (latest tagged release)
-2. npm SDK: `0.2.2`
-3. PyPI SDK: `0.2.2`
-4. Docker line: `v0.2.2` (main), `standalone-v0.2.2` (standalone)
