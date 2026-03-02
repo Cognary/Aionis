@@ -38,7 +38,7 @@ a {
 }
 
 .shell {
-  width: min(1600px, 98vw);
+  width: min(1700px, 99vw);
   margin: 0 auto;
 }
 
@@ -52,26 +52,63 @@ a {
 }
 
 .topbar-inner {
-  min-height: 64px;
-  display: flex;
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  gap: 0.9rem;
+}
+
+.topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.62rem;
+}
+
+.brand-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #bfc2d3, #6d728a);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
 }
 
 .eyebrow {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   color: var(--accent);
   font-family: var(--font-mono), monospace;
 }
 
-.title {
-  margin: 0.16rem 0 0;
-  font-size: 1rem;
-  color: #d7d7de;
+.title-en {
+  margin: 0.08rem 0 0;
+  font-size: 0.96rem;
+  font-weight: 600;
+  color: #e1e1ea;
+}
+
+.title-zh {
+  margin: 0.05rem 0 0;
+  font-size: 0.72rem;
+  color: #a9a9b4;
+}
+
+.topbar-center {
+  display: flex;
+  justify-content: center;
+}
+
+.topbar-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.22rem 0.62rem;
+  font-size: 0.69rem;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .top-links {
@@ -88,8 +125,8 @@ a {
 }
 
 main {
-  height: calc(100vh - 64px);
-  padding: 0.8rem 0;
+  height: calc(100vh - 76px);
+  padding: 0;
 }
 
 h1,
@@ -145,13 +182,13 @@ summary {
   height: 100%;
   display: grid;
   grid-template-columns: 280px minmax(560px, 1fr) 380px;
-  gap: 0.75rem;
+  gap: 0;
 }
 
 .oa-pane {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   min-height: 0;
 }
 
@@ -171,8 +208,16 @@ summary {
   gap: 0;
 }
 
+.oa-left {
+  border-right: 1px solid var(--border-soft);
+}
+
+.oa-right {
+  border-left: 1px solid var(--border-soft);
+}
+
 .oa-brand {
-  padding: 0.85rem 0.95rem;
+  padding: 1rem 1rem 0.85rem;
   border-bottom: 1px solid var(--border-soft);
 }
 
@@ -196,7 +241,7 @@ summary {
 }
 
 .oa-section {
-  padding: 0.85rem 0.95rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--border-soft);
   display: grid;
   gap: 0.55rem;
@@ -348,9 +393,9 @@ button.danger {
 .chain-item {
   width: 100%;
   text-align: left;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #1b1b1f;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -360,8 +405,8 @@ button.danger {
 
 .session-item.active,
 .chain-item.active {
-  border-color: #4a4a54;
-  background: #232328;
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .filters-row {
@@ -376,7 +421,7 @@ button.danger {
 }
 
 .oa-center-head {
-  padding: 0.8rem 0.95rem;
+  padding: 0.9rem 1rem 0.75rem;
   border-bottom: 1px solid var(--border-soft);
   display: flex;
   align-items: center;
@@ -385,7 +430,7 @@ button.danger {
 }
 
 .oa-metrics {
-  padding: 0.5rem 0.95rem;
+  padding: 0.45rem 1rem 0.6rem;
   border-bottom: 1px solid var(--border-soft);
   display: flex;
   flex-wrap: wrap;
@@ -404,7 +449,7 @@ button.danger {
 .oa-chat-surface {
   min-height: 0;
   overflow: auto;
-  padding: 0.85rem 0.95rem;
+  padding: 0.75rem 1rem 0.8rem;
   display: grid;
   align-content: start;
   gap: 0.75rem;
@@ -419,16 +464,21 @@ button.danger {
 }
 
 .chat-bubble {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.58rem;
-  background: #1b1b1f;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 0.56rem 0.6rem;
+  background: transparent;
   display: grid;
   gap: 0.32rem;
 }
 
 .chat-bubble.user {
-  background: #25252a;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+}
+
+.chat-bubble.assistant {
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .chat-meta {
@@ -448,9 +498,9 @@ button.danger {
 }
 
 .oa-inspector {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-soft);
   border-radius: 10px;
-  background: #1b1b1f;
+  background: rgba(255, 255, 255, 0.01);
   padding: 0.55rem;
 }
 
@@ -470,7 +520,7 @@ details {
   border: 1px solid var(--border-soft);
   border-radius: 9px;
   padding: 0.45rem;
-  background: #161619;
+  background: rgba(0, 0, 0, 0.12);
 }
 
 pre {
@@ -499,10 +549,10 @@ pre {
 
 .composer {
   border-top: 1px solid var(--border-soft);
-  padding: 0.8rem 0.95rem;
+  padding: 0.75rem 1rem 0.95rem;
   display: grid;
   gap: 0.48rem;
-  background: #171719;
+  background: transparent;
 }
 
 .composer textarea {
@@ -530,14 +580,14 @@ pre {
 }
 
 .oa-tabs {
-  padding: 0.75rem;
+  padding: 0.75rem 1rem 0.65rem;
   border-bottom: 1px solid var(--border-soft);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.4rem;
   position: sticky;
   top: 0;
-  background: var(--panel);
+  background: var(--bg);
   z-index: 3;
 }
 
@@ -558,16 +608,16 @@ pre {
 }
 
 .oa-tab-panel {
-  padding: 0.85rem 0.95rem;
+  padding: 0.85rem 1rem 1.1rem;
   display: grid;
   gap: 0.6rem;
 }
 
 .oa-settings-summary {
-  padding: 0.48rem 0.95rem;
+  padding: 0.48rem 1rem;
   border-bottom: 1px solid var(--border-soft);
   color: var(--muted);
-  background: #151518;
+  background: transparent;
 }
 
 ::-webkit-scrollbar {
@@ -643,11 +693,24 @@ pre {
 @media (max-width: 1180px) {
   main {
     height: auto;
+    padding: 0.5rem 0;
   }
 
   .oa-layout {
     grid-template-columns: 1fr;
     height: auto;
+    gap: 0.8rem;
+  }
+
+  .oa-pane {
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    background: var(--panel);
+  }
+
+  .oa-left,
+  .oa-right {
+    border: none;
   }
 
   .oa-left,
@@ -673,9 +736,14 @@ pre {
 
 @media (max-width: 760px) {
   .topbar-inner {
-    flex-wrap: wrap;
-    min-height: 62px;
+    grid-template-columns: 1fr;
+    min-height: 68px;
     padding: 0.52rem 0;
+    gap: 0.5rem;
+  }
+
+  .topbar-center {
+    justify-content: flex-start;
   }
 
   .top-links {

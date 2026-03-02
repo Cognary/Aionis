@@ -29,9 +29,16 @@ export default function RootLayout({ children }) {
         <div className="ambient" aria-hidden="true" />
         <header className="topbar">
           <div className="shell topbar-inner">
-            <div>
-              <p className="eyebrow">Aionis Playground</p>
-              <p className="title">Memory + Policy Loop Lab / 记忆与策略实验台</p>
+            <div className="topbar-brand">
+              <span className="brand-dot" aria-hidden="true" />
+              <div>
+                <p className="eyebrow">Aionis Playground</p>
+                <p className="title-en">Memory + Policy Loop Lab</p>
+                <p className="title-zh">记忆与策略实验台</p>
+              </div>
+            </div>
+            <div className="topbar-center">
+              <span className="topbar-pill">Product Console / 产品控制台</span>
             </div>
             <div className="top-links">
               <a href="https://doc.aionisos.com" target="_blank" rel="noreferrer">Docs</a>

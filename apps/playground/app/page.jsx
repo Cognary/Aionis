@@ -28,6 +28,7 @@ const CHAT_SESSION_ACTIVE_KEY = "aionis_playground_chat_active_session_v1";
 const PLAYGROUND_SETTINGS_TAB_STORAGE_KEY = "aionis_playground_settings_tab_v1";
 const PLAYGROUND_LANGUAGE_STORAGE_KEY = "aionis_playground_language_v1";
 const PLAYGROUND_LEFT_PANELS_STORAGE_KEY = "aionis_playground_left_panels_v1";
+const PLAYGROUND_RUNTIME_PREFS_STORAGE_KEY = "aionis_playground_runtime_prefs_v1";
 const DEFAULT_CHAT_CONFIG = {
   provider: "openai_compatible",
   base_url: "https://api.openai.com/v1",
@@ -70,6 +71,9 @@ const I18N = {
     toggle_panel: "Toggle panel",
     settings_summary: "Model {model} · {tenant}/{scope} · {flow}",
     jump_latest: "Latest",
+    confirm_delete_session: "Delete current session?",
+    confirm_clear_chat: "Clear all messages in current session?",
+    confirm_clear_history: "Clear all request history?",
     scenario: "Scenario",
     scenario_preset: "scenario preset",
     apply_preset: "Apply preset",
@@ -182,6 +186,9 @@ const I18N = {
     toggle_panel: "折叠/展开面板",
     settings_summary: "模型 {model} · {tenant}/{scope} · {flow}",
     jump_latest: "最新",
+    confirm_delete_session: "确定删除当前会话吗？",
+    confirm_clear_chat: "确定清空当前会话的所有消息吗？",
+    confirm_clear_history: "确定清空全部请求历史吗？",
     scenario: "场景",
     scenario_preset: "场景预设",
     apply_preset: "应用预设",
@@ -875,6 +882,7 @@ export default function PlaygroundPage() {
 
   function removeActiveSession() {
     if (!activeChatSession) return;
+    if (typeof window !== "undefined" && !window.confirm(tr("confirm_delete_session"))) return;
     setChatSessions((prev) => {
       if (prev.length <= 1) return prev;
       const next = prev.filter((item) => item.id !== activeChatSession.id);
@@ -893,6 +901,19 @@ export default function PlaygroundPage() {
     }));
   }
 
+  function clearAllHistory() {
+    if (typeof window !== "undefined" && !window.confirm(tr("confirm_clear_history"))) return;
+    setHistory([]);
+    setActiveId("");
+    setErrorMessage("");
+    setFlowError("");
+    setFlowRunNote("");
+    setFlowReport(null);
+    setFlowReportNote("");
+    setInspectNote("");
+    setShareNote(tr("history_cleared"));
+  }
+
   function renameActiveSession(nextTitle) {
     if (!activeChatSession) return;
     const normalized = makeSessionTitle(nextTitle, tr("untitled_chat"));
@@ -905,6 +926,7 @@ export default function PlaygroundPage() {
 
   function clearActiveSessionMessages() {
     if (!activeChatSession || chatRunning) return;
+    if (typeof window !== "undefined" && !window.confirm(tr("confirm_clear_chat"))) return;
     updateSessionById(activeChatSession.id, (session) => ({
       ...session,
       messages: []
@@ -1428,6 +1450,47 @@ export default function PlaygroundPage() {
       // ignore local storage read errors
     }
 
+    try {
+      const rawPrefs = window.localStorage.getItem(PLAYGROUND_RUNTIME_PREFS_STORAGE_KEY);
+      if (rawPrefs) {
+        const parsed = JSON.parse(rawPrefs);
+        if (parsed && typeof parsed === "object") {
+          if (typeof parsed.scenario_preset === "string" && SCENARIO_PRESET_MAP[parsed.scenario_preset]) {
+            setScenarioPreset(parsed.scenario_preset);
+          }
+          const nextScenario = typeof parsed.scenario_preset === "string" && SCENARIO_PRESET_MAP[parsed.scenario_preset]
+            ? parsed.scenario_preset
+            : DEFAULT_SCENARIO;
+          if (typeof parsed.operation === "string" && OPERATION_MAP[parsed.operation]) {
+            const mergedConnection = {
+              ...DEFAULT_CONNECTION,
+              ...(parsed.connection || {})
+            };
+            setOperation(parsed.operation);
+            setPayloadText(pretty(getOperationTemplate(parsed.operation, mergedConnection, nextScenario)));
+          }
+          if (typeof parsed.flow_preset === "string" && FLOW_PRESET_MAP[parsed.flow_preset]) {
+            setFlowPreset(parsed.flow_preset);
+            setFlowText(makeFlowTextFromPreset(parsed.flow_preset));
+          }
+          if (typeof parsed.flow_stop_on_http_fail === "boolean") setFlowStopOnHttpFail(parsed.flow_stop_on_http_fail);
+          if (typeof parsed.flow_stop_on_assert_fail === "boolean") setFlowStopOnAssertFail(parsed.flow_stop_on_assert_fail);
+          if (typeof parsed.chat_use_recall === "boolean") setChatUseRecallContext(parsed.chat_use_recall);
+          if (typeof parsed.chat_auto_write === "boolean") setChatAutoWriteMemory(parsed.chat_auto_write);
+          if (parsed.connection && typeof parsed.connection === "object") {
+            setConnection((prev) => ({
+              ...prev,
+              base_url: String(parsed.connection.base_url || prev.base_url),
+              tenant_id: String(parsed.connection.tenant_id || prev.tenant_id),
+              scope: String(parsed.connection.scope || prev.scope)
+            }));
+          }
+        }
+      }
+    } catch {
+      // ignore local storage read errors
+    }
+
     setActiveSessionId((prev) => prev || chatSessions[0]?.id || "");
   }, []);
 
@@ -1455,6 +1518,36 @@ export default function PlaygroundPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(PLAYGROUND_LEFT_PANELS_STORAGE_KEY, JSON.stringify(leftPanels));
   }, [leftPanels]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const payload = {
+      scenario_preset: scenarioPreset,
+      operation,
+      flow_preset: flowPreset,
+      flow_stop_on_http_fail: flowStopOnHttpFail,
+      flow_stop_on_assert_fail: flowStopOnAssertFail,
+      chat_use_recall: chatUseRecallContext,
+      chat_auto_write: chatAutoWriteMemory,
+      connection: {
+        base_url: connection.base_url,
+        tenant_id: connection.tenant_id,
+        scope: connection.scope
+      }
+    };
+    window.localStorage.setItem(PLAYGROUND_RUNTIME_PREFS_STORAGE_KEY, JSON.stringify(payload));
+  }, [
+    scenarioPreset,
+    operation,
+    flowPreset,
+    flowStopOnHttpFail,
+    flowStopOnAssertFail,
+    chatUseRecallContext,
+    chatAutoWriteMemory,
+    connection.base_url,
+    connection.tenant_id,
+    connection.scope
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2028,17 +2121,7 @@ export default function PlaygroundPage() {
               <button
                 type="button"
                 className="ghost danger"
-                onClick={() => {
-                  setHistory([]);
-                  setActiveId("");
-                  setErrorMessage("");
-                  setFlowError("");
-                  setFlowRunNote("");
-                  setFlowReport(null);
-                  setFlowReportNote("");
-                  setInspectNote("");
-                  setShareNote(tr("history_cleared"));
-                }}
+                onClick={clearAllHistory}
                 disabled={history.length === 0 || running || chatRunning}
               >
                 {tr("clear_history")}

@@ -27,13 +27,15 @@ The playground focuses on these routes:
 5. Optional `recall_text` context injection before each chat turn.
 6. Optional auto-write of chat turns into memory (`write` route) for fast self-learning simulation.
 7. LLM one-click connection test from settings tab.
-8. Connection settings in UI (`base_url`, `tenant_id`, `scope`, API key, bearer token, admin token).
-9. Scenario presets (`Support Triage`, `Sales Follow-up`, `Personal Assistant`) to seed tenant/scope + payload defaults.
-10. Per-operation payload editor with JSON templates and runtime variable injection (`\{\{last.decision_id\}\}`, `\{\{last.request_id\}\}`, `\{\{last.run_id\}\}`, `\{\{connection.*\}\}`).
-11. Step Flow orchestrator with editable flow JSON and reusable flow presets (including closed-loop policy flow).
-12. Per-step flow assertions (`expect_ok`, `require_decision_id`, `require_request_id`, `max_duration_ms`, `error_includes`) with optional stop-on-fail behavior.
-13. Latest flow report panel plus one-click export as JSON/Markdown.
-14. Share link export (`?pg=...`), request chain filters, response diff inspector, and session export.
+8. Destructive actions (`delete session`, `clear chat`, `clear history`) include confirmation prompts.
+9. Runtime preferences (scenario/operation/flow + non-secret connection fields + chat toggles) persist across reloads.
+10. Connection settings in UI (`base_url`, `tenant_id`, `scope`, API key, bearer token, admin token).
+11. Scenario presets (`Support Triage`, `Sales Follow-up`, `Personal Assistant`) to seed tenant/scope + payload defaults.
+12. Per-operation payload editor with JSON templates and runtime variable injection (`\{\{last.decision_id\}\}`, `\{\{last.request_id\}\}`, `\{\{last.run_id\}\}`, `\{\{connection.*\}\}`).
+13. Step Flow orchestrator with editable flow JSON and reusable flow presets (including closed-loop policy flow).
+14. Per-step flow assertions (`expect_ok`, `require_decision_id`, `require_request_id`, `max_duration_ms`, `error_includes`) with optional stop-on-fail behavior.
+15. Latest flow report panel plus one-click export as JSON/Markdown.
+16. Share link export (`?pg=...`), request chain filters, response diff inspector, and session export.
 
 ## Run locally
 
