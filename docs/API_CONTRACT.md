@@ -477,10 +477,12 @@ Profiles:
 **Response**
 - `tenant_id: string`
 - `scope: string`
-- `seeds: { id,type,title,text_summary,tier,salience,confidence,similarity }[]`
-- `ranked: { id, activation, score }[]` (bounded by `ranked_limit`)
+- `seeds: { id,uri?,type,title,text_summary,tier,salience,confidence,similarity }[]`
+- `ranked: { id,uri?, activation, score }[]` (bounded by `ranked_limit`)
 - `subgraph: { nodes: NodeDTO[], edges: EdgeDTO[] }`
 - `context: { text: string, items: any[], citations: any[] }`
+  - node-backed `items[]` include `uri` when node type is URI-addressable
+  - `citations[]` include `node_id`, `uri?`, `commit_id`, `raw_ref`, `evidence_ref`
 - `rules?: { scope, considered, matched, skipped_invalid_then, invalid_then_sample, applied }` (only when `rules_context` is provided)
 - `debug?: { neighborhood_counts: { nodes:number, edges:number }, embeddings?: DebugEmbeddingDTO[], context_compaction?: { profile, token_budget, char_budget, applied, before_chars, after_chars, before_est_tokens, after_est_tokens, dropped_lines, dropped_by_section } }` (only when `return_debug=true`)
 - `trajectory?: { strategy, layers, budgets, pruned_reasons }` (stage-level explain block for L0/L1/L2 flow)
@@ -503,7 +505,7 @@ Profiles:
     - `context_empty_after_compaction_or_missing_text`
 
 **NodeDTO (whitelist)**
-- Always: `id`, `type`, `title`, `text_summary`
+- Always: `id`, `uri?`, `type`, `title`, `text_summary`
 - For topics: `topic_state?`, `member_count?`
 - For compression summaries:
   - `type="concept"` with `slots.summary_kind="compression_rollup"` (only if `include_slots=true`)

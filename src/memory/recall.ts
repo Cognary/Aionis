@@ -15,6 +15,7 @@ import { buildContext } from "./context.js";
 import { sha256Hex } from "../util/crypto.js";
 import { badRequest } from "../util/http.js";
 import { resolveTenantScope } from "./tenant.js";
+import { buildAionisUri } from "./uri.js";
 
 export type RecallAuth = {
   allow_debug_embeddings: boolean;
@@ -66,6 +67,7 @@ function pickSlotsPreview(slots: unknown, maxKeys: number): Record<string, unkno
 
 type NodeDTO = {
   id: string;
+  uri?: string;
   type: string;
   title: string | null;
   text_summary: string | null;
@@ -97,6 +99,8 @@ type EdgeDTO = {
   weight: number;
   commit_id?: string | null;
 };
+
+const URI_NODE_TYPES = new Set(["event", "entity", "topic", "rule", "evidence", "concept", "procedure", "self_model"]);
 
 // Very small spreading-activation MVP: 1-2 iterations, bounded by the neighborhood we fetched.
 function spreadActivation(seeds: RecallCandidate[], nodes: Map<string, NodeRow>, edges: EdgeRow[], hops: number) {
@@ -169,6 +173,15 @@ export async function memoryRecallParsed(
     { defaultScope, defaultTenantId },
   );
   const scope = tenancy.scope_key;
+  const buildNodeUri = (id: string, type: string): string | null => {
+    if (!URI_NODE_TYPES.has(type)) return null;
+    return buildAionisUri({
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      type,
+      id,
+    });
+  };
   const consumerAgentId = parsed.consumer_agent_id?.trim() || null;
   const consumerTeamId = parsed.consumer_team_id?.trim() || null;
   const stage1ExactFallbackOnEmpty = options?.stage1_exact_fallback_on_empty ?? true;
@@ -222,13 +235,19 @@ export async function memoryRecallParsed(
     stage1Mode = "exact_fallback";
   }
 
+  const outSeeds = seeds.map((s) => {
+    const uri = buildNodeUri(s.id, s.type);
+    if (!uri) return s;
+    return { ...s, uri };
+  });
+
   const seedIds = seeds.map((s) => s.id);
 
   if (seedIds.length === 0) {
     return {
       scope: tenancy.scope,
       tenant_id: tenancy.tenant_id,
-      seeds: [],
+      seeds: outSeeds,
       subgraph: { nodes: [], edges: [] },
       ranked: [],
       context: { text: "", items: [], citations: [] },
@@ -326,7 +345,13 @@ export async function memoryRecallParsed(
 
   // Score via spreading activation.
   const rankedAll = spreadActivation(seeds, nodeMapForScoring, edgesForScoringReady, parsed.neighborhood_hops);
-  const ranked = rankedAll.slice(0, parsed.ranked_limit);
+  const ranked = rankedAll.slice(0, parsed.ranked_limit).map((r) => {
+    const node = nodeMapAll.get(r.id);
+    if (!node) return r;
+    const uri = buildNodeUri(node.id, node.type);
+    if (!uri) return r;
+    return { ...r, uri };
+  });
 
   // Build the returned subgraph under hard caps (contract):
   // - nodes: max_nodes (always)
@@ -410,8 +435,10 @@ export async function memoryRecallParsed(
     nodeMapAll,
     ruleDefMap,
     {
-    context_token_budget: parsed.context_token_budget,
-    context_char_budget: parsed.context_char_budget,
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      context_token_budget: parsed.context_token_budget,
+      context_char_budget: parsed.context_char_budget,
       context_compaction_profile: parsed.context_compaction_profile,
     },
   );
@@ -424,6 +451,8 @@ export async function memoryRecallParsed(
       title: n.title,
       text_summary: n.text_summary,
     };
+    const uri = buildNodeUri(n.id, n.type);
+    if (uri) dto.uri = uri;
 
     if (n.type === "topic") {
       dto.topic_state = n.topic_state;
@@ -541,7 +570,7 @@ export async function memoryRecallParsed(
   return {
     scope: tenancy.scope,
     tenant_id: tenancy.tenant_id,
-    seeds,
+    seeds: outSeeds,
     subgraph: { nodes: outNodes, edges: outEdges },
     ranked,
     context: { text: context_text, items: context_items, citations },

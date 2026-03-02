@@ -160,11 +160,82 @@ class ContextAssembleInput(MemoryRecallTextInput, total=False):
     context_layers: ContextLayerConfigInput
 
 
+class RecallSeed(TypedDict, total=False):
+    id: str
+    uri: str
+    type: str
+    title: Optional[str]
+    text_summary: Optional[str]
+    tier: str
+    salience: float
+    confidence: float
+    similarity: float
+
+
+class RecallSubgraphNode(TypedDict, total=False):
+    id: str
+    uri: str
+    type: str
+    title: Optional[str]
+    text_summary: Optional[str]
+
+
+class RecallSubgraphEdge(TypedDict, total=False):
+    from_id: str
+    to_id: str
+    type: str
+    weight: float
+
+
+class RecallRankedItem(TypedDict, total=False):
+    id: str
+    uri: str
+    activation: float
+    score: float
+
+
+class RecallContextItem(TypedDict, total=False):
+    kind: str
+    node_id: str
+    uri: str
+
+
+class RecallCitation(TypedDict, total=False):
+    node_id: str
+    uri: str
+    commit_id: Optional[str]
+    raw_ref: Optional[str]
+    evidence_ref: Optional[str]
+
+
+class RecallSubgraph(TypedDict, total=False):
+    nodes: List[RecallSubgraphNode]
+    edges: List[RecallSubgraphEdge]
+
+
+class RecallContext(TypedDict, total=False):
+    text: str
+    items: List[RecallContextItem]
+    citations: List[RecallCitation]
+
+
+class MemoryRecallResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    seeds: List[RecallSeed]
+    subgraph: RecallSubgraph
+    ranked: List[RecallRankedItem]
+    context: RecallContext
+    debug: Dict[str, Any]
+    rules: Dict[str, Any]
+    query: Dict[str, Any]
+
+
 class ContextAssembleResponse(TypedDict, total=False):
     tenant_id: str
     scope: str
     query: Dict[str, Any]
-    recall: Dict[str, Any]
+    recall: MemoryRecallResponse
     rules: Dict[str, Any]
     tools: Dict[str, Any]
     layered_context: Dict[str, Any]

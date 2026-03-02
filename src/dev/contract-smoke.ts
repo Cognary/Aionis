@@ -1757,9 +1757,22 @@ async function run() {
   assert.equal(out.subgraph.nodes.length, 2);
   for (const n of out.subgraph.nodes) {
     assert.ok(!("embedding" in (n as any)));
-    assertSubset(keys(n), ["id", "type", "title", "text_summary", "topic_state", "member_count"].filter(Boolean));
+    assertSubset(keys(n), ["id", "uri", "type", "title", "text_summary", "topic_state", "member_count"].filter(Boolean));
+    assert.ok(typeof (n as any).uri === "string" && String((n as any).uri).startsWith("aionis://"));
   }
   assertSubset(keys(out.subgraph.edges[0]), ["from_id", "to_id", "type", "weight"]);
+  for (const s of out.seeds as any[]) {
+    assert.ok(typeof s.uri === "string" && String(s.uri).startsWith("aionis://"));
+  }
+  for (const r of out.ranked as any[]) {
+    assert.ok(typeof r.uri === "string" && String(r.uri).startsWith("aionis://"));
+  }
+  for (const item of out.context.items as any[]) {
+    assert.ok(typeof item.uri === "string" && String(item.uri).startsWith("aionis://"));
+  }
+  for (const c of out.context.citations as any[]) {
+    assert.ok(typeof c.uri === "string" && String(c.uri).startsWith("aionis://"));
+  }
 
   // Recall should stay functional even when backend declares audit_insert capability unavailable.
   const outNoAudit = await memoryRecallParsed(

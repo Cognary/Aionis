@@ -89,9 +89,14 @@ function collectLayerCandidates(recall: any, rules: any, tools: any): Record<Con
     const kind = String((item as any)?.kind || "").trim().toLowerCase();
     const layer = classifyRecallItemKind(kind);
     const nodeId = String((item as any)?.node_id || "").trim();
+    const uri = String((item as any)?.uri || "").trim();
     const summary = firstText(item);
     if (!summary) continue;
-    addLine(out[layer], nodeId ? `${summary} (node:${nodeId})` : summary);
+    if (uri) {
+      addLine(out[layer], `${summary} (uri:${uri})`);
+    } else {
+      addLine(out[layer], nodeId ? `${summary} (node:${nodeId})` : summary);
+    }
   }
 
   const activeRules = Array.isArray(rules?.active) ? rules.active : [];
@@ -121,9 +126,10 @@ function collectLayerCandidates(recall: any, rules: any, tools: any): Record<Con
   const citations = Array.isArray(recall?.context?.citations) ? recall.context.citations : [];
   for (const c of citations.slice(0, 64)) {
     const nodeId = String((c as any)?.node_id || "").trim();
+    const uri = String((c as any)?.uri || "").trim();
     const commitId = String((c as any)?.commit_id || "").trim();
-    if (!nodeId && !commitId) continue;
-    addLine(out.citations, `citation node=${nodeId || "-"} commit=${commitId || "-"}`);
+    if (!nodeId && !uri && !commitId) continue;
+    addLine(out.citations, `citation uri=${uri || "-"} node=${nodeId || "-"} commit=${commitId || "-"}`);
   }
 
   return out;

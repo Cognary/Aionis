@@ -603,19 +603,73 @@ export type HealthResponse = {
   [k: string]: unknown;
 };
 
+export type RecallSeedDto = {
+  id: string;
+  uri?: string;
+  type: string;
+  title: string | null;
+  text_summary: string | null;
+  tier: string;
+  salience: number;
+  confidence: number;
+  similarity: number;
+  [k: string]: unknown;
+};
+
+export type RecallSubgraphNodeDto = {
+  id: string;
+  uri?: string;
+  type: string;
+  title: string | null;
+  text_summary: string | null;
+  [k: string]: unknown;
+};
+
+export type RecallSubgraphEdgeDto = {
+  from_id: string;
+  to_id: string;
+  type: string;
+  weight: number;
+  [k: string]: unknown;
+};
+
+export type RecallRankedDto = {
+  id: string;
+  uri?: string;
+  activation: number;
+  score: number;
+  [k: string]: unknown;
+};
+
+export type RecallContextItemDto = {
+  kind: string;
+  node_id: string;
+  uri?: string;
+  [k: string]: unknown;
+};
+
+export type RecallCitationDto = {
+  node_id: string;
+  uri?: string;
+  commit_id?: string | null;
+  raw_ref?: string | null;
+  evidence_ref?: string | null;
+  [k: string]: unknown;
+};
+
 export type MemoryRecallResponse = {
   tenant_id?: string;
   scope: string;
-  seeds: Array<Record<string, unknown>>;
+  seeds: RecallSeedDto[];
   subgraph: {
-    nodes: Array<Record<string, unknown>>;
-    edges: Array<Record<string, unknown>>;
+    nodes: RecallSubgraphNodeDto[];
+    edges: RecallSubgraphEdgeDto[];
   };
-  ranked: Array<Record<string, unknown>>;
+  ranked: RecallRankedDto[];
   context: {
     text: string;
-    items: Array<Record<string, unknown>>;
-    citations: Array<Record<string, unknown>>;
+    items: RecallContextItemDto[];
+    citations: RecallCitationDto[];
   };
   debug?: Record<string, unknown>;
   rules?: Record<string, unknown>;

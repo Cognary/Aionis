@@ -1,3 +1,5 @@
+import { buildAionisUri } from "./uri.js";
+
 type RankedItem = { id: string; activation: number; score: number };
 
 type NodeRow = {
@@ -28,11 +30,12 @@ type RuleDefRow = {
 };
 
 export type ContextItem =
-  | { kind: "topic" | "concept"; node_id: string; title?: string; summary?: string; commit_id?: string | null }
-  | { kind: "entity"; node_id: string; title?: string; summary?: string; commit_id?: string | null }
+  | { kind: "topic" | "concept"; node_id: string; uri?: string; title?: string; summary?: string; commit_id?: string | null }
+  | { kind: "entity"; node_id: string; uri?: string; title?: string; summary?: string; commit_id?: string | null }
   | {
       kind: "event" | "evidence";
       node_id: string;
+      uri?: string;
       summary?: string;
       raw_ref?: string | null;
       evidence_ref?: string | null;
@@ -41,6 +44,7 @@ export type ContextItem =
   | {
       kind: "rule";
       node_id: string;
+      uri?: string;
       state?: string;
       rule_scope?: string;
       target_agent_id?: string | null;
@@ -54,9 +58,19 @@ export type ContextItem =
     };
 
 export type ContextBuildOptions = {
+  tenant_id?: string | null;
+  scope?: string | null;
   context_token_budget?: number | null;
   context_char_budget?: number | null;
   context_compaction_profile?: ContextCompactionProfile | null;
+};
+
+type ContextCitation = {
+  node_id: string;
+  uri?: string;
+  commit_id: string | null;
+  raw_ref: string | null;
+  evidence_ref: string | null;
 };
 
 type SectionId = "topics" | "entities" | "events" | "rules";
@@ -160,6 +174,16 @@ function resolveCompactionProfile(opts?: ContextBuildOptions): ContextCompaction
   return opts?.context_compaction_profile === "aggressive" ? "aggressive" : "balanced";
 }
 
+const URI_NODE_TYPES = new Set(["event", "entity", "topic", "rule", "evidence", "concept", "procedure", "self_model"]);
+
+function buildNodeUri(node: Pick<NodeRow, "id" | "type">, options?: ContextBuildOptions): string | undefined {
+  const tenantId = String(options?.tenant_id ?? "").trim();
+  const scope = String(options?.scope ?? "").trim();
+  if (!tenantId || !scope) return undefined;
+  if (!URI_NODE_TYPES.has(node.type)) return undefined;
+  return buildAionisUri({ tenant_id: tenantId, scope, type: node.type, id: node.id });
+}
+
 export function buildContext(
   ranked: RankedItem[],
   nodes: Map<string, NodeRow>,
@@ -168,12 +192,11 @@ export function buildContext(
 ): {
   text: string;
   items: ContextItem[];
-  citations: Array<{ node_id: string; commit_id: string | null; raw_ref: string | null; evidence_ref: string | null }>;
+  citations: ContextCitation[];
   compaction: ContextCompactionDiagnostics;
 } {
   const items: ContextItem[] = [];
-  const citations: Array<{ node_id: string; commit_id: string | null; raw_ref: string | null; evidence_ref: string | null }> =
-    [];
+  const citations: ContextCitation[] = [];
   const compactionProfile = resolveCompactionProfile(options);
   const policy = CONTEXT_COMPACTION_POLICY[compactionProfile];
   const tokenBudget = resolveContextTokenBudget(options);
@@ -199,19 +222,42 @@ export function buildContext(
   const pushCitation = (n: NodeRow) => {
     if (seen.has(n.id)) return;
     seen.add(n.id);
-    citations.push({ node_id: n.id, commit_id: n.commit_id ?? null, raw_ref: n.raw_ref ?? null, evidence_ref: n.evidence_ref ?? null });
+    const uri = buildNodeUri(n, options);
+    citations.push({
+      node_id: n.id,
+      ...(uri ? { uri } : {}),
+      commit_id: n.commit_id ?? null,
+      raw_ref: n.raw_ref ?? null,
+      evidence_ref: n.evidence_ref ?? null,
+    });
   };
 
   const topics = pickTop(ranked, nodes, new Set(["topic", "concept"]), 4);
   const hasCompressionConcept = topics.some(isCompressionConcept);
   for (const n of topics) {
-    items.push({ kind: n.type as "topic" | "concept", node_id: n.id, title: n.title ?? undefined, summary: n.text_summary ?? undefined, commit_id: n.commit_id });
+    const uri = buildNodeUri(n, options);
+    items.push({
+      kind: n.type as "topic" | "concept",
+      node_id: n.id,
+      ...(uri ? { uri } : {}),
+      title: n.title ?? undefined,
+      summary: n.text_summary ?? undefined,
+      commit_id: n.commit_id,
+    });
     pushCitation(n);
   }
 
   const entities = pickTop(ranked, nodes, new Set(["entity"]), 6);
   for (const n of entities) {
-    items.push({ kind: "entity", node_id: n.id, title: n.title ?? undefined, summary: n.text_summary ?? undefined, commit_id: n.commit_id });
+    const uri = buildNodeUri(n, options);
+    items.push({
+      kind: "entity",
+      node_id: n.id,
+      ...(uri ? { uri } : {}),
+      title: n.title ?? undefined,
+      summary: n.text_summary ?? undefined,
+      commit_id: n.commit_id,
+    });
     pushCitation(n);
   }
 
@@ -232,9 +278,11 @@ export function buildContext(
   const eventBase = hasCompressionConcept ? rawEvents.filter((n) => !compressionCited.has(n.id)).slice(0, 5) : rawEvents.slice(0, 10);
   const events = compactMode ? eventBase.slice(0, policy.max_event_lines_compact) : eventBase;
   for (const n of events) {
+    const uri = buildNodeUri(n, options);
     items.push({
       kind: n.type as "event" | "evidence",
       node_id: n.id,
+      ...(uri ? { uri } : {}),
       summary: n.text_summary ?? undefined,
       raw_ref: n.raw_ref,
       evidence_ref: n.evidence_ref,
@@ -246,9 +294,11 @@ export function buildContext(
   const rules = pickTop(ranked, nodes, new Set(["rule"]), 6);
   for (const n of rules) {
     const d = ruleDefs.get(n.id);
+    const uri = buildNodeUri(n, options);
     items.push({
       kind: "rule",
       node_id: n.id,
+      ...(uri ? { uri } : {}),
       state: d?.state,
       rule_scope: d?.rule_scope,
       target_agent_id: d?.target_agent_id,
