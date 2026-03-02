@@ -170,6 +170,16 @@ export type MemoryRecallInput = z.infer<typeof MemoryRecallRequest>;
 export type MemoryRecallTextInput = z.infer<typeof MemoryRecallTextRequest>;
 export type MemoryWriteInput = z.infer<typeof MemoryWriteRequest>;
 
+export const ContextLayerName = z.enum(["facts", "episodes", "rules", "decisions", "tools", "citations"]);
+
+export const ContextLayerConfig = z.object({
+  enabled: z.array(ContextLayerName).min(1).max(6).optional(),
+  char_budget_total: z.number().int().positive().max(200000).optional(),
+  char_budget_by_layer: z.record(z.string(), z.number().int().positive().max(200000)).optional(),
+  max_items_by_layer: z.record(z.string(), z.number().int().positive().max(500)).optional(),
+  include_merge_trace: z.boolean().default(true),
+});
+
 export const PlanningContextRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
@@ -200,9 +210,48 @@ export const PlanningContextRequest = z.object({
   context_token_budget: z.number().int().positive().max(256000).optional(),
   context_char_budget: z.number().int().positive().max(1000000).optional(),
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
+  // Experimental: return explicit multi-layer context assembly (facts/episodes/rules/decisions/tools/citations).
+  return_layered_context: z.boolean().default(false),
+  context_layers: ContextLayerConfig.optional(),
 });
 
+export type ContextLayerConfigInput = z.infer<typeof ContextLayerConfig>;
 export type PlanningContextInput = z.infer<typeof PlanningContextRequest>;
+
+export const ContextAssembleRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  query_text: z.string().min(1),
+  recall_strategy: z.enum(["local", "balanced", "global"]).optional(),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  context: z.any().optional(),
+  include_rules: z.boolean().default(true),
+  include_shadow: z.boolean().default(false),
+  rules_limit: z.number().int().positive().max(200).default(50),
+  tool_candidates: z.array(z.string().min(1)).max(200).optional(),
+  tool_strict: z.boolean().default(true),
+  limit: z.number().int().positive().max(200).default(30),
+  neighborhood_hops: z.number().int().min(1).max(2).default(2),
+  return_debug: z.boolean().default(false),
+  include_embeddings: z.boolean().default(false),
+  include_meta: z.boolean().default(false),
+  include_slots: z.boolean().default(false),
+  include_slots_preview: z.boolean().default(false),
+  slots_preview_keys: z.number().int().positive().max(50).default(10),
+  max_nodes: z.number().int().positive().max(200).default(50),
+  max_edges: z.number().int().positive().max(100).default(100),
+  ranked_limit: z.number().int().positive().max(500).default(100),
+  min_edge_weight: z.number().min(0).max(1).default(0),
+  min_edge_confidence: z.number().min(0).max(1).default(0),
+  context_token_budget: z.number().int().positive().max(256000).optional(),
+  context_char_budget: z.number().int().positive().max(1000000).optional(),
+  context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
+  return_layered_context: z.boolean().default(true),
+  context_layers: ContextLayerConfig.optional(),
+});
+
+export type ContextAssembleInput = z.infer<typeof ContextAssembleRequest>;
 
 export const MemoryFindRequest = z.object({
   tenant_id: z.string().min(1).optional(),

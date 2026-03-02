@@ -20,6 +20,7 @@ This is the complete Aionis documentation catalog, organized by user journey.
 2. [Playground](./PLAYGROUND.md)
 3. [Planner Context](./PLANNER_CONTEXT.md)
 4. [Architecture](./ARCHITECTURE.md)
+5. [Context Orchestrator Plan](./CONTEXT_ORCHESTRATOR_PLAN.md)
 
 ## 3) Control & Policy
 

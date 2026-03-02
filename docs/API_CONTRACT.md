@@ -573,6 +573,15 @@ This endpoint is designed for planner/executor integration where you want one re
   - `min_edge_weight`, `min_edge_confidence`
   - `return_debug`, `include_embeddings`, `include_meta`, `include_slots`, `include_slots_preview`, `slots_preview_keys`
   - `context_token_budget`, `context_char_budget`, `context_compaction_profile`
+- experimental layered-context assembly knobs:
+  - `return_layered_context?: boolean` (default `false`)
+  - `context_layers?: {`
+    - `enabled?: ("facts"|"episodes"|"rules"|"decisions"|"tools"|"citations")[]`
+    - `char_budget_total?: number`
+    - `char_budget_by_layer?: Record<string, number>`
+    - `max_items_by_layer?: Record<string, number>`
+    - `include_merge_trace?: boolean`
+    - `}`
 
 **Response**
 - `tenant_id: string`
@@ -585,6 +594,14 @@ This endpoint is designed for planner/executor integration where you want one re
 - `tools?: ToolsSelectResponse`
   - present only when request includes `tool_candidates`
   - same structure as `/v1/memory/tools/select`
+- `layered_context?: { ... }` (experimental; only when `return_layered_context=true`)
+  - `version`, `mode`, `order`
+  - `budget: { total_chars, used_chars, remaining_chars }`
+  - `stats: { source_items, kept_items, dropped_items, layers_with_content }`
+  - `layers: Record<layer, { items, source_count, kept_count, dropped_count, budget_chars, used_chars, max_items }>`
+  - `merged_text: string`
+  - `merge_trace?: any[]`
+  - `dropped_reasons: string[]`
 
 Notes:
 - Embedding error mapping follows `/recall_text`.
@@ -592,6 +609,68 @@ Notes:
 - Identity enforcement:
   - `consumer_agent_id` / `consumer_team_id` are checked against authenticated principal
   - `context.agent.id` / `context.agent.team_id` are also checked/injected when auth is enabled
+
+### `POST /v1/memory/context/assemble`
+
+Planner-agnostic context assembly endpoint for explicit multi-layer context output.
+
+This endpoint composes:
+
+1. semantic recall from `query_text`
+2. optional rule evaluation on `context`
+3. optional tool selection when `tool_candidates` is supplied
+4. deterministic layered context assembly (`layered_context`)
+
+**Request**
+- `query_text: string` (required)
+- `tenant_id?: string`
+- `scope?: string`
+- `recall_strategy?: "local"|"balanced"|"global"`
+- `consumer_agent_id?: string`
+- `consumer_team_id?: string`
+- `context?: any` (optional execution context)
+- `include_rules?: boolean` (default `true`)
+- `include_shadow?: boolean` (default `false`)
+- `rules_limit?: number` (default `50`, max `200`)
+- `tool_candidates?: string[]` (optional)
+- `tool_strict?: boolean` (default `true`)
+- recall knobs and response flags (same semantics as `/recall_text`):
+  - `limit`, `neighborhood_hops`, `max_nodes`, `max_edges`, `ranked_limit`
+  - `min_edge_weight`, `min_edge_confidence`
+  - `return_debug`, `include_embeddings`, `include_meta`, `include_slots`, `include_slots_preview`, `slots_preview_keys`
+  - `context_token_budget`, `context_char_budget`, `context_compaction_profile`
+- layered assembly knobs:
+  - `return_layered_context?: boolean` (default `true`)
+  - `context_layers?: {`
+    - `enabled?: ("facts"|"episodes"|"rules"|"decisions"|"tools"|"citations")[]`
+    - `char_budget_total?: number`
+    - `char_budget_by_layer?: Record<string, number>`
+    - `max_items_by_layer?: Record<string, number>`
+    - `include_merge_trace?: boolean`
+    - `}`
+
+**Response**
+- `tenant_id: string`
+- `scope: string`
+- `query: { text: string, embedding_provider: string }`
+- `recall: RecallResponse` (same structure as `/recall_text`, plus `trajectory` and `observability`)
+- `rules?: RulesEvaluateResponse` (present when `include_rules=true`)
+- `tools?: ToolsSelectResponse` (present when `tool_candidates` is provided)
+- `layered_context?: {`
+  - `version`, `mode`, `order`
+  - `budget: { total_chars, used_chars, remaining_chars }`
+  - `stats: { source_items, kept_items, dropped_items, layers_with_content }`
+  - `layers: Record<layer, { items, source_count, kept_count, dropped_count, budget_chars, used_chars, max_items }>`
+  - `merged_text: string`
+  - `merge_trace?: any[]`
+  - `dropped_reasons: string[]`
+  - `}` (present when `return_layered_context=true`)
+
+Notes:
+
+- Embedding error mapping follows `/recall_text`.
+- Rate limiting / tenant quota / inflight gate class is `recall`.
+- Identity enforcement for `consumer_*` and `context.agent.*` follows `/planning/context`.
 
 ---
 

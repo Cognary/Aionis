@@ -3,7 +3,14 @@ import { createHmac } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { MemoryRecallRequest, MemorySessionEventsListRequest, PlanningContextRequest, ToolsFeedbackRequest, ToolsSelectRequest } from "../memory/schemas.js";
+import {
+  ContextAssembleRequest,
+  MemoryRecallRequest,
+  MemorySessionEventsListRequest,
+  PlanningContextRequest,
+  ToolsFeedbackRequest,
+  ToolsSelectRequest,
+} from "../memory/schemas.js";
 import { HttpError } from "../util/http.js";
 import { requireAdminTokenHeader } from "../util/admin_auth.js";
 import { resolveTenantScope } from "../memory/tenant.js";
@@ -1481,6 +1488,29 @@ async function run() {
   assert.equal(planningReq.rules_limit, 50);
   assert.equal(planningReq.tool_strict, true);
   assert.equal(planningReq.limit, 30);
+  const assembleReq = ContextAssembleRequest.parse({
+    query_text: "memory graph",
+    context: { run: { id: "run_2" }, agent: { id: "agent_b", team_id: "team_b" } },
+    tool_candidates: ["psql", "curl"],
+    context_layers: {
+      enabled: ["facts", "episodes", "rules"],
+      char_budget_total: 3200,
+      char_budget_by_layer: { facts: 1200, episodes: 1200, rules: 800 },
+      max_items_by_layer: { facts: 16, episodes: 16, rules: 12 },
+    },
+  });
+  assert.equal(assembleReq.include_rules, true);
+  assert.equal(assembleReq.include_shadow, false);
+  assert.equal(assembleReq.return_layered_context, true);
+  assert.equal(assembleReq.tool_strict, true);
+  assert.throws(
+    () =>
+      ContextAssembleRequest.parse({
+        query_text: "x",
+        context_layers: { enabled: ["facts", "unknown_layer"] },
+      }),
+    /Invalid enum value/i,
+  );
   assert.throws(
     () =>
       ToolsFeedbackRequest.parse({

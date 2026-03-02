@@ -45,6 +45,7 @@ Read:
 1. [API Contract](./API_CONTRACT.md)
 2. [Recall Tail Latency Plan](./RECALL_TAIL_LATENCY_PLAN.md)
 3. [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
+4. [Context Orchestrator Plan](./CONTEXT_ORCHESTRATOR_PLAN.md)
 
 ## Working with Graphs
 

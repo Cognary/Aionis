@@ -8,6 +8,7 @@ This document defines a **recommended, stable JSON shape** for the execution sys
 
 - `POST /v1/memory/rules/evaluate`
 - `POST /v1/memory/planning/context`
+- `POST /v1/memory/context/assemble` (planner-agnostic layered assembly)
 
 The endpoint currently accepts any JSON (`context: any`) for flexibility, but **standardizing early** prevents drift across SDKs/UIs/agents.
 
@@ -80,6 +81,38 @@ It performs:
 ```bash
 bash examples/planning_context.sh "memory graph" psql curl bash \
   | jq '{selected_tool:(.tools.selection.selected // null), rules_matched:.rules.matched, recall_nodes:(.recall.subgraph.nodes|length)}'
+```
+
+### Experimental: Explicit Layered Context Output
+
+If you want an explicit multi-layer context assembly output, set:
+
+- `return_layered_context=true`
+- optional `context_layers` config for layer budgets and enabled layers
+
+Example:
+
+```bash
+curl -sS "localhost:${PORT:-3001}/v1/memory/planning/context" \
+  -H 'content-type: application/json' \
+  -d '{
+    "query_text":"memory graph",
+    "context":{"intent":"json","agent":{"id":"agent_a","team_id":"team_default"}},
+    "return_layered_context":true,
+    "context_layers":{
+      "enabled":["facts","episodes","rules","tools","citations"],
+      "char_budget_total":3200,
+      "char_budget_by_layer":{"facts":900,"episodes":1000,"rules":700,"tools":300,"citations":300}
+    }
+  }' \
+| jq '{layer_order:.layered_context.order, budget:.layered_context.budget, layers:(.layered_context.layers|keys)}'
+```
+
+Or run the helper script:
+
+```bash
+bash examples/context_assemble.sh "memory graph" psql curl bash \
+  | jq '{selected:(.tools.selection.selected // null), layer_order:.layered_context.order}'
 ```
 
 ## Tool Selector (Rules + Candidates)

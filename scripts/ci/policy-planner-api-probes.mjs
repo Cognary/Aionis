@@ -265,6 +265,60 @@ async function probePlanningContext() {
   return { skipped: false, status: out.status, body: out.body };
 }
 
+async function probeContextAssemble() {
+  const out = await postJson(
+    baseUrl,
+    "/v1/memory/context/assemble",
+    {
+      tenant_id: tenantId,
+      scope,
+      query_text: "policy planner parity probe",
+      context,
+      include_rules: true,
+      include_shadow: false,
+      rules_limit: 50,
+      tool_candidates: candidates,
+      tool_strict: false,
+      return_layered_context: true,
+      context_layers: {
+        enabled: ["facts", "episodes", "rules", "tools", "citations"],
+        char_budget_total: 2800,
+      },
+      return_debug: false,
+      include_embeddings: false,
+      include_meta: false,
+      include_slots: false,
+      include_slots_preview: false,
+    },
+    headers,
+    label,
+  );
+
+  if (out.status === 400 && out.body?.error === "no_embedding_provider") {
+    return { skipped: true, reason: "no_embedding_provider", status: out.status, body: out.body };
+  }
+
+  ensure(out.status === 200, `${label}: context/assemble must return 200 (got ${out.status})`);
+  ensure(out.body?.query && typeof out.body.query === "object", `${label}: context/assemble missing query`);
+  ensure(
+    typeof out.body.query.embedding_provider === "string" && out.body.query.embedding_provider.length > 0,
+    `${label}: context/assemble missing query.embedding_provider`,
+  );
+  ensure(out.body?.recall && typeof out.body.recall === "object", `${label}: context/assemble missing recall`);
+  ensure(out.body?.rules && typeof out.body.rules === "object", `${label}: context/assemble missing rules`);
+  ensure(out.body?.tools && typeof out.body.tools === "object", `${label}: context/assemble missing tools`);
+  ensure(
+    out.body?.layered_context && typeof out.body.layered_context === "object",
+    `${label}: context/assemble missing layered_context`,
+  );
+  ensure(Array.isArray(out.body.layered_context?.order), `${label}: context/assemble layered_context.order must be array`);
+  ensure(
+    typeof out.body.layered_context?.merged_text === "string",
+    `${label}: context/assemble layered_context.merged_text must be string`,
+  );
+  return { skipped: false, status: out.status, body: out.body };
+}
+
 try {
   const setup = await setupProbeRule();
   const rules = await probeRulesEvaluate();
@@ -303,6 +357,7 @@ try {
   );
 
   const planning = await probePlanningContext();
+  const assembled = await probeContextAssemble();
 
   if (!planning.skipped) {
     ensure(
@@ -318,6 +373,21 @@ try {
     ensure(
       String(directSelected ?? "") === String(planningSelected ?? ""),
       `${label}: planning.tools.selection.selected must match tools/select`,
+    );
+  }
+
+  if (!assembled.skipped) {
+    ensure(
+      Number(assembled.body.rules?.considered ?? -1) === Number(rules.considered ?? -2),
+      `${label}: assemble.rules.considered must match rules/evaluate`,
+    );
+    ensure(
+      Number(assembled.body.rules?.matched ?? -1) === Number(rules.matched ?? -2),
+      `${label}: assemble.rules.matched must match rules/evaluate`,
+    );
+    ensure(
+      Array.isArray(assembled.body.layered_context?.order) && assembled.body.layered_context.order.length > 0,
+      `${label}: assemble.layered_context.order must be non-empty`,
     );
   }
 
@@ -337,6 +407,14 @@ try {
         expected_modes: ["provided", "inferred", "created_from_feedback"],
       },
       planning_context: { include_shadow: false, rules_limit: 50, tool_candidates_count: candidates.length, tool_strict: false },
+      context_assemble: {
+        include_rules: true,
+        include_shadow: false,
+        rules_limit: 50,
+        tool_candidates_count: candidates.length,
+        tool_strict: false,
+        return_layered_context: true,
+      },
     },
     results: {
       setup,
@@ -386,7 +464,23 @@ try {
               : 0,
             rules_considered: Number(planning.body.rules?.considered ?? 0),
             rules_matched: Number(planning.body.rules?.matched ?? 0),
-      },
+        },
+      assembled: assembled.skipped
+        ? {
+            skipped: true,
+            reason: assembled.reason,
+            status: assembled.status,
+          }
+        : {
+            skipped: false,
+            selected: assembled.body.tools?.selection?.selected ?? null,
+            recall_nodes: Array.isArray(assembled.body.recall?.subgraph?.nodes)
+              ? assembled.body.recall.subgraph.nodes.length
+              : 0,
+            rules_considered: Number(assembled.body.rules?.considered ?? 0),
+            rules_matched: Number(assembled.body.rules?.matched ?? 0),
+            layered_order: assembled.body.layered_context?.order ?? [],
+          },
     },
   };
   writeJson(process.stdout, out);
