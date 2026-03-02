@@ -76,6 +76,11 @@ Reference docs:
     <p>TypeScript and Python SDKs with capability negotiation and typed error handling.</p>
     <span>Read SDK guide</span>
   </a>
+  <a class="aionis-home-card" href="/PLAYGROUND">
+    <h3>Playground</h3>
+    <p>Interactive API lab for write/recall, rules, tools feedback, and decision replay with request trace history.</p>
+    <span>Open playground docs</span>
+  </a>
   <a class="aionis-home-card" href="/OPS_CONSOLE">
     <h3>Ops Console</h3>
     <p>Dashboard, audit stream, and guarded admin write actions for runtime operations.</p>

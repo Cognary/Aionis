@@ -38,6 +38,7 @@ export default defineConfig({
     nav: [
       { text: "Why Aionis", link: "/index#why-teams-choose-aionis" },
       { text: "Start", link: "/ONBOARDING_5MIN" },
+      { text: "Playground", link: "/PLAYGROUND" },
       { text: "Concepts", link: "/ARCHITECTURE" },
       { text: "API", link: "/API_CONTRACT" },
       { text: "SDK", link: "/SDK" },
@@ -51,6 +52,7 @@ export default defineConfig({
         items: [
           { text: "Docs Home", link: "/index" },
           { text: "5-Minute Onboarding", link: "/ONBOARDING_5MIN" },
+          { text: "Playground", link: "/PLAYGROUND" },
           { text: "Architecture", link: "/ARCHITECTURE" },
           { text: "Docs Index", link: "/README" },
         ],
@@ -73,6 +75,7 @@ export default defineConfig({
         text: "Operations",
         items: [
           { text: "Operator Runbook", link: "/OPERATOR_RUNBOOK" },
+          { text: "Playground", link: "/PLAYGROUND" },
           { text: "Ops Console", link: "/OPS_CONSOLE" },
           { text: "Abstraction Policy Runbook", link: "/ABSTRACTION_POLICY_RUNBOOK" },
           { text: "Consolidation Replay Runbook", link: "/CONSOLIDATION_REPLAY_RUNBOOK" },

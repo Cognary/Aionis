@@ -28,6 +28,7 @@ This is the public documentation index for Aionis.
 
 - [Operator Runbook](./OPERATOR_RUNBOOK.md)
 - [Ops Console](./OPS_CONSOLE.md)
+- [Playground](./PLAYGROUND.md)
 - [Standalone to HA Runbook](./STANDALONE_TO_HA_RUNBOOK.md)
 - [HA Failure Drill Template](./HA_FAILURE_DRILL_TEMPLATE.md)
 - [HA Failure Drill Sample](./HA_FAILURE_DRILL_SAMPLE.md)

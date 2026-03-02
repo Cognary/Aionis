@@ -320,6 +320,28 @@ Optional dangerous-write gate (default safe):
 OPS_DANGEROUS_ACTIONS_ENABLED=false
 ```
 
+## Playground (Next.js, interactive)
+
+`apps/playground` provides a full request lab for core memory and policy-loop APIs:
+
+1. `write`, `recall`, `recall_text`
+2. `rules/evaluate`
+3. `tools/select`, `tools/feedback`, `tools/decision`
+4. Request chain timeline with `request_id`, status, and latency
+5. Session JSON export for replay/debug sharing
+
+Run:
+
+```bash
+npm run -s playground:dev
+npm run -s playground:build
+npm run -s playground:start
+```
+
+Docs:
+
+- [Playground](docs/PLAYGROUND.md)
+
 ## Technical Reference (Previous README)
 
 The previous long-form technical README is preserved here:
