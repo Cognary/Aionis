@@ -373,6 +373,9 @@ button.danger {
 .chat-thread {
   display: grid;
   gap: 0.55rem;
+  max-height: 52vh;
+  overflow: auto;
+  padding-right: 0.1rem;
 }
 
 .chat-bubble {
@@ -464,6 +467,19 @@ pre {
 
 .composer textarea {
   min-height: 80px;
+}
+
+.prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip-btn {
+  font-size: 0.7rem;
+  line-height: 1.2;
+  padding: 0.34rem 0.5rem;
+  max-width: 100%;
 }
 
 .composer-foot {
@@ -571,6 +587,10 @@ pre {
 
   .session-list,
   .chain-list {
+    max-height: none;
+  }
+
+  .chat-thread {
     max-height: none;
   }
 }

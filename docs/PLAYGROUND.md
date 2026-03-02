@@ -22,16 +22,17 @@ The playground focuses on these routes:
 
 1. Three-pane console layout: left navigation/history, center chat + inspector, right run settings.
 2. LLM settings panel (`provider`, `base_url`, `model`, `api_key`, `temperature`, `max_tokens`, `system_prompt`) with local persistence.
-3. Built-in chat session manager (new/delete/switch sessions) and multi-turn chat thread.
+3. Built-in chat session manager (new/delete/switch/rename/clear) and multi-turn chat thread.
 4. Optional `recall_text` context injection before each chat turn.
 5. Optional auto-write of chat turns into memory (`write` route) for fast self-learning simulation.
-6. Connection settings in UI (`base_url`, `tenant_id`, `scope`, API key, bearer token, admin token).
-7. Scenario presets (`Support Triage`, `Sales Follow-up`, `Personal Assistant`) to seed tenant/scope + payload defaults.
-8. Per-operation payload editor with JSON templates and runtime variable injection (`\{\{last.decision_id\}\}`, `\{\{last.request_id\}\}`, `\{\{last.run_id\}\}`, `\{\{connection.*\}\}`).
-9. Step Flow orchestrator with editable flow JSON and reusable flow presets (including closed-loop policy flow).
-10. Per-step flow assertions (`expect_ok`, `require_decision_id`, `require_request_id`, `max_duration_ms`, `error_includes`) with optional stop-on-fail behavior.
-11. Latest flow report panel plus one-click export as JSON/Markdown.
-12. Share link export (`?pg=...`), request chain filters, response diff inspector, and session export.
+6. LLM one-click connection test from settings tab.
+7. Connection settings in UI (`base_url`, `tenant_id`, `scope`, API key, bearer token, admin token).
+8. Scenario presets (`Support Triage`, `Sales Follow-up`, `Personal Assistant`) to seed tenant/scope + payload defaults.
+9. Per-operation payload editor with JSON templates and runtime variable injection (`\{\{last.decision_id\}\}`, `\{\{last.request_id\}\}`, `\{\{last.run_id\}\}`, `\{\{connection.*\}\}`).
+10. Step Flow orchestrator with editable flow JSON and reusable flow presets (including closed-loop policy flow).
+11. Per-step flow assertions (`expect_ok`, `require_decision_id`, `require_request_id`, `max_duration_ms`, `error_includes`) with optional stop-on-fail behavior.
+12. Latest flow report panel plus one-click export as JSON/Markdown.
+13. Share link export (`?pg=...`), request chain filters, response diff inspector, and session export.
 
 ## Run locally
 

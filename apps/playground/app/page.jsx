@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FLOW_PRESETS,
   FLOW_PRESET_MAP,
@@ -25,6 +25,7 @@ const DEFAULT_FLOW_PRESET = FLOW_PRESETS[0]?.key || "";
 const LLM_CONFIG_STORAGE_KEY = "aionis_playground_llm_config_v1";
 const CHAT_SESSION_STORAGE_KEY = "aionis_playground_chat_sessions_v1";
 const CHAT_SESSION_ACTIVE_KEY = "aionis_playground_chat_active_session_v1";
+const PLAYGROUND_SETTINGS_TAB_STORAGE_KEY = "aionis_playground_settings_tab_v1";
 const DEFAULT_CHAT_CONFIG = {
   provider: "openai_compatible",
   base_url: "https://api.openai.com/v1",
@@ -38,6 +39,11 @@ const CHAIN_STATUS_FILTERS = [
   { key: "all", label: "all" },
   { key: "ok", label: "ok only" },
   { key: "fail", label: "failed only" }
+];
+const CHAT_PROMPT_CHIPS = [
+  "Summarize what you remember about this user.",
+  "What rule constraints should apply to this request?",
+  "Give a policy-safe next action with brief rationale."
 ];
 
 function deepClone(value) {
@@ -454,10 +460,14 @@ export default function PlaygroundPage() {
   const [chatUseRecallContext, setChatUseRecallContext] = useState(true);
   const [chatAutoWriteMemory, setChatAutoWriteMemory] = useState(false);
   const [settingsTab, setSettingsTab] = useState("llm");
+  const [llmTestRunning, setLlmTestRunning] = useState(false);
+  const [llmTestNote, setLlmTestNote] = useState("");
+  const [sessionTitleDraft, setSessionTitleDraft] = useState("");
   const [chainStatusFilter, setChainStatusFilter] = useState("all");
   const [chainOperationFilter, setChainOperationFilter] = useState("all");
   const [chatSessions, setChatSessions] = useState(() => [makeChatSession("Session 1")]);
   const [activeSessionId, setActiveSessionId] = useState("");
+  const chatThreadRef = useRef(null);
 
   const runtimeContext = useMemo(() => computeRuntimeContext(history), [history]);
   const active = useMemo(() => history.find((item) => item.id === activeId) || history[0] || null, [history, activeId]);
@@ -541,6 +551,26 @@ export default function PlaygroundPage() {
     });
     setChatError("");
     setChatNote("");
+  }
+
+  function renameActiveSession(nextTitle) {
+    if (!activeChatSession) return;
+    const normalized = makeSessionTitle(nextTitle);
+    updateSessionById(activeChatSession.id, (session) => ({
+      ...session,
+      title: normalized
+    }));
+    setSessionTitleDraft(normalized);
+  }
+
+  function clearActiveSessionMessages() {
+    if (!activeChatSession || chatRunning) return;
+    updateSessionById(activeChatSession.id, (session) => ({
+      ...session,
+      messages: []
+    }));
+    setChatNote("Cleared current session messages.");
+    setChatError("");
   }
 
   async function copyText(value) {
@@ -949,6 +979,32 @@ export default function PlaygroundPage() {
     }
   }
 
+  async function testLlmConnection() {
+    setLlmTestNote("");
+    if (llmTestRunning) return;
+    setLlmTestRunning(true);
+    try {
+      const response = await fetch("/api/playground/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          config: llmConfig,
+          messages: [{ role: "user", content: "Reply with: ok" }]
+        })
+      });
+
+      const result = await response.json().catch(() => null);
+      if (!result || result.ok !== true) {
+        throw new Error(result?.error || "llm_connection_failed");
+      }
+      setLlmTestNote(`LLM connection OK (${result.model || llmConfig.model}).`);
+    } catch (error) {
+      setLlmTestNote(`LLM test failed: ${error instanceof Error ? error.message : "unknown_error"}`);
+    } finally {
+      setLlmTestRunning(false);
+    }
+  }
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -961,6 +1017,15 @@ export default function PlaygroundPage() {
             ...parsed
           }));
         }
+      }
+    } catch {
+      // ignore local storage read errors
+    }
+
+    try {
+      const rawTab = window.localStorage.getItem(PLAYGROUND_SETTINGS_TAB_STORAGE_KEY);
+      if (rawTab && ["llm", "connection", "operation", "flow", "export"].includes(rawTab)) {
+        setSettingsTab(rawTab);
       }
     } catch {
       // ignore local storage read errors
@@ -1007,6 +1072,11 @@ export default function PlaygroundPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(chatSessions));
   }, [chatSessions]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(PLAYGROUND_SETTINGS_TAB_STORAGE_KEY, settingsTab);
+  }, [settingsTab]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1107,6 +1177,16 @@ export default function PlaygroundPage() {
     setInspectNote("");
   }, [activeId]);
 
+  useEffect(() => {
+    setSessionTitleDraft(activeChatSession?.title || "");
+  }, [activeSessionId, activeChatSession?.title]);
+
+  useEffect(() => {
+    const node = chatThreadRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [activeSessionId, activeChatSession?.messages.length]);
+
   return (
     <div className="oa-layout">
       <aside className="oa-pane oa-left">
@@ -1139,7 +1219,23 @@ export default function PlaygroundPage() {
           <div className="inline-actions">
             <button type="button" className="ghost" onClick={createSession} disabled={chatRunning}>New</button>
             <button type="button" className="ghost danger" onClick={removeActiveSession} disabled={chatSessions.length <= 1 || chatRunning}>Delete</button>
+            <button type="button" className="ghost" onClick={clearActiveSessionMessages} disabled={!activeChatSession || chatRunning}>Clear chat</button>
           </div>
+          <label>
+            active title
+            <input
+              value={sessionTitleDraft}
+              onChange={(event) => setSessionTitleDraft(event.target.value)}
+              onBlur={() => renameActiveSession(sessionTitleDraft)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  renameActiveSession(sessionTitleDraft);
+                }
+              }}
+              disabled={!activeChatSession}
+            />
+          </label>
           <div className="session-list">
             {chatSessions.map((item) => (
               <button
@@ -1222,7 +1318,7 @@ export default function PlaygroundPage() {
         </div>
 
         <div className="oa-chat-surface">
-          <div className="chat-thread">
+          <div className="chat-thread" ref={chatThreadRef}>
             {(activeChatSession?.messages || []).length === 0 ? (
               <p className="muted tiny">Start a conversation to test memory-grounded behavior.</p>
             ) : (
@@ -1234,6 +1330,7 @@ export default function PlaygroundPage() {
                   </div>
                   <p>{message.content}</p>
                   {message.meta?.model ? <p className="tiny muted">model: <span className="mono">{message.meta.model}</span></p> : null}
+                  {message.meta?.usage?.total_tokens ? <p className="tiny muted">tokens: <span className="mono">{message.meta.usage.total_tokens}</span></p> : null}
                 </article>
               ))
             )}
@@ -1305,6 +1402,19 @@ export default function PlaygroundPage() {
               }
             }}
           />
+          <div className="prompt-chips">
+            {CHAT_PROMPT_CHIPS.map((chip) => (
+              <button
+                type="button"
+                key={chip}
+                className="ghost chip-btn"
+                onClick={() => setChatInput(chip)}
+                disabled={chatRunning || running}
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
           <div className="composer-foot">
             <div className="toggle-row">
               <label className="checkbox-row">
@@ -1364,7 +1474,11 @@ export default function PlaygroundPage() {
               <div className="inline-actions">
                 <button type="button" className="ghost" onClick={() => setShowApiKey((prev) => !prev)}>{showApiKey ? "Hide" : "Show"}</button>
                 <button type="button" className="ghost danger" onClick={() => setLlmConfig((prev) => ({ ...prev, api_key: "" }))}>Clear</button>
+                <button type="button" className="ghost" onClick={testLlmConnection} disabled={llmTestRunning}>
+                  {llmTestRunning ? "Testing..." : "Test connection"}
+                </button>
               </div>
+              {llmTestNote ? <p className="note-line">{llmTestNote}</p> : null}
               <label>
                 temperature
                 <input type="number" min="0" max="2" step="0.1" value={llmConfig.temperature} onChange={(event) => setLlmConfig((prev) => ({ ...prev, temperature: Number(event.target.value) }))} />
