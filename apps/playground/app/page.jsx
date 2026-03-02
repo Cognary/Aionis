@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FLOW_PRESETS,
   FLOW_PRESET_MAP,
@@ -136,6 +136,28 @@ function applyRuntimeVars(value, runtimeContext, connection) {
   return value;
 }
 
+function normalizeStepAssert(raw, index) {
+  if (raw == null) return null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`flow step ${index + 1}: assert must be an object`);
+  }
+
+  const out = {};
+  if (raw.expect_ok !== undefined) out.expect_ok = Boolean(raw.expect_ok);
+  if (raw.require_decision_id !== undefined) out.require_decision_id = Boolean(raw.require_decision_id);
+  if (raw.require_request_id !== undefined) out.require_request_id = Boolean(raw.require_request_id);
+  if (raw.max_duration_ms !== undefined) {
+    const n = Number(raw.max_duration_ms);
+    if (!Number.isFinite(n) || n <= 0) {
+      throw new Error(`flow step ${index + 1}: max_duration_ms must be > 0`);
+    }
+    out.max_duration_ms = Math.round(n);
+  }
+  if (raw.error_includes !== undefined) out.error_includes = String(raw.error_includes);
+
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 function parseFlowSteps(flowText) {
   const parsed = JSON.parse(flowText);
   if (!Array.isArray(parsed)) {
@@ -147,7 +169,7 @@ function parseFlowSteps(flowText) {
       if (!OPERATION_MAP[item]) {
         throw new Error(`flow step ${index + 1}: unknown operation '${item}'`);
       }
-      return { operation: item, payload: null };
+      return { operation: item, payload: null, assert: null };
     }
 
     if (!item || typeof item !== "object" || Array.isArray(item)) {
@@ -163,7 +185,11 @@ function parseFlowSteps(flowText) {
       ? deepClone(item.payload)
       : null;
 
-    return { operation: op, payload };
+    return {
+      operation: op,
+      payload,
+      assert: normalizeStepAssert(item.assert, index)
+    };
   });
 }
 
@@ -202,6 +228,40 @@ function collectDiff(prev, next, path = "", out = [], depth = 0) {
   return out;
 }
 
+function evaluateStepAssert(entry, stepAssert) {
+  if (!stepAssert) return { ok: true, reason: "" };
+
+  if (stepAssert.expect_ok === true && !entry.ok) {
+    return { ok: false, reason: "expected ok=true" };
+  }
+  if (stepAssert.expect_ok === false && entry.ok) {
+    return { ok: false, reason: "expected ok=false" };
+  }
+  if (stepAssert.require_decision_id && !entry.decision_id) {
+    return { ok: false, reason: "decision_id is missing" };
+  }
+  if (stepAssert.require_request_id && !entry.request_id) {
+    return { ok: false, reason: "request_id is missing" };
+  }
+  if (typeof stepAssert.max_duration_ms === "number" && entry.duration_ms > stepAssert.max_duration_ms) {
+    return {
+      ok: false,
+      reason: `duration ${entry.duration_ms}ms > ${stepAssert.max_duration_ms}ms`
+    };
+  }
+  if (typeof stepAssert.error_includes === "string" && stepAssert.error_includes.trim()) {
+    const haystack = String(entry.error || "");
+    if (!haystack.includes(stepAssert.error_includes)) {
+      return {
+        ok: false,
+        reason: `error does not include '${stepAssert.error_includes}'`
+      };
+    }
+  }
+
+  return { ok: true, reason: "" };
+}
+
 function computeRuntimeContext(history) {
   const context = {
     request_id: "",
@@ -219,6 +279,38 @@ function computeRuntimeContext(history) {
   return context;
 }
 
+function encodeShareState(state) {
+  if (typeof window === "undefined") return "";
+  try {
+    const text = JSON.stringify(state);
+    const bytes = new TextEncoder().encode(text);
+    let binary = "";
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  } catch {
+    return "";
+  }
+}
+
+function decodeShareState(token) {
+  if (!token) return null;
+  try {
+    const normalized = token.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "===".slice((normalized.length + 3) % 4);
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    const text = new TextDecoder().decode(bytes);
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 export default function PlaygroundPage() {
   const [connection, setConnection] = useState(DEFAULT_CONNECTION);
   const [scenarioPreset, setScenarioPreset] = useState(DEFAULT_SCENARIO);
@@ -226,11 +318,15 @@ export default function PlaygroundPage() {
   const [payloadText, setPayloadText] = useState(pretty(defaultPayloadFor("write")));
   const [flowPreset, setFlowPreset] = useState(DEFAULT_FLOW_PRESET);
   const [flowText, setFlowText] = useState(makeFlowTextFromPreset(DEFAULT_FLOW_PRESET));
+  const [flowStopOnHttpFail, setFlowStopOnHttpFail] = useState(true);
+  const [flowStopOnAssertFail, setFlowStopOnAssertFail] = useState(true);
   const [history, setHistory] = useState([]);
   const [activeId, setActiveId] = useState("");
   const [running, setRunning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [flowError, setFlowError] = useState("");
+  const [flowRunNote, setFlowRunNote] = useState("");
+  const [shareNote, setShareNote] = useState("");
 
   const runtimeContext = useMemo(() => computeRuntimeContext(history), [history]);
   const active = useMemo(() => history.find((item) => item.id === activeId) || history[0] || null, [history, activeId]);
@@ -316,6 +412,7 @@ export default function PlaygroundPage() {
   async function runCurrent() {
     setErrorMessage("");
     setFlowError("");
+    setFlowRunNote("");
 
     let payload = null;
     try {
@@ -337,6 +434,7 @@ export default function PlaygroundPage() {
   async function runFlow() {
     setErrorMessage("");
     setFlowError("");
+    setFlowRunNote("");
 
     let steps = [];
     try {
@@ -350,15 +448,31 @@ export default function PlaygroundPage() {
     let flowRuntime = { ...runtimeContext };
 
     try {
-      for (const step of steps) {
+      for (let i = 0; i < steps.length; i += 1) {
+        const step = steps[i];
         const payloadSeed = step.payload ? deepClone(step.payload) : getOperationTemplate(step.operation);
         const preparedPayload = materializePayload(payloadSeed, flowRuntime);
         const entry = await executeOne(step.operation, preparedPayload);
+
         flowRuntime = {
           request_id: entry.request_id || flowRuntime.request_id,
           decision_id: entry.decision_id || flowRuntime.decision_id,
           run_id: entry.run_id || flowRuntime.run_id
         };
+
+        if (!entry.ok && flowStopOnHttpFail) {
+          setFlowRunNote(`stopped at step ${i + 1}: http failure`);
+          break;
+        }
+
+        const assertResult = evaluateStepAssert(entry, step.assert);
+        if (!assertResult.ok) {
+          setFlowError(`step ${i + 1} (${step.operation}) assert failed: ${assertResult.reason}`);
+          if (flowStopOnAssertFail) {
+            setFlowRunNote(`stopped at step ${i + 1}: assert failed`);
+            break;
+          }
+        }
       }
     } catch (error) {
       setFlowError(error instanceof Error ? error.message : "flow execution failed");
@@ -409,6 +523,7 @@ export default function PlaygroundPage() {
     setFlowText(makeFlowTextFromPreset(nextFlowPreset));
     setErrorMessage("");
     setFlowError("");
+    setFlowRunNote("");
   }
 
   function exportSession() {
@@ -417,6 +532,10 @@ export default function PlaygroundPage() {
       scenario: scenarioPreset,
       operation,
       flow: flowText,
+      flow_options: {
+        stop_on_http_fail: flowStopOnHttpFail,
+        stop_on_assert_fail: flowStopOnAssertFail
+      },
       connection: {
         base_url: connection.base_url,
         tenant_id: connection.tenant_id,
@@ -439,16 +558,103 @@ export default function PlaygroundPage() {
     URL.revokeObjectURL(url);
   }
 
+  function buildShareState() {
+    return {
+      version: 1,
+      scenario_preset: scenarioPreset,
+      operation,
+      payload_text: payloadText,
+      flow_preset: flowPreset,
+      flow_text: flowText,
+      flow_stop_on_http_fail: flowStopOnHttpFail,
+      flow_stop_on_assert_fail: flowStopOnAssertFail,
+      connection: {
+        base_url: connection.base_url,
+        tenant_id: connection.tenant_id,
+        scope: connection.scope
+      }
+    };
+  }
+
+  async function copyShareLink() {
+    if (typeof window === "undefined" || !navigator?.clipboard) return;
+    const token = encodeShareState(buildShareState());
+    if (!token) {
+      setShareNote("Failed to create share link.");
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("pg", token);
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setShareNote("Share link copied.");
+    } catch {
+      setShareNote("Copy failed.");
+    }
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const token = new URLSearchParams(window.location.search).get("pg");
+    if (!token) return;
+
+    const parsed = decodeShareState(token);
+    if (!parsed || typeof parsed !== "object") {
+      setShareNote("Invalid share link payload.");
+      return;
+    }
+
+    if (typeof parsed.scenario_preset === "string" && SCENARIO_PRESET_MAP[parsed.scenario_preset]) {
+      setScenarioPreset(parsed.scenario_preset);
+    }
+
+    if (typeof parsed.operation === "string" && OPERATION_MAP[parsed.operation]) {
+      setOperation(parsed.operation);
+    }
+
+    if (typeof parsed.payload_text === "string") {
+      setPayloadText(parsed.payload_text);
+    }
+
+    if (typeof parsed.flow_preset === "string" && FLOW_PRESET_MAP[parsed.flow_preset]) {
+      setFlowPreset(parsed.flow_preset);
+    }
+
+    if (typeof parsed.flow_text === "string") {
+      setFlowText(parsed.flow_text);
+    }
+
+    if (typeof parsed.flow_stop_on_http_fail === "boolean") {
+      setFlowStopOnHttpFail(parsed.flow_stop_on_http_fail);
+    }
+
+    if (typeof parsed.flow_stop_on_assert_fail === "boolean") {
+      setFlowStopOnAssertFail(parsed.flow_stop_on_assert_fail);
+    }
+
+    if (parsed.connection && typeof parsed.connection === "object") {
+      setConnection((prev) => ({
+        ...prev,
+        base_url: String(parsed.connection.base_url || prev.base_url),
+        tenant_id: String(parsed.connection.tenant_id || prev.tenant_id),
+        scope: String(parsed.connection.scope || prev.scope)
+      }));
+    }
+
+    setShareNote("Loaded config from share link.");
+  }, []);
+
   return (
     <div className="pg-page">
       <section className="panel hero">
         <div>
           <p className="kicker">Interactive API Lab</p>
-          <h1>Aionis Playground v2</h1>
+          <h1>Aionis Playground v3</h1>
           <p className="muted">
             End-to-end surface for memory write/recall, rules, tool selection, feedback, and decision replay.
-            Includes scenario presets, flow runner, runtime variable injection, and response diffs.
+            Includes scenario presets, flow runner, runtime variable injection, assertions, share links, and response diff.
           </p>
+          {shareNote ? <p className="note-line">{shareNote}</p> : null}
         </div>
         <div className="hero-actions">
           <button type="button" onClick={runCurrent} disabled={running}>
@@ -456,6 +662,9 @@ export default function PlaygroundPage() {
           </button>
           <button type="button" className="ghost" onClick={runFlow} disabled={running}>
             {running ? "Running..." : "Run Flow"}
+          </button>
+          <button type="button" className="ghost" onClick={copyShareLink} disabled={running}>
+            Copy Share Link
           </button>
           <button type="button" className="ghost" onClick={exportSession} disabled={history.length === 0 || running}>
             Export Session JSON
@@ -468,6 +677,7 @@ export default function PlaygroundPage() {
               setActiveId("");
               setErrorMessage("");
               setFlowError("");
+              setFlowRunNote("");
             }}
             disabled={history.length === 0 || running}
           >
@@ -500,6 +710,10 @@ export default function PlaygroundPage() {
         <article className="metric-card">
           <span>last.decision_id</span>
           <strong className="mono tiny-strong">{runtimeContext.decision_id || "-"}</strong>
+        </article>
+        <article className="metric-card">
+          <span>last.run_id</span>
+          <strong className="mono tiny-strong">{runtimeContext.run_id || "-"}</strong>
         </article>
       </section>
 
@@ -621,6 +835,7 @@ export default function PlaygroundPage() {
                     setFlowPreset(next);
                     setFlowText(makeFlowTextFromPreset(next));
                     setFlowError("");
+                    setFlowRunNote("");
                   }}
                 >
                   {FLOW_PRESETS.map((item) => (
@@ -630,10 +845,33 @@ export default function PlaygroundPage() {
               </label>
               <p className="muted tiny">{FLOW_PRESET_MAP[flowPreset]?.description || ""}</p>
               <label>
-                flow JSON (string op or {`{ operation, payload }`})
+                flow JSON (string op or {`{ operation, payload, assert }`})
                 <textarea value={flowText} onChange={(event) => setFlowText(event.target.value)} rows={10} />
               </label>
+              <div className="toggle-row">
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={flowStopOnHttpFail}
+                    onChange={(event) => setFlowStopOnHttpFail(event.target.checked)}
+                  />
+                  stop on HTTP failure
+                </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={flowStopOnAssertFail}
+                    onChange={(event) => setFlowStopOnAssertFail(event.target.checked)}
+                  />
+                  stop on assert failure
+                </label>
+              </div>
+              <p className="muted tiny">
+                Assert fields per step: <span className="mono">expect_ok</span>, <span className="mono">require_decision_id</span>,
+                <span className="mono"> require_request_id</span>, <span className="mono">max_duration_ms</span>, <span className="mono">error_includes</span>.
+              </p>
               {flowError ? <p className="error">{flowError}</p> : null}
+              {flowRunNote ? <p className="note-line">{flowRunNote}</p> : null}
             </div>
           </article>
 

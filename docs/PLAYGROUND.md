@@ -24,9 +24,11 @@ The playground focuses on these routes:
 2. Scenario presets (`Support Triage`, `Sales Follow-up`, `Personal Assistant`) to seed tenant/scope + payload defaults.
 3. Per-operation payload editor with JSON templates and runtime variable injection (`\{\{last.decision_id\}\}`, `\{\{last.request_id\}\}`, `\{\{last.run_id\}\}`, `\{\{connection.*\}\}`).
 4. Step Flow orchestrator with editable flow JSON and reusable flow presets (including closed-loop policy flow).
-5. Request chain timeline with status, duration, and `request_id`.
-6. Response inspector with structural diff against previous response of the same operation.
-7. One-click session export to JSON for replay or issue reports.
+5. Per-step flow assertions (`expect_ok`, `require_decision_id`, `require_request_id`, `max_duration_ms`, `error_includes`) with optional stop-on-fail behavior.
+6. Share link export (`?pg=...`) for reproducible, non-secret config handoff.
+7. Request chain timeline with status, duration, and `request_id`.
+8. Response inspector with structural diff against previous response of the same operation.
+9. One-click session export to JSON for replay or issue reports.
 
 ## Run locally
 

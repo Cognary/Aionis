@@ -153,6 +153,12 @@ h2 {
   line-height: 1.2;
 }
 
+.note-line {
+  margin-top: 0.5rem;
+  color: #0b49cf;
+  font-size: 0.78rem;
+}
+
 .hero-actions {
   display: grid;
   align-content: start;
@@ -190,7 +196,7 @@ button.danger {
 
 .status-strip {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.7rem;
 }
 
@@ -313,6 +319,22 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.checkbox-row input {
+  width: auto;
 }
 
 .error {
