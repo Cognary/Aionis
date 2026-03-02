@@ -27,6 +27,7 @@ const CHAT_SESSION_STORAGE_KEY = "aionis_playground_chat_sessions_v1";
 const CHAT_SESSION_ACTIVE_KEY = "aionis_playground_chat_active_session_v1";
 const PLAYGROUND_SETTINGS_TAB_STORAGE_KEY = "aionis_playground_settings_tab_v1";
 const PLAYGROUND_LANGUAGE_STORAGE_KEY = "aionis_playground_language_v1";
+const PLAYGROUND_LEFT_PANELS_STORAGE_KEY = "aionis_playground_left_panels_v1";
 const DEFAULT_CHAT_CONFIG = {
   provider: "openai_compatible",
   base_url: "https://api.openai.com/v1",
@@ -64,6 +65,11 @@ const I18N = {
   en: {
     app_name: "Aionis Playground",
     app_subtitle: "Chat + Memory Lab",
+    search_sessions: "search sessions",
+    no_matching_sessions: "No matching sessions.",
+    toggle_panel: "Toggle panel",
+    settings_summary: "Model {model} · {tenant}/{scope} · {flow}",
+    jump_latest: "Latest",
     scenario: "Scenario",
     scenario_preset: "scenario preset",
     apply_preset: "Apply preset",
@@ -171,6 +177,11 @@ const I18N = {
   zh: {
     app_name: "Aionis Playground",
     app_subtitle: "对话 + 记忆实验台",
+    search_sessions: "搜索会话",
+    no_matching_sessions: "没有匹配的会话。",
+    toggle_panel: "折叠/展开面板",
+    settings_summary: "模型 {model} · {tenant}/{scope} · {flow}",
+    jump_latest: "最新",
     scenario: "场景",
     scenario_preset: "场景预设",
     apply_preset: "应用预设",
@@ -734,6 +745,12 @@ export default function PlaygroundPage() {
   const [chatUseRecallContext, setChatUseRecallContext] = useState(true);
   const [chatAutoWriteMemory, setChatAutoWriteMemory] = useState(false);
   const [settingsTab, setSettingsTab] = useState("llm");
+  const [sessionQuery, setSessionQuery] = useState("");
+  const [leftPanels, setLeftPanels] = useState({
+    scenario: true,
+    sessions: true,
+    history: true
+  });
   const [llmTestRunning, setLlmTestRunning] = useState(false);
   const [llmTestNote, setLlmTestNote] = useState("");
   const [sessionTitleDraft, setSessionTitleDraft] = useState("");
@@ -781,6 +798,16 @@ export default function PlaygroundPage() {
     return raw ? scenarioText(raw) : { label: "", description: "" };
   }, [scenarioPreset, metaPack]);
   const selectedOperationView = useMemo(() => operationText(operation), [operation, metaPack]);
+  const selectedFlowView = useMemo(() => {
+    const raw = FLOW_PRESET_MAP[flowPreset];
+    if (!raw) return { label: "", description: "" };
+    return flowTextPack(raw);
+  }, [flowPreset, metaPack]);
+  const filteredSessions = useMemo(() => {
+    const keyword = String(sessionQuery || "").trim().toLowerCase();
+    if (!keyword) return chatSessions;
+    return chatSessions.filter((item) => String(item.title || "").toLowerCase().includes(keyword));
+  }, [chatSessions, sessionQuery]);
 
   const metrics = useMemo(() => {
     const total = history.length;
@@ -857,6 +884,13 @@ export default function PlaygroundPage() {
     });
     setChatError("");
     setChatNote("");
+  }
+
+  function toggleLeftPanel(panelKey) {
+    setLeftPanels((prev) => ({
+      ...prev,
+      [panelKey]: !prev[panelKey]
+    }));
   }
 
   function renameActiveSession(nextTitle) {
@@ -1349,6 +1383,23 @@ export default function PlaygroundPage() {
     }
 
     try {
+      const rawPanels = window.localStorage.getItem(PLAYGROUND_LEFT_PANELS_STORAGE_KEY);
+      if (rawPanels) {
+        const parsed = JSON.parse(rawPanels);
+        if (parsed && typeof parsed === "object") {
+          setLeftPanels((prev) => ({
+            ...prev,
+            scenario: parsed.scenario !== false,
+            sessions: parsed.sessions !== false,
+            history: parsed.history !== false
+          }));
+        }
+      }
+    } catch {
+      // ignore local storage read errors
+    }
+
+    try {
       const rawSessions = window.localStorage.getItem(CHAT_SESSION_STORAGE_KEY);
       const rawActive = window.localStorage.getItem(CHAT_SESSION_ACTIVE_KEY);
       if (rawSessions) {
@@ -1358,7 +1409,7 @@ export default function PlaygroundPage() {
             .filter((item) => item && typeof item === "object" && typeof item.id === "string")
             .map((item) => ({
               id: item.id,
-              title: typeof item.title === "string" ? item.title : tr("untitled_chat"),
+              title: typeof item.title === "string" ? item.title : I18N.en.untitled_chat,
               created_at: typeof item.created_at === "string" ? item.created_at : new Date().toISOString(),
               messages: Array.isArray(item.messages) ? item.messages : []
             }));
@@ -1399,6 +1450,11 @@ export default function PlaygroundPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(PLAYGROUND_LANGUAGE_STORAGE_KEY, language);
   }, [language]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(PLAYGROUND_LEFT_PANELS_STORAGE_KEY, JSON.stringify(leftPanels));
+  }, [leftPanels]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1524,102 +1580,137 @@ export default function PlaygroundPage() {
         <section className="oa-section">
           <div className="panel-head">
             <h2>{tr("scenario")}</h2>
+            <button type="button" className="ghost panel-toggle" onClick={() => toggleLeftPanel("scenario")} aria-label={tr("toggle_panel")}>
+              {leftPanels.scenario ? "−" : "+"}
+            </button>
           </div>
-          <label>
-            {tr("scenario_preset")}
-            <select value={scenarioPreset} onChange={(event) => setScenarioPreset(event.target.value)}>
-              {SCENARIO_PRESETS.map((item) => (
-                <option key={item.key} value={item.key}>{scenarioText(item).label}</option>
-              ))}
-            </select>
-          </label>
-          <p className="muted tiny">{selectedScenarioView.description}</p>
-          <button type="button" className="ghost" onClick={applyScenarioPreset} disabled={running || chatRunning}>{tr("apply_preset")}</button>
+          {leftPanels.scenario ? (
+            <>
+              <label>
+                {tr("scenario_preset")}
+                <select value={scenarioPreset} onChange={(event) => setScenarioPreset(event.target.value)}>
+                  {SCENARIO_PRESETS.map((item) => (
+                    <option key={item.key} value={item.key}>{scenarioText(item).label}</option>
+                  ))}
+                </select>
+              </label>
+              <p className="muted tiny">{selectedScenarioView.description}</p>
+              <button type="button" className="ghost" onClick={applyScenarioPreset} disabled={running || chatRunning}>{tr("apply_preset")}</button>
+            </>
+          ) : null}
         </section>
 
         <section className="oa-section">
           <div className="panel-head">
             <h2>{tr("sessions")}</h2>
             <span className="tag">{chatSessions.length}</span>
+            <button type="button" className="ghost panel-toggle" onClick={() => toggleLeftPanel("sessions")} aria-label={tr("toggle_panel")}>
+              {leftPanels.sessions ? "−" : "+"}
+            </button>
           </div>
-          <div className="inline-actions">
-            <button type="button" className="ghost" onClick={createSession} disabled={chatRunning}>{tr("new")}</button>
-            <button type="button" className="ghost danger" onClick={removeActiveSession} disabled={chatSessions.length <= 1 || chatRunning}>{tr("delete")}</button>
-            <button type="button" className="ghost" onClick={clearActiveSessionMessages} disabled={!activeChatSession || chatRunning}>{tr("clear_chat")}</button>
-          </div>
-          <label>
-            {tr("active_title")}
-            <input
-              value={sessionTitleDraft}
-              onChange={(event) => setSessionTitleDraft(event.target.value)}
-              onBlur={() => renameActiveSession(sessionTitleDraft)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  renameActiveSession(sessionTitleDraft);
-                }
-              }}
-              disabled={!activeChatSession}
-            />
-          </label>
-          <div className="session-list">
-            {chatSessions.map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                className={`session-item ${activeChatSession?.id === item.id ? "active" : ""}`}
-                onClick={() => setActiveSessionId(item.id)}
-              >
-                <span>{item.title}</span>
-                <span className="tiny mono">{item.messages.length}</span>
-              </button>
-            ))}
-          </div>
+          {leftPanels.sessions ? (
+            <>
+              <div className="inline-actions">
+                <button type="button" className="ghost" onClick={createSession} disabled={chatRunning}>{tr("new")}</button>
+                <button type="button" className="ghost danger" onClick={removeActiveSession} disabled={chatSessions.length <= 1 || chatRunning}>{tr("delete")}</button>
+                <button type="button" className="ghost" onClick={clearActiveSessionMessages} disabled={!activeChatSession || chatRunning}>{tr("clear_chat")}</button>
+              </div>
+              <label>
+                {tr("search_sessions")}
+                <input value={sessionQuery} onChange={(event) => setSessionQuery(event.target.value)} placeholder={tr("search_sessions")} />
+              </label>
+              <label>
+                {tr("active_title")}
+                <input
+                  value={sessionTitleDraft}
+                  onChange={(event) => setSessionTitleDraft(event.target.value)}
+                  onBlur={() => renameActiveSession(sessionTitleDraft)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      renameActiveSession(sessionTitleDraft);
+                    }
+                  }}
+                  disabled={!activeChatSession}
+                />
+              </label>
+              {filteredSessions.length === 0 ? (
+                <p className="muted tiny">{tr("no_matching_sessions")}</p>
+              ) : (
+                <div className="session-list">
+                  {filteredSessions.map((item) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      className={`session-item ${activeChatSession?.id === item.id ? "active" : ""}`}
+                      onClick={() => setActiveSessionId(item.id)}
+                    >
+                      <span>{item.title}</span>
+                      <span className="tiny mono">{item.messages.length}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : null}
         </section>
 
         <section className="oa-section oa-grow">
           <div className="panel-head">
             <h2>{tr("history")}</h2>
             <span className="tag">{filteredHistory.length}/{history.length}</span>
-          </div>
-          <div className="filters-row">
-            <label className="filter-field">
-              {tr("status")}
-              <select value={chainStatusFilter} onChange={(event) => setChainStatusFilter(event.target.value)}>
-                {CHAIN_STATUS_FILTERS.map((item) => (
-                  <option key={item.key} value={item.key}>{tr(item.label_key)}</option>
-                ))}
-              </select>
-            </label>
-            <label className="filter-field">
-              {tr("operation")}
-              <select value={chainOperationFilter} onChange={(event) => setChainOperationFilter(event.target.value)}>
-                <option value="all">{tr("status_all")}</option>
-                {OPERATION_LIST.map((item) => (
-                  <option key={item.key} value={item.key}>{operationText(item.key).label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {filteredHistory.length === 0 ? (
-            <p className="muted tiny">{tr("no_matching_requests")}</p>
-          ) : (
-            <div className="chain-list">
-              {filteredHistory.map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  className={`chain-item ${active?.id === item.id ? "active" : ""}`}
-                  onClick={() => setActiveId(item.id)}
-                >
-                  <div>
-                    <p className="mono">{item.operation}</p>
-                    <p className="tiny muted">{item.status || "ERR"} · {item.duration_ms}ms</p>
-                  </div>
-                </button>
-              ))}
+            <div className="inline-actions panel-tools">
+              <button type="button" className="ghost panel-mini" onClick={() => history[0]?.id && setActiveId(history[0].id)} disabled={!history[0]?.id}>
+                {tr("jump_latest")}
+              </button>
+              <button type="button" className="ghost panel-toggle" onClick={() => toggleLeftPanel("history")} aria-label={tr("toggle_panel")}>
+                {leftPanels.history ? "−" : "+"}
+              </button>
             </div>
-          )}
+          </div>
+          {leftPanels.history ? (
+            <>
+              <div className="filters-row">
+                <label className="filter-field">
+                  {tr("status")}
+                  <select value={chainStatusFilter} onChange={(event) => setChainStatusFilter(event.target.value)}>
+                    {CHAIN_STATUS_FILTERS.map((item) => (
+                      <option key={item.key} value={item.key}>{tr(item.label_key)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="filter-field">
+                  {tr("operation")}
+                  <select value={chainOperationFilter} onChange={(event) => setChainOperationFilter(event.target.value)}>
+                    <option value="all">{tr("status_all")}</option>
+                    {OPERATION_LIST.map((item) => (
+                      <option key={item.key} value={item.key}>{operationText(item.key).label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {filteredHistory.length === 0 ? (
+                <p className="muted tiny">{tr("no_matching_requests")}</p>
+              ) : (
+                <div className="chain-list">
+                  {filteredHistory.map((item) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      className={`chain-item ${active?.id === item.id ? "active" : ""}`}
+                      onClick={() => setActiveId(item.id)}
+                    >
+                      <div>
+                        <p className="mono">{operationText(item.operation).label}</p>
+                        <p className="tiny muted">{item.duration_ms}ms</p>
+                      </div>
+                      <span className={`status ${item.ok ? "ok" : "err"}`}>{item.status || "ERR"}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : null}
         </section>
       </aside>
 
@@ -1771,6 +1862,16 @@ export default function PlaygroundPage() {
               {tr(tab)}
             </button>
           ))}
+        </div>
+        <div className="oa-settings-summary">
+          <span className="mono tiny">
+            {tr("settings_summary", {
+              model: llmConfig.model || "-",
+              tenant: connection.tenant_id || "-",
+              scope: connection.scope || "-",
+              flow: selectedFlowView.label || flowPreset || "-"
+            })}
+          </span>
         </div>
 
         <div className="oa-tab-panel">

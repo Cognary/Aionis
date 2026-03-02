@@ -161,6 +161,8 @@ summary {
   grid-auto-rows: min-content;
   gap: 0;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a44 transparent;
 }
 
 .oa-center {
@@ -209,6 +211,25 @@ summary {
   align-items: center;
   justify-content: space-between;
   gap: 0.45rem;
+}
+
+.panel-tools {
+  margin-left: auto;
+  flex-wrap: nowrap;
+}
+
+.panel-toggle {
+  min-width: 30px;
+  min-height: 28px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.panel-mini {
+  min-height: 28px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
 }
 
 .tag,
@@ -514,6 +535,10 @@ pre {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.4rem;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 3;
 }
 
 .tab-btn {
@@ -536,6 +561,34 @@ pre {
   padding: 0.85rem 0.95rem;
   display: grid;
   gap: 0.6rem;
+}
+
+.oa-settings-summary {
+  padding: 0.48rem 0.95rem;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--muted);
+  background: #151518;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #35353e;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #454553;
+  background-clip: padding-box;
 }
 
 .form-grid {
