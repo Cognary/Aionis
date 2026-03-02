@@ -552,7 +552,7 @@ export type ControlIncidentPublishSloQuery = {
 };
 
 export type ControlTenantTimeseriesQuery = {
-  endpoint?: "write" | "recall" | "recall_text";
+  endpoint?: "write" | "recall" | "recall_text" | "planning_context" | "context_assemble";
   window_hours?: number;
   limit?: number;
   offset?: number;
@@ -560,7 +560,7 @@ export type ControlTenantTimeseriesQuery = {
 };
 
 export type ControlTenantKeyUsageQuery = {
-  endpoint?: "write" | "recall" | "recall_text";
+  endpoint?: "write" | "recall" | "recall_text" | "planning_context" | "context_assemble";
   window_hours?: number;
   baseline_hours?: number;
   min_requests?: number;

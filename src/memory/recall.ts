@@ -161,7 +161,7 @@ export async function memoryRecallParsed(
   defaultTenantId: string,
   auth: RecallAuth,
   telemetry?: RecallTelemetry,
-  endpoint: "recall" | "recall_text" = "recall",
+  endpoint: "recall" | "recall_text" | "planning_context" | "context_assemble" = "recall",
   options?: MemoryRecallOptions,
 ) {
   const tenancy = resolveTenantScope(

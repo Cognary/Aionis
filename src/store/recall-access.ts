@@ -103,7 +103,7 @@ export type RecallDebugEmbeddingRow = {
 
 export type RecallAuditInsertParams = {
   scope: string;
-  endpoint: "recall" | "recall_text";
+  endpoint: "recall" | "recall_text" | "planning_context" | "context_assemble";
   consumerAgentId: string | null;
   consumerTeamId: string | null;
   querySha256: string;

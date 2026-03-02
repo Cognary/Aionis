@@ -33,11 +33,13 @@ Panel groups:
 1. Runtime health (`database_target_hash`, backend mode, feature capabilities)
 2. Tenant snapshot (`nodes/edges`, active rules, recalls/commits, outbox state)
 3. Request telemetry (`total`, `error_rate`, `p95/p99`)
-4. Recall pipeline and outbox diagnostics
-5. Incident publish rollup + SLO
-6. Timeseries buckets (latest)
-7. API key usage anomaly
-8. Control audit preview
+4. Recall pipeline diagnostics
+5. Context assembly diagnostics (`planning_context` / `context_assemble` latency, budget adherence, per-layer drop ratio)
+6. Outbox diagnostics
+7. Incident publish rollup + SLO
+8. Timeseries buckets (latest)
+9. API key usage anomaly
+10. Control audit preview
 
 ### Audit (`/audit`)
 
@@ -53,9 +55,10 @@ Focused view over `GET /v1/admin/control/audit-events`:
 Operationalized evidence surface for memory-policy execution:
 
 1. Execution-loop snapshot from diagnostics (`recall_text` error/latency + outbox state).
-2. Audit risk slice (write-like/high-risk/replay action counts).
-3. Decision replay inspector via `POST /v1/memory/tools/decision`.
-4. One-screen evidence commands for governance gates and benchmark runs.
+2. Context orchestration snapshot (`planning_context` and `context_assemble` throughput/latency + layer drop pressure).
+3. Audit risk slice (write-like/high-risk/replay action counts).
+4. Decision replay inspector via `POST /v1/memory/tools/decision`.
+5. One-screen evidence commands for governance gates and benchmark runs.
 
 ### Actions (`/actions`)
 

@@ -132,14 +132,43 @@ export type ControlIncidentPublishReplayInput = {
 export type MemoryRequestTelemetryInput = {
   tenant_id: string;
   scope: string;
-  endpoint: "write" | "recall" | "recall_text";
+  endpoint: "write" | "recall" | "recall_text" | "planning_context" | "context_assemble";
   status_code: number;
   latency_ms: number;
   api_key_prefix?: string | null;
   request_id?: string | null;
 };
 
-type TelemetryEndpoint = "write" | "recall" | "recall_text";
+export type ContextAssemblyLayerName = "facts" | "episodes" | "rules" | "decisions" | "tools" | "citations";
+
+export type MemoryContextAssemblyLayerTelemetryInput = {
+  layer_name: ContextAssemblyLayerName;
+  source_count: number;
+  kept_count: number;
+  dropped_count: number;
+  budget_chars: number;
+  used_chars: number;
+  max_items: number;
+};
+
+export type MemoryContextAssemblyTelemetryInput = {
+  tenant_id: string;
+  scope: string;
+  endpoint: "planning_context" | "context_assemble";
+  latency_ms: number;
+  request_id?: string | null;
+  total_budget_chars: number;
+  used_chars: number;
+  remaining_chars: number;
+  source_items: number;
+  kept_items: number;
+  dropped_items: number;
+  layers_with_content: number;
+  merge_trace_included: boolean;
+  layers: MemoryContextAssemblyLayerTelemetryInput[];
+};
+
+type TelemetryEndpoint = MemoryRequestTelemetryInput["endpoint"];
 
 function trimOrNull(v: unknown): string | null {
   if (typeof v !== "string") return null;
@@ -1407,6 +1436,141 @@ export async function recordMemoryRequestTelemetry(db: Db, input: MemoryRequestT
     });
   } catch (err: any) {
     // During rollout, this table may not exist yet.
+    const code = String(err?.code ?? "");
+    if (code === "42P01") return;
+    if (code === "23514" && (endpoint === "planning_context" || endpoint === "context_assemble")) return;
+    throw err;
+  }
+}
+
+function boundedInt(input: number, max = 10_000_000): number {
+  if (!Number.isFinite(input)) return 0;
+  return Math.max(0, Math.min(max, Math.trunc(input)));
+}
+
+function boundedMs(input: number): number {
+  if (!Number.isFinite(input)) return 0;
+  return Math.max(0, input);
+}
+
+export async function recordMemoryContextAssemblyTelemetry(
+  db: Db,
+  input: MemoryContextAssemblyTelemetryInput,
+): Promise<void> {
+  const tenantId = trimOrNull(input.tenant_id);
+  const scope = trimOrNull(input.scope);
+  const endpoint = trimOrNull(input.endpoint);
+  if (!tenantId || !scope) return;
+  if (endpoint !== "planning_context" && endpoint !== "context_assemble") return;
+
+  const requestId = trimOrNull(input.request_id);
+  const totalBudgetChars = boundedInt(input.total_budget_chars);
+  const usedChars = boundedInt(input.used_chars);
+  const remainingChars = boundedInt(input.remaining_chars);
+  const sourceItems = boundedInt(input.source_items);
+  const keptItems = boundedInt(input.kept_items);
+  const droppedItems = boundedInt(input.dropped_items);
+  const layersWithContent = boundedInt(input.layers_with_content, 10_000);
+  const mergeTraceIncluded = input.merge_trace_included === true;
+  const latencyMs = boundedMs(input.latency_ms);
+
+  const layers = (Array.isArray(input.layers) ? input.layers : [])
+    .map((layer) => ({
+      layer_name: layer.layer_name,
+      source_count: boundedInt(layer.source_count),
+      kept_count: boundedInt(layer.kept_count),
+      dropped_count: boundedInt(layer.dropped_count),
+      budget_chars: boundedInt(layer.budget_chars),
+      used_chars: boundedInt(layer.used_chars),
+      max_items: boundedInt(layer.max_items, 10_000),
+    }))
+    .filter((layer) => {
+      return (
+        layer.layer_name === "facts" ||
+        layer.layer_name === "episodes" ||
+        layer.layer_name === "rules" ||
+        layer.layer_name === "decisions" ||
+        layer.layer_name === "tools" ||
+        layer.layer_name === "citations"
+      );
+    });
+
+  try {
+    await withTx(db, async (client) => {
+      const head = await client.query(
+        `
+        INSERT INTO memory_context_assembly_telemetry (
+          tenant_id,
+          scope,
+          endpoint,
+          request_id,
+          total_budget_chars,
+          used_chars,
+          remaining_chars,
+          source_items,
+          kept_items,
+          dropped_items,
+          layers_with_content,
+          merge_trace_included,
+          latency_ms
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING id
+        `,
+        [
+          tenantId,
+          scope,
+          endpoint,
+          requestId,
+          totalBudgetChars,
+          usedChars,
+          remainingChars,
+          sourceItems,
+          keptItems,
+          droppedItems,
+          layersWithContent,
+          mergeTraceIncluded,
+          latencyMs,
+        ],
+      );
+      const telemetryId = Number(head.rows[0]?.id ?? 0);
+      if (!Number.isFinite(telemetryId) || telemetryId <= 0) return;
+
+      for (const layer of layers) {
+        await client.query(
+          `
+          INSERT INTO memory_context_assembly_layer_telemetry (
+            telemetry_id,
+            tenant_id,
+            scope,
+            endpoint,
+            layer_name,
+            source_count,
+            kept_count,
+            dropped_count,
+            budget_chars,
+            used_chars,
+            max_items
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          `,
+          [
+            telemetryId,
+            tenantId,
+            scope,
+            endpoint,
+            layer.layer_name,
+            layer.source_count,
+            layer.kept_count,
+            layer.dropped_count,
+            layer.budget_chars,
+            layer.used_chars,
+            layer.max_items,
+          ],
+        );
+      }
+    });
+  } catch (err: any) {
     if (String(err?.code ?? "") === "42P01") return;
     throw err;
   }
@@ -1597,6 +1761,14 @@ export async function getTenantOperabilityDiagnostics(
       })()
     : tenantScopeCondition(memoryArgs, tenantId, defaultTenantId);
 
+  const contextArgs: unknown[] = [tenantId];
+  let scopeFilterContext = scope
+    ? (() => {
+        contextArgs.push(tenantScopeKey(scope, tenantId, defaultTenantId));
+        return { sql: `c.scope = $${contextArgs.length}`, args: contextArgs };
+      })()
+    : tenantScopeConditionForColumn(contextArgs, tenantId, defaultTenantId, "c.scope");
+
   const out: Record<string, unknown> = {
     tenant_id: tenantId,
     default_tenant_id: defaultTenantId,
@@ -1664,6 +1836,87 @@ export async function getTenantOperabilityDiagnostics(
         scopeFilterMemory.args,
       );
 
+      let contextSummaryRow: any = null;
+      let contextEndpointRowsRaw: any[] = [];
+      let contextLayerRowsRaw: any[] = [];
+      let contextTelemetryWarning: string | null = null;
+
+      try {
+        const contextSummary = await client.query(
+          `
+          SELECT
+            COUNT(*)::bigint AS total,
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p50_ms,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p95_ms,
+            percentile_cont(0.99) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p99_ms,
+            COUNT(*) FILTER (WHERE c.remaining_chars = 0)::bigint AS budget_exhausted,
+            COUNT(*) FILTER (WHERE c.dropped_items > 0)::bigint AS dropped_requests,
+            AVG(
+              CASE
+                WHEN c.total_budget_chars > 0 THEN c.used_chars::double precision / c.total_budget_chars::double precision
+                ELSE 0
+              END
+            )::double precision AS budget_use_ratio_avg
+          FROM memory_context_assembly_telemetry c
+          WHERE c.tenant_id = $1
+            AND ${scopeFilterContext.sql}
+            AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+          `,
+          [...scopeFilterContext.args, windowMinutes],
+        );
+        contextSummaryRow = contextSummary.rows[0] ?? null;
+
+        const contextByEndpoint = await client.query(
+          `
+          SELECT
+            c.endpoint,
+            COUNT(*)::bigint AS total,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p95_ms,
+            COUNT(*) FILTER (WHERE c.remaining_chars = 0)::bigint AS budget_exhausted,
+            COUNT(*) FILTER (WHERE c.dropped_items > 0)::bigint AS dropped_requests
+          FROM memory_context_assembly_telemetry c
+          WHERE c.tenant_id = $1
+            AND ${scopeFilterContext.sql}
+            AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+          GROUP BY c.endpoint
+          ORDER BY c.endpoint ASC
+          `,
+          [...scopeFilterContext.args, windowMinutes],
+        );
+        contextEndpointRowsRaw = contextByEndpoint.rows;
+
+        const layerArgs = [...scopeFilterContext.args];
+        const windowArgIndex = layerArgs.length + 1;
+        const contextByLayer = await client.query(
+          `
+          SELECT
+            l.layer_name,
+            COUNT(*)::bigint AS total,
+            SUM(l.source_count)::bigint AS source_total,
+            SUM(l.kept_count)::bigint AS kept_total,
+            SUM(l.dropped_count)::bigint AS dropped_total,
+            AVG(l.used_chars)::double precision AS used_chars_avg,
+            AVG(l.budget_chars)::double precision AS budget_chars_avg,
+            COUNT(*) FILTER (WHERE l.dropped_count > 0)::bigint AS dropped_requests,
+            COUNT(*) FILTER (WHERE l.budget_chars > 0 AND l.used_chars >= l.budget_chars)::bigint AS budget_exhausted
+          FROM memory_context_assembly_layer_telemetry l
+          WHERE l.tenant_id = $1
+            AND ${scopeFilterContext.sql.replace(/c\.scope/g, "l.scope")}
+            AND l.created_at >= now() - (($${windowArgIndex}::text || ' minutes')::interval)
+          GROUP BY l.layer_name
+          ORDER BY l.layer_name ASC
+          `,
+          [...layerArgs, windowMinutes],
+        );
+        contextLayerRowsRaw = contextByLayer.rows;
+      } catch (contextErr: any) {
+        if (String(contextErr?.code ?? "") === "42P01") {
+          contextTelemetryWarning = "context_assembly_telemetry_table_missing";
+        } else {
+          throw contextErr;
+        }
+      }
+
       const endpointRows = requestTelemetry.rows.map((r: any) => {
         const total = Number(r.total ?? 0);
         const errors = Number(r.errors ?? 0);
@@ -1702,6 +1955,55 @@ export async function getTenantOperabilityDiagnostics(
         { pending: 0, retrying: 0, failed: 0, oldest_pending_age_sec: 0 },
       );
 
+      const contextTotal = Number(contextSummaryRow?.total ?? 0);
+      const contextBudgetExhausted = Number(contextSummaryRow?.budget_exhausted ?? 0);
+      const contextDroppedRequests = Number(contextSummaryRow?.dropped_requests ?? 0);
+      const contextEndpointRows = contextEndpointRowsRaw.map((r: any) => {
+        const total = Number(r.total ?? 0);
+        const budgetExhausted = Number(r.budget_exhausted ?? 0);
+        const droppedRequests = Number(r.dropped_requests ?? 0);
+        return {
+          endpoint: String(r.endpoint ?? "unknown"),
+          total,
+          latency_p95_ms: round(Number(r.latency_p95_ms ?? 0)),
+          budget_exhausted: budgetExhausted,
+          budget_exhausted_rate: total > 0 ? round(budgetExhausted / total) : 0,
+          dropped_requests: droppedRequests,
+          dropped_request_rate: total > 0 ? round(droppedRequests / total) : 0,
+        };
+      });
+      const contextLayerRows = contextLayerRowsRaw.map((r: any) => {
+        const total = Number(r.total ?? 0);
+        const sourceTotal = Number(r.source_total ?? 0);
+        const keptTotal = Number(r.kept_total ?? 0);
+        const droppedTotal = Number(r.dropped_total ?? 0);
+        const droppedRequests = Number(r.dropped_requests ?? 0);
+        const budgetExhausted = Number(r.budget_exhausted ?? 0);
+        return {
+          layer_name: String(r.layer_name ?? "unknown"),
+          total,
+          source_total: sourceTotal,
+          kept_total: keptTotal,
+          dropped_total: droppedTotal,
+          kept_ratio: sourceTotal > 0 ? round(keptTotal / sourceTotal) : 0,
+          drop_ratio: sourceTotal > 0 ? round(droppedTotal / sourceTotal) : 0,
+          used_chars_avg: round(Number(r.used_chars_avg ?? 0)),
+          budget_chars_avg: round(Number(r.budget_chars_avg ?? 0)),
+          dropped_requests: droppedRequests,
+          dropped_request_rate: total > 0 ? round(droppedRequests / total) : 0,
+          budget_exhausted: budgetExhausted,
+          budget_exhausted_rate: total > 0 ? round(budgetExhausted / total) : 0,
+        };
+      });
+      const criticalLayerAlerts = contextLayerRows
+        .filter((row) => row.layer_name === "rules" || row.layer_name === "decisions")
+        .map((row) => ({
+          layer_name: row.layer_name,
+          sample_count: row.total,
+          drop_ratio: row.drop_ratio,
+          severity: row.total >= 20 && row.drop_ratio >= 0.2 ? "warning" : "ok",
+        }));
+
       out.request_telemetry = {
         endpoints: endpointRows,
       };
@@ -1720,6 +2022,23 @@ export async function getTenantOperabilityDiagnostics(
       out.outbox = {
         totals: outboxTotals,
         by_event_type: outboxRows,
+      };
+      out.context_assembly = {
+        total: contextTotal,
+        latency_p50_ms: round(Number(contextSummaryRow?.latency_p50_ms ?? 0)),
+        latency_p95_ms: round(Number(contextSummaryRow?.latency_p95_ms ?? 0)),
+        latency_p99_ms: round(Number(contextSummaryRow?.latency_p99_ms ?? 0)),
+        budget_exhausted: contextBudgetExhausted,
+        budget_exhausted_rate: contextTotal > 0 ? round(contextBudgetExhausted / contextTotal) : 0,
+        dropped_requests: contextDroppedRequests,
+        dropped_request_rate: contextTotal > 0 ? round(contextDroppedRequests / contextTotal) : 0,
+        budget_use_ratio_avg: round(Number(contextSummaryRow?.budget_use_ratio_avg ?? 0)),
+        endpoints: contextEndpointRows,
+        layers: contextLayerRows,
+        alerts: {
+          critical_layers: criticalLayerAlerts,
+        },
+        warning: contextTelemetryWarning ?? undefined,
       };
     });
   } catch (err: any) {

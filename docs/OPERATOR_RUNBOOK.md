@@ -136,12 +136,13 @@ curl -sS localhost:${PORT:-3001}/v1/memory/recall_text \
 set -a; source .env; set +a
 curl -sS localhost:${PORT:-3001}/v1/admin/control/diagnostics/tenant/default?window_minutes=60 \
   -H "X-Admin-Token: ${ADMIN_TOKEN}" \
-| jq '.diagnostics | {request_telemetry, recall_pipeline, outbox}'
+| jq '.diagnostics | {request_telemetry, recall_pipeline, context_assembly, outbox}'
 ```
 
 Use this to quickly locate:
 - empty-seed / empty-node spikes
 - endpoint p95/p99 latency regressions
+- context assembly budget-exhausted / drop-ratio pressure (especially `rules` and `decisions` layers)
 - outbox pending/retrying/failed backlog by event type
 
 ## Weekly

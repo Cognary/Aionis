@@ -95,7 +95,10 @@ export default async function GovernancePage({ searchParams }) {
     ? diagnostics.request_telemetry.endpoints
     : [];
   const recallTextRow = endpointRows.find((row) => String(row?.endpoint || "") === "recall_text") || null;
+  const planningContextRow = endpointRows.find((row) => String(row?.endpoint || "") === "planning_context") || null;
+  const contextAssembleRow = endpointRows.find((row) => String(row?.endpoint || "") === "context_assemble") || null;
   const writeRow = endpointRows.find((row) => String(row?.endpoint || "") === "write") || null;
+  const contextAssembly = diagnostics?.context_assembly ?? null;
   const outboxTotals = diagnostics?.outbox?.totals ?? {};
 
   const auditEvents = Array.isArray(auditResult.data?.events) ? auditResult.data.events : [];
@@ -203,6 +206,12 @@ export default async function GovernancePage({ searchParams }) {
             <p>{formatNumber(writeRow?.total)}</p>
             <p>write p95</p>
             <p>{formatNumber(writeRow?.latency_p95_ms)} ms</p>
+            <p>planning/context assemble total</p>
+            <p>
+              {formatNumber(planningContextRow?.total)} / {formatNumber(contextAssembleRow?.total)}
+            </p>
+            <p>context assemble p95</p>
+            <p>{formatNumber(contextAssembly?.latency_p95_ms)} ms</p>
             <p>outbox pending/retrying/failed</p>
             <p>
               {formatNumber(outboxTotals?.pending)} / {formatNumber(outboxTotals?.retrying)} / {formatNumber(outboxTotals?.failed)}

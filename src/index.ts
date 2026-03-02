@@ -41,6 +41,7 @@ import {
   replayControlIncidentPublishJobs,
   listStaleControlApiKeys,
   listControlTenants,
+  recordMemoryContextAssemblyTelemetry,
   recordMemoryRequestTelemetry,
   recordControlAuditEvent,
   rotateControlApiKey,
@@ -380,7 +381,9 @@ const CORS_MEMORY_ALLOW_METHODS = "POST,OPTIONS";
 const CORS_ADMIN_ALLOW_HEADERS = "content-type,authorization,x-admin-token,x-request-id";
 const CORS_ADMIN_ALLOW_METHODS = "GET,POST,PUT,DELETE,OPTIONS";
 const CORS_ADMIN_ROUTE_METHODS = new Set(["GET", "POST", "PUT", "DELETE"]);
-const TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT = new Map<string, "write" | "recall" | "recall_text">([
+type TelemetryEndpoint = "write" | "recall" | "recall_text" | "planning_context" | "context_assemble";
+
+const TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT = new Map<string, TelemetryEndpoint>([
   ["/v1/memory/write", "write"],
   ["/v1/memory/sessions", "write"],
   ["/v1/memory/events", "write"],
@@ -389,8 +392,8 @@ const TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT = new Map<string, "write" | "recall" | 
   ["/v1/memory/packs/export", "recall"],
   ["/v1/memory/recall", "recall"],
   ["/v1/memory/recall_text", "recall_text"],
-  ["/v1/memory/planning/context", "recall"],
-  ["/v1/memory/context/assemble", "recall"],
+  ["/v1/memory/planning/context", "planning_context"],
+  ["/v1/memory/context/assemble", "context_assemble"],
   ["/v1/memory/tools/decision", "recall"],
 ]);
 
@@ -451,15 +454,17 @@ function resolveCorsPolicy(req: any): CorsPolicy | null {
   return null;
 }
 
-function telemetryEndpointFromRequest(req: any): "write" | "recall" | "recall_text" | null {
+function telemetryEndpointFromRequest(req: any): TelemetryEndpoint | null {
   if (String(req?.method ?? "").toUpperCase() !== "POST") return null;
   const p = routePath(req);
   return TELEMETRY_MEMORY_ROUTE_TO_ENDPOINT.get(p) ?? null;
 }
 
-function parseTelemetryEndpoint(v: unknown): "write" | "recall" | "recall_text" | undefined {
+function parseTelemetryEndpoint(v: unknown): TelemetryEndpoint | undefined {
   if (typeof v !== "string") return undefined;
-  if (v === "write" || v === "recall" || v === "recall_text") return v;
+  if (v === "write" || v === "recall" || v === "recall_text" || v === "planning_context" || v === "context_assemble") {
+    return v;
+  }
   return undefined;
 }
 
@@ -467,7 +472,7 @@ type DashboardCursor = {
   v: 1;
   kind: "timeseries" | "key_usage";
   tenant_id: string;
-  endpoint?: "write" | "recall" | "recall_text" | null;
+  endpoint?: TelemetryEndpoint | null;
   window_hours: number;
   baseline_hours?: number;
   limit: number;
@@ -533,6 +538,73 @@ function resolveRequestApiKeyPrefixForTelemetry(req: any): string | null {
   const tagged = (req as any)?.aionis_api_key_prefix;
   if (typeof tagged === "string" && tagged.trim().length > 0) return tagged.trim();
   return null;
+}
+
+type ContextAssemblyEndpoint = "planning_context" | "context_assemble";
+
+type ContextAssemblyLayerTelemetryRow = {
+  layer_name: "facts" | "episodes" | "rules" | "decisions" | "tools" | "citations";
+  source_count: number;
+  kept_count: number;
+  dropped_count: number;
+  budget_chars: number;
+  used_chars: number;
+  max_items: number;
+};
+
+function parseNonNegativeNumber(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, n);
+}
+
+function collectLayeredContextTelemetryRows(layeredContext: any): ContextAssemblyLayerTelemetryRow[] {
+  if (!layeredContext || typeof layeredContext !== "object") return [];
+  const layers = layeredContext.layers;
+  if (!layers || typeof layers !== "object" || Array.isArray(layers)) return [];
+  const validLayers = ["facts", "episodes", "rules", "decisions", "tools", "citations"] as const;
+  const out: ContextAssemblyLayerTelemetryRow[] = [];
+  for (const layerName of validLayers) {
+    const layer = (layers as any)[layerName];
+    if (!layer || typeof layer !== "object" || Array.isArray(layer)) continue;
+    out.push({
+      layer_name: layerName,
+      source_count: parseNonNegativeNumber(layer.source_count),
+      kept_count: parseNonNegativeNumber(layer.kept_count),
+      dropped_count: parseNonNegativeNumber(layer.dropped_count),
+      budget_chars: parseNonNegativeNumber(layer.budget_chars),
+      used_chars: parseNonNegativeNumber(layer.used_chars),
+      max_items: parseNonNegativeNumber(layer.max_items),
+    });
+  }
+  return out;
+}
+
+async function recordContextAssemblyTelemetryBestEffort(args: {
+  req: any;
+  tenant_id: string;
+  scope: string;
+  endpoint: ContextAssemblyEndpoint;
+  latency_ms: number;
+  layered_context: any;
+}) {
+  const layerRows = collectLayeredContextTelemetryRows(args.layered_context);
+  await recordMemoryContextAssemblyTelemetry(db, {
+    tenant_id: args.tenant_id,
+    scope: args.scope,
+    endpoint: args.endpoint,
+    latency_ms: parseNonNegativeNumber(args.latency_ms),
+    request_id: String(args.req?.id ?? ""),
+    total_budget_chars: parseNonNegativeNumber(args.layered_context?.budget?.total_chars),
+    used_chars: parseNonNegativeNumber(args.layered_context?.budget?.used_chars),
+    remaining_chars: parseNonNegativeNumber(args.layered_context?.budget?.remaining_chars),
+    source_items: parseNonNegativeNumber(args.layered_context?.stats?.source_items),
+    kept_items: parseNonNegativeNumber(args.layered_context?.stats?.kept_items),
+    dropped_items: parseNonNegativeNumber(args.layered_context?.stats?.dropped_items),
+    layers_with_content: parseNonNegativeNumber(args.layered_context?.stats?.layers_with_content),
+    merge_trace_included: Array.isArray(args.layered_context?.merge_trace),
+    layers: layerRows,
+  });
 }
 
 function withRecallProfileDefaults(body: unknown, defaults: RecallProfileDefaults) {
@@ -1550,7 +1622,11 @@ app.get("/v1/admin/control/dashboard/tenant/:tenant_id/timeseries", async (req, 
   const endpointRaw = typeof q?.endpoint === "string" ? q.endpoint : undefined;
   const endpoint = parseTelemetryEndpoint(endpointRaw ?? cursor?.endpoint ?? undefined);
   if (endpointRaw && !endpoint && endpointRaw.trim().length > 0) {
-    throw new HttpError(400, "invalid_request", "endpoint must be one of: write|recall|recall_text");
+    throw new HttpError(
+      400,
+      "invalid_request",
+      "endpoint must be one of: write|recall|recall_text|planning_context|context_assemble",
+    );
   }
   const windowHours = typeof q?.window_hours === "string" ? Number(q.window_hours) : cursor?.window_hours;
   const limit = typeof q?.limit === "string" ? Number(q.limit) : cursor?.limit;
@@ -1592,7 +1668,11 @@ app.get("/v1/admin/control/dashboard/tenant/:tenant_id/key-usage", async (req, r
   const endpointRaw = typeof q?.endpoint === "string" ? q.endpoint : undefined;
   const endpoint = parseTelemetryEndpoint(endpointRaw ?? cursor?.endpoint ?? undefined);
   if (endpointRaw && !endpoint && endpointRaw.trim().length > 0) {
-    throw new HttpError(400, "invalid_request", "endpoint must be one of: write|recall|recall_text");
+    throw new HttpError(
+      400,
+      "invalid_request",
+      "endpoint must be one of: write|recall|recall_text|planning_context|context_assemble",
+    );
   }
   const windowHours = typeof q?.window_hours === "string" ? Number(q.window_hours) : cursor?.window_hours;
   const baselineHours = typeof q?.baseline_hours === "string" ? Number(q.baseline_hours) : cursor?.baseline_hours;
@@ -2515,7 +2595,7 @@ app.post("/v1/memory/planning/context", async (req, reply) => {
             timings[stage] = (timings[stage] ?? 0) + ms;
           },
         },
-        "recall_text",
+        "planning_context",
         {
           stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
           recall_access: recallAccessForClient(client),
@@ -2649,9 +2729,24 @@ app.post("/v1/memory/planning/context", async (req, reply) => {
         config: parsed.context_layers ?? null,
       })
     : undefined;
+  const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
+  if (layeredContext) {
+    try {
+      await recordContextAssemblyTelemetryBestEffort({
+        req,
+        tenant_id: tenantIdOut,
+        scope: recallOut.scope,
+        endpoint: "planning_context",
+        latency_ms: ms,
+        layered_context: layeredContext,
+      });
+    } catch (err) {
+      req.log.warn({ err, tenant_id: tenantIdOut, scope: recallOut.scope }, "planning_context telemetry insert failed");
+    }
+  }
 
   return reply.code(200).send({
-    tenant_id: recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+    tenant_id: tenantIdOut,
     scope: recallOut.scope,
     query: { text: q, embedding_provider: embedder.name },
     recall: {
@@ -2675,7 +2770,7 @@ app.post("/v1/memory/context/assemble", async (req, reply) => {
   const t0 = performance.now();
   const timings: Record<string, number> = {};
   const principal = await requireMemoryPrincipal(req);
-  const bodyRaw = withIdentityFromRequest(req, req.body, principal, "planning_context");
+  const bodyRaw = withIdentityFromRequest(req, req.body, principal, "context_assemble");
   const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
   const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
   let body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
@@ -2811,7 +2906,7 @@ app.post("/v1/memory/context/assemble", async (req, reply) => {
             timings[stage] = (timings[stage] ?? 0) + ms;
           },
         },
-        "recall_text",
+        "context_assemble",
         {
           stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
           recall_access: recallAccessForClient(client),
@@ -2916,12 +3011,27 @@ app.post("/v1/memory/context/assemble", async (req, reply) => {
         config: parsed.context_layers ?? null,
       })
     : undefined;
+  const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
+  if (layeredContext) {
+    try {
+      await recordContextAssemblyTelemetryBestEffort({
+        req,
+        tenant_id: tenantIdOut,
+        scope: recallOut.scope,
+        endpoint: "context_assemble",
+        latency_ms: ms,
+        layered_context: layeredContext,
+      });
+    } catch (err) {
+      req.log.warn({ err, tenant_id: tenantIdOut, scope: recallOut.scope }, "context_assemble telemetry insert failed");
+    }
+  }
 
   req.log.info(
     {
       context_assemble: {
         scope: recallOut.scope,
-        tenant_id: recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+        tenant_id: tenantIdOut,
         include_rules: parsed.include_rules,
         include_shadow: parsed.include_shadow,
         rules_limit: parsed.rules_limit,
@@ -2950,7 +3060,7 @@ app.post("/v1/memory/context/assemble", async (req, reply) => {
   );
 
   return reply.code(200).send({
-    tenant_id: recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+    tenant_id: tenantIdOut,
     scope: recallOut.scope,
     query: { text: q, embedding_provider: embedder.name },
     recall: {
@@ -3284,6 +3394,7 @@ function withIdentityFromRequest(
     | "recall"
     | "recall_text"
     | "planning_context"
+    | "context_assemble"
     | "feedback"
     | "rules_state"
     | "rules_evaluate"
@@ -3313,7 +3424,10 @@ function withIdentityFromRequest(
     (req as any).aionis_scope = obj.scope.trim();
   }
 
-  if (principal && (kind === "find" || kind === "recall" || kind === "recall_text" || kind === "planning_context")) {
+  if (
+    principal &&
+    (kind === "find" || kind === "recall" || kind === "recall_text" || kind === "planning_context" || kind === "context_assemble")
+  ) {
     const reqAgent = typeof obj.consumer_agent_id === "string" ? obj.consumer_agent_id.trim() : null;
     const reqTeam = typeof obj.consumer_team_id === "string" ? obj.consumer_team_id.trim() : null;
     assertIdentityMatch("consumer_agent_id", reqAgent, principal.agent_id);
@@ -3338,7 +3452,7 @@ function withIdentityFromRequest(
 
   if (
     principal &&
-    (kind === "rules_evaluate" || kind === "tools_select" || kind === "tools_feedback" || kind === "planning_context")
+    (kind === "rules_evaluate" || kind === "tools_select" || kind === "tools_feedback" || kind === "planning_context" || kind === "context_assemble")
   ) {
     const ctx = obj.context && typeof obj.context === "object" && !Array.isArray(obj.context) ? { ...obj.context } : {};
     const agent = ctx.agent && typeof ctx.agent === "object" && !Array.isArray(ctx.agent) ? { ...ctx.agent } : {};

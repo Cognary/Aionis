@@ -107,6 +107,8 @@ Progress update (`2026-03-02`):
 3. Playground: added `context/assemble` operation, layer preset controls (balanced/compact/policy-first), enabled-layer toggles, budget/merge-trace toggles, and inspector merge-trace preview.
 4. Added bilingual docs page `CONTEXT_ORCHESTRATION.md` with copy-ready presets and rollout guidance.
 5. SDK smoke scripts now include `context/assemble` probe with `no_embedding_provider` graceful skip semantics.
+6. Added context-assembly operability telemetry (summary + per-layer stats) and diagnostics aggregation for ops.
+7. Updated Ops dashboard/governance surfaces and runbook/API docs with context-assembly SLO signals.
 
 Acceptance:
 
@@ -150,4 +152,4 @@ Mitigation: contract-smoke in CI and shared schema source
 4. [x] Add CI contract probes
 5. [x] Add SDK methods/types
 6. [x] Add Playground orchestration panel
-7. [ ] Add ops metrics + runbook
+7. [x] Add ops metrics + runbook

@@ -39,7 +39,14 @@ export function readDashboardQuery(searchParams) {
   const windowMinutes = normalizeInt(searchParams?.window_minutes, 60, 5, 1440);
   const windowHours = normalizeInt(searchParams?.window_hours, 168, 1, 24 * 30);
   const endpoint = normalizeText(searchParams?.endpoint, "");
-  const endpointFilter = endpoint === "write" || endpoint === "recall" || endpoint === "recall_text" ? endpoint : "";
+  const endpointFilter =
+    endpoint === "write" ||
+    endpoint === "recall" ||
+    endpoint === "recall_text" ||
+    endpoint === "planning_context" ||
+    endpoint === "context_assemble"
+      ? endpoint
+      : "";
 
   return {
     tenantId,

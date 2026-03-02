@@ -528,7 +528,7 @@ class ControlIncidentPublishSloQuery(TypedDict, total=False):
 
 
 class ControlTenantTimeseriesQuery(TypedDict, total=False):
-    endpoint: Literal["write", "recall", "recall_text"]
+    endpoint: Literal["write", "recall", "recall_text", "planning_context", "context_assemble"]
     window_hours: int
     limit: int
     offset: int
@@ -536,7 +536,7 @@ class ControlTenantTimeseriesQuery(TypedDict, total=False):
 
 
 class ControlTenantKeyUsageQuery(TypedDict, total=False):
-    endpoint: Literal["write", "recall", "recall_text"]
+    endpoint: Literal["write", "recall", "recall_text", "planning_context", "context_assemble"]
     window_hours: int
     baseline_hours: int
     min_requests: int

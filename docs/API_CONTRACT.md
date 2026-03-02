@@ -836,7 +836,7 @@ Rotate one active API key (create new + revoke old).
 
 ### `GET /v1/admin/control/diagnostics/tenant/:tenant_id`
 
-Structured operability snapshot for recall pipeline + outbox health.
+Structured operability snapshot for request/recall/context-assembly pipelines + outbox health.
 
 **Headers**
 - `X-Admin-Token: <ADMIN_TOKEN>`
@@ -851,10 +851,20 @@ Structured operability snapshot for recall pipeline + outbox health.
   - `tenant_id`, `scope`, `window_minutes`, `generated_at`
   - `request_telemetry.endpoints[]`:
     - `endpoint`, `total`, `errors`, `error_rate`, `latency_p50_ms`, `latency_p95_ms`, `latency_p99_ms`
+    - endpoint values now include `write`, `recall`, `recall_text`, `planning_context`, `context_assemble`
   - `recall_pipeline`:
     - `total`, `empty_seed`, `empty_nodes`, `empty_edges`
     - `empty_seed_rate`, `empty_node_rate`, `empty_edge_rate`
     - `seed_avg`, `node_avg`, `edge_avg`
+  - `context_assembly`:
+    - summary: `total`, `latency_p50_ms`, `latency_p95_ms`, `latency_p99_ms`
+    - budget adherence: `budget_exhausted`, `budget_exhausted_rate`, `budget_use_ratio_avg`
+    - drop pressure: `dropped_requests`, `dropped_request_rate`
+    - `endpoints[]`: `endpoint`, `total`, `latency_p95_ms`, `budget_exhausted_rate`, `dropped_request_rate`
+    - `layers[]`: `layer_name`, `source_total`, `kept_total`, `dropped_total`, `kept_ratio`, `drop_ratio`,
+      `used_chars_avg`, `budget_chars_avg`, `dropped_request_rate`, `budget_exhausted_rate`
+    - `alerts.critical_layers[]`: `layer_name`, `sample_count`, `drop_ratio`, `severity`
+    - optional rollout warning: `warning`
   - `outbox`:
     - `totals: { pending, retrying, failed, oldest_pending_age_sec }`
     - `by_event_type[]: { event_type, pending, retrying, failed, oldest_pending_age_sec }`
@@ -1177,7 +1187,7 @@ Request telemetry timeseries.
 - `X-Admin-Token: <ADMIN_TOKEN>`
 
 **Query**
-- `endpoint?: "write"|"recall"|"recall_text"`
+- `endpoint?: "write"|"recall"|"recall_text"|"planning_context"|"context_assemble"`
 - `window_hours?: number`
 - `limit?: number`
 - `offset?: number`
@@ -1200,7 +1210,7 @@ API key usage anomaly report.
 - `X-Admin-Token: <ADMIN_TOKEN>`
 
 **Query**
-- `endpoint?: "write"|"recall"|"recall_text"`
+- `endpoint?: "write"|"recall"|"recall_text"|"planning_context"|"context_assemble"`
 - `window_hours?: number`
 - `baseline_hours?: number`
 - `min_requests?: number`

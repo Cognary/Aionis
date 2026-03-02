@@ -31,6 +31,8 @@ function EndpointOptions({ endpointFilter }) {
       <option value="write">write</option>
       <option value="recall">recall</option>
       <option value="recall_text">recall_text</option>
+      <option value="planning_context">planning_context</option>
+      <option value="context_assemble">context_assemble</option>
     </select>
   );
 }
@@ -121,6 +123,8 @@ export default async function OpsDashboardPage({ searchParams }) {
   const endpointRows = Array.isArray(diagnostics?.request_telemetry?.endpoints)
     ? diagnostics.request_telemetry.endpoints
     : [];
+  const contextAssembly = diagnostics?.context_assembly ?? null;
+  const contextAssemblyLayerRows = Array.isArray(contextAssembly?.layers) ? contextAssembly.layers : [];
   const timeseriesRows = Array.isArray(timeseries?.series) ? timeseries.series.slice(0, 24) : [];
   const keyUsageRows = Array.isArray(keyUsage?.items) ? keyUsage.items.slice(0, 16) : [];
   const rollupFailedSample = Array.isArray(rollup?.failed_sample) ? rollup.failed_sample : [];
@@ -266,6 +270,67 @@ export default async function OpsDashboardPage({ searchParams }) {
             <p>
               {formatNumber(dashboard?.outbox?.pending)} / {formatNumber(dashboard?.outbox?.retrying)} / {formatNumber(dashboard?.outbox?.failed)}
             </p>
+          </div>
+        </article>
+      </section>
+
+      <section className="grid-2">
+        <article className="panel">
+          <div className="panel-head">
+            <h2>Context Assembly SLO</h2>
+            <StatusChip result={diagnosticsResult} />
+          </div>
+          <div className="kv">
+            <p>total</p>
+            <p>{formatNumber(contextAssembly?.total)}</p>
+            <p>latency p95 / p99</p>
+            <p>
+              {formatMs(contextAssembly?.latency_p95_ms)} / {formatMs(contextAssembly?.latency_p99_ms)}
+            </p>
+            <p>budget exhausted rate</p>
+            <p>{formatPct(contextAssembly?.budget_exhausted_rate)}</p>
+            <p>dropped request rate</p>
+            <p>{formatPct(contextAssembly?.dropped_request_rate)}</p>
+            <p>budget use ratio avg</p>
+            <p>{formatPct(contextAssembly?.budget_use_ratio_avg)}</p>
+            <p>warning</p>
+            <p>{String(contextAssembly?.warning ?? "none")}</p>
+          </div>
+        </article>
+
+        <article className="panel">
+          <div className="panel-head">
+            <h2>Context Layer Drop Ratio</h2>
+            <StatusChip result={diagnosticsResult} />
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>layer</th>
+                  <th>drop_ratio</th>
+                  <th>dropped_req_rate</th>
+                  <th>avg_used/budget</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contextAssemblyLayerRows.map((row) => (
+                  <tr key={String(row.layer_name)}>
+                    <td>{String(row.layer_name)}</td>
+                    <td>{formatPct(row.drop_ratio)}</td>
+                    <td>{formatPct(row.dropped_request_rate)}</td>
+                    <td>
+                      {formatNumber(row.used_chars_avg)} / {formatNumber(row.budget_chars_avg)}
+                    </td>
+                  </tr>
+                ))}
+                {contextAssemblyLayerRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="empty">No context layer telemetry rows</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
           </div>
         </article>
       </section>
