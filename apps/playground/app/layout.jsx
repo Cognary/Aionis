@@ -31,7 +31,7 @@ export default function RootLayout({ children }) {
           <div className="shell topbar-inner">
             <div>
               <p className="eyebrow">Aionis Playground</p>
-              <p className="title">Memory + Policy Loop Lab</p>
+              <p className="title">Memory + Policy Loop Lab / 记忆与策略实验台</p>
             </div>
             <div className="top-links">
               <a href="https://doc.aionisos.com" target="_blank" rel="noreferrer">Docs</a>

@@ -26,6 +26,7 @@ const LLM_CONFIG_STORAGE_KEY = "aionis_playground_llm_config_v1";
 const CHAT_SESSION_STORAGE_KEY = "aionis_playground_chat_sessions_v1";
 const CHAT_SESSION_ACTIVE_KEY = "aionis_playground_chat_active_session_v1";
 const PLAYGROUND_SETTINGS_TAB_STORAGE_KEY = "aionis_playground_settings_tab_v1";
+const PLAYGROUND_LANGUAGE_STORAGE_KEY = "aionis_playground_language_v1";
 const DEFAULT_CHAT_CONFIG = {
   provider: "openai_compatible",
   base_url: "https://api.openai.com/v1",
@@ -36,15 +37,283 @@ const DEFAULT_CHAT_CONFIG = {
   system_prompt: "You are an assistant helping validate Aionis memory and policy workflows."
 };
 const CHAIN_STATUS_FILTERS = [
-  { key: "all", label: "all" },
-  { key: "ok", label: "ok only" },
-  { key: "fail", label: "failed only" }
+  { key: "all", label_key: "status_all" },
+  { key: "ok", label_key: "status_ok" },
+  { key: "fail", label_key: "status_fail" }
 ];
 const CHAT_PROMPT_CHIPS = [
-  "Summarize what you remember about this user.",
-  "What rule constraints should apply to this request?",
-  "Give a policy-safe next action with brief rationale."
+  {
+    key: "chip_memory_summary",
+    en: "Summarize what you remember about this user.",
+    zh: "总结你目前记住的用户信息。"
+  },
+  {
+    key: "chip_rule_constraints",
+    en: "What rule constraints should apply to this request?",
+    zh: "这个请求应该应用哪些规则约束？"
+  },
+  {
+    key: "chip_policy_action",
+    en: "Give a policy-safe next action with brief rationale.",
+    zh: "给出一个符合策略的下一步动作，并简述理由。"
+  }
 ];
+const SETTINGS_TABS = ["llm", "connection", "operation", "flow", "export"];
+
+const I18N = {
+  en: {
+    app_name: "Aionis Playground",
+    app_subtitle: "Chat + Memory Lab",
+    scenario: "Scenario",
+    scenario_preset: "scenario preset",
+    apply_preset: "Apply preset",
+    sessions: "Sessions",
+    new: "New",
+    delete: "Delete",
+    clear_chat: "Clear chat",
+    active_title: "active title",
+    history: "History",
+    status: "status",
+    status_all: "all",
+    status_ok: "ok only",
+    status_fail: "failed only",
+    operation: "operation",
+    no_matching_requests: "No matching requests.",
+    session: "Session",
+    run_op: "Run op",
+    run_flow: "Run flow",
+    running: "Running...",
+    metric_total: "Total",
+    metric_ok: "OK",
+    metric_fail: "Fail",
+    metric_avg: "Avg",
+    chat_empty_hint: "Start a conversation to test memory-grounded behavior.",
+    inspector: "Inspector",
+    inspector_empty: "Select one request from history.",
+    request_id: "request_id",
+    decision_id: "decision_id",
+    run_id: "run_id",
+    copy_request_id: "Copy request_id",
+    copy_decision_id: "Copy decision_id",
+    copy_run_id: "Copy run_id",
+    request_payload: "request payload",
+    response_body: "response body",
+    response_diff: "response diff",
+    no_previous_response: "No previous response for this operation.",
+    no_structural_diff: "No structural diff detected.",
+    error_prefix: "error",
+    before_label: "before",
+    after_label: "after",
+    composer_placeholder: "Message...",
+    use_recall: "use recall",
+    auto_write: "auto write",
+    send: "Send",
+    sending: "Sending...",
+    llm: "LLM",
+    connection: "connection",
+    flow: "flow",
+    export: "export",
+    provider: "provider",
+    base_url: "base_url",
+    model: "model",
+    model_label: "model",
+    tokens_label: "tokens",
+    api_key: "api_key",
+    hide: "Hide",
+    show: "Show",
+    clear: "Clear",
+    test_connection: "Test connection",
+    testing: "Testing...",
+    temperature: "temperature",
+    max_tokens: "max_tokens",
+    system_prompt: "system prompt",
+    tenant_id: "tenant_id",
+    scope: "scope",
+    x_api_key: "x-api-key",
+    bearer_token: "bearer token",
+    x_admin_token: "x-admin-token",
+    payload_json: "payload JSON",
+    reset: "Reset",
+    inject_tenant_scope: "Inject tenant/scope",
+    inject_runtime: "Inject runtime",
+    flow_preset: "flow preset",
+    flow_json: "flow JSON",
+    stop_on_http: "stop on HTTP failure",
+    stop_on_assert: "stop on assert failure",
+    flow_report: "Flow report",
+    flow_ok_label: "ok",
+    flow_failed_label: "failed",
+    flow_assert_failed_label: "assert failed",
+    export_json: "Export JSON",
+    export_md: "Export MD",
+    copy_share_link: "Copy share link",
+    export_session_json: "Export session JSON",
+    clear_history: "Clear history",
+    history_cleared: "History cleared.",
+    share_link_copied: "Share link copied.",
+    share_link_create_failed: "Failed to create share link.",
+    share_link_copy_failed: "Copy failed.",
+    share_link_loaded: "Loaded config from share link.",
+    share_link_invalid: "Invalid share link payload.",
+    flow_report_json_exported: "Flow report JSON exported.",
+    flow_report_md_exported: "Flow report Markdown exported.",
+    copy_success: "Copied {kind}.",
+    copy_failed: "Copy {kind} failed.",
+    chat_note_recall_injected: "Injected recall_text context into prompt.",
+    chat_note_recall_failed: "recall_text failed; continue without memory context.",
+    chat_note_auto_write: "Auto-wrote this turn into memory.",
+    chat_error_prefix: "Chat error: ",
+    llm_ok: "LLM connection OK ({model}).",
+    llm_fail: "LLM test failed: {error}",
+    clear_session_messages: "Cleared current session messages.",
+    untitled_chat: "Untitled chat"
+  },
+  zh: {
+    app_name: "Aionis Playground",
+    app_subtitle: "对话 + 记忆实验台",
+    scenario: "场景",
+    scenario_preset: "场景预设",
+    apply_preset: "应用预设",
+    sessions: "会话",
+    new: "新建",
+    delete: "删除",
+    clear_chat: "清空会话",
+    active_title: "当前会话标题",
+    history: "请求历史",
+    status: "状态",
+    status_all: "全部",
+    status_ok: "仅成功",
+    status_fail: "仅失败",
+    operation: "操作",
+    no_matching_requests: "当前筛选下无请求。",
+    session: "会话",
+    run_op: "执行操作",
+    run_flow: "执行流程",
+    running: "执行中...",
+    metric_total: "总数",
+    metric_ok: "成功",
+    metric_fail: "失败",
+    metric_avg: "平均",
+    chat_empty_hint: "开始一段对话，验证记忆增强行为。",
+    inspector: "检查器",
+    inspector_empty: "请先在历史中选择一条请求。",
+    request_id: "request_id",
+    decision_id: "decision_id",
+    run_id: "run_id",
+    copy_request_id: "复制 request_id",
+    copy_decision_id: "复制 decision_id",
+    copy_run_id: "复制 run_id",
+    request_payload: "请求载荷",
+    response_body: "响应内容",
+    response_diff: "响应差异",
+    no_previous_response: "该操作暂无上一条响应可对比。",
+    no_structural_diff: "未检测到结构性差异。",
+    error_prefix: "错误",
+    before_label: "变更前",
+    after_label: "变更后",
+    composer_placeholder: "输入消息...",
+    use_recall: "使用 recall",
+    auto_write: "自动写入",
+    send: "发送",
+    sending: "发送中...",
+    llm: "模型",
+    connection: "连接",
+    flow: "流程",
+    export: "导出",
+    provider: "提供方",
+    base_url: "base_url",
+    model: "模型",
+    model_label: "模型",
+    tokens_label: "tokens",
+    api_key: "api_key",
+    hide: "隐藏",
+    show: "显示",
+    clear: "清空",
+    test_connection: "连通性测试",
+    testing: "测试中...",
+    temperature: "温度",
+    max_tokens: "最大 tokens",
+    system_prompt: "系统提示词",
+    tenant_id: "tenant_id",
+    scope: "scope",
+    x_api_key: "x-api-key",
+    bearer_token: "bearer token",
+    x_admin_token: "x-admin-token",
+    payload_json: "payload JSON",
+    reset: "重置",
+    inject_tenant_scope: "注入 tenant/scope",
+    inject_runtime: "注入运行时变量",
+    flow_preset: "流程预设",
+    flow_json: "流程 JSON",
+    stop_on_http: "HTTP 失败即停止",
+    stop_on_assert: "断言失败即停止",
+    flow_report: "流程报告",
+    flow_ok_label: "成功",
+    flow_failed_label: "失败",
+    flow_assert_failed_label: "断言失败",
+    export_json: "导出 JSON",
+    export_md: "导出 MD",
+    copy_share_link: "复制分享链接",
+    export_session_json: "导出会话 JSON",
+    clear_history: "清空历史",
+    history_cleared: "历史已清空。",
+    share_link_copied: "分享链接已复制。",
+    share_link_create_failed: "生成分享链接失败。",
+    share_link_copy_failed: "复制失败。",
+    share_link_loaded: "已从分享链接载入配置。",
+    share_link_invalid: "分享链接内容无效。",
+    flow_report_json_exported: "流程报告 JSON 已导出。",
+    flow_report_md_exported: "流程报告 Markdown 已导出。",
+    copy_success: "已复制 {kind}。",
+    copy_failed: "复制 {kind} 失败。",
+    chat_note_recall_injected: "已将 recall_text 结果注入到提示中。",
+    chat_note_recall_failed: "recall_text 调用失败，将在无记忆上下文模式下继续。",
+    chat_note_auto_write: "本轮对话已自动写入记忆。",
+    chat_error_prefix: "对话错误：",
+    llm_ok: "LLM 连接正常（{model}）。",
+    llm_fail: "LLM 测试失败：{error}",
+    clear_session_messages: "当前会话消息已清空。",
+    untitled_chat: "未命名会话"
+  }
+};
+
+const I18N_META = {
+  zh: {
+    scenarios: {
+      support_triage: {
+        label: "客服分诊",
+        description: "客服记忆 + 策略流"
+      },
+      sales_followup: {
+        label: "销售跟进",
+        description: "线索记忆 + 下一步决策"
+      },
+      personal_assistant: {
+        label: "个人助理",
+        description: "个人记忆召回 + 工具选择"
+      }
+    },
+    flows: {
+      quick_default: {
+        label: "快速默认流",
+        description: "write -> recall_text -> rules -> tools_select"
+      },
+      policy_closed_loop: {
+        label: "策略闭环流",
+        description: "在选择后补充 feedback 与 decision replay"
+      }
+    },
+    operations: {
+      write: { label: "写入", description: "创建或更新记忆节点与边。" },
+      recall: { label: "结构召回", description: "检索结构化记忆图上下文。" },
+      recall_text: { label: "文本召回", description: "为 LLM 检索可直接拼接的文本上下文。" },
+      rules_evaluate: { label: "规则评估", description: "基于当前输入执行激活规则。" },
+      tools_select: { label: "工具选择", description: "在策略约束下进行工具选择。" },
+      tools_feedback: { label: "反馈回写", description: "写入执行结果反馈以支持策略适配。" },
+      tools_decision: { label: "决策回放", description: "回放或检查持久化决策证据。" }
+    }
+  }
+};
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -61,6 +330,10 @@ function deepMerge(base, patch) {
     }
   }
   return next;
+}
+
+function interpolate(template, vars = {}) {
+  return String(template || "").replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? ""));
 }
 
 function pretty(value) {
@@ -366,9 +639,9 @@ function makeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
-function makeSessionTitle(text) {
+function makeSessionTitle(text, fallback = "Untitled chat") {
   const raw = String(text || "").trim().replace(/\s+/g, " ");
-  if (!raw) return "Untitled chat";
+  if (!raw) return fallback;
   return raw.length > 34 ? `${raw.slice(0, 34)}...` : raw;
 }
 
@@ -433,6 +706,7 @@ function decodeShareState(token) {
 }
 
 export default function PlaygroundPage() {
+  const [language, setLanguage] = useState("en");
   const [connection, setConnection] = useState(DEFAULT_CONNECTION);
   const [llmConfig, setLlmConfig] = useState(DEFAULT_CHAT_CONFIG);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -469,12 +743,44 @@ export default function PlaygroundPage() {
   const [activeSessionId, setActiveSessionId] = useState("");
   const chatThreadRef = useRef(null);
 
+  const tx = useMemo(() => I18N[language] || I18N.en, [language]);
+  const tr = (key, vars = {}) => interpolate(tx[key] || I18N.en[key] || key, vars);
+  const metaPack = useMemo(() => I18N_META[language] || null, [language]);
+
+  const scenarioText = (scenario) => {
+    const mapped = metaPack?.scenarios?.[scenario.key];
+    return {
+      label: mapped?.label || scenario.label,
+      description: mapped?.description || scenario.description || ""
+    };
+  };
+  const flowTextPack = (flowItem) => {
+    const mapped = metaPack?.flows?.[flowItem.key];
+    return {
+      label: mapped?.label || flowItem.label,
+      description: mapped?.description || flowItem.description || ""
+    };
+  };
+  const operationText = (opKey) => {
+    const base = OPERATION_MAP[opKey];
+    const mapped = metaPack?.operations?.[opKey];
+    return {
+      label: mapped?.label || base?.label || opKey,
+      description: mapped?.description || base?.description || ""
+    };
+  };
+
   const runtimeContext = useMemo(() => computeRuntimeContext(history), [history]);
   const active = useMemo(() => history.find((item) => item.id === activeId) || history[0] || null, [history, activeId]);
   const activeChatSession = useMemo(
     () => chatSessions.find((item) => item.id === activeSessionId) || chatSessions[0] || null,
     [chatSessions, activeSessionId]
   );
+  const selectedScenarioView = useMemo(() => {
+    const raw = SCENARIO_PRESET_MAP[scenarioPreset];
+    return raw ? scenarioText(raw) : { label: "", description: "" };
+  }, [scenarioPreset, metaPack]);
+  const selectedOperationView = useMemo(() => operationText(operation), [operation, metaPack]);
 
   const metrics = useMemo(() => {
     const total = history.length;
@@ -521,7 +827,7 @@ export default function PlaygroundPage() {
   function appendMessage(sessionId, message) {
     updateSessionById(sessionId, (session) => {
       const nextTitle = session.messages.length === 0 && message.role === "user"
-        ? makeSessionTitle(message.content)
+        ? makeSessionTitle(message.content, tr("untitled_chat"))
         : session.title;
       return {
         ...session,
@@ -532,7 +838,7 @@ export default function PlaygroundPage() {
   }
 
   function createSession() {
-    const next = makeChatSession(`Session ${chatSessions.length + 1}`);
+    const next = makeChatSession(`${tr("session")} ${chatSessions.length + 1}`);
     setChatSessions((prev) => [next, ...prev]);
     setActiveSessionId(next.id);
     setChatInput("");
@@ -555,7 +861,7 @@ export default function PlaygroundPage() {
 
   function renameActiveSession(nextTitle) {
     if (!activeChatSession) return;
-    const normalized = makeSessionTitle(nextTitle);
+    const normalized = makeSessionTitle(nextTitle, tr("untitled_chat"));
     updateSessionById(activeChatSession.id, (session) => ({
       ...session,
       title: normalized
@@ -569,7 +875,7 @@ export default function PlaygroundPage() {
       ...session,
       messages: []
     }));
-    setChatNote("Cleared current session messages.");
+    setChatNote(tr("clear_session_messages"));
     setChatError("");
   }
 
@@ -844,7 +1150,7 @@ export default function PlaygroundPage() {
       JSON.stringify(payload, null, 2),
       "application/json"
     );
-    setFlowReportNote("Flow report JSON exported.");
+    setFlowReportNote(tr("flow_report_json_exported"));
   }
 
   function exportFlowReportMarkdown() {
@@ -854,16 +1160,16 @@ export default function PlaygroundPage() {
       flowReportToMarkdown(flowReport),
       "text/markdown;charset=utf-8"
     );
-    setFlowReportNote("Flow report Markdown exported.");
+    setFlowReportNote(tr("flow_report_md_exported"));
   }
 
   async function copyActiveId(kind, value) {
     const ok = await copyText(value);
     if (!ok) {
-      setInspectNote(`Copy ${kind} failed.`);
+      setInspectNote(tr("copy_failed", { kind }));
       return;
     }
-    setInspectNote(`Copied ${kind}.`);
+    setInspectNote(tr("copy_success", { kind }));
   }
 
   async function sendChatMessage() {
@@ -897,9 +1203,9 @@ export default function PlaygroundPage() {
         const recallEntry = await executeOne("recall_text", materializePayload(recallPayload));
         if (recallEntry.ok) {
           memoryContext = extractRecallText(recallEntry.data);
-          if (memoryContext) setChatNote("Injected recall_text context into prompt.");
+          if (memoryContext) setChatNote(tr("chat_note_recall_injected"));
         } else {
-          setChatNote("recall_text failed; continue without memory context.");
+          setChatNote(tr("chat_note_recall_failed"));
         }
       }
 
@@ -962,7 +1268,7 @@ export default function PlaygroundPage() {
           edges: []
         };
         await executeOne("write", materializePayload(writePayload));
-        setChatNote((prev) => `${prev ? `${prev} ` : ""}Auto-wrote this turn into memory.`.trim());
+        setChatNote((prev) => `${prev ? `${prev} ` : ""}${tr("chat_note_auto_write")}`.trim());
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "chat_send_failed";
@@ -970,7 +1276,7 @@ export default function PlaygroundPage() {
       appendMessage(activeChatSession.id, {
         id: makeId("msg"),
         role: "assistant",
-        content: `Chat error: ${message}`,
+        content: `${tr("chat_error_prefix")}${message}`,
         at: new Date().toISOString(),
         meta: { error: true }
       });
@@ -997,9 +1303,9 @@ export default function PlaygroundPage() {
       if (!result || result.ok !== true) {
         throw new Error(result?.error || "llm_connection_failed");
       }
-      setLlmTestNote(`LLM connection OK (${result.model || llmConfig.model}).`);
+      setLlmTestNote(tr("llm_ok", { model: result.model || llmConfig.model }));
     } catch (error) {
-      setLlmTestNote(`LLM test failed: ${error instanceof Error ? error.message : "unknown_error"}`);
+      setLlmTestNote(tr("llm_fail", { error: error instanceof Error ? error.message : "unknown_error" }));
     } finally {
       setLlmTestRunning(false);
     }
@@ -1024,8 +1330,19 @@ export default function PlaygroundPage() {
 
     try {
       const rawTab = window.localStorage.getItem(PLAYGROUND_SETTINGS_TAB_STORAGE_KEY);
-      if (rawTab && ["llm", "connection", "operation", "flow", "export"].includes(rawTab)) {
+      if (rawTab && SETTINGS_TABS.includes(rawTab)) {
         setSettingsTab(rawTab);
+      }
+    } catch {
+      // ignore local storage read errors
+    }
+
+    try {
+      const rawLanguage = window.localStorage.getItem(PLAYGROUND_LANGUAGE_STORAGE_KEY);
+      if (rawLanguage === "zh" || rawLanguage === "en") {
+        setLanguage(rawLanguage);
+      } else if (String(window.navigator.language || "").toLowerCase().startsWith("zh")) {
+        setLanguage("zh");
       }
     } catch {
       // ignore local storage read errors
@@ -1041,7 +1358,7 @@ export default function PlaygroundPage() {
             .filter((item) => item && typeof item === "object" && typeof item.id === "string")
             .map((item) => ({
               id: item.id,
-              title: typeof item.title === "string" ? item.title : "Untitled chat",
+              title: typeof item.title === "string" ? item.title : tr("untitled_chat"),
               created_at: typeof item.created_at === "string" ? item.created_at : new Date().toISOString(),
               messages: Array.isArray(item.messages) ? item.messages : []
             }));
@@ -1080,6 +1397,11 @@ export default function PlaygroundPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    window.localStorage.setItem(PLAYGROUND_LANGUAGE_STORAGE_KEY, language);
+  }, [language]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     if (!activeSessionId && chatSessions[0]?.id) {
       setActiveSessionId(chatSessions[0].id);
       return;
@@ -1109,16 +1431,16 @@ export default function PlaygroundPage() {
     if (typeof window === "undefined" || !navigator?.clipboard) return;
     const token = encodeShareState(buildShareState());
     if (!token) {
-      setShareNote("Failed to create share link.");
+      setShareNote(tr("share_link_create_failed"));
       return;
     }
     const url = new URL(window.location.href);
     url.searchParams.set("pg", token);
     try {
       await navigator.clipboard.writeText(url.toString());
-      setShareNote("Share link copied.");
+      setShareNote(tr("share_link_copied"));
     } catch {
-      setShareNote("Copy failed.");
+      setShareNote(tr("share_link_copy_failed"));
     }
   }
 
@@ -1129,7 +1451,7 @@ export default function PlaygroundPage() {
 
     const parsed = decodeShareState(token);
     if (!parsed || typeof parsed !== "object") {
-      setShareNote("Invalid share link payload.");
+      setShareNote(tr("share_link_invalid"));
       return;
     }
 
@@ -1170,7 +1492,7 @@ export default function PlaygroundPage() {
       }));
     }
 
-    setShareNote("Loaded config from share link.");
+    setShareNote(tr("share_link_loaded"));
   }, []);
 
   useEffect(() => {
@@ -1191,38 +1513,42 @@ export default function PlaygroundPage() {
     <div className="oa-layout">
       <aside className="oa-pane oa-left">
         <div className="oa-brand">
-          <p className="kicker">Aionis Playground</p>
-          <h1>Chat + Memory Lab</h1>
+          <p className="kicker">{tr("app_name")}</p>
+          <h1>{tr("app_subtitle")}</h1>
+          <div className="lang-switch">
+            <button type="button" className={language === "en" ? "active" : ""} onClick={() => setLanguage("en")}>EN</button>
+            <button type="button" className={language === "zh" ? "active" : ""} onClick={() => setLanguage("zh")}>中文</button>
+          </div>
         </div>
 
         <section className="oa-section">
           <div className="panel-head">
-            <h2>Scenario</h2>
+            <h2>{tr("scenario")}</h2>
           </div>
           <label>
-            scenario preset
+            {tr("scenario_preset")}
             <select value={scenarioPreset} onChange={(event) => setScenarioPreset(event.target.value)}>
               {SCENARIO_PRESETS.map((item) => (
-                <option key={item.key} value={item.key}>{item.label}</option>
+                <option key={item.key} value={item.key}>{scenarioText(item).label}</option>
               ))}
             </select>
           </label>
-          <p className="muted tiny">{SCENARIO_PRESET_MAP[scenarioPreset]?.description || ""}</p>
-          <button type="button" className="ghost" onClick={applyScenarioPreset} disabled={running || chatRunning}>Apply preset</button>
+          <p className="muted tiny">{selectedScenarioView.description}</p>
+          <button type="button" className="ghost" onClick={applyScenarioPreset} disabled={running || chatRunning}>{tr("apply_preset")}</button>
         </section>
 
         <section className="oa-section">
           <div className="panel-head">
-            <h2>Sessions</h2>
+            <h2>{tr("sessions")}</h2>
             <span className="tag">{chatSessions.length}</span>
           </div>
           <div className="inline-actions">
-            <button type="button" className="ghost" onClick={createSession} disabled={chatRunning}>New</button>
-            <button type="button" className="ghost danger" onClick={removeActiveSession} disabled={chatSessions.length <= 1 || chatRunning}>Delete</button>
-            <button type="button" className="ghost" onClick={clearActiveSessionMessages} disabled={!activeChatSession || chatRunning}>Clear chat</button>
+            <button type="button" className="ghost" onClick={createSession} disabled={chatRunning}>{tr("new")}</button>
+            <button type="button" className="ghost danger" onClick={removeActiveSession} disabled={chatSessions.length <= 1 || chatRunning}>{tr("delete")}</button>
+            <button type="button" className="ghost" onClick={clearActiveSessionMessages} disabled={!activeChatSession || chatRunning}>{tr("clear_chat")}</button>
           </div>
           <label>
-            active title
+            {tr("active_title")}
             <input
               value={sessionTitleDraft}
               onChange={(event) => setSessionTitleDraft(event.target.value)}
@@ -1253,30 +1579,30 @@ export default function PlaygroundPage() {
 
         <section className="oa-section oa-grow">
           <div className="panel-head">
-            <h2>History</h2>
+            <h2>{tr("history")}</h2>
             <span className="tag">{filteredHistory.length}/{history.length}</span>
           </div>
           <div className="filters-row">
             <label className="filter-field">
-              status
+              {tr("status")}
               <select value={chainStatusFilter} onChange={(event) => setChainStatusFilter(event.target.value)}>
                 {CHAIN_STATUS_FILTERS.map((item) => (
-                  <option key={item.key} value={item.key}>{item.label}</option>
+                  <option key={item.key} value={item.key}>{tr(item.label_key)}</option>
                 ))}
               </select>
             </label>
             <label className="filter-field">
-              operation
+              {tr("operation")}
               <select value={chainOperationFilter} onChange={(event) => setChainOperationFilter(event.target.value)}>
-                <option value="all">all</option>
+                <option value="all">{tr("status_all")}</option>
                 {OPERATION_LIST.map((item) => (
-                  <option key={item.key} value={item.key}>{item.key}</option>
+                  <option key={item.key} value={item.key}>{operationText(item.key).label}</option>
                 ))}
               </select>
             </label>
           </div>
           {filteredHistory.length === 0 ? (
-            <p className="muted tiny">No matching requests.</p>
+            <p className="muted tiny">{tr("no_matching_requests")}</p>
           ) : (
             <div className="chain-list">
               {filteredHistory.map((item) => (
@@ -1300,79 +1626,79 @@ export default function PlaygroundPage() {
       <section className="oa-pane oa-center">
         <header className="oa-center-head">
           <div>
-            <p className="kicker">Session</p>
-            <h2>{activeChatSession?.title || "Untitled chat"}</h2>
-            <p className="muted tiny">req <span className="mono">{runtimeContext.request_id || "-"}</span> · dec <span className="mono">{runtimeContext.decision_id || "-"}</span> · run <span className="mono">{runtimeContext.run_id || "-"}</span></p>
+            <p className="kicker">{tr("session")}</p>
+            <h2>{activeChatSession?.title || tr("untitled_chat")}</h2>
+            <p className="muted tiny">{tr("request_id")} <span className="mono">{runtimeContext.request_id || "-"}</span> · {tr("decision_id")} <span className="mono">{runtimeContext.decision_id || "-"}</span> · {tr("run_id")} <span className="mono">{runtimeContext.run_id || "-"}</span></p>
           </div>
           <div className="inline-actions">
-            <button type="button" onClick={runCurrent} disabled={running || chatRunning}>{running ? "Running..." : "Run op"}</button>
-            <button type="button" className="ghost" onClick={runFlow} disabled={running || chatRunning}>{running ? "Running..." : "Run flow"}</button>
+            <button type="button" onClick={runCurrent} disabled={running || chatRunning}>{running ? tr("running") : tr("run_op")}</button>
+            <button type="button" className="ghost" onClick={runFlow} disabled={running || chatRunning}>{running ? tr("running") : tr("run_flow")}</button>
           </div>
         </header>
 
         <div className="oa-metrics">
-          <span>Total {metrics.total}</span>
-          <span>OK {metrics.success}</span>
-          <span>Fail {metrics.failed}</span>
-          <span>Avg {metrics.avgLatency}ms</span>
+          <span>{tr("metric_total")} {metrics.total}</span>
+          <span>{tr("metric_ok")} {metrics.success}</span>
+          <span>{tr("metric_fail")} {metrics.failed}</span>
+          <span>{tr("metric_avg")} {metrics.avgLatency}ms</span>
         </div>
 
         <div className="oa-chat-surface">
           <div className="chat-thread" ref={chatThreadRef}>
             {(activeChatSession?.messages || []).length === 0 ? (
-              <p className="muted tiny">Start a conversation to test memory-grounded behavior.</p>
+              <p className="muted tiny">{tr("chat_empty_hint")}</p>
             ) : (
               activeChatSession.messages.map((message) => (
                 <article key={message.id} className={`chat-bubble ${message.role}`}>
                   <div className="chat-meta">
-                    <span>{message.role}</span>
+                    <span>{message.role === "user" ? (language === "zh" ? "用户" : "user") : (language === "zh" ? "助手" : "assistant")}</span>
                     <span className="mono tiny">{message.at || "-"}</span>
                   </div>
                   <p>{message.content}</p>
-                  {message.meta?.model ? <p className="tiny muted">model: <span className="mono">{message.meta.model}</span></p> : null}
-                  {message.meta?.usage?.total_tokens ? <p className="tiny muted">tokens: <span className="mono">{message.meta.usage.total_tokens}</span></p> : null}
+                  {message.meta?.model ? <p className="tiny muted">{tr("model_label")}: <span className="mono">{message.meta.model}</span></p> : null}
+                  {message.meta?.usage?.total_tokens ? <p className="tiny muted">{tr("tokens_label")}: <span className="mono">{message.meta.usage.total_tokens}</span></p> : null}
                 </article>
               ))
             )}
           </div>
 
           <details className="oa-inspector" open={Boolean(active)}>
-            <summary>Inspector</summary>
+            <summary>{tr("inspector")}</summary>
             {!active ? (
-              <p className="muted tiny">Select one request from history.</p>
+              <p className="muted tiny">{tr("inspector_empty")}</p>
             ) : (
               <div className="inspect-block">
-                <p className="tiny muted">request_id: <span className="mono">{active.request_id || "-"}</span></p>
-                <p className="tiny muted">decision_id: <span className="mono">{active.decision_id || "-"}</span></p>
-                <p className="tiny muted">run_id: <span className="mono">{active.run_id || "-"}</span></p>
+                <p className="tiny muted">{tr("request_id")}: <span className="mono">{active.request_id || "-"}</span></p>
+                <p className="tiny muted">{tr("decision_id")}: <span className="mono">{active.decision_id || "-"}</span></p>
+                <p className="tiny muted">{tr("run_id")}: <span className="mono">{active.run_id || "-"}</span></p>
                 <div className="inline-actions mini-actions">
-                  <button type="button" className="ghost" onClick={() => copyActiveId("request_id", active.request_id)} disabled={!active.request_id}>Copy request_id</button>
-                  <button type="button" className="ghost" onClick={() => copyActiveId("decision_id", active.decision_id)} disabled={!active.decision_id}>Copy decision_id</button>
-                  <button type="button" className="ghost" onClick={() => copyActiveId("run_id", active.run_id)} disabled={!active.run_id}>Copy run_id</button>
+                  <button type="button" className="ghost" onClick={() => copyActiveId("request_id", active.request_id)} disabled={!active.request_id}>{tr("copy_request_id")}</button>
+                  <button type="button" className="ghost" onClick={() => copyActiveId("decision_id", active.decision_id)} disabled={!active.decision_id}>{tr("copy_decision_id")}</button>
+                  <button type="button" className="ghost" onClick={() => copyActiveId("run_id", active.run_id)} disabled={!active.run_id}>{tr("copy_run_id")}</button>
                 </div>
                 {inspectNote ? <p className="note-line">{inspectNote}</p> : null}
-                {active.error ? <p className="error">error: {active.error}</p> : null}
+                {active.error ? <p className="error">{tr("error_prefix")}: {active.error}</p> : null}
                 <details>
-                  <summary>request payload</summary>
+                  <summary>{tr("request_payload")}</summary>
                   <pre>{pretty(active.payload)}</pre>
                 </details>
                 <details>
-                  <summary>response body</summary>
+                  <summary>{tr("response_body")}</summary>
                   <pre>{pretty(active.data)}</pre>
                 </details>
                 <details>
-                  <summary>response diff</summary>
+                  <summary>{tr("response_diff")}</summary>
                   {!previousSameOperation ? (
-                    <p className="muted tiny">No previous response for this operation.</p>
+                    <p className="muted tiny">{tr("no_previous_response")}</p>
                   ) : responseDiff.length === 0 ? (
-                    <p className="muted tiny">No structural diff detected.</p>
+                    <p className="muted tiny">{tr("no_structural_diff")}</p>
                   ) : (
                     <div className="diff-list">
                       {responseDiff.slice(0, 20).map((item) => (
                         <div className="diff-item" key={`${item.path}-${JSON.stringify(item.after)}`}>
                           <p className="mono tiny"><strong>{item.path}</strong></p>
-                          <p className="tiny muted">before: <span className="mono">{JSON.stringify(item.before)}</span></p>
-                          <p className="tiny muted">after: <span className="mono">{JSON.stringify(item.after)}</span></p>
+                          <p className="tiny muted">{tr("before_label")}: <span className="mono">{JSON.stringify(item.before)}</span></p>
+                          <p className="tiny muted">{tr("after_label")}: <span className="mono">{JSON.stringify(item.after)}</span></p>
                         </div>
                       ))}
                     </div>
@@ -1392,7 +1718,7 @@ export default function PlaygroundPage() {
         >
           <textarea
             rows={3}
-            placeholder="Message..."
+            placeholder={tr("composer_placeholder")}
             value={chatInput}
             onChange={(event) => setChatInput(event.target.value)}
             onKeyDown={(event) => {
@@ -1406,12 +1732,12 @@ export default function PlaygroundPage() {
             {CHAT_PROMPT_CHIPS.map((chip) => (
               <button
                 type="button"
-                key={chip}
+                key={chip.key}
                 className="ghost chip-btn"
-                onClick={() => setChatInput(chip)}
+                onClick={() => setChatInput(language === "zh" ? chip.zh : chip.en)}
                 disabled={chatRunning || running}
               >
-                {chip}
+                {language === "zh" ? chip.zh : chip.en}
               </button>
             ))}
           </div>
@@ -1419,14 +1745,14 @@ export default function PlaygroundPage() {
             <div className="toggle-row">
               <label className="checkbox-row">
                 <input type="checkbox" checked={chatUseRecallContext} onChange={(event) => setChatUseRecallContext(event.target.checked)} />
-                use recall
+                {tr("use_recall")}
               </label>
               <label className="checkbox-row">
                 <input type="checkbox" checked={chatAutoWriteMemory} onChange={(event) => setChatAutoWriteMemory(event.target.checked)} />
-                auto write
+                {tr("auto_write")}
               </label>
             </div>
-            <button type="submit" disabled={chatRunning || running || !chatInput.trim()}>{chatRunning ? "Sending..." : "Send"}</button>
+            <button type="submit" disabled={chatRunning || running || !chatInput.trim()}>{chatRunning ? tr("sending") : tr("send")}</button>
           </div>
           {chatNote ? <p className="note-line">{chatNote}</p> : null}
           {chatError ? <p className="error">{chatError}</p> : null}
@@ -1435,14 +1761,14 @@ export default function PlaygroundPage() {
 
       <aside className="oa-pane oa-right">
         <div className="oa-tabs">
-          {["llm", "connection", "operation", "flow", "export"].map((tab) => (
+          {SETTINGS_TABS.map((tab) => (
             <button
               type="button"
               key={tab}
               className={`tab-btn ${settingsTab === tab ? "active" : ""}`}
               onClick={() => setSettingsTab(tab)}
             >
-              {tab}
+              {tr(tab)}
             </button>
           ))}
         </div>
@@ -1451,19 +1777,19 @@ export default function PlaygroundPage() {
           {settingsTab === "llm" ? (
             <div className="form-grid compact">
               <label>
-                provider
+                {tr("provider")}
                 <input value={llmConfig.provider} onChange={(event) => setLlmConfig((prev) => ({ ...prev, provider: event.target.value }))} />
               </label>
               <label>
-                base_url
+                {tr("base_url")}
                 <input value={llmConfig.base_url} onChange={(event) => setLlmConfig((prev) => ({ ...prev, base_url: event.target.value }))} />
               </label>
               <label>
-                model
+                {tr("model")}
                 <input value={llmConfig.model} onChange={(event) => setLlmConfig((prev) => ({ ...prev, model: event.target.value }))} />
               </label>
               <label>
-                api_key
+                {tr("api_key")}
                 <input
                   type={showApiKey ? "text" : "password"}
                   value={llmConfig.api_key}
@@ -1472,23 +1798,23 @@ export default function PlaygroundPage() {
                 />
               </label>
               <div className="inline-actions">
-                <button type="button" className="ghost" onClick={() => setShowApiKey((prev) => !prev)}>{showApiKey ? "Hide" : "Show"}</button>
-                <button type="button" className="ghost danger" onClick={() => setLlmConfig((prev) => ({ ...prev, api_key: "" }))}>Clear</button>
+                <button type="button" className="ghost" onClick={() => setShowApiKey((prev) => !prev)}>{showApiKey ? tr("hide") : tr("show")}</button>
+                <button type="button" className="ghost danger" onClick={() => setLlmConfig((prev) => ({ ...prev, api_key: "" }))}>{tr("clear")}</button>
                 <button type="button" className="ghost" onClick={testLlmConnection} disabled={llmTestRunning}>
-                  {llmTestRunning ? "Testing..." : "Test connection"}
+                  {llmTestRunning ? tr("testing") : tr("test_connection")}
                 </button>
               </div>
               {llmTestNote ? <p className="note-line">{llmTestNote}</p> : null}
               <label>
-                temperature
+                {tr("temperature")}
                 <input type="number" min="0" max="2" step="0.1" value={llmConfig.temperature} onChange={(event) => setLlmConfig((prev) => ({ ...prev, temperature: Number(event.target.value) }))} />
               </label>
               <label>
-                max_tokens
+                {tr("max_tokens")}
                 <input type="number" min="1" step="1" value={llmConfig.max_tokens} onChange={(event) => setLlmConfig((prev) => ({ ...prev, max_tokens: Number(event.target.value) }))} />
               </label>
               <label>
-                system prompt
+                {tr("system_prompt")}
                 <textarea rows={5} value={llmConfig.system_prompt} onChange={(event) => setLlmConfig((prev) => ({ ...prev, system_prompt: event.target.value }))} />
               </label>
             </div>
@@ -1496,19 +1822,19 @@ export default function PlaygroundPage() {
 
           {settingsTab === "connection" ? (
             <div className="form-grid compact">
-              <label>base_url<input value={connection.base_url} onChange={(event) => setConnection((prev) => ({ ...prev, base_url: event.target.value }))} /></label>
-              <label>tenant_id<input value={connection.tenant_id} onChange={(event) => setConnection((prev) => ({ ...prev, tenant_id: event.target.value }))} /></label>
-              <label>scope<input value={connection.scope} onChange={(event) => setConnection((prev) => ({ ...prev, scope: event.target.value }))} /></label>
-              <label>x-api-key<input value={connection.api_key} onChange={(event) => setConnection((prev) => ({ ...prev, api_key: event.target.value }))} /></label>
-              <label>bearer token<input value={connection.bearer_token} onChange={(event) => setConnection((prev) => ({ ...prev, bearer_token: event.target.value }))} /></label>
-              <label>x-admin-token<input value={connection.admin_token} onChange={(event) => setConnection((prev) => ({ ...prev, admin_token: event.target.value }))} /></label>
+              <label>{tr("base_url")}<input value={connection.base_url} onChange={(event) => setConnection((prev) => ({ ...prev, base_url: event.target.value }))} /></label>
+              <label>{tr("tenant_id")}<input value={connection.tenant_id} onChange={(event) => setConnection((prev) => ({ ...prev, tenant_id: event.target.value }))} /></label>
+              <label>{tr("scope")}<input value={connection.scope} onChange={(event) => setConnection((prev) => ({ ...prev, scope: event.target.value }))} /></label>
+              <label>{tr("x_api_key")}<input value={connection.api_key} onChange={(event) => setConnection((prev) => ({ ...prev, api_key: event.target.value }))} /></label>
+              <label>{tr("bearer_token")}<input value={connection.bearer_token} onChange={(event) => setConnection((prev) => ({ ...prev, bearer_token: event.target.value }))} /></label>
+              <label>{tr("x_admin_token")}<input value={connection.admin_token} onChange={(event) => setConnection((prev) => ({ ...prev, admin_token: event.target.value }))} /></label>
             </div>
           ) : null}
 
           {settingsTab === "operation" ? (
             <div className="form-grid compact">
               <label>
-                operation
+                {tr("operation")}
                 <select
                   value={operation}
                   onChange={(event) => {
@@ -1518,19 +1844,19 @@ export default function PlaygroundPage() {
                   }}
                 >
                   {OPERATION_LIST.map((item) => (
-                    <option key={item.key} value={item.key}>{item.label} ({item.method} {item.path})</option>
+                    <option key={item.key} value={item.key}>{operationText(item.key).label} ({item.method} {item.path})</option>
                   ))}
                 </select>
               </label>
-              <p className="muted tiny">{OPERATION_MAP[operation]?.description || ""}</p>
+              <p className="muted tiny">{selectedOperationView.description}</p>
               <label>
-                payload JSON
+                {tr("payload_json")}
                 <textarea value={payloadText} onChange={(event) => setPayloadText(event.target.value)} rows={10} />
               </label>
               <div className="inline-actions">
-                <button type="button" className="ghost" onClick={() => resetPayload(operation)} disabled={running || chatRunning}>Reset</button>
-                <button type="button" className="ghost" onClick={injectTenantScope} disabled={running || chatRunning}>Inject tenant/scope</button>
-                <button type="button" className="ghost" onClick={injectRuntimeVars} disabled={running || chatRunning}>Inject runtime</button>
+                <button type="button" className="ghost" onClick={() => resetPayload(operation)} disabled={running || chatRunning}>{tr("reset")}</button>
+                <button type="button" className="ghost" onClick={injectTenantScope} disabled={running || chatRunning}>{tr("inject_tenant_scope")}</button>
+                <button type="button" className="ghost" onClick={injectRuntimeVars} disabled={running || chatRunning}>{tr("inject_runtime")}</button>
               </div>
               {errorMessage ? <p className="error">{errorMessage}</p> : null}
             </div>
@@ -1539,7 +1865,7 @@ export default function PlaygroundPage() {
           {settingsTab === "flow" ? (
             <div className="form-grid compact">
               <label>
-                flow preset
+                {tr("flow_preset")}
                 <select
                   value={flowPreset}
                   onChange={(event) => {
@@ -1551,22 +1877,22 @@ export default function PlaygroundPage() {
                   }}
                 >
                   {FLOW_PRESETS.map((item) => (
-                    <option key={item.key} value={item.key}>{item.label}</option>
+                    <option key={item.key} value={item.key}>{flowTextPack(item).label}</option>
                   ))}
                 </select>
               </label>
               <label>
-                flow JSON
+                {tr("flow_json")}
                 <textarea value={flowText} onChange={(event) => setFlowText(event.target.value)} rows={8} />
               </label>
               <div className="toggle-row">
                 <label className="checkbox-row">
                   <input type="checkbox" checked={flowStopOnHttpFail} onChange={(event) => setFlowStopOnHttpFail(event.target.checked)} />
-                  stop on HTTP failure
+                  {tr("stop_on_http")}
                 </label>
                 <label className="checkbox-row">
                   <input type="checkbox" checked={flowStopOnAssertFail} onChange={(event) => setFlowStopOnAssertFail(event.target.checked)} />
-                  stop on assert failure
+                  {tr("stop_on_assert")}
                 </label>
               </div>
               {flowError ? <p className="error">{flowError}</p> : null}
@@ -1574,17 +1900,17 @@ export default function PlaygroundPage() {
               {flowReport ? (
                 <div className="flow-report">
                   <div className="flow-report-head">
-                    <strong>Flow report</strong>
+                    <strong>{tr("flow_report")}</strong>
                     <span className="mono tiny">{flowReport.steps_executed}/{flowReport.steps_total}</span>
                   </div>
                   <div className="flow-report-metrics">
-                    <span>ok: {flowReport.steps_ok}</span>
-                    <span>failed: {flowReport.steps_failed}</span>
-                    <span>assert failed: {flowReport.steps_assert_failed}</span>
+                    <span>{tr("flow_ok_label")}: {flowReport.steps_ok}</span>
+                    <span>{tr("flow_failed_label")}: {flowReport.steps_failed}</span>
+                    <span>{tr("flow_assert_failed_label")}: {flowReport.steps_assert_failed}</span>
                   </div>
                   <div className="inline-actions">
-                    <button type="button" className="ghost" onClick={exportFlowReportJson} disabled={running || chatRunning}>Export JSON</button>
-                    <button type="button" className="ghost" onClick={exportFlowReportMarkdown} disabled={running || chatRunning}>Export MD</button>
+                    <button type="button" className="ghost" onClick={exportFlowReportJson} disabled={running || chatRunning}>{tr("export_json")}</button>
+                    <button type="button" className="ghost" onClick={exportFlowReportMarkdown} disabled={running || chatRunning}>{tr("export_md")}</button>
                   </div>
                   {flowReportNote ? <p className="note-line">{flowReportNote}</p> : null}
                 </div>
@@ -1595,8 +1921,8 @@ export default function PlaygroundPage() {
           {settingsTab === "export" ? (
             <div className="form-grid compact">
               <div className="inline-actions">
-                <button type="button" className="ghost" onClick={copyShareLink} disabled={running || chatRunning}>Copy share link</button>
-                <button type="button" className="ghost" onClick={exportSession} disabled={history.length === 0 || running || chatRunning}>Export session JSON</button>
+                <button type="button" className="ghost" onClick={copyShareLink} disabled={running || chatRunning}>{tr("copy_share_link")}</button>
+                <button type="button" className="ghost" onClick={exportSession} disabled={history.length === 0 || running || chatRunning}>{tr("export_session_json")}</button>
               </div>
               <button
                 type="button"
@@ -1610,10 +1936,11 @@ export default function PlaygroundPage() {
                   setFlowReport(null);
                   setFlowReportNote("");
                   setInspectNote("");
+                  setShareNote(tr("history_cleared"));
                 }}
                 disabled={history.length === 0 || running || chatRunning}
               >
-                Clear history
+                {tr("clear_history")}
               </button>
               {shareNote ? <p className="note-line">{shareNote}</p> : null}
             </div>
