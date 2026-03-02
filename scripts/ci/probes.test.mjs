@@ -510,6 +510,15 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
         },
       };
     }
+    if (req.path === "/v1/memory/context/assemble") {
+      return {
+        status: 400,
+        body: {
+          error: "no_embedding_provider",
+          message: "Configure EMBEDDING_PROVIDER",
+        },
+      };
+    }
     return { status: 404, body: { error: "not_found" } };
   });
 
@@ -522,6 +531,8 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
     assert.equal(parsed.ok, true);
     assert.equal(parsed.results.planning.skipped, true);
     assert.equal(parsed.results.planning.reason, "no_embedding_provider");
+    assert.equal(parsed.results.assembled.skipped, true);
+    assert.equal(parsed.results.assembled.reason, "no_embedding_provider");
     assert.equal(parsed.results.decision_readback.decision_kind, "tools_select");
     assert.equal(parsed.results.provenance.provided.decision_link_mode, "provided");
     assert.equal(parsed.results.provenance.inferred.decision_link_mode, "inferred");
@@ -637,6 +648,27 @@ test("policy-planner probe fails when planning/tools selected mismatch", async (
           recall: { subgraph: { nodes: [] } },
           rules: { considered: 2, matched: 1 },
           tools: { selection: { selected: cands[1] ?? "different_tool" } },
+        },
+      };
+    }
+    if (req.path === "/v1/memory/context/assemble") {
+      const cands = Array.isArray(req.body?.tool_candidates) ? req.body.tool_candidates.map((v) => String(v)) : ["tool_a", "tool_b"];
+      return {
+        status: 200,
+        body: {
+          query: { embedding_provider: "fake" },
+          recall: { subgraph: { nodes: [] } },
+          rules: { considered: 2, matched: 1 },
+          tools: { selection: { selected: cands[0] ?? "tool_a" } },
+          layered_context: {
+            order: ["facts", "rules", "tools"],
+            sections: {
+              facts: "",
+              rules: "",
+              tools: "",
+            },
+            merged_text: "",
+          },
         },
       };
     }
