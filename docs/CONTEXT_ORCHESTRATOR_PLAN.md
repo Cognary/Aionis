@@ -4,7 +4,7 @@ title: "Context Orchestrator Plan"
 
 # Context Orchestrator Plan
 
-Status: `in progress`  
+Status: `completed` (`2026-03-02`)  
 Owner: Aionis Core  
 Track: `v0.3 context orchestration`
 
@@ -65,7 +65,7 @@ Acceptance:
 1. Backward compatible when `return_layered_context=false`
 2. `layered_context` includes layer stats + merged text + drop reasons
 
-## Phase 1: Dedicated Endpoint + Hard Contract
+## Phase 1: Dedicated Endpoint + Hard Contract (Completed)
 
 Target:
 
@@ -79,7 +79,7 @@ Acceptance:
 2. deterministic output given same inputs/config
 3. explicit error codes for invalid layer config/budget conflicts
 
-## Phase 2: Governance + Operability
+## Phase 2: Governance + Operability (Completed)
 
 Target:
 
@@ -92,7 +92,7 @@ Acceptance:
 1. per-layer metrics visible in ops diagnostics
 2. alerts for chronic over-budget/dropped critical layers
 
-## Phase 3: SDK + Playground Productization
+## Phase 3: SDK + Playground Productization (Completed)
 
 Target:
 
@@ -100,7 +100,7 @@ Target:
 2. Playground panel for layer config and merge trace visualization
 3. bilingual docs page with copy-ready templates
 
-Progress update (`2026-03-02`):
+Delivery summary (`2026-03-02`):
 
 1. TypeScript SDK: added `contextAssemble(...)` + typed request/response contracts.
 2. Python SDK: added `context_assemble(...)` + TypedDict contracts.
