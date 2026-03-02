@@ -25,14 +25,11 @@ export const OPERATION_LIST = [
     label: "recall",
     method: "POST",
     path: "/v1/memory/recall",
-    description: "Retrieve structured memory graph context.",
+    description: "Retrieve structured memory graph context (advanced: requires embedding vector).",
     template: {
       tenant_id: "default",
       scope: "default",
-      query: {
-        keywords: ["coffee"],
-        entity_types: ["fact"]
-      },
+      query_embedding: [0.01, 0.02, 0.03],
       limit: 8
     }
   },

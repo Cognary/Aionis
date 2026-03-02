@@ -74,6 +74,9 @@ jobs:
       - name: Root build
         run: npm run -s build
 
+      - name: Playground template contract check
+        run: npm run -s playground:template:check
+
       - name: SDK build
         run: npm run -s sdk:build
 
