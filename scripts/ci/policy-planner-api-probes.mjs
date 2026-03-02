@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { buildAuthHeaders, ensure, envString, postJson, toProbeFailure, writeJson } from "./probe-common.mjs";
+import { buildAuthHeaders, ensure, envString, getJson, postJson, toProbeFailure, writeJson } from "./probe-common.mjs";
 
 const label = "policy-planner-api-probes";
 const baseUrl = envString("AIONIS_BASE_URL", `http://127.0.0.1:${envString("PORT", "3001")}`);
@@ -8,6 +8,8 @@ const scopePrefix = envString("POLICY_PLANNER_PROBE_SCOPE", "default");
 const scope = `${scopePrefix}_policy_planner_probe_${scopeSeed}`;
 const tenantId = envString("POLICY_PLANNER_PROBE_TENANT_ID", "default");
 const headers = buildAuthHeaders({ includeAdmin: false, requireAdmin: false });
+const adminHeaders = buildAuthHeaders({ includeAdmin: true, requireAdmin: false });
+const hasAdminToken = typeof adminHeaders["x-admin-token"] === "string" && adminHeaders["x-admin-token"].trim().length > 0;
 
 const context = {
   intent: "json",
@@ -319,6 +321,39 @@ async function probeContextAssemble() {
   return { skipped: false, status: out.status, body: out.body };
 }
 
+async function probeDiagnostics() {
+  if (!hasAdminToken) {
+    return { skipped: true, reason: "admin_token_missing", status: 0, body: null };
+  }
+  const out = await getJson(
+    baseUrl,
+    `/v1/admin/control/diagnostics/tenant/${encodeURIComponent(tenantId)}?scope=${encodeURIComponent(scope)}&window_minutes=60`,
+    adminHeaders,
+    label,
+  );
+
+  if (out.status === 401 || out.status === 403) {
+    return { skipped: true, reason: "admin_unauthorized", status: out.status, body: out.body };
+  }
+
+  ensure(out.status === 200, `${label}: diagnostics endpoint must return 200 (got ${out.status})`);
+  ensure(out.body?.diagnostics && typeof out.body.diagnostics === "object", `${label}: diagnostics response missing diagnostics object`);
+  ensure(
+    out.body?.diagnostics?.context_assembly && typeof out.body.diagnostics.context_assembly === "object",
+    `${label}: diagnostics response missing context_assembly`,
+  );
+  const contextAssembly = out.body.diagnostics.context_assembly;
+  ensure(typeof contextAssembly.total === "number", `${label}: diagnostics.context_assembly.total must be number`);
+  ensure(typeof contextAssembly.layered_total === "number", `${label}: diagnostics.context_assembly.layered_total must be number`);
+  ensure(
+    typeof contextAssembly.layered_adoption_rate === "number",
+    `${label}: diagnostics.context_assembly.layered_adoption_rate must be number`,
+  );
+  ensure(Array.isArray(contextAssembly.endpoints), `${label}: diagnostics.context_assembly.endpoints must be array`);
+  ensure(Array.isArray(contextAssembly.layers), `${label}: diagnostics.context_assembly.layers must be array`);
+  return { skipped: false, status: out.status, body: out.body };
+}
+
 try {
   const setup = await setupProbeRule();
   const rules = await probeRulesEvaluate();
@@ -358,6 +393,7 @@ try {
 
   const planning = await probePlanningContext();
   const assembled = await probeContextAssemble();
+  const diagnostics = await probeDiagnostics();
 
   if (!planning.skipped) {
     ensure(
@@ -414,6 +450,10 @@ try {
         tool_candidates_count: candidates.length,
         tool_strict: false,
         return_layered_context: true,
+      },
+      diagnostics: {
+        scope,
+        window_minutes: 60,
       },
     },
     results: {
@@ -480,6 +520,20 @@ try {
             rules_considered: Number(assembled.body.rules?.considered ?? 0),
             rules_matched: Number(assembled.body.rules?.matched ?? 0),
             layered_order: assembled.body.layered_context?.order ?? [],
+          },
+      diagnostics: diagnostics.skipped
+        ? {
+            skipped: true,
+            reason: diagnostics.reason,
+            status: diagnostics.status,
+          }
+        : {
+            skipped: false,
+            context_assembly: {
+              total: Number(diagnostics.body?.diagnostics?.context_assembly?.total ?? 0),
+              layered_total: Number(diagnostics.body?.diagnostics?.context_assembly?.layered_total ?? 0),
+              layered_adoption_rate: Number(diagnostics.body?.diagnostics?.context_assembly?.layered_adoption_rate ?? 0),
+            },
           },
     },
   };

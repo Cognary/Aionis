@@ -857,10 +857,11 @@ Structured operability snapshot for request/recall/context-assembly pipelines + 
     - `empty_seed_rate`, `empty_node_rate`, `empty_edge_rate`
     - `seed_avg`, `node_avg`, `edge_avg`
   - `context_assembly`:
-    - summary: `total`, `latency_p50_ms`, `latency_p95_ms`, `latency_p99_ms`
-    - budget adherence: `budget_exhausted`, `budget_exhausted_rate`, `budget_use_ratio_avg`
-    - drop pressure: `dropped_requests`, `dropped_request_rate`
-    - `endpoints[]`: `endpoint`, `total`, `latency_p95_ms`, `budget_exhausted_rate`, `dropped_request_rate`
+    - summary (all requests): `total`, `layered_total`, `layered_adoption_rate`, `latency_p50_ms`, `latency_p95_ms`, `latency_p99_ms`
+    - budget/drop quality (layered subset only): `budget_exhausted`, `budget_exhausted_rate`, `budget_use_ratio_avg`,
+      `dropped_requests`, `dropped_request_rate`
+    - `endpoints[]`: `endpoint`, `total`, `layered_total`, `layered_adoption_rate`, `latency_p95_ms`,
+      `budget_exhausted_rate`, `dropped_request_rate`
     - `layers[]`: `layer_name`, `source_total`, `kept_total`, `dropped_total`, `kept_ratio`, `drop_ratio`,
       `used_chars_avg`, `budget_chars_avg`, `dropped_request_rate`, `budget_exhausted_rate`
     - `alerts.critical_layers[]`: `layer_name`, `sample_count`, `drop_ratio`, `severity`

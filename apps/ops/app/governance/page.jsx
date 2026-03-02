@@ -210,6 +210,8 @@ export default async function GovernancePage({ searchParams }) {
             <p>
               {formatNumber(planningContextRow?.total)} / {formatNumber(contextAssembleRow?.total)}
             </p>
+            <p>context layered adoption</p>
+            <p>{formatPct(contextAssembly?.layered_adoption_rate)}</p>
             <p>context assemble p95</p>
             <p>{formatNumber(contextAssembly?.latency_p95_ms)} ms</p>
             <p>outbox pending/retrying/failed</p>

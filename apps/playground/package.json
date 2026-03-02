@@ -1,6 +1,7 @@
 {
   "name": "aionis-playground",
   "private": true,
+  "type": "module",
   "version": "0.2.2",
   "scripts": {
     "dev": "next dev",

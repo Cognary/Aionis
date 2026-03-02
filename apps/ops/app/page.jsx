@@ -283,6 +283,10 @@ export default async function OpsDashboardPage({ searchParams }) {
           <div className="kv">
             <p>total</p>
             <p>{formatNumber(contextAssembly?.total)}</p>
+            <p>layered_total / adoption</p>
+            <p>
+              {formatNumber(contextAssembly?.layered_total)} / {formatPct(contextAssembly?.layered_adoption_rate)}
+            </p>
             <p>latency p95 / p99</p>
             <p>
               {formatMs(contextAssembly?.latency_p95_ms)} / {formatMs(contextAssembly?.latency_p99_ms)}

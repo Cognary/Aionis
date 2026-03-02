@@ -155,6 +155,7 @@ export type MemoryContextAssemblyTelemetryInput = {
   tenant_id: string;
   scope: string;
   endpoint: "planning_context" | "context_assemble";
+  layered_output: boolean;
   latency_ms: number;
   request_id?: string | null;
   total_budget_chars: number;
@@ -1464,6 +1465,7 @@ export async function recordMemoryContextAssemblyTelemetry(
   if (endpoint !== "planning_context" && endpoint !== "context_assemble") return;
 
   const requestId = trimOrNull(input.request_id);
+  const layeredOutput = input.layered_output === true;
   const totalBudgetChars = boundedInt(input.total_budget_chars);
   const usedChars = boundedInt(input.used_chars);
   const remainingChars = boundedInt(input.remaining_chars);
@@ -1497,42 +1499,86 @@ export async function recordMemoryContextAssemblyTelemetry(
 
   try {
     await withTx(db, async (client) => {
-      const head = await client.query(
-        `
-        INSERT INTO memory_context_assembly_telemetry (
-          tenant_id,
-          scope,
-          endpoint,
-          request_id,
-          total_budget_chars,
-          used_chars,
-          remaining_chars,
-          source_items,
-          kept_items,
-          dropped_items,
-          layers_with_content,
-          merge_trace_included,
-          latency_ms
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-        RETURNING id
-        `,
-        [
-          tenantId,
-          scope,
-          endpoint,
-          requestId,
-          totalBudgetChars,
-          usedChars,
-          remainingChars,
-          sourceItems,
-          keptItems,
-          droppedItems,
-          layersWithContent,
-          mergeTraceIncluded,
-          latencyMs,
-        ],
-      );
+      let head: any;
+      try {
+        head = await client.query(
+          `
+          INSERT INTO memory_context_assembly_telemetry (
+            tenant_id,
+            scope,
+            endpoint,
+            layered_output,
+            request_id,
+            total_budget_chars,
+            used_chars,
+            remaining_chars,
+            source_items,
+            kept_items,
+            dropped_items,
+            layers_with_content,
+            merge_trace_included,
+            latency_ms
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          RETURNING id
+          `,
+          [
+            tenantId,
+            scope,
+            endpoint,
+            layeredOutput,
+            requestId,
+            totalBudgetChars,
+            usedChars,
+            remainingChars,
+            sourceItems,
+            keptItems,
+            droppedItems,
+            layersWithContent,
+            mergeTraceIncluded,
+            latencyMs,
+          ],
+        );
+      } catch (insertErr: any) {
+        // Backward compatibility during rolling migration: old schema has no layered_output column.
+        if (String(insertErr?.code ?? "") !== "42703") throw insertErr;
+        head = await client.query(
+          `
+          INSERT INTO memory_context_assembly_telemetry (
+            tenant_id,
+            scope,
+            endpoint,
+            request_id,
+            total_budget_chars,
+            used_chars,
+            remaining_chars,
+            source_items,
+            kept_items,
+            dropped_items,
+            layers_with_content,
+            merge_trace_included,
+            latency_ms
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          RETURNING id
+          `,
+          [
+            tenantId,
+            scope,
+            endpoint,
+            requestId,
+            totalBudgetChars,
+            usedChars,
+            remainingChars,
+            sourceItems,
+            keptItems,
+            droppedItems,
+            layersWithContent,
+            mergeTraceIncluded,
+            latencyMs,
+          ],
+        );
+      }
       const telemetryId = Number(head.rows[0]?.id ?? 0);
       if (!Number.isFinite(telemetryId) || telemetryId <= 0) return;
 
@@ -1842,19 +1888,38 @@ export async function getTenantOperabilityDiagnostics(
       let contextTelemetryWarning: string | null = null;
 
       try {
+        const layeredOutputColumn = await client.query(
+          `
+          SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'memory_context_assembly_telemetry'
+              AND column_name = 'layered_output'
+          ) AS has_layered_output
+          `,
+        );
+        const hasLayeredOutput = layeredOutputColumn.rows[0]?.has_layered_output === true;
+        const layeredExpr = hasLayeredOutput ? "c.layered_output" : "(c.total_budget_chars > 0)";
+        if (!hasLayeredOutput) {
+          contextTelemetryWarning = "context_assembly_telemetry_schema_legacy";
+        }
+
         const contextSummary = await client.query(
           `
           SELECT
             COUNT(*)::bigint AS total,
+            COUNT(*) FILTER (WHERE ${layeredExpr})::bigint AS layered_total,
             percentile_cont(0.5) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p50_ms,
             percentile_cont(0.95) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p95_ms,
             percentile_cont(0.99) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p99_ms,
-            COUNT(*) FILTER (WHERE c.remaining_chars = 0)::bigint AS budget_exhausted,
-            COUNT(*) FILTER (WHERE c.dropped_items > 0)::bigint AS dropped_requests,
+            COUNT(*) FILTER (WHERE ${layeredExpr} AND c.remaining_chars = 0)::bigint AS budget_exhausted,
+            COUNT(*) FILTER (WHERE ${layeredExpr} AND c.dropped_items > 0)::bigint AS dropped_requests,
             AVG(
               CASE
-                WHEN c.total_budget_chars > 0 THEN c.used_chars::double precision / c.total_budget_chars::double precision
-                ELSE 0
+                WHEN ${layeredExpr} AND c.total_budget_chars > 0
+                  THEN c.used_chars::double precision / c.total_budget_chars::double precision
+                ELSE NULL
               END
             )::double precision AS budget_use_ratio_avg
           FROM memory_context_assembly_telemetry c
@@ -1871,9 +1936,10 @@ export async function getTenantOperabilityDiagnostics(
           SELECT
             c.endpoint,
             COUNT(*)::bigint AS total,
+            COUNT(*) FILTER (WHERE ${layeredExpr})::bigint AS layered_total,
             percentile_cont(0.95) WITHIN GROUP (ORDER BY c.latency_ms) AS latency_p95_ms,
-            COUNT(*) FILTER (WHERE c.remaining_chars = 0)::bigint AS budget_exhausted,
-            COUNT(*) FILTER (WHERE c.dropped_items > 0)::bigint AS dropped_requests
+            COUNT(*) FILTER (WHERE ${layeredExpr} AND c.remaining_chars = 0)::bigint AS budget_exhausted,
+            COUNT(*) FILTER (WHERE ${layeredExpr} AND c.dropped_items > 0)::bigint AS dropped_requests
           FROM memory_context_assembly_telemetry c
           WHERE c.tenant_id = $1
             AND ${scopeFilterContext.sql}
@@ -1956,20 +2022,24 @@ export async function getTenantOperabilityDiagnostics(
       );
 
       const contextTotal = Number(contextSummaryRow?.total ?? 0);
+      const contextLayeredTotal = Number(contextSummaryRow?.layered_total ?? 0);
       const contextBudgetExhausted = Number(contextSummaryRow?.budget_exhausted ?? 0);
       const contextDroppedRequests = Number(contextSummaryRow?.dropped_requests ?? 0);
       const contextEndpointRows = contextEndpointRowsRaw.map((r: any) => {
         const total = Number(r.total ?? 0);
+        const layeredTotal = Number(r.layered_total ?? 0);
         const budgetExhausted = Number(r.budget_exhausted ?? 0);
         const droppedRequests = Number(r.dropped_requests ?? 0);
         return {
           endpoint: String(r.endpoint ?? "unknown"),
           total,
+          layered_total: layeredTotal,
+          layered_adoption_rate: total > 0 ? round(layeredTotal / total) : 0,
           latency_p95_ms: round(Number(r.latency_p95_ms ?? 0)),
           budget_exhausted: budgetExhausted,
-          budget_exhausted_rate: total > 0 ? round(budgetExhausted / total) : 0,
+          budget_exhausted_rate: layeredTotal > 0 ? round(budgetExhausted / layeredTotal) : 0,
           dropped_requests: droppedRequests,
-          dropped_request_rate: total > 0 ? round(droppedRequests / total) : 0,
+          dropped_request_rate: layeredTotal > 0 ? round(droppedRequests / layeredTotal) : 0,
         };
       });
       const contextLayerRows = contextLayerRowsRaw.map((r: any) => {
@@ -2025,13 +2095,15 @@ export async function getTenantOperabilityDiagnostics(
       };
       out.context_assembly = {
         total: contextTotal,
+        layered_total: contextLayeredTotal,
+        layered_adoption_rate: contextTotal > 0 ? round(contextLayeredTotal / contextTotal) : 0,
         latency_p50_ms: round(Number(contextSummaryRow?.latency_p50_ms ?? 0)),
         latency_p95_ms: round(Number(contextSummaryRow?.latency_p95_ms ?? 0)),
         latency_p99_ms: round(Number(contextSummaryRow?.latency_p99_ms ?? 0)),
         budget_exhausted: contextBudgetExhausted,
-        budget_exhausted_rate: contextTotal > 0 ? round(contextBudgetExhausted / contextTotal) : 0,
+        budget_exhausted_rate: contextLayeredTotal > 0 ? round(contextBudgetExhausted / contextLayeredTotal) : 0,
         dropped_requests: contextDroppedRequests,
-        dropped_request_rate: contextTotal > 0 ? round(contextDroppedRequests / contextTotal) : 0,
+        dropped_request_rate: contextLayeredTotal > 0 ? round(contextDroppedRequests / contextLayeredTotal) : 0,
         budget_use_ratio_avg: round(Number(contextSummaryRow?.budget_use_ratio_avg ?? 0)),
         endpoints: contextEndpointRows,
         layers: contextLayerRows,

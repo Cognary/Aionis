@@ -533,10 +533,205 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
     assert.equal(parsed.results.planning.reason, "no_embedding_provider");
     assert.equal(parsed.results.assembled.skipped, true);
     assert.equal(parsed.results.assembled.reason, "no_embedding_provider");
+    assert.equal(parsed.results.diagnostics.skipped, true);
+    assert.equal(parsed.results.diagnostics.reason, "admin_token_missing");
     assert.equal(parsed.results.decision_readback.decision_kind, "tools_select");
     assert.equal(parsed.results.provenance.provided.decision_link_mode, "provided");
     assert.equal(parsed.results.provenance.inferred.decision_link_mode, "inferred");
     assert.equal(parsed.results.provenance.created_from_feedback.decision_link_mode, "created_from_feedback");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("policy-planner probe validates diagnostics context_assembly dual metrics", async () => {
+  let selectedRunId = "";
+  let selectedTool = "tool_a";
+  const mock = await createMockServer(async (req) => {
+    if (req.path === "/v1/memory/write") {
+      return {
+        status: 200,
+        body: {
+          commit_id: "c_seed_rule_diag",
+          nodes: [{ id: String(req.body?.nodes?.[0]?.id ?? "rule-diag"), type: "rule" }],
+        },
+      };
+    }
+    if (req.path === "/v1/memory/rules/state") {
+      return { status: 200, body: { commit_id: "c_rule_state_diag" } };
+    }
+    if (req.path === "/v1/memory/rules/evaluate") {
+      return {
+        status: 200,
+        body: {
+          considered: 2,
+          matched: 1,
+          active: [],
+          shadow: [],
+          applied: {},
+          agent_visibility_summary: {},
+        },
+      };
+    }
+    if (req.path === "/v1/memory/tools/select") {
+      const cands = Array.isArray(req.body?.candidates) ? req.body.candidates.map((v) => String(v)) : ["tool_a", "tool_b"];
+      selectedRunId = String(req.body?.run_id ?? "");
+      selectedTool = cands[0] ?? "tool_a";
+      return {
+        status: 200,
+        body: {
+          decision: { decision_id: "decision_diag_1" },
+          selection: { selected: cands[0] ?? null, ordered: cands },
+          rules: {},
+        },
+      };
+    }
+    if (req.path === "/v1/memory/tools/decision") {
+      const decisionId = String(req.body?.decision_id ?? "");
+      if (!decisionId) return { status: 400, body: { error: "invalid_decision_id" } };
+      return {
+        status: 200,
+        body: {
+          tenant_id: String(req.body?.tenant_id ?? "default"),
+          scope: String(req.body?.scope ?? "default"),
+          decision: {
+            decision_id: decisionId,
+            decision_kind: "tools_select",
+            run_id: selectedRunId,
+            selected_tool: selectedTool,
+            candidates: [selectedTool, "tool_b"],
+            context_sha256: "ctx",
+            policy_sha256: "policy",
+            source_rule_ids: [],
+            metadata: {},
+            created_at: new Date().toISOString(),
+            commit_id: null,
+          },
+        },
+      };
+    }
+    if (req.path === "/v1/memory/tools/feedback") {
+      const feedbackRunId = String(req.body?.run_id ?? "");
+      if (req.body?.decision_id) {
+        return {
+          status: 200,
+          body: {
+            updated_rules: 1,
+            decision_id: "decision_diag_1",
+            decision_link_mode: "provided",
+          },
+        };
+      }
+      if (feedbackRunId.endsWith("_fresh")) {
+        return {
+          status: 200,
+          body: {
+            updated_rules: 1,
+            decision_id: "decision_diag_created_1",
+            decision_link_mode: "created_from_feedback",
+          },
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          updated_rules: 1,
+          decision_id: "decision_diag_1",
+          decision_link_mode: "inferred",
+        },
+      };
+    }
+    if (req.path === "/v1/memory/planning/context") {
+      const cands = Array.isArray(req.body?.tool_candidates) ? req.body.tool_candidates.map((v) => String(v)) : ["tool_a", "tool_b"];
+      return {
+        status: 200,
+        body: {
+          query: { embedding_provider: "fake" },
+          recall: { subgraph: { nodes: [] } },
+          rules: { considered: 2, matched: 1 },
+          tools: { selection: { selected: cands[0] ?? "tool_a" } },
+        },
+      };
+    }
+    if (req.path === "/v1/memory/context/assemble") {
+      const cands = Array.isArray(req.body?.tool_candidates) ? req.body.tool_candidates.map((v) => String(v)) : ["tool_a", "tool_b"];
+      return {
+        status: 200,
+        body: {
+          query: { embedding_provider: "fake" },
+          recall: { subgraph: { nodes: [] } },
+          rules: { considered: 2, matched: 1 },
+          tools: { selection: { selected: cands[0] ?? "tool_a" } },
+          layered_context: {
+            order: ["facts", "rules", "tools"],
+            sections: {
+              facts: "",
+              rules: "",
+              tools: "",
+            },
+            merged_text: "",
+          },
+        },
+      };
+    }
+    if (req.path.startsWith("/v1/admin/control/diagnostics/tenant/")) {
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          diagnostics: {
+            request_telemetry: { endpoints: [] },
+            recall_pipeline: {
+              total: 0,
+              empty_seed: 0,
+              empty_nodes: 0,
+              empty_edges: 0,
+              empty_seed_rate: 0,
+              empty_node_rate: 0,
+              empty_edge_rate: 0,
+              seed_avg: 0,
+              node_avg: 0,
+              edge_avg: 0,
+            },
+            context_assembly: {
+              total: 2,
+              layered_total: 1,
+              layered_adoption_rate: 0.5,
+              latency_p50_ms: 12,
+              latency_p95_ms: 20,
+              latency_p99_ms: 24,
+              budget_exhausted: 0,
+              budget_exhausted_rate: 0,
+              dropped_requests: 0,
+              dropped_request_rate: 0,
+              budget_use_ratio_avg: 0.4,
+              endpoints: [],
+              layers: [],
+              alerts: { critical_layers: [] },
+            },
+            outbox: {
+              totals: { pending: 0, retrying: 0, failed: 0, oldest_pending_age_sec: 0 },
+              by_event_type: [],
+            },
+          },
+        },
+      };
+    }
+    return { status: 404, body: { error: "not_found" } };
+  });
+
+  try {
+    const out = await runNodeScript("scripts/ci/policy-planner-api-probes.mjs", {
+      AIONIS_BASE_URL: mock.baseUrl,
+      ADMIN_TOKEN: "test-admin-token",
+    });
+    assert.equal(out.code, 0, out.stderr || out.stdout);
+    const parsed = JSON.parse(out.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.results.diagnostics.skipped, false);
+    assert.equal(parsed.results.diagnostics.context_assembly.total, 2);
+    assert.equal(parsed.results.diagnostics.context_assembly.layered_total, 1);
+    assert.equal(parsed.results.diagnostics.context_assembly.layered_adoption_rate, 0.5);
   } finally {
     await mock.close();
   }

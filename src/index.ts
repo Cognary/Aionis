@@ -586,23 +586,26 @@ async function recordContextAssemblyTelemetryBestEffort(args: {
   scope: string;
   endpoint: ContextAssemblyEndpoint;
   latency_ms: number;
+  layered_output: boolean;
   layered_context: any;
 }) {
-  const layerRows = collectLayeredContextTelemetryRows(args.layered_context);
+  const isLayeredOutput = args.layered_output === true;
+  const layerRows = isLayeredOutput ? collectLayeredContextTelemetryRows(args.layered_context) : [];
   await recordMemoryContextAssemblyTelemetry(db, {
     tenant_id: args.tenant_id,
     scope: args.scope,
     endpoint: args.endpoint,
+    layered_output: isLayeredOutput,
     latency_ms: parseNonNegativeNumber(args.latency_ms),
     request_id: String(args.req?.id ?? ""),
-    total_budget_chars: parseNonNegativeNumber(args.layered_context?.budget?.total_chars),
-    used_chars: parseNonNegativeNumber(args.layered_context?.budget?.used_chars),
-    remaining_chars: parseNonNegativeNumber(args.layered_context?.budget?.remaining_chars),
-    source_items: parseNonNegativeNumber(args.layered_context?.stats?.source_items),
-    kept_items: parseNonNegativeNumber(args.layered_context?.stats?.kept_items),
-    dropped_items: parseNonNegativeNumber(args.layered_context?.stats?.dropped_items),
-    layers_with_content: parseNonNegativeNumber(args.layered_context?.stats?.layers_with_content),
-    merge_trace_included: Array.isArray(args.layered_context?.merge_trace),
+    total_budget_chars: isLayeredOutput ? parseNonNegativeNumber(args.layered_context?.budget?.total_chars) : 0,
+    used_chars: isLayeredOutput ? parseNonNegativeNumber(args.layered_context?.budget?.used_chars) : 0,
+    remaining_chars: isLayeredOutput ? parseNonNegativeNumber(args.layered_context?.budget?.remaining_chars) : 0,
+    source_items: isLayeredOutput ? parseNonNegativeNumber(args.layered_context?.stats?.source_items) : 0,
+    kept_items: isLayeredOutput ? parseNonNegativeNumber(args.layered_context?.stats?.kept_items) : 0,
+    dropped_items: isLayeredOutput ? parseNonNegativeNumber(args.layered_context?.stats?.dropped_items) : 0,
+    layers_with_content: isLayeredOutput ? parseNonNegativeNumber(args.layered_context?.stats?.layers_with_content) : 0,
+    merge_trace_included: isLayeredOutput ? Array.isArray(args.layered_context?.merge_trace) : false,
     layers: layerRows,
   });
 }
@@ -2730,19 +2733,18 @@ app.post("/v1/memory/planning/context", async (req, reply) => {
       })
     : undefined;
   const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
-  if (layeredContext) {
-    try {
-      await recordContextAssemblyTelemetryBestEffort({
-        req,
-        tenant_id: tenantIdOut,
-        scope: recallOut.scope,
-        endpoint: "planning_context",
-        latency_ms: ms,
-        layered_context: layeredContext,
-      });
-    } catch (err) {
-      req.log.warn({ err, tenant_id: tenantIdOut, scope: recallOut.scope }, "planning_context telemetry insert failed");
-    }
+  try {
+    await recordContextAssemblyTelemetryBestEffort({
+      req,
+      tenant_id: tenantIdOut,
+      scope: recallOut.scope,
+      endpoint: "planning_context",
+      latency_ms: ms,
+      layered_output: !!layeredContext,
+      layered_context: layeredContext,
+    });
+  } catch (err) {
+    req.log.warn({ err, tenant_id: tenantIdOut, scope: recallOut.scope }, "planning_context telemetry insert failed");
   }
 
   return reply.code(200).send({
@@ -3012,19 +3014,18 @@ app.post("/v1/memory/context/assemble", async (req, reply) => {
       })
     : undefined;
   const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
-  if (layeredContext) {
-    try {
-      await recordContextAssemblyTelemetryBestEffort({
-        req,
-        tenant_id: tenantIdOut,
-        scope: recallOut.scope,
-        endpoint: "context_assemble",
-        latency_ms: ms,
-        layered_context: layeredContext,
-      });
-    } catch (err) {
-      req.log.warn({ err, tenant_id: tenantIdOut, scope: recallOut.scope }, "context_assemble telemetry insert failed");
-    }
+  try {
+    await recordContextAssemblyTelemetryBestEffort({
+      req,
+      tenant_id: tenantIdOut,
+      scope: recallOut.scope,
+      endpoint: "context_assemble",
+      latency_ms: ms,
+      layered_output: !!layeredContext,
+      layered_context: layeredContext,
+    });
+  } catch (err) {
+    req.log.warn({ err, tenant_id: tenantIdOut, scope: recallOut.scope }, "context_assemble telemetry insert failed");
   }
 
   req.log.info(

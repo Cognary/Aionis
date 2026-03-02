@@ -34,7 +34,7 @@ Panel groups:
 2. Tenant snapshot (`nodes/edges`, active rules, recalls/commits, outbox state)
 3. Request telemetry (`total`, `error_rate`, `p95/p99`)
 4. Recall pipeline diagnostics
-5. Context assembly diagnostics (`planning_context` / `context_assemble` latency, budget adherence, per-layer drop ratio)
+5. Context assembly diagnostics (`planning_context` / `context_assemble` total vs layered adoption, budget adherence, per-layer drop ratio)
 6. Outbox diagnostics
 7. Incident publish rollup + SLO
 8. Timeseries buckets (latest)

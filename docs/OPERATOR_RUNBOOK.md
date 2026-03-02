@@ -142,7 +142,7 @@ curl -sS localhost:${PORT:-3001}/v1/admin/control/diagnostics/tenant/default?win
 Use this to quickly locate:
 - empty-seed / empty-node spikes
 - endpoint p95/p99 latency regressions
-- context assembly budget-exhausted / drop-ratio pressure (especially `rules` and `decisions` layers)
+- context assembly layered adoption (`layered_total / total`) and budget-exhausted / drop-ratio pressure (especially `rules` and `decisions` layers)
 - outbox pending/retrying/failed backlog by event type
 
 ## Weekly
