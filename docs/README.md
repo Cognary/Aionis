@@ -12,6 +12,7 @@ This is the public documentation index for Aionis.
 - [Aionis Onepage](./AIONIS_ONEPAGE.md)
 - [Aionis Onepage (Public)](./AIONIS_ONEPAGE_PUBLIC.md)
 - [5-Minute Developer Onboarding](./ONBOARDING_5MIN.md)
+- [Embedding Setup](./EMBEDDING_SETUP.md)
 - [Architecture](./ARCHITECTURE.md)
 
 ## API & SDK

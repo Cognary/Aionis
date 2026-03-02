@@ -13,7 +13,7 @@ export const OPERATION_LIST = [
       nodes: [
         {
           client_id: "fact_user_coffee",
-          type: "fact",
+          type: "entity",
           text_summary: "User likes black coffee."
         }
       ],
@@ -58,7 +58,7 @@ export const OPERATION_LIST = [
     template: {
       tenant_id: "default",
       scope: "default",
-      input: {
+      context: {
         task: "draft_reply",
         channel: "chat",
         user_intent: "recommend_coffee"
@@ -75,9 +75,9 @@ export const OPERATION_LIST = [
       tenant_id: "default",
       scope: "default",
       run_id: "run_playground_001",
-      goal: "Answer user preference question",
-      candidate_tools: ["search_profile", "draft_answer"],
+      candidates: ["search_profile", "draft_answer"],
       context: {
+        goal: "Answer user preference question",
         query: "What coffee does the user prefer?"
       }
     }
@@ -93,10 +93,15 @@ export const OPERATION_LIST = [
       scope: "default",
       run_id: "{{last.run_id}}",
       decision_id: "{{last.decision_id}}",
+      context: {
+        goal: "Answer user preference question",
+        query: "What coffee does the user prefer?"
+      },
+      candidates: ["search_profile", "draft_answer"],
       selected_tool: "search_profile",
-      outcome: "success",
-      score: 1,
-      feedback_text: "Result was grounded and aligned with user preference."
+      outcome: "positive",
+      note: "Result was grounded and aligned with user preference.",
+      input_text: "Playground feedback: selected tool result was useful."
     }
   },
   {
@@ -166,7 +171,7 @@ export const SCENARIO_PRESETS = [
         query_text: "What issue did this customer report and what should support do first?"
       },
       rules_evaluate: {
-        input: {
+        context: {
           task: "support_triage",
           priority: "high",
           channel: "support_chat"
@@ -174,13 +179,22 @@ export const SCENARIO_PRESETS = [
       },
       tools_select: {
         run_id: "run_support_triage_001",
-        goal: "Recommend first support action for password reset issue",
-        candidate_tools: ["kb_search", "account_lookup", "draft_reply"]
+        candidates: ["kb_search", "account_lookup", "draft_reply"],
+        context: {
+          goal: "Recommend first support action for password reset issue"
+        }
       },
       tools_feedback: {
         run_id: "{{last.run_id}}",
+        decision_id: "{{last.decision_id}}",
+        context: {
+          goal: "Recommend first support action for password reset issue"
+        },
+        candidates: ["kb_search", "account_lookup", "draft_reply"],
         selected_tool: "kb_search",
-        feedback_text: "Suggested remediation steps matched known password reset playbook."
+        outcome: "positive",
+        note: "Suggested remediation steps matched known password reset playbook.",
+        input_text: "Support triage outcome was successful."
       }
     }
   },
@@ -200,7 +214,7 @@ export const SCENARIO_PRESETS = [
         nodes: [
           {
             client_id: "lead_finbank_soc2",
-            type: "fact",
+            type: "entity",
             text_summary: "FinBank lead asked for SOC2 package and pricing follow-up next week"
           }
         ]
@@ -210,8 +224,10 @@ export const SCENARIO_PRESETS = [
       },
       tools_select: {
         run_id: "run_sales_followup_001",
-        goal: "Pick best next action for enterprise lead",
-        candidate_tools: ["crm_lookup", "compose_followup", "pricing_packet"]
+        candidates: ["crm_lookup", "compose_followup", "pricing_packet"],
+        context: {
+          goal: "Pick best next action for enterprise lead"
+        }
       }
     }
   },
@@ -231,7 +247,7 @@ export const SCENARIO_PRESETS = [
         nodes: [
           {
             client_id: "pref_meeting_time",
-            type: "fact",
+            type: "entity",
             text_summary: "Meetings after 2pm preferred; avoid Monday mornings"
           }
         ]
@@ -241,8 +257,10 @@ export const SCENARIO_PRESETS = [
       },
       tools_select: {
         run_id: "run_personal_assistant_001",
-        goal: "Choose action for scheduling request",
-        candidate_tools: ["calendar_lookup", "schedule_draft"]
+        candidates: ["calendar_lookup", "schedule_draft"],
+        context: {
+          goal: "Choose action for scheduling request"
+        }
       }
     }
   }

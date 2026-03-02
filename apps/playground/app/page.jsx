@@ -765,6 +765,7 @@ export default function PlaygroundPage() {
   const [chainOperationFilter, setChainOperationFilter] = useState("all");
   const [chatSessions, setChatSessions] = useState(() => [makeChatSession("Session 1")]);
   const [activeSessionId, setActiveSessionId] = useState("");
+  const [storageHydrated, setStorageHydrated] = useState(false);
   const chatThreadRef = useRef(null);
 
   const tx = useMemo(() => I18N[language] || I18N.en, [language]);
@@ -978,22 +979,94 @@ export default function PlaygroundPage() {
     return applyRuntimeVars(scoped, runtime, connection);
   }
 
+  function normalizeOperationPayload(nextOperation, payload) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+    const next = deepClone(payload);
+
+    if (nextOperation === "write" && Array.isArray(next.nodes)) {
+      next.nodes = next.nodes.map((node) => {
+        if (!node || typeof node !== "object") return node;
+        if (node.type !== "fact") return node;
+        return { ...node, type: "entity" };
+      });
+    }
+
+    if (nextOperation === "rules_evaluate") {
+      if ((next.context === undefined || next.context === null) && next.input && typeof next.input === "object" && !Array.isArray(next.input)) {
+        next.context = deepClone(next.input);
+      }
+      if (next.context === undefined || next.context === null || typeof next.context !== "object" || Array.isArray(next.context)) {
+        next.context = {};
+      }
+      delete next.input;
+    }
+
+    if (nextOperation === "tools_select") {
+      if (!Array.isArray(next.candidates) && Array.isArray(next.candidate_tools)) {
+        next.candidates = [...next.candidate_tools];
+      }
+      if (!next.context || typeof next.context !== "object" || Array.isArray(next.context)) {
+        next.context = {};
+      }
+      if (typeof next.goal === "string" && next.goal.trim() && !next.context.goal) {
+        next.context.goal = next.goal.trim();
+      }
+      delete next.goal;
+      delete next.candidate_tools;
+    }
+
+    if (nextOperation === "tools_feedback") {
+      if (!Array.isArray(next.candidates) && Array.isArray(next.candidate_tools)) {
+        next.candidates = [...next.candidate_tools];
+      }
+      if (!next.context || typeof next.context !== "object" || Array.isArray(next.context)) {
+        next.context = {};
+      }
+      if (typeof next.goal === "string" && next.goal.trim() && !next.context.goal) {
+        next.context.goal = next.goal.trim();
+      }
+      if (typeof next.feedback_text === "string" && next.feedback_text.trim() && !next.note) {
+        next.note = next.feedback_text.trim();
+      }
+      if (typeof next.outcome === "string") {
+        const raw = next.outcome.trim().toLowerCase();
+        if (raw === "success") next.outcome = "positive";
+        else if (raw === "failure" || raw === "failed" || raw === "error") next.outcome = "negative";
+      }
+      if (!next.outcome && typeof next.score === "number") {
+        if (next.score > 0) next.outcome = "positive";
+        else if (next.score < 0) next.outcome = "negative";
+        else next.outcome = "neutral";
+      }
+      if (!next.input_text && !next.input_sha256) {
+        next.input_text = typeof next.note === "string" && next.note.trim() ? next.note : "Playground tool feedback";
+      }
+      delete next.goal;
+      delete next.candidate_tools;
+      delete next.feedback_text;
+      delete next.score;
+    }
+
+    return next;
+  }
+
   async function executeOne(nextOperation, preparedPayload) {
+    const normalizedPayload = normalizeOperationPayload(nextOperation, preparedPayload);
     const startedAt = new Date().toISOString();
     const response = await fetch("/api/playground/execute", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         operation: nextOperation,
-        payload: preparedPayload,
+        payload: normalizedPayload,
         connection
       })
     });
 
     const result = await response.json().catch(() => ({ ok: false, error: "invalid_json_response" }));
     const id = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-    const decisionId = findDecisionId(result.data) || findDecisionId(preparedPayload);
-    const runId = findRunId(result.data) || findRunId(preparedPayload);
+    const decisionId = findDecisionId(result.data) || findDecisionId(normalizedPayload);
+    const runId = findRunId(result.data) || findRunId(normalizedPayload);
 
     const entry = {
       id,
@@ -1005,7 +1078,7 @@ export default function PlaygroundPage() {
       status: Number(result.status || 0),
       request_id: String(result.request_id || ""),
       duration_ms: Number(result.duration_ms || 0),
-      payload: preparedPayload,
+      payload: normalizedPayload,
       data: result.data ?? null,
       error: result.error || "",
       decision_id: decisionId,
@@ -1442,7 +1515,6 @@ export default function PlaygroundPage() {
             } else {
               setActiveSessionId(normalized[0].id);
             }
-            return;
           }
         }
       }
@@ -1492,35 +1564,36 @@ export default function PlaygroundPage() {
     }
 
     setActiveSessionId((prev) => prev || chatSessions[0]?.id || "");
+    setStorageHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !storageHydrated) return;
     window.localStorage.setItem(LLM_CONFIG_STORAGE_KEY, JSON.stringify(llmConfig));
-  }, [llmConfig]);
+  }, [storageHydrated, llmConfig]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !storageHydrated) return;
     window.localStorage.setItem(CHAT_SESSION_STORAGE_KEY, JSON.stringify(chatSessions));
-  }, [chatSessions]);
+  }, [storageHydrated, chatSessions]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !storageHydrated) return;
     window.localStorage.setItem(PLAYGROUND_SETTINGS_TAB_STORAGE_KEY, settingsTab);
-  }, [settingsTab]);
+  }, [storageHydrated, settingsTab]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !storageHydrated) return;
     window.localStorage.setItem(PLAYGROUND_LANGUAGE_STORAGE_KEY, language);
-  }, [language]);
+  }, [storageHydrated, language]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !storageHydrated) return;
     window.localStorage.setItem(PLAYGROUND_LEFT_PANELS_STORAGE_KEY, JSON.stringify(leftPanels));
-  }, [leftPanels]);
+  }, [storageHydrated, leftPanels]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !storageHydrated) return;
     const payload = {
       scenario_preset: scenarioPreset,
       operation,
@@ -1537,6 +1610,7 @@ export default function PlaygroundPage() {
     };
     window.localStorage.setItem(PLAYGROUND_RUNTIME_PREFS_STORAGE_KEY, JSON.stringify(payload));
   }, [
+    storageHydrated,
     scenarioPreset,
     operation,
     flowPreset,
@@ -1550,13 +1624,13 @@ export default function PlaygroundPage() {
   ]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !storageHydrated) return;
     if (!activeSessionId && chatSessions[0]?.id) {
       setActiveSessionId(chatSessions[0].id);
       return;
     }
     if (activeSessionId) window.localStorage.setItem(CHAT_SESSION_ACTIVE_KEY, activeSessionId);
-  }, [activeSessionId, chatSessions]);
+  }, [storageHydrated, activeSessionId, chatSessions]);
 
   function buildShareState() {
     return {

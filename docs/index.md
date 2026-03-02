@@ -66,6 +66,11 @@ Reference docs:
     <p>Bring up DB + API + worker and run your first memory write/recall flow in minutes.</p>
     <span>Open 5-minute guide</span>
   </a>
+  <a class="aionis-home-card" href="/EMBEDDING_SETUP">
+    <h3>Embedding Setup</h3>
+    <p>Enable fake/OpenAI/MiniMax embedding providers with copy-ready env templates and validation commands.</p>
+    <span>Open embedding guide</span>
+  </a>
   <a class="aionis-home-card" href="/API_CONTRACT">
     <h3>API Contract</h3>
     <p>Full endpoint and payload definitions for write, recall, policy, and admin control APIs.</p>

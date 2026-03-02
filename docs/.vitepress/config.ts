@@ -52,6 +52,7 @@ export default defineConfig({
         items: [
           { text: "Docs Home", link: "/index" },
           { text: "5-Minute Onboarding", link: "/ONBOARDING_5MIN" },
+          { text: "Embedding Setup", link: "/EMBEDDING_SETUP" },
           { text: "Playground", link: "/PLAYGROUND" },
           { text: "Architecture", link: "/ARCHITECTURE" },
           { text: "Docs Index", link: "/README" },
