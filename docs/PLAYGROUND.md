@@ -21,11 +21,12 @@ The playground focuses on these routes:
 ## Included capabilities
 
 1. Connection settings in UI (`base_url`, `tenant_id`, `scope`, API key, bearer token, admin token).
-2. Per-operation payload editor with JSON templates.
-3. Request chain timeline with status, duration, and `request_id`.
-4. Response inspector with payload/response side-by-side inspection.
-5. One-click quick flow (`write -> recall_text -> rules/evaluate -> tools/select`).
-6. Export current session to JSON for replay or issue reports.
+2. Scenario presets (`Support Triage`, `Sales Follow-up`, `Personal Assistant`) to seed tenant/scope + payload defaults.
+3. Per-operation payload editor with JSON templates and runtime variable injection (`\{\{last.decision_id\}\}`, `\{\{last.request_id\}\}`, `\{\{last.run_id\}\}`, `\{\{connection.*\}\}`).
+4. Step Flow orchestrator with editable flow JSON and reusable flow presets (including closed-loop policy flow).
+5. Request chain timeline with status, duration, and `request_id`.
+6. Response inspector with structural diff against previous response of the same operation.
+7. One-click session export to JSON for replay or issue reports.
 
 ## Run locally
 

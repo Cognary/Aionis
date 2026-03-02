@@ -1,7 +1,7 @@
 :root {
   --bg: #eff5ff;
   --bg-alt: #f8fbff;
-  --card: rgba(255, 255, 255, 0.9);
+  --card: rgba(255, 255, 255, 0.92);
   --line: rgba(15, 23, 42, 0.16);
   --ink: #0d1629;
   --ink-soft: #4c5d79;
@@ -41,7 +41,7 @@ a {
 }
 
 .shell {
-  width: min(1320px, 94vw);
+  width: min(1360px, 95vw);
   margin: 0 auto;
 }
 
@@ -50,7 +50,7 @@ a {
   top: 0;
   z-index: 50;
   border-bottom: 1px solid var(--line);
-  background: rgba(240, 246, 255, 0.8);
+  background: rgba(240, 246, 255, 0.84);
   backdrop-filter: blur(10px);
 }
 
@@ -113,7 +113,7 @@ h1 {
 }
 
 h2 {
-  font-size: 1.16rem;
+  font-size: 1.14rem;
 }
 
 .panel {
@@ -126,7 +126,7 @@ h2 {
 
 .hero {
   display: grid;
-  grid-template-columns: 1.2fr auto;
+  grid-template-columns: 1.28fr auto;
   gap: 1rem;
 }
 
@@ -148,11 +148,16 @@ h2 {
   font-size: 0.76rem;
 }
 
+.tiny-strong {
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
 .hero-actions {
   display: grid;
   align-content: start;
   gap: 0.52rem;
-  min-width: 210px;
+  min-width: 220px;
 }
 
 button {
@@ -183,9 +188,52 @@ button.danger {
   background: rgba(254, 235, 235, 0.84);
 }
 
-.grid-2 {
+.status-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.metric-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0.55rem 0.62rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.metric-card span {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.metric-card strong {
+  font-size: 0.96rem;
+}
+
+.metric-card.ok {
+  border-color: rgba(2, 122, 72, 0.35);
+  background: rgba(226, 251, 237, 0.68);
+}
+
+.metric-card.err {
+  border-color: rgba(180, 35, 24, 0.35);
+  background: rgba(254, 235, 235, 0.72);
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(300px, 0.94fr) minmax(420px, 1.24fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.left-stack,
+.mid-stack {
+  display: grid;
   gap: 1rem;
 }
 
@@ -276,7 +324,7 @@ textarea {
 .chain-list {
   display: grid;
   gap: 0.54rem;
-  max-height: 540px;
+  max-height: 650px;
   overflow: auto;
   padding-right: 0.12rem;
 }
@@ -335,9 +383,28 @@ pre {
   line-height: 1.42;
 }
 
+.diff-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.diff-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.45rem;
+  background: #f9fbff;
+}
+
+@media (max-width: 1280px) {
+  .status-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1120px) {
   .hero,
-  .grid-2 {
+  .workspace-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -350,5 +417,9 @@ pre {
 
   .top-links {
     width: 100%;
+  }
+
+  .status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

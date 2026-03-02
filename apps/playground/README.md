@@ -2,6 +2,13 @@
 
 Interactive playground app for core memory and policy-loop APIs.
 
+Highlights:
+
+1. Scenario presets for fast end-to-end demos.
+2. Step-flow runner with editable JSON workflow.
+3. Runtime placeholder injection (`{{last.*}}`, `{{connection.*}}`).
+4. Response diff viewer against previous same-operation run.
+
 ## Run
 
 ```bash
