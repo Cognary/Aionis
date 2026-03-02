@@ -46,6 +46,8 @@ import type {
   ControlTenantTimeseriesQuery,
   ControlTenantTimeseriesResponse,
   CapabilityContractSpec,
+  ContextAssembleInput,
+  ContextAssembleResponse,
   HealthResponse,
   MemoryEventWriteInput,
   MemoryEventWriteResponse,
@@ -207,6 +209,10 @@ export class AionisClient {
 
   async recallText(input: MemoryRecallTextInput, opts?: RequestOptions): Promise<AionisResponse<MemoryRecallResponse>> {
     return this.requestPost<MemoryRecallTextInput, MemoryRecallResponse>("/v1/memory/recall_text", input, opts);
+  }
+
+  async contextAssemble(input: ContextAssembleInput, opts?: RequestOptions): Promise<AionisResponse<ContextAssembleResponse>> {
+    return this.requestPost<ContextAssembleInput, ContextAssembleResponse>("/v1/memory/context/assemble", input, opts);
   }
 
   async find(input: MemoryFindInput, opts?: RequestOptions): Promise<AionisResponse<MemoryFindResponse>> {

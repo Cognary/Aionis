@@ -17,10 +17,11 @@ This is the complete Aionis documentation catalog, organized by user journey.
 ## 2) Build Memory
 
 1. [Build Memory](./BUILD_MEMORY.md)
-2. [Playground](./PLAYGROUND.md)
-3. [Planner Context](./PLANNER_CONTEXT.md)
-4. [Architecture](./ARCHITECTURE.md)
-5. [Context Orchestrator Plan](./CONTEXT_ORCHESTRATOR_PLAN.md)
+2. [Context Orchestration](./CONTEXT_ORCHESTRATION.md)
+3. [Playground](./PLAYGROUND.md)
+4. [Planner Context](./PLANNER_CONTEXT.md)
+5. [Architecture](./ARCHITECTURE.md)
+6. [Context Orchestrator Plan](./CONTEXT_ORCHESTRATOR_PLAN.md)
 
 ## 3) Control & Policy
 

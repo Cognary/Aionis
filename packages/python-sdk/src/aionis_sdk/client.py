@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         ControlTenantsQuery,
         ControlTenantTimeseriesQuery,
         BackendCapabilityErrorDetails,
+        ContextAssembleInput,
         MemoryEventWriteInput,
         MemoryFindInput,
         MemoryPackExportInput,
@@ -244,6 +245,9 @@ class AionisClient:
 
     def recall_text(self, payload: "MemoryRecallTextInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/recall_text", payload, request_options)
+
+    def context_assemble(self, payload: "ContextAssembleInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/context/assemble", payload, request_options)
 
     def find(self, payload: "MemoryFindInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/find", payload, request_options)

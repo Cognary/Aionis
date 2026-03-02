@@ -659,6 +659,60 @@ pre {
   gap: 0.44rem;
 }
 
+.orchestrator-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #1a1a1e;
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.layer-picker {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.layer-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.layer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.16rem 0.45rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.layer-chip input {
+  width: auto;
+}
+
+.layered-summary {
+  margin-top: 0.4rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.layered-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.layered-metrics span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.42rem;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
 .flow-report-head {
   display: flex;
   align-items: center;

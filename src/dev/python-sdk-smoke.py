@@ -356,6 +356,46 @@ def main() -> int:
             else:
                 raise
 
+        context_assemble = None
+        try:
+            assembled = client.context_assemble(
+                {
+                    "scope": scope,
+                    "query_text": "Assemble context for python sdk smoke",
+                    "context": {"intent": "json", "provider": "minimax", "tool": {"name": "curl"}},
+                    "include_rules": True,
+                    "include_shadow": False,
+                    "rules_limit": 50,
+                    "tool_candidates": ["psql", "curl", "bash"],
+                    "tool_strict": False,
+                    "return_layered_context": True,
+                    "context_layers": {
+                        "enabled": ["facts", "rules", "tools", "citations"],
+                        "char_budget_total": 1200,
+                        "include_merge_trace": True,
+                    },
+                    "limit": 10,
+                }
+            )
+            assembled_data = assembled.get("data") if isinstance(assembled.get("data"), dict) else {}
+            layered = assembled_data.get("layered_context") if isinstance(assembled_data, dict) else {}
+            layer_order = layered.get("order") if isinstance(layered, dict) else []
+            dropped_reasons = layered.get("dropped_reasons") if isinstance(layered, dict) else []
+            merged_text = layered.get("merged_text") if isinstance(layered, dict) else ""
+            context_assemble = {
+                "ok": True,
+                "status": assembled.get("status"),
+                "request_id": assembled.get("request_id"),
+                "layer_order": layer_order if isinstance(layer_order, list) else [],
+                "dropped_reasons": len(dropped_reasons) if isinstance(dropped_reasons, list) else 0,
+                "merged_chars": len(merged_text) if isinstance(merged_text, str) else 0,
+            }
+        except AionisApiError as err:
+            if err.code == "no_embedding_provider":
+                context_assemble = {"ok": False, "reason": "context_assemble skipped: no embedding provider configured"}
+            else:
+                raise
+
         out = {
             "ok": True,
             "base_url": base_url,
@@ -407,6 +447,7 @@ def main() -> int:
                 "sessions_graph": sessions_graph,
                 "pack_import": pack_import,
                 "recall_text": recall_text,
+                "context_assemble": context_assemble,
             },
         }
         print(json.dumps(out, indent=2, ensure_ascii=False))

@@ -138,6 +138,38 @@ class MemoryRecallTextInput(MemoryRecallInput, total=False):
     query_text: str
 
 
+ContextLayerName = Literal["facts", "episodes", "rules", "decisions", "tools", "citations"]
+
+
+class ContextLayerConfigInput(TypedDict, total=False):
+    enabled: List[ContextLayerName]
+    char_budget_total: int
+    char_budget_by_layer: Dict[str, int]
+    max_items_by_layer: Dict[str, int]
+    include_merge_trace: bool
+
+
+class ContextAssembleInput(MemoryRecallTextInput, total=False):
+    context: Dict[str, Any]
+    include_rules: bool
+    include_shadow: bool
+    rules_limit: int
+    tool_candidates: List[str]
+    tool_strict: bool
+    return_layered_context: bool
+    context_layers: ContextLayerConfigInput
+
+
+class ContextAssembleResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    query: Dict[str, Any]
+    recall: Dict[str, Any]
+    rules: Dict[str, Any]
+    tools: Dict[str, Any]
+    layered_context: Dict[str, Any]
+
+
 class MemoryFindInput(TypedDict, total=False):
     tenant_id: str
     scope: str
@@ -537,6 +569,10 @@ __all__ = [
     "ControlTenantQuotaInput",
     "ControlTenantsQuery",
     "ControlTenantTimeseriesQuery",
+    "ContextAssembleInput",
+    "ContextAssembleResponse",
+    "ContextLayerConfigInput",
+    "ContextLayerName",
     "DecisionLinkMode",
     "FeedbackOutcome",
     "MemoryEdgeInput",

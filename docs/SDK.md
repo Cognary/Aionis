@@ -18,18 +18,19 @@ title: "Aionis SDK (TypeScript + Python)"
 1. `write`
 2. `recall`
 3. `recallText`
-4. `find`
-5. `createSession`
-6. `writeEvent`
-7. `listSessionEvents`
-8. `packExport`
-9. `packImport`
-10. `rulesEvaluate`
-11. `toolsSelect`
-12. `toolsDecision`
-13. `toolsFeedback`
-14. `health`
-15. `getCapabilityContract` / `get_capability_contract`
+4. `contextAssemble` / `context_assemble`
+5. `find`
+6. `createSession`
+7. `writeEvent`
+8. `listSessionEvents`
+9. `packExport`
+10. `packImport`
+11. `rulesEvaluate`
+12. `toolsSelect`
+13. `toolsDecision`
+14. `toolsFeedback`
+15. `health`
+16. `getCapabilityContract` / `get_capability_contract`
 
 admin/control 方法（需 `admin_token`）：
 
@@ -74,6 +75,23 @@ const write = await client.write({
 });
 
 console.log(write.request_id, write.data.commit_id);
+
+const assembled = await client.contextAssemble({
+  tenant_id: "default",
+  scope: "default",
+  query_text: "Assemble context before reply",
+  include_rules: true,
+  tool_candidates: ["search_profile", "draft_answer"],
+  tool_strict: false,
+  return_layered_context: true,
+  context_layers: {
+    enabled: ["facts", "rules", "tools", "citations"],
+    char_budget_total: 1200,
+    include_merge_trace: true,
+  },
+});
+
+console.log(assembled.data.layered_context?.order);
 ```
 
 ## 4. Python Quick Usage
@@ -96,6 +114,24 @@ out = client.write({
     "edges": [],
 })
 print(out["status"], out["request_id"], out["data"]["commit_id"])
+
+assembled = client.context_assemble(
+    {
+        "tenant_id": "default",
+        "scope": "default",
+        "query_text": "Assemble context before reply",
+        "include_rules": True,
+        "tool_candidates": ["search_profile", "draft_answer"],
+        "tool_strict": False,
+        "return_layered_context": True,
+        "context_layers": {
+            "enabled": ["facts", "rules", "tools", "citations"],
+            "char_budget_total": 1200,
+            "include_merge_trace": True,
+        },
+    }
+)
+print(assembled["data"].get("layered_context", {}).get("order"))
 ```
 
 ## 5. Error Semantics

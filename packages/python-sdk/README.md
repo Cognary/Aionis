@@ -78,18 +78,19 @@ client.tools_feedback(feedback_payload)
 1. `write`
 2. `recall`
 3. `recall_text`
-4. `find`
-5. `create_session`
-6. `write_event`
-7. `list_session_events`
-8. `pack_export`
-9. `pack_import`
-10. `rules_evaluate`
-11. `tools_select`
-12. `tools_decision`
-13. `tools_feedback`
-14. `health`
-15. `get_capability_contract`
+4. `context_assemble`
+5. `find`
+6. `create_session`
+7. `write_event`
+8. `list_session_events`
+9. `pack_export`
+10. `pack_import`
+11. `rules_evaluate`
+12. `tools_select`
+13. `tools_decision`
+14. `tools_feedback`
+15. `health`
+16. `get_capability_contract`
 
 Admin/control methods (require `admin_token`):
 

@@ -17,6 +17,7 @@ The playground focuses on these routes:
 5. `POST /v1/memory/tools/select`
 6. `POST /v1/memory/tools/feedback`
 7. `POST /v1/memory/tools/decision`
+8. `POST /v1/memory/context/assemble`
 
 ## Included capabilities
 
@@ -36,6 +37,8 @@ The playground focuses on these routes:
 14. Per-step flow assertions (`expect_ok`, `require_decision_id`, `require_request_id`, `max_duration_ms`, `error_includes`) with optional stop-on-fail behavior.
 15. Latest flow report panel plus one-click export as JSON/Markdown.
 16. Share link export (`?pg=...`), request chain filters, response diff inspector, and session export.
+17. `context/assemble` 专用 orchestration panel（层预设、启用层勾选、总预算、merge trace 开关），无需手改 JSON 即可调参。
+18. Inspector 内置 `layered_context` 摘要、`dropped_reasons` 和 `merge_trace` 预览，便于回放与审计。
 
 ## Run locally
 

@@ -59,6 +59,7 @@ export default defineConfig({
         text: "Build",
         items: [
           { text: "Build Memory", link: "/BUILD_MEMORY" },
+          { text: "Context Orchestration", link: "/CONTEXT_ORCHESTRATION" },
           { text: "Context Orchestrator Plan", link: "/CONTEXT_ORCHESTRATOR_PLAN" },
           { text: "5-Minute Onboarding", link: "/ONBOARDING_5MIN" },
           { text: "Embedding Setup", link: "/EMBEDDING_SETUP" },

@@ -46,18 +46,19 @@ If you set custom headers manually, the SDK will not override existing auth head
 1. `write`
 2. `recall`
 3. `recallText`
-4. `find`
-5. `createSession`
-6. `writeEvent`
-7. `listSessionEvents`
-8. `packExport`
-9. `packImport`
-10. `rulesEvaluate`
-11. `toolsSelect`
-12. `toolsDecision`
-13. `toolsFeedback`
-14. `health`
-15. `getCapabilityContract`
+4. `contextAssemble`
+5. `find`
+6. `createSession`
+7. `writeEvent`
+8. `listSessionEvents`
+9. `packExport`
+10. `packImport`
+11. `rulesEvaluate`
+12. `toolsSelect`
+13. `toolsDecision`
+14. `toolsFeedback`
+15. `health`
+16. `getCapabilityContract`
 
 Admin/control methods (require `admin_token`):
 

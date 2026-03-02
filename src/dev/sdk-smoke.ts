@@ -358,6 +358,63 @@ async function main() {
     }
   }
 
+  let contextAssemble:
+    | {
+        ok: true;
+        status: number;
+        request_id: string | null;
+        layer_order: string[];
+        dropped_reasons: number;
+        merged_chars: number;
+      }
+    | { ok: false; reason: string };
+  try {
+    const assembled = await client.contextAssemble({
+      scope,
+      query_text: "Assemble context for sdk smoke",
+      context: { intent: "json", provider: "minimax", tool: { name: "curl" } },
+      include_rules: true,
+      include_shadow: false,
+      rules_limit: 50,
+      tool_candidates: ["psql", "curl", "bash"],
+      tool_strict: false,
+      neighborhood_hops: 2,
+      return_debug: false,
+      include_embeddings: false,
+      include_meta: false,
+      include_slots: false,
+      include_slots_preview: false,
+      slots_preview_keys: 10,
+      max_nodes: 30,
+      max_edges: 60,
+      ranked_limit: 100,
+      min_edge_weight: 0,
+      min_edge_confidence: 0,
+      return_layered_context: true,
+      context_layers: {
+        enabled: ["facts", "rules", "tools", "citations"],
+        char_budget_total: 1200,
+        include_merge_trace: true,
+      },
+      limit: 10,
+    });
+    const layered = (assembled.data as any)?.layered_context;
+    contextAssemble = {
+      ok: true,
+      status: assembled.status,
+      request_id: assembled.request_id,
+      layer_order: Array.isArray(layered?.order) ? layered.order : [],
+      dropped_reasons: Array.isArray(layered?.dropped_reasons) ? layered.dropped_reasons.length : 0,
+      merged_chars: typeof layered?.merged_text === "string" ? layered.merged_text.length : 0,
+    };
+  } catch (err) {
+    if (err instanceof AionisApiError && err.code === "no_embedding_provider") {
+      contextAssemble = { ok: false, reason: "context_assemble skipped: no embedding provider configured" };
+    } else {
+      throw err;
+    }
+  }
+
   const out = {
     ok: true,
     base_url: baseUrl,
@@ -394,6 +451,7 @@ async function main() {
       sessions_graph: sessionsGraph,
       pack_import: packImport,
       recall_text: recallText,
+      context_assemble: contextAssemble,
     },
   };
   process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);

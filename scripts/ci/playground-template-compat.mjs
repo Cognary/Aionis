@@ -1,5 +1,6 @@
 import { OPERATION_LIST, SCENARIO_PRESETS } from "../../apps/playground/app/lib/operations.js";
 import {
+  ContextAssembleRequest,
   MemoryRecallRequest,
   MemoryRecallTextRequest,
   MemoryWriteRequest,
@@ -29,6 +30,7 @@ const validators = {
   tools_select: ToolsSelectRequest,
   tools_feedback: ToolsFeedbackRequest,
   tools_decision: ToolsDecisionRequest,
+  context_assemble: ContextAssembleRequest,
 };
 
 function deepClone(value) {

@@ -239,6 +239,27 @@ export type MemoryRecallTextInput = Omit<MemoryRecallInput, "query_embedding"> &
   query_text: string;
 };
 
+export type ContextLayerName = "facts" | "episodes" | "rules" | "decisions" | "tools" | "citations";
+
+export type ContextLayerConfigInput = {
+  enabled?: ContextLayerName[];
+  char_budget_total?: number;
+  char_budget_by_layer?: Record<string, number>;
+  max_items_by_layer?: Record<string, number>;
+  include_merge_trace?: boolean;
+};
+
+export type ContextAssembleInput = Omit<MemoryRecallTextInput, "rules_context" | "rules_include_shadow"> & {
+  context?: unknown;
+  include_rules?: boolean;
+  include_shadow?: boolean;
+  rules_limit?: number;
+  tool_candidates?: string[];
+  tool_strict?: boolean;
+  return_layered_context?: boolean;
+  context_layers?: ContextLayerConfigInput;
+};
+
 export type MemoryFindInput = {
   tenant_id?: string;
   scope?: string;
@@ -599,6 +620,55 @@ export type MemoryRecallResponse = {
   debug?: Record<string, unknown>;
   rules?: Record<string, unknown>;
   query?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
+export type ContextAssembleResponse = {
+  tenant_id?: string;
+  scope: string;
+  query: {
+    text?: string;
+    embedding_provider?: string;
+    [k: string]: unknown;
+  };
+  recall: MemoryRecallResponse;
+  rules?: RulesEvaluateResponse;
+  tools?: ToolsSelectResponse;
+  layered_context?: {
+    version?: string;
+    mode?: string;
+    order?: string[];
+    budget?: {
+      total_chars?: number;
+      used_chars?: number;
+      remaining_chars?: number;
+      [k: string]: unknown;
+    };
+    stats?: {
+      source_items?: number;
+      kept_items?: number;
+      dropped_items?: number;
+      layers_with_content?: number;
+      [k: string]: unknown;
+    };
+    layers?: Record<
+      string,
+      {
+        items?: Array<Record<string, unknown>>;
+        source_count?: number;
+        kept_count?: number;
+        dropped_count?: number;
+        budget_chars?: number | null;
+        used_chars?: number;
+        max_items?: number | null;
+        [k: string]: unknown;
+      }
+    >;
+    merged_text?: string;
+    merge_trace?: Array<Record<string, unknown>>;
+    dropped_reasons?: string[];
+    [k: string]: unknown;
+  };
   [k: string]: unknown;
 };
 

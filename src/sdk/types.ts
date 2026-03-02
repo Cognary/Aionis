@@ -1,4 +1,6 @@
 import type {
+  ContextAssembleInput,
+  ContextLayerConfigInput,
   MemoryEventWriteInput,
   MemoryFindInput,
   MemoryPackExportInput,
@@ -15,6 +17,8 @@ import type {
 } from "../memory/schemas.js";
 
 export type {
+  ContextAssembleInput,
+  ContextLayerConfigInput,
   MemoryEventWriteInput,
   MemoryFindInput,
   MemoryPackExportInput,
@@ -30,6 +34,7 @@ export type {
 };
 
 export type MemorySessionEventsListInput = Partial<Omit<MemorySessionEventsListSchemaInput, "session_id">>;
+export type ContextLayerName = "facts" | "episodes" | "rules" | "decisions" | "tools" | "citations";
 
 export type ControlTenantInput = {
   tenant_id: string;
@@ -412,6 +417,55 @@ export type MemoryRecallResponse = {
   debug?: Record<string, unknown>;
   rules?: Record<string, unknown>;
   query?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
+export type ContextAssembleResponse = {
+  tenant_id?: string;
+  scope: string;
+  query: {
+    text?: string;
+    embedding_provider?: string;
+    [k: string]: unknown;
+  };
+  recall: MemoryRecallResponse;
+  rules?: RulesEvaluateResponse;
+  tools?: ToolsSelectResponse;
+  layered_context?: {
+    version?: string;
+    mode?: string;
+    order?: string[];
+    budget?: {
+      total_chars?: number;
+      used_chars?: number;
+      remaining_chars?: number;
+      [k: string]: unknown;
+    };
+    stats?: {
+      source_items?: number;
+      kept_items?: number;
+      dropped_items?: number;
+      layers_with_content?: number;
+      [k: string]: unknown;
+    };
+    layers?: Record<
+      string,
+      {
+        items?: Array<Record<string, unknown>>;
+        source_count?: number;
+        kept_count?: number;
+        dropped_count?: number;
+        budget_chars?: number | null;
+        used_chars?: number;
+        max_items?: number | null;
+        [k: string]: unknown;
+      }
+    >;
+    merged_text?: string;
+    merge_trace?: Array<Record<string, unknown>>;
+    dropped_reasons?: string[];
+    [k: string]: unknown;
+  };
   [k: string]: unknown;
 };
 

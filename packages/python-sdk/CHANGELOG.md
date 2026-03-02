@@ -9,7 +9,7 @@ The format is based on Keep a Changelog and this package follows SemVer.
 ### Changed
 
 1. Aligned coordinated release baseline from `0.2.1` to `0.2.2` across core, npm, PyPI, and Docker channels.
-2. No Python SDK API surface break in this release; this is a synchronized release-line update.
+2. Added `context_assemble(...)` method and exported orchestration TypedDicts (`ContextAssembleInput`, `ContextAssembleResponse`, `ContextLayerConfigInput`) for `POST /v1/memory/context/assemble`.
 
 ## [0.2.1] - 2026-03-01
 

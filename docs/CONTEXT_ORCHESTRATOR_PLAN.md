@@ -100,6 +100,14 @@ Target:
 2. Playground panel for layer config and merge trace visualization
 3. bilingual docs page with copy-ready templates
 
+Progress update (`2026-03-02`):
+
+1. TypeScript SDK: added `contextAssemble(...)` + typed request/response contracts.
+2. Python SDK: added `context_assemble(...)` + TypedDict contracts.
+3. Playground: added `context/assemble` operation, layer preset controls (balanced/compact/policy-first), enabled-layer toggles, budget/merge-trace toggles, and inspector merge-trace preview.
+4. Added bilingual docs page `CONTEXT_ORCHESTRATION.md` with copy-ready presets and rollout guidance.
+5. SDK smoke scripts now include `context/assemble` probe with `no_embedding_provider` graceful skip semantics.
+
 Acceptance:
 
 1. users can tune layers without editing raw JSON manually
@@ -140,6 +148,6 @@ Mitigation: contract-smoke in CI and shared schema source
 2. [x] Add dedicated `context/assemble` endpoint
 3. [x] Add hard contract + error code table
 4. [x] Add CI contract probes
-5. [ ] Add SDK methods/types
-6. [ ] Add Playground orchestration panel
+5. [x] Add SDK methods/types
+6. [x] Add Playground orchestration panel
 7. [ ] Add ops metrics + runbook

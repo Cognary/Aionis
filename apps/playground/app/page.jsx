@@ -61,6 +61,7 @@ const CHAT_PROMPT_CHIPS = [
   }
 ];
 const SETTINGS_TABS = ["llm", "connection", "operation", "flow", "export"];
+const CONTEXT_LAYER_OPTIONS = ["facts", "episodes", "rules", "decisions", "tools", "citations"];
 
 const I18N = {
   en: {
@@ -123,6 +124,7 @@ const I18N = {
     connection: "connection",
     flow: "flow",
     export: "export",
+    context_orchestrator: "context orchestrator",
     provider: "provider",
     base_url: "base_url",
     model: "model",
@@ -146,6 +148,23 @@ const I18N = {
     reset: "Reset",
     inject_tenant_scope: "Inject tenant/scope",
     inject_runtime: "Inject runtime",
+    layer_preset: "layer preset",
+    preset_balanced: "Balanced",
+    preset_compact: "Compact",
+    preset_policy: "Policy-first",
+    enabled_layers: "enabled layers",
+    char_budget_total: "char budget total",
+    include_merge_trace: "include merge trace",
+    layered_context_summary: "layered context summary",
+    layer_order: "layer order",
+    layers_with_content: "layers with content",
+    source_items: "source items",
+    kept_items: "kept items",
+    dropped_items: "dropped items",
+    dropped_reasons: "dropped reasons",
+    no_dropped_reasons: "No dropped reasons.",
+    merge_trace_preview: "merge trace preview",
+    no_merge_trace: "No merge trace available.",
     flow_preset: "flow preset",
     flow_json: "flow JSON",
     stop_on_http: "stop on HTTP failure",
@@ -238,6 +257,7 @@ const I18N = {
     connection: "连接",
     flow: "流程",
     export: "导出",
+    context_orchestrator: "上下文编排",
     provider: "提供方",
     base_url: "base_url",
     model: "模型",
@@ -261,6 +281,23 @@ const I18N = {
     reset: "重置",
     inject_tenant_scope: "注入 tenant/scope",
     inject_runtime: "注入运行时变量",
+    layer_preset: "层预设",
+    preset_balanced: "均衡",
+    preset_compact: "紧凑",
+    preset_policy: "策略优先",
+    enabled_layers: "启用层",
+    char_budget_total: "总字符预算",
+    include_merge_trace: "输出 merge trace",
+    layered_context_summary: "分层上下文摘要",
+    layer_order: "层顺序",
+    layers_with_content: "有内容层数",
+    source_items: "源条目",
+    kept_items: "保留条目",
+    dropped_items: "丢弃条目",
+    dropped_reasons: "丢弃原因",
+    no_dropped_reasons: "无丢弃原因。",
+    merge_trace_preview: "merge trace 预览",
+    no_merge_trace: "暂无 merge trace。",
     flow_preset: "流程预设",
     flow_json: "流程 JSON",
     stop_on_http: "HTTP 失败即停止",
@@ -319,6 +356,10 @@ const I18N_META = {
       policy_closed_loop: {
         label: "策略闭环流",
         description: "在选择后补充 feedback 与 decision replay"
+      },
+      context_orchestrator: {
+        label: "上下文编排流",
+        description: "write -> context/assemble"
       }
     },
     operations: {
@@ -328,7 +369,8 @@ const I18N_META = {
       rules_evaluate: { label: "规则评估", description: "基于当前输入执行激活规则。" },
       tools_select: { label: "工具选择", description: "在策略约束下进行工具选择。" },
       tools_feedback: { label: "反馈回写", description: "写入执行结果反馈以支持策略适配。" },
-      tools_decision: { label: "决策回放", description: "回放或检查持久化决策证据。" }
+      tools_decision: { label: "决策回放", description: "回放或检查持久化决策证据。" },
+      context_assemble: { label: "上下文编排", description: "按层预算和策略信息组装可回放上下文。" }
     }
   }
 };
@@ -448,6 +490,27 @@ function applyRuntimeVars(value, runtimeContext, connection) {
   }
 
   return value;
+}
+
+function readContextOrchestratorConfig(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return {
+      enabled: [...CONTEXT_LAYER_OPTIONS],
+      char_budget_total: "",
+      include_merge_trace: true
+    };
+  }
+  const rawLayers = payload.context_layers && typeof payload.context_layers === "object" && !Array.isArray(payload.context_layers)
+    ? payload.context_layers
+    : {};
+  const enabledRaw = Array.isArray(rawLayers.enabled) ? rawLayers.enabled.map((item) => String(item)) : [];
+  const enabled = CONTEXT_LAYER_OPTIONS.filter((layer) => enabledRaw.includes(layer));
+  const budgetRaw = rawLayers.char_budget_total;
+  return {
+    enabled: enabled.length > 0 ? enabled : [...CONTEXT_LAYER_OPTIONS],
+    char_budget_total: typeof budgetRaw === "number" && Number.isFinite(budgetRaw) && budgetRaw > 0 ? String(Math.round(budgetRaw)) : "",
+    include_merge_trace: rawLayers.include_merge_trace !== false
+  };
 }
 
 function normalizeStepAssert(raw, index) {
@@ -854,6 +917,102 @@ export default function PlaygroundPage() {
       return statusOk && operationOk;
     });
   }, [history, chainStatusFilter, chainOperationFilter]);
+
+  const contextOrchestratorConfig = useMemo(() => {
+    if (operation !== "context_assemble") return null;
+    try {
+      return readContextOrchestratorConfig(parseJsonObject(payloadText));
+    } catch {
+      return null;
+    }
+  }, [operation, payloadText]);
+
+  const activeLayeredContext = useMemo(() => {
+    if (!active?.data || typeof active.data !== "object" || Array.isArray(active.data)) return null;
+    const layered = active.data.layered_context;
+    if (!layered || typeof layered !== "object" || Array.isArray(layered)) return null;
+    return layered;
+  }, [active]);
+
+  function patchPayload(mutator) {
+    try {
+      const payload = parseJsonObject(payloadText);
+      const next = mutator(deepClone(payload));
+      setPayloadText(pretty(next));
+      setErrorMessage("");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "invalid payload json");
+    }
+  }
+
+  function applyContextLayerPreset(preset) {
+    patchPayload((payload) => {
+      if (!payload.context_layers || typeof payload.context_layers !== "object" || Array.isArray(payload.context_layers)) {
+        payload.context_layers = {};
+      }
+      if (preset === "balanced") {
+        payload.context_layers.enabled = ["facts", "episodes", "rules", "tools", "citations"];
+        payload.context_layers.char_budget_total = 1800;
+        payload.context_layers.max_items_by_layer = { facts: 8, episodes: 4, rules: 6, tools: 4, citations: 8 };
+        payload.context_layers.include_merge_trace = true;
+      } else if (preset === "compact") {
+        payload.context_layers.enabled = ["facts", "rules", "tools", "citations"];
+        payload.context_layers.char_budget_total = 1000;
+        payload.context_layers.max_items_by_layer = { facts: 5, rules: 4, tools: 3, citations: 6 };
+        payload.context_layers.include_merge_trace = true;
+      } else {
+        payload.context_layers.enabled = ["rules", "tools", "facts", "citations"];
+        payload.context_layers.char_budget_total = 1400;
+        payload.context_layers.max_items_by_layer = { rules: 8, tools: 4, facts: 6, citations: 8 };
+        payload.context_layers.include_merge_trace = true;
+      }
+      payload.return_layered_context = true;
+      return payload;
+    });
+  }
+
+  function setContextLayerEnabled(layer, checked) {
+    patchPayload((payload) => {
+      if (!payload.context_layers || typeof payload.context_layers !== "object" || Array.isArray(payload.context_layers)) {
+        payload.context_layers = {};
+      }
+      const currentRaw = Array.isArray(payload.context_layers.enabled) ? payload.context_layers.enabled.map((item) => String(item)) : [];
+      const current = CONTEXT_LAYER_OPTIONS.filter((item) => currentRaw.includes(item));
+      const nextSet = new Set(current.length > 0 ? current : CONTEXT_LAYER_OPTIONS);
+      if (checked) nextSet.add(layer);
+      else nextSet.delete(layer);
+      payload.context_layers.enabled = CONTEXT_LAYER_OPTIONS.filter((item) => nextSet.has(item));
+      payload.return_layered_context = true;
+      return payload;
+    });
+  }
+
+  function setContextCharBudgetTotal(nextValue) {
+    patchPayload((payload) => {
+      if (!payload.context_layers || typeof payload.context_layers !== "object" || Array.isArray(payload.context_layers)) {
+        payload.context_layers = {};
+      }
+      const numeric = Number(nextValue);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        payload.context_layers.char_budget_total = Math.round(numeric);
+      } else {
+        delete payload.context_layers.char_budget_total;
+      }
+      payload.return_layered_context = true;
+      return payload;
+    });
+  }
+
+  function setContextMergeTraceEnabled(checked) {
+    patchPayload((payload) => {
+      if (!payload.context_layers || typeof payload.context_layers !== "object" || Array.isArray(payload.context_layers)) {
+        payload.context_layers = {};
+      }
+      payload.context_layers.include_merge_trace = Boolean(checked);
+      payload.return_layered_context = true;
+      return payload;
+    });
+  }
 
   function updateSessionById(sessionId, updater) {
     setChatSessions((prev) => prev.map((item) => (item.id === sessionId ? updater(item) : item)));
@@ -1944,6 +2103,36 @@ export default function PlaygroundPage() {
                   <summary>{tr("response_body")}</summary>
                   <pre>{pretty(active.data)}</pre>
                 </details>
+                {activeLayeredContext ? (
+                  <details>
+                    <summary>{tr("layered_context_summary")}</summary>
+                    <div className="layered-summary">
+                      <div className="layered-metrics">
+                        <span>{tr("layer_order")}: <span className="mono">{Array.isArray(activeLayeredContext.order) ? activeLayeredContext.order.join(" -> ") : "-"}</span></span>
+                        <span>{tr("layers_with_content")}: <span className="mono">{activeLayeredContext?.stats?.layers_with_content ?? 0}</span></span>
+                        <span>{tr("source_items")}: <span className="mono">{activeLayeredContext?.stats?.source_items ?? 0}</span></span>
+                        <span>{tr("kept_items")}: <span className="mono">{activeLayeredContext?.stats?.kept_items ?? 0}</span></span>
+                        <span>{tr("dropped_items")}: <span className="mono">{activeLayeredContext?.stats?.dropped_items ?? 0}</span></span>
+                      </div>
+                      <details>
+                        <summary>{tr("dropped_reasons")}</summary>
+                        {Array.isArray(activeLayeredContext.dropped_reasons) && activeLayeredContext.dropped_reasons.length > 0 ? (
+                          <pre>{pretty(activeLayeredContext.dropped_reasons.slice(0, 30))}</pre>
+                        ) : (
+                          <p className="muted tiny">{tr("no_dropped_reasons")}</p>
+                        )}
+                      </details>
+                      <details>
+                        <summary>{tr("merge_trace_preview")}</summary>
+                        {Array.isArray(activeLayeredContext.merge_trace) && activeLayeredContext.merge_trace.length > 0 ? (
+                          <pre>{pretty(activeLayeredContext.merge_trace.slice(0, 50))}</pre>
+                        ) : (
+                          <p className="muted tiny">{tr("no_merge_trace")}</p>
+                        )}
+                      </details>
+                    </div>
+                  </details>
+                ) : null}
                 <details>
                   <summary>{tr("response_diff")}</summary>
                   {!previousSameOperation ? (
@@ -2117,6 +2306,58 @@ export default function PlaygroundPage() {
                 </select>
               </label>
               <p className="muted tiny">{selectedOperationView.description}</p>
+              {operation === "context_assemble" ? (
+                <div className="orchestrator-panel">
+                  <p className="muted tiny">{tr("context_orchestrator")}</p>
+                  <div className="inline-actions">
+                    <button type="button" className="ghost" onClick={() => applyContextLayerPreset("balanced")} disabled={running || chatRunning}>
+                      {tr("preset_balanced")}
+                    </button>
+                    <button type="button" className="ghost" onClick={() => applyContextLayerPreset("compact")} disabled={running || chatRunning}>
+                      {tr("preset_compact")}
+                    </button>
+                    <button type="button" className="ghost" onClick={() => applyContextLayerPreset("policy")} disabled={running || chatRunning}>
+                      {tr("preset_policy")}
+                    </button>
+                  </div>
+                  <div className="layer-picker">
+                    <p className="muted tiny">{tr("enabled_layers")}</p>
+                    <div className="layer-chip-list">
+                      {CONTEXT_LAYER_OPTIONS.map((layer) => {
+                        const checked = contextOrchestratorConfig?.enabled?.includes(layer) ?? true;
+                        return (
+                          <label key={layer} className="layer-chip">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(event) => setContextLayerEnabled(layer, event.target.checked)}
+                            />
+                            <span className="mono tiny">{layer}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <label>
+                    {tr("char_budget_total")}
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={contextOrchestratorConfig?.char_budget_total ?? ""}
+                      onChange={(event) => setContextCharBudgetTotal(event.target.value)}
+                    />
+                  </label>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={contextOrchestratorConfig?.include_merge_trace ?? true}
+                      onChange={(event) => setContextMergeTraceEnabled(event.target.checked)}
+                    />
+                    {tr("include_merge_trace")}
+                  </label>
+                </div>
+              ) : null}
               <label>
                 {tr("payload_json")}
                 <textarea value={payloadText} onChange={(event) => setPayloadText(event.target.value)} rows={10} />

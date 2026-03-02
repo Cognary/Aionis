@@ -112,6 +112,35 @@ export const OPERATION_LIST = [
       scope: "default",
       decision_id: "{{last.decision_id}}"
     }
+  },
+  {
+    key: "context_assemble",
+    label: "context/assemble",
+    method: "POST",
+    path: "/v1/memory/context/assemble",
+    description: "Assemble deterministic layered context with explicit orchestration controls.",
+    template: {
+      tenant_id: "default",
+      scope: "default",
+      query_text: "What should the assistant remember before replying?",
+      context: {
+        task: "chat_reply",
+        channel: "chat",
+        user_intent: "memory_grounded_response"
+      },
+      include_rules: true,
+      include_shadow: false,
+      rules_limit: 50,
+      tool_candidates: ["search_profile", "draft_answer"],
+      tool_strict: false,
+      return_layered_context: true,
+      context_layers: {
+        enabled: ["facts", "episodes", "rules", "tools", "citations"],
+        char_budget_total: 1800,
+        include_merge_trace: true
+      },
+      limit: 12
+    }
   }
 ];
 
@@ -138,6 +167,15 @@ export const FLOW_PRESETS = [
       { operation: "tools_select" },
       { operation: "tools_feedback" },
       { operation: "tools_decision" }
+    ]
+  },
+  {
+    key: "context_orchestrator",
+    label: "Context Orchestrator",
+    description: "write -> context/assemble",
+    steps: [
+      { operation: "write" },
+      { operation: "context_assemble" }
     ]
   }
 ];
