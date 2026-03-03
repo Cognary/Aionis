@@ -207,8 +207,12 @@ run_capture "governance_weekly_report" \
     --out-dir "${OUT_DIR}/governance_weekly" \
     "${STRICT_FLAGS[@]:-}"
 
+run_capture "sandbox_api_probe" \
+  node scripts/ci/sandbox-api-probes.mjs
+
 EXEC_JSON="${RAW_DIR}/execution_loop_gate.json"
 GOV_JSON="${RAW_DIR}/governance_weekly_report.json"
+SANDBOX_PROBE_JSON="${RAW_DIR}/sandbox_api_probe.json"
 GOV_SUMMARY_JSON="${OUT_DIR}/governance_weekly/summary.json"
 BENCH_SUMMARY_JSON="${OUT_DIR}/bench_xmb/summary.json"
 BENCH_DETAILS_JSON="${OUT_DIR}/bench_xmb/details.json"
@@ -225,6 +229,12 @@ else
   echo "{\"ok\":false,\"error\":\"invalid_governance_weekly_output\"}" > "${GOV_JSON}"
 fi
 
+if jq -e . "${RAW_DIR}/sandbox_api_probe.out" >/dev/null 2>&1; then
+  cp "${RAW_DIR}/sandbox_api_probe.out" "${SANDBOX_PROBE_JSON}"
+else
+  echo "{\"ok\":false,\"error\":\"invalid_sandbox_api_probe_output\"}" > "${SANDBOX_PROBE_JSON}"
+fi
+
 if [[ ! -f "${GOV_SUMMARY_JSON}" ]]; then
   echo "{\"ok\":false,\"error\":\"missing_governance_weekly_summary\",\"summary\":{\"pass\":false}}" > "${GOV_SUMMARY_JSON}"
 fi
@@ -238,6 +248,7 @@ fi
 
 EXEC_EXIT="$(cat "${RAW_DIR}/execution_loop_gate.exit_code")"
 GOV_EXIT="$(cat "${RAW_DIR}/governance_weekly_report.exit_code")"
+SANDBOX_PROBE_EXIT="$(cat "${RAW_DIR}/sandbox_api_probe.exit_code")"
 BENCH_EXIT="$(cat "${RAW_DIR}/bench_xmb.exit_code")"
 
 EXEC_PASS="$(jq -r '.summary.pass // false' "${EXEC_JSON}" 2>/dev/null || echo false)"
@@ -263,9 +274,11 @@ jq -n \
   --argjson evidence_pass "${EVIDENCE_PASS}" \
   --argjson execution_loop_gate_exit_code "${EXEC_EXIT}" \
   --argjson governance_weekly_report_exit_code "${GOV_EXIT}" \
+  --argjson sandbox_api_probe_exit_code "${SANDBOX_PROBE_EXIT}" \
   --argjson bench_xmb_exit_code "${BENCH_EXIT}" \
   --slurpfile execution_loop_gate "${EXEC_JSON}" \
   --slurpfile governance_weekly "${GOV_SUMMARY_JSON}" \
+  --slurpfile sandbox_api_probe "${SANDBOX_PROBE_JSON}" \
   --slurpfile bench_summary "${BENCH_SUMMARY_JSON}" \
   --slurpfile bench_details "${BENCH_DETAILS_JSON}" \
   '{
@@ -297,6 +310,10 @@ jq -n \
         scope_snapshot: ($governance_weekly[0].scope_snapshot // null),
         recommendations: ($governance_weekly[0].recommendations // [])
       },
+      sandbox_api_probe: {
+        exit_code: $sandbox_api_probe_exit_code,
+        result: ($sandbox_api_probe[0] // null)
+      },
       bench_xmb: {
         exit_code: $bench_xmb_exit_code,
         summary: ($bench_summary[0] // null),
@@ -312,6 +329,7 @@ jq -n \
       execution_loop_gate_json: ($out_dir + "/raw/execution_loop_gate.json"),
       governance_weekly_summary_json: ($out_dir + "/governance_weekly/summary.json"),
       governance_weekly_md: ($out_dir + "/governance_weekly/WEEKLY_STATUS.md"),
+      sandbox_api_probe_json: ($out_dir + "/raw/sandbox_api_probe.json"),
       bench_summary_json: ($out_dir + "/bench_xmb/summary.json"),
       bench_report_md: ($out_dir + "/bench_xmb/report.md"),
       evidence_summary_json: ($out_dir + "/EVIDENCE_SUMMARY.json"),
@@ -344,7 +362,8 @@ cat > "${SUMMARY_MD}" <<EOF
 
 1. execution_loop_gate: \`${EXEC_SUMMARY_PASS}\` (exit=\`${EXEC_EXIT}\`)
 2. governance_weekly_report: \`${GOV_SUMMARY_PASS}\` (exit=\`${GOV_EXIT}\`)
-3. bench_xmb: \`${BENCH_SUMMARY_PASS}\` (exit=\`${BENCH_EXIT}\`)
+3. sandbox_api_probe: \`$(jq -r '.stages.sandbox_api_probe.result.ok // false' "${SUMMARY_JSON}")\` (exit=\`${SANDBOX_PROBE_EXIT}\`)
+4. bench_xmb: \`${BENCH_SUMMARY_PASS}\` (exit=\`${BENCH_EXIT}\`)
 
 ## Policy Loop A/B (XMB-006)
 
@@ -365,10 +384,11 @@ $(jq -r '.stages.governance_weekly_report.recommendations[]? | "1. " + .' "${SUM
 1. execution loop json: \`${OUT_DIR}/raw/execution_loop_gate.json\`
 2. governance weekly json: \`${OUT_DIR}/governance_weekly/summary.json\`
 3. governance weekly markdown: \`${OUT_DIR}/governance_weekly/WEEKLY_STATUS.md\`
-4. bench summary json: \`${OUT_DIR}/bench_xmb/summary.json\`
-5. bench report markdown: \`${OUT_DIR}/bench_xmb/report.md\`
-6. weekly evidence json: \`${OUT_DIR}/EVIDENCE_SUMMARY.json\`
-7. weekly evidence markdown: \`${OUT_DIR}/EVIDENCE_WEEKLY.md\`
+4. sandbox api probe json: \`${OUT_DIR}/raw/sandbox_api_probe.json\`
+5. bench summary json: \`${OUT_DIR}/bench_xmb/summary.json\`
+6. bench report markdown: \`${OUT_DIR}/bench_xmb/report.md\`
+7. weekly evidence json: \`${OUT_DIR}/EVIDENCE_SUMMARY.json\`
+8. weekly evidence markdown: \`${OUT_DIR}/EVIDENCE_WEEKLY.md\`
 EOF
 
 echo "[weekly-evidence] generated:"

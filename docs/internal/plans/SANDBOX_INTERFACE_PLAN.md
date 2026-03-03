@@ -116,7 +116,7 @@ Delivered:
 
 ### Phase 2: Operability and Governance Hardening
 
-Status: `in_progress` (2026-03-03)
+Status: `completed` (2026-03-03)
 
 Delivered in this batch:
 
@@ -125,11 +125,8 @@ Delivered in this batch:
 3. CI contract probe (`scripts/ci/sandbox-api-probes.mjs` + tests)
 4. benchmark-style stress script (`scripts/bench/sandbox-stress.mjs`)
 5. split sandbox rate-limit buckets (`sandbox_write` / `sandbox_read`)
-
-Planned:
-
-1. failure classification and weekly governance report section
-2. replay/evidence artifacts for sandbox runs
+6. failure classification in governance weekly report (`scope_snapshot.sandbox.top_errors`)
+7. weekly evidence pack sandbox artifact (`raw/sandbox_api_probe.json`)
 
 ### Phase 3: Isolation-Grade Runtime
 
@@ -170,6 +167,6 @@ Planned:
 
 ## 10. Next Implementation Batch
 
-1. Add sandbox telemetry table + diagnostics rollup.
-2. Add CI probe for sandbox API contract.
-3. Add benchmark-style stress script for queue + timeout behavior.
+1. Add remote executor adapter contract + health surface.
+2. Add sandbox run retention policy and archival export flow.
+3. Add per-tenant sandbox budget policy (daily run cap / timeout budget).

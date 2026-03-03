@@ -47,6 +47,13 @@ npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
 
 Use this for release-review evidence bundles.
 
+Expected bundle highlights:
+
+1. governance weekly snapshot (`governance_weekly/summary.json`)
+2. execution-loop gate output (`raw/execution_loop_gate.json`)
+3. sandbox probe artifact (`raw/sandbox_api_probe.json`)
+4. benchmark summary/report (`bench_xmb/summary.json`, `bench_xmb/report.md`)
+
 ## Related
 
 1. [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public)

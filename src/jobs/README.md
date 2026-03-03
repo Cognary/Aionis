@@ -229,6 +229,18 @@ Strict release gate:
 npm run job:governance-weekly-report -- --scope default --window-hours 168 --strict-warnings
 ```
 
+Sandbox-aware thresholds (optional):
+
+```bash
+npm run job:governance-weekly-report -- \
+  --scope default \
+  --window-hours 168 \
+  --min-sandbox-runs-for-gate 10 \
+  --max-sandbox-failure-rate 0.2 \
+  --max-sandbox-timeout-rate 0.1 \
+  --max-sandbox-output-truncated-rate 0.2
+```
+
 Artifacts:
 
 - `artifacts/governance/weekly/<report_week>_<run_id>/summary.json`

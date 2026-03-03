@@ -149,6 +149,7 @@
     "mcp:aionis": "tsx src/mcp/aionis-mcp.ts",
     "mcp:smoke": "bash examples/mcp_stdio_smoke.sh",
     "langgraph:smoke": "bash examples/langgraph_adapter_smoke.sh",
+    "ci:sandbox-probe": "node scripts/ci/sandbox-api-probes.mjs",
     "ci:sdk-validate": "npm run -s lint && npm run -s test:ci-probes && npm run -s build && npm run -s playground:template:check && npm run -s sdk:build && npm run -s sdk:release-check && npm run -s sdk:py:compile && npm run -s sdk:py:release-check && npm run -s sdk:pack-dry-run && npm run -s docs:check",
     "lint": "eslint --cache --max-warnings=0 \"src/**/*.ts\" \"packages/sdk/src/**/*.ts\" \"scripts/**/*.mjs\"",
     "lint:fix": "npm run -s lint -- --fix"

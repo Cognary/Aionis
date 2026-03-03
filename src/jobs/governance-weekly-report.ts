@@ -34,6 +34,9 @@ type TenantRollup = {
   recall_identity_coverage: number | null;
   private_total: number;
   private_owner_coverage: number | null;
+  sandbox_total: number;
+  sandbox_failed_rate: number | null;
+  sandbox_timeout_rate: number | null;
 };
 
 function argValue(flag: string): string | null {
@@ -164,6 +167,28 @@ function buildMarkdown(args: {
   lines.push(`3. Decision link coverage: \`${pct(scopeSnapshot.decision.link_coverage)}%\``);
   lines.push(`4. Recall identity coverage: \`${pct(scopeSnapshot.recall.identity_coverage)}%\``);
   lines.push(`5. Private owner coverage: \`${pct(scopeSnapshot.lane.private_owner_coverage)}%\``);
+  if (scopeSnapshot.sandbox?.available) {
+    lines.push(`6. Sandbox total runs: \`${scopeSnapshot.sandbox.total}\``);
+    lines.push(`7. Sandbox failure rate: \`${pct(scopeSnapshot.sandbox.failure_rate)}%\``);
+    lines.push(`8. Sandbox timeout rate: \`${pct(scopeSnapshot.sandbox.timeout_rate)}%\``);
+    lines.push(`9. Sandbox output truncated rate: \`${pct(scopeSnapshot.sandbox.output_truncated_rate)}%\``);
+  } else {
+    lines.push("6. Sandbox telemetry: `unavailable`");
+  }
+  lines.push("");
+  lines.push("## Sandbox Failure Classification");
+  lines.push("");
+  if (scopeSnapshot.sandbox?.available) {
+    if (Array.isArray(scopeSnapshot.sandbox.top_errors) && scopeSnapshot.sandbox.top_errors.length > 0) {
+      for (const e of scopeSnapshot.sandbox.top_errors) {
+        lines.push(`1. ${e.error_code}: \`${e.total}\``);
+      }
+    } else {
+      lines.push("1. No sandbox error buckets in the current window.");
+    }
+  } else {
+    lines.push("1. Sandbox telemetry table is missing; apply sandbox telemetry migration.");
+  }
   lines.push("");
   lines.push("## Cross-Tenant Drift");
   lines.push("");
@@ -179,14 +204,16 @@ function buildMarkdown(args: {
   lines.push("");
   lines.push("## Top Tenants");
   lines.push("");
-  lines.push("| tenant_id | active_rules | feedback_total | negative_ratio | decision_link_coverage | recall_identity_coverage | private_owner_coverage |");
-  lines.push("|---|---:|---:|---:|---:|---:|---:|");
+  lines.push("| tenant_id | active_rules | feedback_total | negative_ratio | decision_link_coverage | recall_identity_coverage | private_owner_coverage | sandbox_total | sandbox_failed_rate | sandbox_timeout_rate |");
+  lines.push("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
   for (const t of topTenants) {
     lines.push(
       `| ${t.tenant_id} | ${t.active_rules} | ${t.feedback_total} | ${round(t.feedback_negative_ratio)} | ${
         t.decision_link_coverage === null ? "n/a" : round(t.decision_link_coverage)
       } | ${t.recall_identity_coverage === null ? "n/a" : round(t.recall_identity_coverage)} | ${
         t.private_owner_coverage === null ? "n/a" : round(t.private_owner_coverage)
+      } | ${t.sandbox_total} | ${t.sandbox_failed_rate === null ? "n/a" : round(t.sandbox_failed_rate)} | ${
+        t.sandbox_timeout_rate === null ? "n/a" : round(t.sandbox_timeout_rate)
       } |`,
     );
   }
@@ -211,6 +238,10 @@ async function main() {
   const minPrivateOwnerCoverage = clampNum(Number(argValue("--min-private-owner-coverage") ?? "1"), 0, 1);
   const maxTenantActiveRuleCountDrift = clampInt(Number(argValue("--max-tenant-active-rule-count-drift") ?? "20"), 0, 1_000_000);
   const maxTenantNegativeRatioDrift = clampNum(Number(argValue("--max-tenant-negative-ratio-drift") ?? "0.3"), 0, 1);
+  const minSandboxRunsForGate = clampInt(Number(argValue("--min-sandbox-runs-for-gate") ?? "10"), 0, 1_000_000);
+  const maxSandboxFailureRate = clampNum(Number(argValue("--max-sandbox-failure-rate") ?? "0.2"), 0, 1);
+  const maxSandboxTimeoutRate = clampNum(Number(argValue("--max-sandbox-timeout-rate") ?? "0.1"), 0, 1);
+  const maxSandboxOutputTruncatedRate = clampNum(Number(argValue("--max-sandbox-output-truncated-rate") ?? "0.2"), 0, 1);
 
   const strict = hasFlag("--strict");
   const strictWarnings = hasFlag("--strict-warnings");
@@ -224,6 +255,7 @@ async function main() {
   const hasRecallAudit = await hasTable("memory_recall_audit");
   const hasRecallConsumerAgent = hasRecallAudit && (await hasColumn("memory_recall_audit", "consumer_agent_id"));
   const hasRecallConsumerTeam = hasRecallAudit && (await hasColumn("memory_recall_audit", "consumer_team_id"));
+  const hasSandboxTelemetry = await hasTable("memory_sandbox_run_telemetry");
   const hasLaneColumns =
     (await hasColumn("memory_nodes", "memory_lane")) &&
     (await hasColumn("memory_nodes", "owner_agent_id")) &&
@@ -337,6 +369,60 @@ async function main() {
           )
         : null;
 
+    const scopeSandboxRes =
+      hasSandboxTelemetry
+        ? await client.query<{
+            total: string;
+            succeeded: string;
+            failed: string;
+            canceled: string;
+            timeout: string;
+            output_truncated: string;
+            queue_wait_p95_ms: string | null;
+            runtime_p95_ms: string | null;
+            total_latency_p95_ms: string | null;
+          }>(
+            `
+            SELECT
+              count(*)::text AS total,
+              count(*) FILTER (WHERE status = 'succeeded')::text AS succeeded,
+              count(*) FILTER (WHERE status = 'failed')::text AS failed,
+              count(*) FILTER (WHERE status = 'canceled')::text AS canceled,
+              count(*) FILTER (WHERE status = 'timeout')::text AS timeout,
+              count(*) FILTER (WHERE output_truncated)::text AS output_truncated,
+              percentile_cont(0.95) WITHIN GROUP (ORDER BY queue_wait_ms)::text AS queue_wait_p95_ms,
+              percentile_cont(0.95) WITHIN GROUP (ORDER BY runtime_ms)::text AS runtime_p95_ms,
+              percentile_cont(0.95) WITHIN GROUP (ORDER BY total_latency_ms)::text AS total_latency_p95_ms
+            FROM memory_sandbox_run_telemetry
+            WHERE scope = $1
+              AND created_at >= now() - (($2::text || ' hours')::interval)
+            `,
+            [scope, windowHours],
+          )
+        : null;
+
+    const scopeSandboxErrorRes =
+      hasSandboxTelemetry
+        ? await client.query<{
+            error_code: string;
+            total: string;
+          }>(
+            `
+            SELECT
+              COALESCE(error_code, 'unknown') AS error_code,
+              count(*)::text AS total
+            FROM memory_sandbox_run_telemetry
+            WHERE scope = $1
+              AND created_at >= now() - (($2::text || ' hours')::interval)
+              AND status IN ('failed', 'timeout')
+            GROUP BY 1
+            ORDER BY count(*) DESC, 1 ASC
+            LIMIT 10
+            `,
+            [scope, windowHours],
+          )
+        : { rows: [] as Array<{ error_code: string; total: string }> };
+
     const tenantRuleRes = await client.query<{
       tenant_id: string;
       active_rules: string;
@@ -436,6 +522,29 @@ async function main() {
           )
         : { rows: [] as Array<{ tenant_id: string; private_total: string; private_with_owner: string }> };
 
+    const tenantSandboxRes =
+      hasSandboxTelemetry
+        ? await client.query<{
+            tenant_id: string;
+            sandbox_total: string;
+            sandbox_failed: string;
+            sandbox_timeout: string;
+          }>(
+            `
+            SELECT
+              ${tenantExpr} AS tenant_id,
+              count(*)::text AS sandbox_total,
+              count(*) FILTER (WHERE status = 'failed')::text AS sandbox_failed,
+              count(*) FILTER (WHERE status = 'timeout')::text AS sandbox_timeout
+            FROM memory_sandbox_run_telemetry
+            WHERE created_at >= now() - (($1::text || ' hours')::interval)
+            GROUP BY 1
+            ORDER BY 1
+            `,
+            [windowHours],
+          )
+        : { rows: [] as Array<{ tenant_id: string; sandbox_total: string; sandbox_failed: string; sandbox_timeout: string }> };
+
     return {
       scopeFeedback: scopeFeedbackRes.rows[0] ?? { total: "0", positive: "0", negative: "0", neutral: "0", with_run_id: "0" },
       scopeRules: scopeRuleRes.rows[0] ?? {
@@ -448,10 +557,23 @@ async function main() {
       scopeDecision: scopeDecisionRes?.rows[0] ?? { tools_feedback_total: "0", linked_decision_id: "0" },
       scopeRecall: scopeRecallRes?.rows[0] ?? { total: "0", with_identity: "0" },
       scopeLane: scopeLaneRes?.rows[0] ?? { private_total: "0", private_with_owner: "0", shared_total: "0" },
+      scopeSandbox: scopeSandboxRes?.rows[0] ?? {
+        total: "0",
+        succeeded: "0",
+        failed: "0",
+        canceled: "0",
+        timeout: "0",
+        output_truncated: "0",
+        queue_wait_p95_ms: "0",
+        runtime_p95_ms: "0",
+        total_latency_p95_ms: "0",
+      },
+      scopeSandboxTopErrors: scopeSandboxErrorRes.rows,
       tenantRules: tenantRuleRes.rows,
       tenantFeedback: tenantFeedbackRes.rows,
       tenantRecall: tenantRecallRes.rows,
       tenantLane: tenantLaneRes.rows,
+      tenantSandbox: tenantSandboxRes.rows,
       support: {
         hasExecutionDecisions,
         hasFeedbackSource,
@@ -459,6 +581,7 @@ async function main() {
         hasRecallAudit,
         hasRecallConsumerAgent,
         hasRecallConsumerTeam,
+        hasSandboxTelemetry,
         hasLaneColumns,
       },
     };
@@ -472,6 +595,14 @@ async function main() {
   const scopeRecallWithIdentity = Number(out.scopeRecall.with_identity ?? "0");
   const scopePrivateTotal = Number(out.scopeLane.private_total ?? "0");
   const scopePrivateWithOwner = Number(out.scopeLane.private_with_owner ?? "0");
+  const scopeSandboxTotal = Number(out.scopeSandbox.total ?? "0");
+  const scopeSandboxFailed = Number(out.scopeSandbox.failed ?? "0");
+  const scopeSandboxTimeout = Number(out.scopeSandbox.timeout ?? "0");
+  const scopeSandboxOutputTruncated = Number(out.scopeSandbox.output_truncated ?? "0");
+  const scopeSandboxTopErrors = (Array.isArray(out.scopeSandboxTopErrors) ? out.scopeSandboxTopErrors : []).map((r) => ({
+    error_code: String(r.error_code ?? "unknown"),
+    total: Number(r.total ?? "0"),
+  }));
 
   const scopeSnapshot = {
     feedback: {
@@ -507,6 +638,22 @@ async function main() {
       shared_total: Number(out.scopeLane.shared_total ?? "0"),
       available: out.support.hasLaneColumns,
     },
+    sandbox: {
+      total: scopeSandboxTotal,
+      succeeded: Number(out.scopeSandbox.succeeded ?? "0"),
+      failed: scopeSandboxFailed,
+      canceled: Number(out.scopeSandbox.canceled ?? "0"),
+      timeout: scopeSandboxTimeout,
+      output_truncated: scopeSandboxOutputTruncated,
+      failure_rate: scopeSandboxTotal > 0 ? scopeSandboxFailed / scopeSandboxTotal : 0,
+      timeout_rate: scopeSandboxTotal > 0 ? scopeSandboxTimeout / scopeSandboxTotal : 0,
+      output_truncated_rate: scopeSandboxTotal > 0 ? scopeSandboxOutputTruncated / scopeSandboxTotal : 0,
+      queue_wait_p95_ms: Number(out.scopeSandbox.queue_wait_p95_ms ?? "0"),
+      runtime_p95_ms: Number(out.scopeSandbox.runtime_p95_ms ?? "0"),
+      total_latency_p95_ms: Number(out.scopeSandbox.total_latency_p95_ms ?? "0"),
+      top_errors: scopeSandboxTopErrors,
+      available: out.support.hasSandboxTelemetry,
+    },
   };
 
   const byTenant = new Map<string, TenantRollup>();
@@ -530,6 +677,9 @@ async function main() {
       recall_identity_coverage: null,
       private_total: 0,
       private_owner_coverage: null,
+      sandbox_total: 0,
+      sandbox_failed_rate: null,
+      sandbox_timeout_rate: null,
     };
     byTenant.set(key, row);
     return row;
@@ -570,6 +720,15 @@ async function main() {
     t.private_total = Number(r.private_total ?? "0");
     const withOwner = Number(r.private_with_owner ?? "0");
     t.private_owner_coverage = t.private_total > 0 ? withOwner / t.private_total : 1;
+  }
+
+  for (const r of out.tenantSandbox) {
+    const t = ensureTenant(r.tenant_id);
+    t.sandbox_total = Number(r.sandbox_total ?? "0");
+    const failed = Number(r.sandbox_failed ?? "0");
+    const timeout = Number(r.sandbox_timeout ?? "0");
+    t.sandbox_failed_rate = t.sandbox_total > 0 ? failed / t.sandbox_total : 0;
+    t.sandbox_timeout_rate = t.sandbox_total > 0 ? timeout / t.sandbox_total : 0;
   }
 
   const tenantRows = Array.from(byTenant.values()).sort((a, b) => b.active_rules - a.active_rules || a.tenant_id.localeCompare(b.tenant_id));
@@ -626,6 +785,44 @@ async function main() {
     },
   ];
 
+  if (scopeSnapshot.sandbox.available) {
+    checks.push({
+      name: "scope_sandbox_failure_rate_max",
+      severity: "warning",
+      pass: scopeSnapshot.sandbox.total < minSandboxRunsForGate || scopeSnapshot.sandbox.failure_rate <= maxSandboxFailureRate,
+      value: round(scopeSnapshot.sandbox.failure_rate),
+      threshold: { op: "<=", value: maxSandboxFailureRate },
+      note:
+        scopeSnapshot.sandbox.total < minSandboxRunsForGate
+          ? `Insufficient sandbox sample size (< ${minSandboxRunsForGate}); skip failure-rate gate.`
+          : "Sandbox failure rate should remain bounded in the governance window.",
+    });
+    checks.push({
+      name: "scope_sandbox_timeout_rate_max",
+      severity: "warning",
+      pass: scopeSnapshot.sandbox.total < minSandboxRunsForGate || scopeSnapshot.sandbox.timeout_rate <= maxSandboxTimeoutRate,
+      value: round(scopeSnapshot.sandbox.timeout_rate),
+      threshold: { op: "<=", value: maxSandboxTimeoutRate },
+      note:
+        scopeSnapshot.sandbox.total < minSandboxRunsForGate
+          ? `Insufficient sandbox sample size (< ${minSandboxRunsForGate}); skip timeout-rate gate.`
+          : "Sandbox timeout rate should remain bounded for stable execution loops.",
+    });
+    checks.push({
+      name: "scope_sandbox_output_truncated_rate_max",
+      severity: "warning",
+      pass:
+        scopeSnapshot.sandbox.total < minSandboxRunsForGate
+        || scopeSnapshot.sandbox.output_truncated_rate <= maxSandboxOutputTruncatedRate,
+      value: round(scopeSnapshot.sandbox.output_truncated_rate),
+      threshold: { op: "<=", value: maxSandboxOutputTruncatedRate },
+      note:
+        scopeSnapshot.sandbox.total < minSandboxRunsForGate
+          ? `Insufficient sandbox sample size (< ${minSandboxRunsForGate}); skip output-truncation gate.`
+          : "Sandbox output truncation should remain controlled under normal workloads.",
+    });
+  }
+
   if (!scopeSnapshot.decision.available) {
     checks.push({
       name: "decision_schema_available",
@@ -659,6 +856,17 @@ async function main() {
     });
   }
 
+  if (!scopeSnapshot.sandbox.available) {
+    checks.push({
+      name: "sandbox_telemetry_schema_available",
+      severity: "warning",
+      pass: false,
+      value: 0,
+      threshold: { op: ">=", value: 1 },
+      note: "Sandbox telemetry schema unavailable; apply migration 0032_memory_sandbox_telemetry.sql.",
+    });
+  }
+
   const failedErrors = checks.filter((c) => !c.pass && c.severity === "error").map((c) => c.name);
   const failedWarnings = checks.filter((c) => !c.pass && c.severity === "warning").map((c) => c.name);
   const pass = failedErrors.length === 0 && failedWarnings.length === 0;
@@ -679,6 +887,15 @@ async function main() {
   if (failedWarnings.includes("tenant_active_rule_count_drift_max") || failedWarnings.includes("tenant_negative_ratio_drift_max")) {
     recommendations.push("Investigate tenant-level policy mismatch and run policy adaptation gate per tenant scope.");
   }
+  if (failedWarnings.includes("scope_sandbox_failure_rate_max") || failedWarnings.includes("scope_sandbox_timeout_rate_max")) {
+    recommendations.push("Inspect sandbox diagnostics.sandbox top_errors and tune executor timeout/command behavior before rollout.");
+  }
+  if (failedWarnings.includes("scope_sandbox_output_truncated_rate_max")) {
+    recommendations.push("Review sandbox stdout/stderr budget and command output size to avoid excessive truncation.");
+  }
+  if (failedWarnings.includes("sandbox_telemetry_schema_available")) {
+    recommendations.push("Apply migration 0032_memory_sandbox_telemetry.sql to enable sandbox governance signals.");
+  }
 
   const generatedAt = new Date().toISOString();
   const summary = {
@@ -697,6 +914,10 @@ async function main() {
       max_tenant_active_rule_count_drift: maxTenantActiveRuleCountDrift,
       max_tenant_negative_ratio_drift: maxTenantNegativeRatioDrift,
       tenant_drift_min_feedback: tenantDriftMinFeedback,
+      min_sandbox_runs_for_gate: minSandboxRunsForGate,
+      max_sandbox_failure_rate: maxSandboxFailureRate,
+      max_sandbox_timeout_rate: maxSandboxTimeoutRate,
+      max_sandbox_output_truncated_rate: maxSandboxOutputTruncatedRate,
     },
     scope_snapshot: {
       feedback: {
@@ -716,6 +937,19 @@ async function main() {
         ...scopeSnapshot.lane,
         private_owner_coverage: round(scopeSnapshot.lane.private_owner_coverage),
       },
+      sandbox: {
+        ...scopeSnapshot.sandbox,
+        failure_rate: round(scopeSnapshot.sandbox.failure_rate),
+        timeout_rate: round(scopeSnapshot.sandbox.timeout_rate),
+        output_truncated_rate: round(scopeSnapshot.sandbox.output_truncated_rate),
+        queue_wait_p95_ms: round(scopeSnapshot.sandbox.queue_wait_p95_ms),
+        runtime_p95_ms: round(scopeSnapshot.sandbox.runtime_p95_ms),
+        total_latency_p95_ms: round(scopeSnapshot.sandbox.total_latency_p95_ms),
+        top_errors: scopeSnapshot.sandbox.top_errors.map((e: any) => ({
+          error_code: String(e.error_code ?? "unknown"),
+          total: Number(e.total ?? 0),
+        })),
+      },
     },
     cross_tenant: {
       tenant_count: tenantCount,
@@ -729,6 +963,8 @@ async function main() {
         decision_link_coverage: t.decision_link_coverage === null ? null : round(t.decision_link_coverage),
         recall_identity_coverage: t.recall_identity_coverage === null ? null : round(t.recall_identity_coverage),
         private_owner_coverage: t.private_owner_coverage === null ? null : round(t.private_owner_coverage),
+        sandbox_failed_rate: t.sandbox_failed_rate === null ? null : round(t.sandbox_failed_rate),
+        sandbox_timeout_rate: t.sandbox_timeout_rate === null ? null : round(t.sandbox_timeout_rate),
       })),
     },
     checks,
