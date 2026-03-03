@@ -50,18 +50,6 @@ flowchart LR
 3. Promote to active only after threshold pass.
 4. Keep rollback payloads available in release windows.
 
-## Start Here
-
-1. Normalize planner context for your runtime.
-2. Integrate `rules/evaluate` before `tools/select`.
-3. Persist `request_id`, `run_id`, and `decision_id`.
-
-## Next Steps
-
-1. [Execution Loop Gate](/public/en/control/03-execution-loop-gate)
-2. [Policy Adaptation Gate](/public/en/control/04-policy-adaptation-gate)
-3. [Production Core Gate](/public/en/operations/03-production-core-gate)
-
 ## Related
 
 1. [Control and Policy](/public/en/control/01-control-policy)

@@ -30,15 +30,3 @@ Every benchmark page includes:
 3. Commands
 4. Artifact paths
 5. Pass/fail interpretation guidance
-
-## Start Here
-
-1. Read [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public).
-2. Run one documented command in your environment.
-3. Compare your output with published artifact expectations.
-
-## Next Steps
-
-1. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
-2. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)
-3. [Operate and Production](/public/en/operate-production/00-operate-production)

@@ -30,18 +30,6 @@ For production integrations, persist and propagate:
 5. `decision_id`
 6. `commit_uri`
 
-## Start Here
-
-1. Pick one integration runtime (MCP, OpenWork, or LangGraph).
-2. Validate write and recall with your production auth mode.
-3. Add policy loop endpoints after retrieval is stable.
-
-## Next Steps
-
-1. [MCP Integration](/public/en/integrations/01-mcp)
-2. [API Reference](/public/en/api-reference/00-api-reference)
-3. [SDK Guide](/public/en/reference/05-sdk)
-
 ## Related
 
 1. [API Reference](/public/en/api-reference/00-api-reference)
