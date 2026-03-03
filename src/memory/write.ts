@@ -11,14 +11,16 @@ import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type Wr
 import { MemoryWriteRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { resolveTenantScope, toTenantScopeKey } from "./tenant.js";
+import { buildAionisUri } from "./uri.js";
 
 type WriteResult = {
   tenant_id?: string;
   scope?: string;
   commit_id: string;
+  commit_uri?: string;
   commit_hash: string;
-  nodes: Array<{ id: string; client_id?: string; type: string }>;
-  edges: Array<{ id: string; type: string; src_id: string; dst_id: string }>;
+  nodes: Array<{ id: string; uri?: string; client_id?: string; type: string }>;
+  edges: Array<{ id: string; uri?: string; type: string; src_id: string; dst_id: string }>;
   embedding_backfill?: { enqueued: true; pending_nodes: number };
   shadow_dual_write?: {
     enabled: boolean;
@@ -503,9 +505,36 @@ export async function applyMemoryWrite(
     tenant_id: prepared.tenant_id,
     scope: prepared.scope_public,
     commit_id,
+    commit_uri: buildAionisUri({
+      tenant_id: prepared.tenant_id,
+      scope: prepared.scope_public,
+      type: "commit",
+      id: commit_id,
+    }),
     commit_hash: commitHash,
-    nodes: nodes.map((n) => ({ id: n.id, client_id: n.client_id, type: n.type })),
-    edges: edges.map((e) => ({ id: e.id, type: e.type, src_id: e.src_id, dst_id: e.dst_id })),
+    nodes: nodes.map((n) => ({
+      id: n.id,
+      uri: buildAionisUri({
+        tenant_id: prepared.tenant_id,
+        scope: prepared.scope_public,
+        type: n.type,
+        id: n.id,
+      }),
+      client_id: n.client_id,
+      type: n.type,
+    })),
+    edges: edges.map((e) => ({
+      id: e.id,
+      uri: buildAionisUri({
+        tenant_id: prepared.tenant_id,
+        scope: prepared.scope_public,
+        type: "edge",
+        id: e.id,
+      }),
+      type: e.type,
+      src_id: e.src_id,
+      dst_id: e.dst_id,
+    })),
   };
 
   // Derived artifact: enqueue embedding backfill for nodes that opted into auto-embed and have embed_text.

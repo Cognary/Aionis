@@ -14,6 +14,7 @@ import {
 import { ToolsFeedbackRequest } from "./schemas.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
+import { buildAionisUri, parseAionisUri } from "./uri.js";
 import type {
   EmbeddedExecutionDecisionView,
   EmbeddedMemoryRuntime,
@@ -234,6 +235,32 @@ export async function toolSelectionFeedback(
     { defaultScope, defaultTenantId },
   );
   const scope = tenancy.scope_key;
+  let linkedDecisionId = parsed.decision_id ?? null;
+  if (parsed.decision_uri) {
+    const uriParts = parseAionisUri(parsed.decision_uri);
+    if (uriParts.type !== "decision") {
+      badRequest("invalid_decision_uri_type", "decision_uri must use type=decision", {
+        decision_uri: parsed.decision_uri,
+        type: uriParts.type,
+      });
+    }
+    if (uriParts.tenant_id !== tenancy.tenant_id || uriParts.scope !== tenancy.scope) {
+      badRequest("decision_uri_scope_mismatch", "decision_uri tenant/scope does not match request scope", {
+        decision_uri: parsed.decision_uri,
+        uri_tenant_id: uriParts.tenant_id,
+        uri_scope: uriParts.scope,
+        request_tenant_id: tenancy.tenant_id,
+        request_scope: tenancy.scope,
+      });
+    }
+    if (linkedDecisionId && linkedDecisionId !== uriParts.id) {
+      badRequest("decision_uri_id_mismatch", "decision_uri id conflicts with decision_id", {
+        decision_id: linkedDecisionId,
+        decision_uri: parsed.decision_uri,
+      });
+    }
+    linkedDecisionId = uriParts.id;
+  }
   const actor = parsed.actor ?? "system";
   const normalizedCandidates = normalizeToolCandidates(parsed.candidates);
   const selectedTool = normalizeToolName(parsed.selected_tool);
@@ -289,15 +316,15 @@ export async function toolSelectionFeedback(
   const candidatesJson = JSON.stringify(normalizedCandidates);
 
   let decision: DecisionRow | null = null;
-  if (parsed.decision_id) {
-    decision = await findDecisionById(client, scope, parsed.decision_id);
+  if (linkedDecisionId) {
+    decision = await findDecisionById(client, scope, linkedDecisionId);
   }
   let decision_link_mode: "provided" | "inferred" | "created_from_feedback" = "provided";
 
-  if (parsed.decision_id) {
+  if (linkedDecisionId) {
     if (!decision) {
       badRequest("decision_not_found_in_scope", "decision_id was not found in this scope", {
-        decision_id: parsed.decision_id,
+        decision_id: linkedDecisionId,
         scope: tenancy.scope,
         tenant_id: tenancy.tenant_id,
       });
@@ -547,8 +574,20 @@ export async function toolSelectionFeedback(
     updated_rules: uniq.length,
     rule_node_ids: uniq,
     commit_id,
+    commit_uri: buildAionisUri({
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      type: "commit",
+      id: commit_id,
+    }),
     commit_hash: commitHash,
     decision_id: decision!.id,
+    decision_uri: buildAionisUri({
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      type: "decision",
+      id: decision!.id,
+    }),
     decision_link_mode,
     decision_policy_sha256: decision!.policy_sha256,
   };

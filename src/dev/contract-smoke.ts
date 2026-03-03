@@ -1760,7 +1760,8 @@ async function run() {
     assertSubset(keys(n), ["id", "uri", "type", "title", "text_summary", "topic_state", "member_count"].filter(Boolean));
     assert.ok(typeof (n as any).uri === "string" && String((n as any).uri).startsWith("aionis://"));
   }
-  assertSubset(keys(out.subgraph.edges[0]), ["from_id", "to_id", "type", "weight"]);
+  assertSubset(keys(out.subgraph.edges[0]), ["id", "uri", "from_id", "to_id", "type", "weight"]);
+  assert.ok(typeof (out.subgraph.edges[0] as any).uri === "string" && String((out.subgraph.edges[0] as any).uri).startsWith("aionis://"));
   for (const s of out.seeds as any[]) {
     assert.ok(typeof s.uri === "string" && String(s.uri).startsWith("aionis://"));
   }

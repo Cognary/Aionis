@@ -131,9 +131,10 @@ Validation hard rules:
 - `tenant_id: string`
 - `scope: string`
 - `commit_id: string`
+- `commit_uri: string` (`aionis://tenant/scope/commit/<id>`)
 - `commit_hash: string`
-- `nodes: { id, client_id?, type }[]`
-- `edges: { id, type, src_id, dst_id }[]`
+- `nodes: { id, uri?, client_id?, type }[]`
+- `edges: { id, uri?, type, src_id, dst_id }[]`
 - `embedding_backfill?: { enqueued: true, pending_nodes: number }`
 - `topic_cluster?: { ... } | { enqueued: true }`
 - `shadow_dual_write?: { enabled, strict, mirrored, copied?, capability?, failure_mode?, degraded_mode?, fallback_applied?, error? }`
@@ -220,6 +221,9 @@ Use this endpoint when you need precise object targeting (URI/id/client_id/type)
 - `limit?: number` (default 20, max 200)
 - `offset?: number` (default 0, max 200000)
 
+Notes:
+- `find` is node-only. URI `type` must be one of node types (`event|entity|topic|rule|evidence|concept|procedure|self_model`).
+
 **Response**
 - `tenant_id: string`
 - `scope: string`
@@ -235,6 +239,38 @@ Lane visibility policy (same as recall):
 - always visible: `memory_lane="shared"`
 - conditionally visible: `memory_lane="private"` with owner match (`owner_agent_id == consumer_agent_id` or `owner_team_id == consumer_team_id`)
 - if `consumer_agent_id`/`consumer_team_id` are omitted, private nodes are filtered out
+
+### `POST /v1/memory/resolve`
+
+Canonical object resolver for URI-first retrieval across node and non-node objects.
+
+**Request**
+- `tenant_id?: string`
+- `scope?: string`
+- `uri: string` (required, `aionis://tenant/scope/type/id`)
+- `consumer_agent_id?: string` (node visibility checks)
+- `consumer_team_id?: string` (node visibility checks)
+- `include_meta?: boolean` (node fields only, default false)
+- `include_slots?: boolean` (node fields only, default false)
+- `include_slots_preview?: boolean` (node fields only, default false)
+- `slots_preview_keys?: number` (node fields only, default 10, max 50)
+
+**Response**
+- common:
+  - `tenant_id: string`
+  - `scope: string`
+  - `uri: string`
+  - `type: "event"|"entity"|"topic"|"rule"|"evidence"|"concept"|"procedure"|"self_model"|"edge"|"commit"|"decision"`
+- object payload by resolved type:
+  - `node?: NodeDTO`
+  - `edge?: { id, uri, type, src_id, src_uri, dst_id, dst_uri, weight, confidence, decay_rate, last_activated, created_at, commit_id, commit_uri }`
+  - `commit?: { id, uri, parent_id, parent_uri, input_sha256, diff_json, actor, model_version, prompt_version, commit_hash, created_at }`
+  - `decision?: { decision_id, decision_uri, decision_kind, run_id, selected_tool, candidates, context_sha256, policy_sha256, source_rule_ids, metadata, created_at, commit_id, commit_uri }`
+
+Error behavior:
+- `404 node_not_found_in_scope_or_visibility` for node URIs outside scope or lane visibility.
+- `404 edge_not_found_in_scope` / `commit_not_found_in_scope` / `decision_not_found_in_scope` for missing non-node objects.
+- `400 conflicting_filters` when request `tenant_id` or `scope` conflicts with URI tenant/scope.
 
 ### `POST /v1/memory/sessions`
 
@@ -262,9 +298,10 @@ Session-first write API. This endpoint creates or updates a session envelope whi
 - `session_node_id: string|null`
 - `session_uri: string|null` (`aionis://tenant/scope/topic/<id>`)
 - `commit_id: string`
+- `commit_uri: string` (`aionis://tenant/scope/commit/<id>`)
 - `commit_hash: string`
-- `nodes: { id, client_id?, type }[]`
-- `edges: { id, type, src_id, dst_id }[]`
+- `nodes: { id, uri?, client_id?, type }[]`
+- `edges: { id, uri?, type, src_id, dst_id }[]`
 - `embedding_backfill?: { enqueued: true, pending_nodes: number }|null`
 
 ### `POST /v1/memory/events`
@@ -299,9 +336,10 @@ Session-first event ingestion API. This endpoint writes one event node and links
 - `event_uri: string|null` (`aionis://tenant/scope/event/<id>`)
 - `session_uri: string|null` (`aionis://tenant/scope/topic/<id>`)
 - `commit_id: string`
+- `commit_uri: string` (`aionis://tenant/scope/commit/<id>`)
 - `commit_hash: string`
-- `nodes: { id, client_id?, type }[]`
-- `edges: { id, type, src_id, dst_id }[]`
+- `nodes: { id, uri?, client_id?, type }[]`
+- `edges: { id, uri?, type, src_id, dst_id }[]`
 - `embedding_backfill?: { enqueued: true, pending_nodes: number }|null`
 
 ### `GET /v1/memory/sessions/:session_id/events`
@@ -482,7 +520,7 @@ Profiles:
 - `subgraph: { nodes: NodeDTO[], edges: EdgeDTO[] }`
 - `context: { text: string, items: any[], citations: any[] }`
   - node-backed `items[]` include `uri` when node type is URI-addressable
-  - `citations[]` include `node_id`, `uri?`, `commit_id`, `raw_ref`, `evidence_ref`
+  - `citations[]` include `node_id`, `uri?`, `commit_id`, `commit_uri?`, `raw_ref`, `evidence_ref`
 - `rules?: { scope, considered, matched, skipped_invalid_then, invalid_then_sample, applied }` (only when `rules_context` is provided)
 - `debug?: { neighborhood_counts: { nodes:number, edges:number }, embeddings?: DebugEmbeddingDTO[], context_compaction?: { profile, token_budget, char_budget, applied, before_chars, after_chars, before_est_tokens, after_est_tokens, dropped_lines, dropped_by_section } }` (only when `return_debug=true`)
 - `trajectory?: { strategy, layers, budgets, pruned_reasons }` (stage-level explain block for L0/L1/L2 flow)
@@ -516,8 +554,8 @@ Profiles:
   - `raw_ref`, `evidence_ref`, `embedding_status`, `embedding_model`, `memory_lane`, `producer_agent_id`, `owner_agent_id`, `owner_team_id`, `created_at`, `updated_at`, `last_activated`, `salience`, `importance`, `confidence`, `commit_id`
 
 **EdgeDTO (whitelist)**
-- Always: `from_id`, `to_id`, `type`, `weight`
-- Meta (only when `include_meta=true`): `commit_id`
+- Always: `id`, `uri`, `from_id`, `to_id`, `type`, `weight`
+- Meta (only when `include_meta=true`): `commit_id`, `commit_uri?`
 
 ---
 
@@ -1474,7 +1512,7 @@ This endpoint is a convenience wrapper around rules evaluation + tool policy app
 - `candidates: string[]` (deduped)
 - `selection: { candidates, allowed, denied, preferred, ordered, selected }`
 - `rules: { considered, matched, skipped_invalid_then, invalid_then_sample, agent_visibility_summary, applied, tool_conflicts_summary, shadow_selection?, shadow_tool_conflicts_summary? }`
-- `decision: { decision_id, run_id, selected_tool, policy_sha256, source_rule_ids, created_at }`
+- `decision: { decision_id, decision_uri, run_id, selected_tool, policy_sha256, source_rule_ids, created_at }`
 
 Notes:
 - This endpoint **never returns embeddings**.
@@ -1497,7 +1535,8 @@ Read back a persisted execution decision by `decision_id` in the caller scope.
 This endpoint is intended for operator/runtime observability and provenance debug workflows.
 
 **Request**
-- `decision_id: string` (UUID, required)
+- `decision_id?: string` (UUID)
+- `decision_uri?: string` (`aionis://tenant/scope/decision/<id>`)
 - `tenant_id?: string`
 - `scope?: string`
 
@@ -1506,6 +1545,7 @@ This endpoint is intended for operator/runtime observability and provenance debu
 - `scope: string`
 - `decision:`
   - `decision_id: string`
+  - `decision_uri: string` (`aionis://tenant/scope/decision/<id>`)
   - `decision_kind: "tools_select"`
   - `run_id: string|null`
   - `selected_tool: string|null`
@@ -1516,6 +1556,7 @@ This endpoint is intended for operator/runtime observability and provenance debu
   - `metadata: object`
   - `created_at: string`
   - `commit_id: string|null`
+  - `commit_uri: string|null` (`aionis://tenant/scope/commit/<id>`)
 
 Failure:
 - `404 decision_not_found_in_scope` when `decision_id` does not exist under the resolved `(tenant_id, scope)`.
@@ -1537,6 +1578,7 @@ verification stats (`positive_count` / `negative_count`) for ordering and govern
 - `actor?: string`
 - `run_id?: string`
 - `decision_id?: string` (UUID; if omitted, server attempts inference and may create a feedback-derived decision record)
+- `decision_uri?: string` (`aionis://tenant/scope/decision/<id>`, optional alternative to `decision_id`)
 - `target?: "tool"|"all"` (default `"tool"`)
 - `include_shadow?: boolean` (default false; if true, also attributes to matched SHADOW rule sources)
 - `rules_limit?: number` (default 50, max 200)
@@ -1550,8 +1592,10 @@ verification stats (`positive_count` / `negative_count`) for ordering and govern
 - `updated_rules: number`
 - `rule_node_ids: string[]`
 - `commit_id: string|null`
+- `commit_uri: string` (`aionis://tenant/scope/commit/<id>`)
 - `commit_hash: string|null`
 - `decision_id: string`
+- `decision_uri: string` (`aionis://tenant/scope/decision/<id>`)
 - `decision_link_mode: "provided"|"inferred"|"created_from_feedback"`
 - `decision_policy_sha256: string`
 

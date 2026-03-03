@@ -56,6 +56,7 @@ import { rehydrateArchiveNodes } from "./memory/rehydrate.js";
 import { activateMemoryNodes } from "./memory/nodes-activate.js";
 import { type RecallAuth, memoryRecallParsed } from "./memory/recall.js";
 import { memoryFind } from "./memory/find.js";
+import { memoryResolve } from "./memory/resolve.js";
 import { createSession, listSessionEvents, writeSessionEvent } from "./memory/sessions.js";
 import { exportMemoryPack, importMemoryPack } from "./memory/packs.js";
 import { ruleFeedback } from "./memory/feedback.js";
@@ -1999,6 +2000,24 @@ app.post("/v1/memory/find", async (req, reply) => {
   return reply.code(200).send(out);
 });
 
+// Canonical object resolver: resolve node/edge/commit/decision by URI.
+app.post("/v1/memory/resolve", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "resolve");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient(async (client) => {
+      return await memoryResolve(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID);
+    });
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
 app.post("/v1/memory/recall", async (req, reply) => {
   const t0 = performance.now();
   const timings: Record<string, number> = {};
@@ -3392,6 +3411,7 @@ function withIdentityFromRequest(
     | "rehydrate"
     | "activate"
     | "find"
+    | "resolve"
     | "recall"
     | "recall_text"
     | "planning_context"
@@ -3427,7 +3447,14 @@ function withIdentityFromRequest(
 
   if (
     principal &&
-    (kind === "find" || kind === "recall" || kind === "recall_text" || kind === "planning_context" || kind === "context_assemble")
+    (
+      kind === "find"
+      || kind === "resolve"
+      || kind === "recall"
+      || kind === "recall_text"
+      || kind === "planning_context"
+      || kind === "context_assemble"
+    )
   ) {
     const reqAgent = typeof obj.consumer_agent_id === "string" ? obj.consumer_agent_id.trim() : null;
     const reqTeam = typeof obj.consumer_team_id === "string" ? obj.consumer_team_id.trim() : null;

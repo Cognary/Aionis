@@ -1,4 +1,4 @@
-import { buildAionisUri } from "./uri.js";
+import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 
 type RankedItem = { id: string; activation: number; score: number };
 
@@ -69,6 +69,7 @@ type ContextCitation = {
   node_id: string;
   uri?: string;
   commit_id: string | null;
+  commit_uri?: string;
   raw_ref: string | null;
   evidence_ref: string | null;
 };
@@ -174,7 +175,7 @@ function resolveCompactionProfile(opts?: ContextBuildOptions): ContextCompaction
   return opts?.context_compaction_profile === "aggressive" ? "aggressive" : "balanced";
 }
 
-const URI_NODE_TYPES = new Set(["event", "entity", "topic", "rule", "evidence", "concept", "procedure", "self_model"]);
+const URI_NODE_TYPES = new Set<string>(AIONIS_URI_NODE_TYPES);
 
 function buildNodeUri(node: Pick<NodeRow, "id" | "type">, options?: ContextBuildOptions): string | undefined {
   const tenantId = String(options?.tenant_id ?? "").trim();
@@ -182,6 +183,14 @@ function buildNodeUri(node: Pick<NodeRow, "id" | "type">, options?: ContextBuild
   if (!tenantId || !scope) return undefined;
   if (!URI_NODE_TYPES.has(node.type)) return undefined;
   return buildAionisUri({ tenant_id: tenantId, scope, type: node.type, id: node.id });
+}
+
+function buildCommitUri(commitId: string | null | undefined, options?: ContextBuildOptions): string | undefined {
+  const tenantId = String(options?.tenant_id ?? "").trim();
+  const scope = String(options?.scope ?? "").trim();
+  const id = String(commitId ?? "").trim();
+  if (!tenantId || !scope || !id) return undefined;
+  return buildAionisUri({ tenant_id: tenantId, scope, type: "commit", id });
 }
 
 export function buildContext(
@@ -223,10 +232,12 @@ export function buildContext(
     if (seen.has(n.id)) return;
     seen.add(n.id);
     const uri = buildNodeUri(n, options);
+    const commitUri = buildCommitUri(n.commit_id, options);
     citations.push({
       node_id: n.id,
       ...(uri ? { uri } : {}),
       commit_id: n.commit_id ?? null,
+      ...(commitUri ? { commit_uri: commitUri } : {}),
       raw_ref: n.raw_ref ?? null,
       evidence_ref: n.evidence_ref ?? null,
     });

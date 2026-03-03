@@ -127,9 +127,13 @@ function collectLayerCandidates(recall: any, rules: any, tools: any): Record<Con
   for (const c of citations.slice(0, 64)) {
     const nodeId = String((c as any)?.node_id || "").trim();
     const uri = String((c as any)?.uri || "").trim();
+    const commitUri = String((c as any)?.commit_uri || "").trim();
     const commitId = String((c as any)?.commit_id || "").trim();
-    if (!nodeId && !uri && !commitId) continue;
-    addLine(out.citations, `citation uri=${uri || "-"} node=${nodeId || "-"} commit=${commitId || "-"}`);
+    if (!nodeId && !uri && !commitUri && !commitId) continue;
+    addLine(
+      out.citations,
+      `citation uri=${uri || "-"} node=${nodeId || "-"} commit=${commitId || "-"} commit_uri=${commitUri || "-"}`,
+    );
   }
 
   return out;

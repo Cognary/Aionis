@@ -277,6 +277,20 @@ export const MemoryFindRequest = z.object({
 
 export type MemoryFindInput = z.infer<typeof MemoryFindRequest>;
 
+export const MemoryResolveRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  uri: z.string().min(1),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  include_meta: z.boolean().default(false),
+  include_slots: z.boolean().default(false),
+  include_slots_preview: z.boolean().default(false),
+  slots_preview_keys: z.number().int().positive().max(50).default(10),
+});
+
+export type MemoryResolveInput = z.infer<typeof MemoryResolveRequest>;
+
 export const MemorySessionCreateRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
@@ -515,7 +529,10 @@ export type ToolsSelectInput = z.infer<typeof ToolsSelectRequest>;
 export const ToolsDecisionRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
-  decision_id: UUID,
+  decision_id: UUID.optional(),
+  decision_uri: z.string().min(1).optional(),
+}).refine((v) => !!v.decision_id || !!v.decision_uri, {
+  message: "must set decision_id or decision_uri",
 });
 
 export type ToolsDecisionInput = z.infer<typeof ToolsDecisionRequest>;
@@ -528,6 +545,7 @@ export const ToolsFeedbackRequest = z
     run_id: z.string().min(1).optional(),
     // Optional direct link to the persisted tools/select decision record.
     decision_id: UUID.optional(),
+    decision_uri: z.string().min(1).optional(),
     // Feedback for the tool selection decision.
     outcome: z.enum(["positive", "negative", "neutral"]),
     // Same execution context used for tool selection.

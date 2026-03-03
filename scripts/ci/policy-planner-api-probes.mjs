@@ -128,6 +128,7 @@ async function probeToolsSelect() {
   ensure(out.body?.selection && typeof out.body.selection === "object", `${label}: tools/select missing selection`);
   ensure(Array.isArray(out.body.selection?.ordered), `${label}: tools/select missing selection.ordered[]`);
   ensure(out.body?.rules && typeof out.body.rules === "object", `${label}: tools/select missing rules`);
+  ensure(typeof out.body?.decision?.decision_uri === "string", `${label}: tools/select missing decision.decision_uri`);
   if (out.body.selection?.selected != null) {
     ensure(
       candidates.includes(String(out.body.selection.selected)),
@@ -169,6 +170,8 @@ async function probeToolsFeedback({
   ensure(typeof out.body?.updated_rules === "number", `${label}: tools/feedback missing updated_rules`);
   ensure(out.body.updated_rules > 0, `${label}: tools/feedback must attribute at least one rule`);
   ensure(typeof out.body?.decision_id === "string", `${label}: tools/feedback missing decision_id`);
+  ensure(typeof out.body?.decision_uri === "string", `${label}: tools/feedback missing decision_uri`);
+  ensure(typeof out.body?.commit_uri === "string", `${label}: tools/feedback missing commit_uri`);
   ensure(
     out.body?.decision_link_mode === expectedLinkMode,
     `${label}: tools/feedback decision_link_mode expected=${expectedLinkMode} got=${String(out.body?.decision_link_mode)}`,
@@ -216,6 +219,7 @@ async function probeToolsDecisionReadback({ decisionId, expectedRunId, expectedS
     String(out.body?.decision?.decision_kind ?? "") === "tools_select",
     `${label}: tools/decision decision_kind must be tools_select`,
   );
+  ensure(typeof out.body?.decision?.decision_uri === "string", `${label}: tools/decision missing decision_uri`);
   return out.body;
 }
 

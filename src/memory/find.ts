@@ -2,7 +2,7 @@ import type pg from "pg";
 import { badRequest } from "../util/http.js";
 import { MemoryFindRequest, type MemoryFindInput } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
-import { buildAionisUri, parseAionisUri } from "./uri.js";
+import { AIONIS_URI_NODE_TYPES, buildAionisUri, parseAionisUri } from "./uri.js";
 
 type NodeRow = {
   id: string;
@@ -95,7 +95,15 @@ function normalizeFindInput(parsed: MemoryFindInput): {
   slots_preview_keys: number;
 } {
   let uriParts: ReturnType<typeof parseAionisUri> | null = null;
-  if (parsed.uri) uriParts = parseAionisUri(parsed.uri);
+  if (parsed.uri) {
+    uriParts = parseAionisUri(parsed.uri);
+    if (!AIONIS_URI_NODE_TYPES.includes(uriParts.type as (typeof AIONIS_URI_NODE_TYPES)[number])) {
+      badRequest("invalid_aionis_uri_type_for_endpoint", "find only accepts node URI types", {
+        type: uriParts.type,
+        allowed_types: AIONIS_URI_NODE_TYPES,
+      });
+    }
+  }
 
   const requestTenant = parsed.tenant_id?.trim();
   const requestScope = parsed.scope?.trim();

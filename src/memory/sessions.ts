@@ -205,6 +205,14 @@ export async function createSession(client: pg.PoolClient, body: unknown, opts: 
           })
         : null,
     commit_id: out.commit_id,
+    commit_uri:
+      out.commit_uri ??
+      buildAionisUri({
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        type: "commit",
+        id: out.commit_id,
+      }),
     commit_hash: out.commit_hash,
     nodes: out.nodes,
     edges: out.edges,
@@ -354,6 +362,14 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
           })
         : null,
     commit_id: out.commit_id,
+    commit_uri:
+      out.commit_uri ??
+      buildAionisUri({
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        type: "commit",
+        id: out.commit_id,
+      }),
     commit_hash: out.commit_hash,
     nodes: out.nodes,
     edges: out.edges,

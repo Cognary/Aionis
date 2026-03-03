@@ -15,7 +15,7 @@ import { buildContext } from "./context.js";
 import { sha256Hex } from "../util/crypto.js";
 import { badRequest } from "../util/http.js";
 import { resolveTenantScope } from "./tenant.js";
-import { buildAionisUri } from "./uri.js";
+import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 
 export type RecallAuth = {
   allow_debug_embeddings: boolean;
@@ -93,14 +93,17 @@ type NodeDTO = {
 };
 
 type EdgeDTO = {
+  id: string;
+  uri: string;
   from_id: string;
   to_id: string;
   type: string;
   weight: number;
   commit_id?: string | null;
+  commit_uri?: string | null;
 };
 
-const URI_NODE_TYPES = new Set(["event", "entity", "topic", "rule", "evidence", "concept", "procedure", "self_model"]);
+const URI_NODE_TYPES = new Set<string>(AIONIS_URI_NODE_TYPES);
 
 // Very small spreading-activation MVP: 1-2 iterations, bounded by the neighborhood we fetched.
 function spreadActivation(seeds: RecallCandidate[], nodes: Map<string, NodeRow>, edges: EdgeRow[], hops: number) {
@@ -180,6 +183,23 @@ export async function memoryRecallParsed(
       scope: tenancy.scope,
       type,
       id,
+    });
+  };
+  const buildEdgeUri = (id: string): string =>
+    buildAionisUri({
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      type: "edge",
+      id,
+    });
+  const buildCommitUri = (id: string | null | undefined): string | null => {
+    const commitId = String(id ?? "").trim();
+    if (!commitId) return null;
+    return buildAionisUri({
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      type: "commit",
+      id: commitId,
     });
   };
   const consumerAgentId = parsed.consumer_agent_id?.trim() || null;
@@ -488,6 +508,8 @@ export async function memoryRecallParsed(
 
   const outEdges: EdgeDTO[] = outEdgeRows.map((e) => {
     const dto: EdgeDTO = {
+      id: e.id,
+      uri: buildEdgeUri(e.id),
       from_id: e.src_id,
       to_id: e.dst_id,
       type: e.type,
@@ -495,6 +517,7 @@ export async function memoryRecallParsed(
     };
     if (parsed.include_meta) {
       dto.commit_id = e.commit_id;
+      dto.commit_uri = buildCommitUri(e.commit_id);
     }
     return dto;
   });

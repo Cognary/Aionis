@@ -6,6 +6,17 @@ title: "URI Expansion Plan"
 
 Last updated: 2026-03-03
 
+## Progress Update (2026-03-03)
+
+Started implementation and completed first production slice:
+
+1. URI type system expanded to include `edge`, `commit`, `decision`.
+2. Recall `subgraph.edges[]` now carries `id` + `uri` (and `commit_uri` when meta is enabled).
+3. Write/session/event/tool decision surfaces now expose `commit_uri` and/or `decision_uri` where applicable.
+4. Tool APIs accept `decision_uri` as a first-class input path (`tools/decision`, `tools/feedback`).
+5. API contract and SDK typing were updated accordingly.
+6. Added `POST /v1/memory/resolve` as a unified URI resolver for `node|edge|commit|decision` objects (with tenant/scope checks and lane visibility guard for nodes).
+
 ## Goal
 
 Extend Aionis URI coverage from memory nodes to additional auditable objects while keeping backward compatibility.

@@ -11,6 +11,7 @@ import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { applyToolPolicy } from "./tool-selector.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import { buildAionisUri } from "./uri.js";
 
 function summarizeToolConflicts(explain: any): string[] {
   const conflicts = Array.isArray(explain?.conflicts) ? explain.conflicts : [];
@@ -141,6 +142,12 @@ export async function selectTools(
     },
     decision: {
       decision_id,
+      decision_uri: buildAionisUri({
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        type: "decision",
+        id: decision_id,
+      }),
       run_id: parsed.run_id ?? null,
       selected_tool: selection.selected ?? null,
       policy_sha256,

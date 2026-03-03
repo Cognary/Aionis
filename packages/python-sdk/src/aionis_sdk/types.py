@@ -262,6 +262,18 @@ class MemoryFindInput(TypedDict, total=False):
     offset: int
 
 
+class MemoryResolveInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    uri: str
+    consumer_agent_id: str
+    consumer_team_id: str
+    include_meta: bool
+    include_slots: bool
+    include_slots_preview: bool
+    slots_preview_keys: int
+
+
 class MemorySessionCreateInput(TypedDict, total=False):
     tenant_id: str
     scope: str
@@ -362,6 +374,7 @@ class ToolsDecisionInput(TypedDict, total=False):
     tenant_id: str
     scope: str
     decision_id: str
+    decision_uri: str
 
 
 class ToolsFeedbackInput(TypedDict, total=False):
@@ -370,6 +383,7 @@ class ToolsFeedbackInput(TypedDict, total=False):
     actor: str
     run_id: str
     decision_id: str
+    decision_uri: str
     outcome: FeedbackOutcome
     context: Dict[str, Any]
     candidates: List[str]
@@ -389,6 +403,7 @@ class ToolsSelectDeniedItem(TypedDict, total=False):
 
 class ToolsSelectDecision(TypedDict, total=False):
     decision_id: str
+    decision_uri: str
     run_id: Optional[str]
     selected_tool: Optional[str]
     policy_sha256: str
@@ -420,14 +435,17 @@ class ToolsFeedbackResponse(TypedDict, total=False):
     updated_rules: int
     rule_node_ids: List[str]
     commit_id: Optional[str]
+    commit_uri: str
     commit_hash: Optional[str]
     decision_id: str
+    decision_uri: str
     decision_link_mode: DecisionLinkMode
     decision_policy_sha256: str
 
 
 class ToolsDecisionPayload(TypedDict, total=False):
     decision_id: str
+    decision_uri: str
     decision_kind: Literal["tools_select"]
     run_id: Optional[str]
     selected_tool: Optional[str]
@@ -438,6 +456,7 @@ class ToolsDecisionPayload(TypedDict, total=False):
     metadata: Dict[str, Any]
     created_at: str
     commit_id: Optional[str]
+    commit_uri: Optional[str]
 
 
 class ToolsDecisionResponse(TypedDict, total=False):

@@ -53,6 +53,8 @@ import type {
   MemoryEventWriteResponse,
   MemoryFindInput,
   MemoryFindResponse,
+  MemoryResolveInput,
+  MemoryResolveResponse,
   MemoryPackExportInput,
   MemoryPackExportResponse,
   MemoryPackImportInput,
@@ -217,6 +219,10 @@ export class AionisClient {
 
   async find(input: MemoryFindInput, opts?: RequestOptions): Promise<AionisResponse<MemoryFindResponse>> {
     return this.requestPost<MemoryFindInput, MemoryFindResponse>("/v1/memory/find", input, opts);
+  }
+
+  async resolve(input: MemoryResolveInput, opts?: RequestOptions): Promise<AionisResponse<MemoryResolveResponse>> {
+    return this.requestPost<MemoryResolveInput, MemoryResolveResponse>("/v1/memory/resolve", input, opts);
   }
 
   async createSession(input: MemorySessionCreateInput, opts?: RequestOptions): Promise<AionisResponse<MemorySessionCreateResponse>> {

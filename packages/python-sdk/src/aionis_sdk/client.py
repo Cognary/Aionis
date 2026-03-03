@@ -36,6 +36,7 @@ if TYPE_CHECKING:
         ContextAssembleInput,
         MemoryEventWriteInput,
         MemoryFindInput,
+        MemoryResolveInput,
         MemoryPackExportInput,
         MemoryPackImportInput,
         MemoryRecallInput,
@@ -251,6 +252,9 @@ class AionisClient:
 
     def find(self, payload: "MemoryFindInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/find", payload, request_options)
+
+    def resolve(self, payload: "MemoryResolveInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/resolve", payload, request_options)
 
     def create_session(self, payload: "MemorySessionCreateInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/sessions", payload, request_options)

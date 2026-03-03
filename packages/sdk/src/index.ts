@@ -64,6 +64,8 @@ export {
   type MemoryRecallTextInput,
   type MemoryFindInput,
   type MemoryFindResponse,
+  type MemoryResolveInput,
+  type MemoryResolveResponse,
   type MemorySessionCreateInput,
   type MemorySessionCreateResponse,
   type MemoryEventWriteInput,

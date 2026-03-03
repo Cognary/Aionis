@@ -2,6 +2,7 @@ import type pg from "pg";
 import { HttpError } from "../util/http.js";
 import { ToolsDecisionRequest } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
+import { buildAionisUri, parseAionisUri } from "./uri.js";
 
 type DecisionRow = {
   id: string;
@@ -30,6 +31,35 @@ export async function getToolsDecisionById(
     { defaultScope, defaultTenantId },
   );
   const scope = tenancy.scope_key;
+  let decisionId = parsed.decision_id ?? null;
+  if (parsed.decision_uri) {
+    const uriParts = parseAionisUri(parsed.decision_uri);
+    if (uriParts.type !== "decision") {
+      throw new HttpError(400, "invalid_decision_uri_type", "decision_uri must use type=decision", {
+        decision_uri: parsed.decision_uri,
+        type: uriParts.type,
+      });
+    }
+    if (uriParts.tenant_id !== tenancy.tenant_id || uriParts.scope !== tenancy.scope) {
+      throw new HttpError(400, "decision_uri_scope_mismatch", "decision_uri tenant/scope does not match request scope", {
+        decision_uri: parsed.decision_uri,
+        uri_tenant_id: uriParts.tenant_id,
+        uri_scope: uriParts.scope,
+        request_tenant_id: tenancy.tenant_id,
+        request_scope: tenancy.scope,
+      });
+    }
+    if (decisionId && decisionId !== uriParts.id) {
+      throw new HttpError(400, "decision_uri_id_mismatch", "decision_uri id conflicts with decision_id", {
+        decision_id: decisionId,
+        decision_uri: parsed.decision_uri,
+      });
+    }
+    decisionId = uriParts.id;
+  }
+  if (!decisionId) {
+    throw new HttpError(400, "invalid_request", "decision_id or decision_uri is required");
+  }
 
   const res = await client.query<DecisionRow>(
     `
@@ -51,12 +81,12 @@ export async function getToolsDecisionById(
       AND id = $2
     LIMIT 1
     `,
-    [scope, parsed.decision_id],
+    [scope, decisionId],
   );
   const row = res.rows[0] ?? null;
   if (!row) {
     throw new HttpError(404, "decision_not_found_in_scope", "decision_id was not found in this scope", {
-      decision_id: parsed.decision_id,
+      decision_id: decisionId,
       scope: tenancy.scope,
       tenant_id: tenancy.tenant_id,
     });
@@ -67,6 +97,12 @@ export async function getToolsDecisionById(
     scope: tenancy.scope,
     decision: {
       decision_id: row.id,
+      decision_uri: buildAionisUri({
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        type: "decision",
+        id: row.id,
+      }),
       decision_kind: row.decision_kind,
       run_id: row.run_id,
       selected_tool: row.selected_tool,
@@ -77,6 +113,15 @@ export async function getToolsDecisionById(
       metadata: row.metadata_json ?? {},
       created_at: row.created_at,
       commit_id: row.commit_id,
+      commit_uri:
+        row.commit_id != null
+          ? buildAionisUri({
+              tenant_id: tenancy.tenant_id,
+              scope: tenancy.scope,
+              type: "commit",
+              id: row.commit_id,
+            })
+          : null,
     },
   };
 }

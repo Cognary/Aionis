@@ -281,6 +281,18 @@ export type MemoryFindInput = {
   offset?: number;
 };
 
+export type MemoryResolveInput = {
+  tenant_id?: string;
+  scope?: string;
+  uri: string;
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
+  include_meta?: boolean;
+  include_slots?: boolean;
+  include_slots_preview?: boolean;
+  slots_preview_keys?: number;
+};
+
 export type MemorySessionCreateInput = {
   tenant_id?: string;
   scope?: string;
@@ -378,7 +390,8 @@ export type ToolsSelectInput = {
 export type ToolsDecisionInput = {
   tenant_id?: string;
   scope?: string;
-  decision_id: string;
+  decision_id?: string;
+  decision_uri?: string;
 };
 
 export type ToolsFeedbackInput = {
@@ -387,6 +400,7 @@ export type ToolsFeedbackInput = {
   actor?: string;
   run_id?: string;
   decision_id?: string;
+  decision_uri?: string;
   outcome: "positive" | "negative" | "neutral";
   context: unknown;
   candidates: string[];
@@ -574,9 +588,10 @@ export type MemoryWriteResponse = {
   tenant_id?: string;
   scope?: string;
   commit_id: string;
+  commit_uri?: string;
   commit_hash: string;
-  nodes: Array<{ id: string; client_id?: string; type: string }>;
-  edges: Array<Record<string, unknown>>;
+  nodes: Array<{ id: string; uri?: string; client_id?: string; type: string }>;
+  edges: Array<{ id: string; uri?: string; type: string; src_id: string; dst_id: string }>;
   embedding_backfill?: { enqueued: true; pending_nodes: number };
   topic_cluster?: Record<string, unknown>;
   shadow_dual_write?: {
@@ -626,10 +641,13 @@ export type RecallSubgraphNodeDto = {
 };
 
 export type RecallSubgraphEdgeDto = {
+  id: string;
+  uri: string;
   from_id: string;
   to_id: string;
   type: string;
   weight: number;
+  commit_uri?: string | null;
   [k: string]: unknown;
 };
 
@@ -652,6 +670,7 @@ export type RecallCitationDto = {
   node_id: string;
   uri?: string;
   commit_id?: string | null;
+  commit_uri?: string;
   raw_ref?: string | null;
   evidence_ref?: string | null;
   [k: string]: unknown;
@@ -741,6 +760,18 @@ export type MemoryFindResponse = {
   [k: string]: unknown;
 };
 
+export type MemoryResolveResponse = {
+  tenant_id: string;
+  scope: string;
+  uri: string;
+  type: "event" | "entity" | "topic" | "rule" | "evidence" | "concept" | "procedure" | "self_model" | "edge" | "commit" | "decision";
+  node?: Record<string, unknown>;
+  edge?: Record<string, unknown>;
+  commit?: Record<string, unknown>;
+  decision?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
 export type MemorySessionCreateResponse = {
   tenant_id: string;
   scope: string;
@@ -748,6 +779,7 @@ export type MemorySessionCreateResponse = {
   session_node_id: string | null;
   session_uri: string | null;
   commit_id: string;
+  commit_uri?: string;
   commit_hash: string;
   nodes: Array<{ id: string; client_id?: string; type: string }>;
   edges: Array<Record<string, unknown>>;
@@ -765,6 +797,7 @@ export type MemoryEventWriteResponse = {
   event_uri: string | null;
   session_uri: string | null;
   commit_id: string;
+  commit_uri?: string;
   commit_hash: string;
   nodes: Array<{ id: string; client_id?: string; type: string }>;
   edges: Array<Record<string, unknown>>;
@@ -865,6 +898,7 @@ export type ToolsSelectResponse = {
   rules: Record<string, unknown>;
   decision?: {
     decision_id: string;
+    decision_uri?: string;
     run_id: string | null;
     selected_tool: string | null;
     policy_sha256: string;
@@ -880,6 +914,7 @@ export type ToolsDecisionResponse = {
   scope: string;
   decision: {
     decision_id: string;
+    decision_uri?: string;
     decision_kind: "tools_select";
     run_id: string | null;
     selected_tool: string | null;
@@ -890,6 +925,7 @@ export type ToolsDecisionResponse = {
     metadata: Record<string, unknown>;
     created_at: string;
     commit_id: string | null;
+    commit_uri?: string | null;
     [k: string]: unknown;
   };
   [k: string]: unknown;
@@ -902,8 +938,10 @@ export type ToolsFeedbackResponse = {
   updated_rules: number;
   rule_node_ids: string[];
   commit_id: string | null;
+  commit_uri?: string;
   commit_hash: string | null;
   decision_id?: string;
+  decision_uri?: string;
   decision_link_mode?: "provided" | "inferred" | "created_from_feedback";
   decision_policy_sha256?: string;
   [k: string]: unknown;

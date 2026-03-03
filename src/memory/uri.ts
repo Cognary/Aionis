@@ -1,8 +1,10 @@
 import { badRequest } from "../util/http.js";
 
 const URI_SCHEME = "aionis://";
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const NODE_TYPES = new Set([
+// Accept canonical UUID text shape without enforcing RFC variant/version bits,
+// so older/backfilled IDs remain URI-addressable.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const AIONIS_URI_NODE_TYPES = [
   "event",
   "entity",
   "topic",
@@ -11,7 +13,16 @@ const NODE_TYPES = new Set([
   "concept",
   "procedure",
   "self_model",
-]);
+] as const;
+
+export const AIONIS_URI_OBJECT_TYPES = [
+  ...AIONIS_URI_NODE_TYPES,
+  "edge",
+  "commit",
+  "decision",
+] as const;
+
+const URI_OBJECT_TYPES = new Set<string>(AIONIS_URI_OBJECT_TYPES);
 
 export type AionisUriParts = {
   tenant_id: string;
@@ -47,8 +58,8 @@ export function parseAionisUri(uri: string): AionisUriParts {
   const type = decodeUriSegment(parts[2] ?? "", "type");
   const id = decodeUriSegment(parts[3] ?? "", "id");
 
-  if (!NODE_TYPES.has(type)) {
-    badRequest("invalid_aionis_uri", "URI type is not a supported node type", { type });
+  if (!URI_OBJECT_TYPES.has(type)) {
+    badRequest("invalid_aionis_uri", "URI type is not supported", { type });
   }
   if (!UUID_RE.test(id)) {
     badRequest("invalid_aionis_uri", "URI id must be a UUID", { id });
@@ -64,6 +75,12 @@ export function buildAionisUri(input: AionisUriParts): string {
   const id = String(input.id ?? "").trim();
   if (!tenant_id || !scope || !type || !id) {
     badRequest("invalid_aionis_uri_parts", "tenant_id, scope, type, id are required for URI generation");
+  }
+  if (!URI_OBJECT_TYPES.has(type)) {
+    badRequest("invalid_aionis_uri_parts", "type is not supported for URI generation", { type });
+  }
+  if (!UUID_RE.test(id)) {
+    badRequest("invalid_aionis_uri_parts", "id must be a UUID for URI generation", { id });
   }
   return `${URI_SCHEME}${encodeURIComponent(tenant_id)}/${encodeURIComponent(scope)}/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
 }

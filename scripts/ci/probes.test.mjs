@@ -5,6 +5,12 @@ import test from "node:test";
 
 const ROOT = new URL("../../", import.meta.url).pathname;
 
+function buildUri(req, type, id) {
+  const tenantId = String(req?.body?.tenant_id ?? "default");
+  const scope = String(req?.body?.scope ?? "default");
+  return `aionis://${encodeURIComponent(tenantId)}/${encodeURIComponent(scope)}/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
+}
+
 function runNodeScript(scriptRelPath, env = {}) {
   return new Promise((resolve) => {
     const child = spawn("node", [scriptRelPath], {
@@ -404,6 +410,9 @@ test("capability probe forces shadow soft-degrade when include flag is true", as
 test("policy-planner probe marks planning as skipped on no_embedding_provider", async () => {
   let selectedRunId = "";
   let selectedTool = "tool_a";
+  const providedDecisionId = "11111111-1111-4111-8111-111111111111";
+  const createdDecisionId = "11111111-1111-4111-8111-222222222222";
+  const commitId = "11111111-1111-4111-8111-aaaaaaaaaaaa";
   const mock = await createMockServer(async (req) => {
     if (req.path === "/v1/memory/write") {
       return {
@@ -437,7 +446,10 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
       return {
         status: 200,
         body: {
-          decision: { decision_id: "decision_provided_1" },
+          decision: {
+            decision_id: providedDecisionId,
+            decision_uri: buildUri(req, "decision", providedDecisionId),
+          },
           selection: {
             selected: cands[0] ?? null,
             ordered: cands,
@@ -466,6 +478,8 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
             metadata: {},
             created_at: new Date().toISOString(),
             commit_id: null,
+            decision_uri: buildUri(req, "decision", decisionId),
+            commit_uri: null,
           },
         },
       };
@@ -477,7 +491,9 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
           status: 200,
           body: {
             updated_rules: 1,
-            decision_id: "decision_provided_1",
+            decision_id: providedDecisionId,
+            decision_uri: buildUri(req, "decision", providedDecisionId),
+            commit_uri: buildUri(req, "commit", commitId),
             decision_link_mode: "provided",
           },
         };
@@ -487,7 +503,9 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
           status: 200,
           body: {
             updated_rules: 1,
-            decision_id: "decision_created_1",
+            decision_id: createdDecisionId,
+            decision_uri: buildUri(req, "decision", createdDecisionId),
+            commit_uri: buildUri(req, "commit", commitId),
             decision_link_mode: "created_from_feedback",
           },
         };
@@ -496,7 +514,9 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
         status: 200,
         body: {
           updated_rules: 1,
-          decision_id: "decision_provided_1",
+          decision_id: providedDecisionId,
+          decision_uri: buildUri(req, "decision", providedDecisionId),
+          commit_uri: buildUri(req, "commit", commitId),
           decision_link_mode: "inferred",
         },
       };
@@ -547,6 +567,9 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
 test("policy-planner probe validates diagnostics context_assembly dual metrics", async () => {
   let selectedRunId = "";
   let selectedTool = "tool_a";
+  const providedDecisionId = "22222222-2222-4222-8222-111111111111";
+  const createdDecisionId = "22222222-2222-4222-8222-222222222222";
+  const commitId = "22222222-2222-4222-8222-aaaaaaaaaaaa";
   const mock = await createMockServer(async (req) => {
     if (req.path === "/v1/memory/write") {
       return {
@@ -580,7 +603,10 @@ test("policy-planner probe validates diagnostics context_assembly dual metrics",
       return {
         status: 200,
         body: {
-          decision: { decision_id: "decision_diag_1" },
+          decision: {
+            decision_id: providedDecisionId,
+            decision_uri: buildUri(req, "decision", providedDecisionId),
+          },
           selection: { selected: cands[0] ?? null, ordered: cands },
           rules: {},
         },
@@ -606,6 +632,8 @@ test("policy-planner probe validates diagnostics context_assembly dual metrics",
             metadata: {},
             created_at: new Date().toISOString(),
             commit_id: null,
+            decision_uri: buildUri(req, "decision", decisionId),
+            commit_uri: null,
           },
         },
       };
@@ -617,7 +645,9 @@ test("policy-planner probe validates diagnostics context_assembly dual metrics",
           status: 200,
           body: {
             updated_rules: 1,
-            decision_id: "decision_diag_1",
+            decision_id: providedDecisionId,
+            decision_uri: buildUri(req, "decision", providedDecisionId),
+            commit_uri: buildUri(req, "commit", commitId),
             decision_link_mode: "provided",
           },
         };
@@ -627,7 +657,9 @@ test("policy-planner probe validates diagnostics context_assembly dual metrics",
           status: 200,
           body: {
             updated_rules: 1,
-            decision_id: "decision_diag_created_1",
+            decision_id: createdDecisionId,
+            decision_uri: buildUri(req, "decision", createdDecisionId),
+            commit_uri: buildUri(req, "commit", commitId),
             decision_link_mode: "created_from_feedback",
           },
         };
@@ -636,7 +668,9 @@ test("policy-planner probe validates diagnostics context_assembly dual metrics",
         status: 200,
         body: {
           updated_rules: 1,
-          decision_id: "decision_diag_1",
+          decision_id: providedDecisionId,
+          decision_uri: buildUri(req, "decision", providedDecisionId),
+          commit_uri: buildUri(req, "commit", commitId),
           decision_link_mode: "inferred",
         },
       };
@@ -740,6 +774,9 @@ test("policy-planner probe validates diagnostics context_assembly dual metrics",
 test("policy-planner probe fails when planning/tools selected mismatch", async () => {
   let selectedRunId = "";
   let selectedTool = "tool_a";
+  const providedDecisionId = "33333333-3333-4333-8333-111111111111";
+  const createdDecisionId = "33333333-3333-4333-8333-222222222222";
+  const commitId = "33333333-3333-4333-8333-aaaaaaaaaaaa";
   const mock = await createMockServer(async (req) => {
     if (req.path === "/v1/memory/write") {
       return {
@@ -773,7 +810,10 @@ test("policy-planner probe fails when planning/tools selected mismatch", async (
       return {
         status: 200,
         body: {
-          decision: { decision_id: "decision_provided_2" },
+          decision: {
+            decision_id: providedDecisionId,
+            decision_uri: buildUri(req, "decision", providedDecisionId),
+          },
           selection: { selected: cands[0] ?? null, ordered: cands },
           rules: {},
         },
@@ -799,6 +839,8 @@ test("policy-planner probe fails when planning/tools selected mismatch", async (
             metadata: {},
             created_at: new Date().toISOString(),
             commit_id: null,
+            decision_uri: buildUri(req, "decision", decisionId),
+            commit_uri: null,
           },
         },
       };
@@ -810,7 +852,9 @@ test("policy-planner probe fails when planning/tools selected mismatch", async (
           status: 200,
           body: {
             updated_rules: 1,
-            decision_id: "decision_provided_2",
+            decision_id: providedDecisionId,
+            decision_uri: buildUri(req, "decision", providedDecisionId),
+            commit_uri: buildUri(req, "commit", commitId),
             decision_link_mode: "provided",
           },
         };
@@ -820,7 +864,9 @@ test("policy-planner probe fails when planning/tools selected mismatch", async (
           status: 200,
           body: {
             updated_rules: 1,
-            decision_id: "decision_created_2",
+            decision_id: createdDecisionId,
+            decision_uri: buildUri(req, "decision", createdDecisionId),
+            commit_uri: buildUri(req, "commit", commitId),
             decision_link_mode: "created_from_feedback",
           },
         };
@@ -829,7 +875,9 @@ test("policy-planner probe fails when planning/tools selected mismatch", async (
         status: 200,
         body: {
           updated_rules: 1,
-          decision_id: "decision_provided_2",
+          decision_id: providedDecisionId,
+          decision_uri: buildUri(req, "decision", providedDecisionId),
+          commit_uri: buildUri(req, "commit", commitId),
           decision_link_mode: "inferred",
         },
       };
