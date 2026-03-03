@@ -56,6 +56,9 @@ type CommitRow = {
   prompt_version: string | null;
   commit_hash: string;
   created_at: string;
+  node_count: number;
+  edge_count: number;
+  decision_count: number;
 };
 
 type DecisionRow = {
@@ -171,17 +174,32 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
     const rr = await client.query<CommitRow>(
       `
       SELECT
-        id::text AS id,
-        parent_id::text AS parent_id,
-        input_sha256,
-        diff_json,
-        actor,
-        model_version,
-        prompt_version,
-        commit_hash,
-        created_at::text AS created_at
-      FROM memory_commits
-      WHERE scope = $1 AND id = $2::uuid
+        c.id::text AS id,
+        c.parent_id::text AS parent_id,
+        c.input_sha256,
+        c.diff_json,
+        c.actor,
+        c.model_version,
+        c.prompt_version,
+        c.commit_hash,
+        c.created_at::text AS created_at,
+        (
+          SELECT count(*)::int
+          FROM memory_nodes n
+          WHERE n.scope = c.scope AND n.commit_id = c.id
+        ) AS node_count,
+        (
+          SELECT count(*)::int
+          FROM memory_edges e
+          WHERE e.scope = c.scope AND e.commit_id = c.id
+        ) AS edge_count,
+        (
+          SELECT count(*)::int
+          FROM memory_execution_decisions d
+          WHERE d.scope = c.scope AND d.commit_id = c.id
+        ) AS decision_count
+      FROM memory_commits c
+      WHERE c.scope = $1 AND c.id = $2::uuid
       LIMIT 1
       `,
       [tenancy.scope_key, uriParts.id],
@@ -208,6 +226,12 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
         prompt_version: row.prompt_version,
         commit_hash: row.commit_hash,
         created_at: row.created_at,
+        linked_object_counts: {
+          nodes: Number(row.node_count ?? 0),
+          edges: Number(row.edge_count ?? 0),
+          decisions: Number(row.decision_count ?? 0),
+          total: Number(row.node_count ?? 0) + Number(row.edge_count ?? 0) + Number(row.decision_count ?? 0),
+        },
       },
     };
   }

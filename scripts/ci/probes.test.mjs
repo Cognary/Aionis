@@ -521,6 +521,27 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
         },
       };
     }
+    if (req.path === "/v1/memory/resolve") {
+      const uri = String(req.body?.uri ?? "");
+      if (uri.includes("/rule/")) {
+        return { status: 200, body: { node: { uri } } };
+      }
+      if (uri.includes("/decision/")) {
+        return { status: 200, body: { decision: { decision_uri: uri } } };
+      }
+      if (uri.includes("/commit/")) {
+        return {
+          status: 200,
+          body: {
+            commit: {
+              uri,
+              linked_object_counts: { nodes: 1, edges: 0, decisions: 1, total: 2 },
+            },
+          },
+        };
+      }
+      return { status: 404, body: { error: "not_found" } };
+    }
     if (req.path === "/v1/memory/planning/context") {
       return {
         status: 400,
@@ -559,6 +580,9 @@ test("policy-planner probe marks planning as skipped on no_embedding_provider", 
     assert.equal(parsed.results.provenance.provided.decision_link_mode, "provided");
     assert.equal(parsed.results.provenance.inferred.decision_link_mode, "inferred");
     assert.equal(parsed.results.provenance.created_from_feedback.decision_link_mode, "created_from_feedback");
+    assert.equal(parsed.results.resolve.skipped, false);
+    assert.equal(parsed.results.pack_export_decisions.skipped, true);
+    assert.equal(parsed.results.pack_export_decisions.reason, "admin_token_missing");
   } finally {
     await mock.close();
   }
@@ -675,6 +699,41 @@ test("policy-planner probe validates diagnostics context_assembly dual metrics",
         },
       };
     }
+    if (req.path === "/v1/memory/resolve") {
+      const uri = String(req.body?.uri ?? "");
+      if (uri.includes("/rule/")) {
+        return { status: 200, body: { node: { uri } } };
+      }
+      if (uri.includes("/decision/")) {
+        return { status: 200, body: { decision: { decision_uri: uri } } };
+      }
+      if (uri.includes("/commit/")) {
+        return {
+          status: 200,
+          body: {
+            commit: {
+              uri,
+              linked_object_counts: { nodes: 2, edges: 1, decisions: 1, total: 4 },
+            },
+          },
+        };
+      }
+      return { status: 404, body: { error: "not_found" } };
+    }
+    if (req.path === "/v1/memory/packs/export") {
+      return {
+        status: 200,
+        body: {
+          manifest: {
+            counts: { nodes: 0, edges: 0, commits: 0, decisions: 1 },
+            truncated: { nodes: false, edges: false, commits: false, decisions: false },
+          },
+          pack: {
+            decisions: [{ decision_uri: buildUri(req, "decision", providedDecisionId) }],
+          },
+        },
+      };
+    }
     if (req.path === "/v1/memory/planning/context") {
       const cands = Array.isArray(req.body?.tool_candidates) ? req.body.tool_candidates.map((v) => String(v)) : ["tool_a", "tool_b"];
       return {
@@ -766,6 +825,9 @@ test("policy-planner probe validates diagnostics context_assembly dual metrics",
     assert.equal(parsed.results.diagnostics.context_assembly.total, 2);
     assert.equal(parsed.results.diagnostics.context_assembly.layered_total, 1);
     assert.equal(parsed.results.diagnostics.context_assembly.layered_adoption_rate, 0.5);
+    assert.equal(parsed.results.resolve.skipped, false);
+    assert.equal(parsed.results.pack_export_decisions.skipped, false);
+    assert.equal(parsed.results.pack_export_decisions.decisions_count, 1);
   } finally {
     await mock.close();
   }
@@ -881,6 +943,27 @@ test("policy-planner probe fails when planning/tools selected mismatch", async (
           decision_link_mode: "inferred",
         },
       };
+    }
+    if (req.path === "/v1/memory/resolve") {
+      const uri = String(req.body?.uri ?? "");
+      if (uri.includes("/rule/")) {
+        return { status: 200, body: { node: { uri } } };
+      }
+      if (uri.includes("/decision/")) {
+        return { status: 200, body: { decision: { decision_uri: uri } } };
+      }
+      if (uri.includes("/commit/")) {
+        return {
+          status: 200,
+          body: {
+            commit: {
+              uri,
+              linked_object_counts: { nodes: 1, edges: 0, decisions: 1, total: 2 },
+            },
+          },
+        };
+      }
+      return { status: 404, body: { error: "not_found" } };
     }
     if (req.path === "/v1/memory/planning/context") {
       const cands = Array.isArray(req.body?.tool_candidates) ? req.body.tool_candidates.map((v) => String(v)) : ["tool_a", "tool_b"];

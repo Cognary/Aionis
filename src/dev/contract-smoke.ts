@@ -228,6 +228,9 @@ class ResolveFixturePgClient {
             prompt_version: "test",
             commit_hash: "b".repeat(64),
             created_at: new Date().toISOString(),
+            node_count: 2,
+            edge_count: 1,
+            decision_count: 1,
           } as any,
         ] as T[],
         rowCount: 1,
@@ -2279,6 +2282,12 @@ async function run() {
   assert.equal((resolvedCommit as any).type, "commit");
   assert.equal((resolvedCommit as any).commit?.uri, commitUri);
   assert.equal((resolvedCommit as any).commit?.parent_uri, "aionis://default/default/commit/00000000-0000-0000-0000-00000000c100");
+  assert.deepEqual((resolvedCommit as any).commit?.linked_object_counts, {
+    nodes: 2,
+    edges: 1,
+    decisions: 1,
+    total: 4,
+  });
 
   const resolvedDecision = await memoryResolve(
     resolveClient as any,

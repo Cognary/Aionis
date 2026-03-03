@@ -20,6 +20,14 @@ Started implementation and completed first production slice:
 8. Upgraded `packs/export` to URI-first artifacts (`nodes/edges/commits` now include canonical URI fields).
 9. Added contract-smoke coverage for `memory/resolve` typed payload resolution and filter conflict handling.
 10. Added optional decision export (`include_decisions`) so replay bundles can include URI-linked `decision -> commit` provenance objects.
+11. Added CI probe coverage for `/v1/memory/resolve` and `packs/export(include_decisions=true)`, including commit linked-object count checks.
+
+## Phase Status
+
+1. `P1 Edge URI`: completed
+2. `P2 Commit URI`: completed
+3. `P3 Decision URI`: completed
+4. `P4 Unified resolver + trajectory linking + URI-first export`: completed
 
 ## Goal
 

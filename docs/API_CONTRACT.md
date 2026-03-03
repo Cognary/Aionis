@@ -264,7 +264,8 @@ Canonical object resolver for URI-first retrieval across node and non-node objec
 - object payload by resolved type:
   - `node?: NodeDTO`
   - `edge?: { id, uri, type, src_id, src_uri, dst_id, dst_uri, weight, confidence, decay_rate, last_activated, created_at, commit_id, commit_uri }`
-  - `commit?: { id, uri, parent_id, parent_uri, input_sha256, diff_json, actor, model_version, prompt_version, commit_hash, created_at }`
+  - `commit?: { id, uri, parent_id, parent_uri, input_sha256, diff_json, actor, model_version, prompt_version, commit_hash, created_at, linked_object_counts }`
+    - `linked_object_counts: { nodes, edges, decisions, total }`
   - `decision?: { decision_id, decision_uri, decision_kind, run_id, selected_tool, candidates, context_sha256, policy_sha256, source_rule_ids, metadata, created_at, commit_id, commit_uri }`
 
 Error behavior:

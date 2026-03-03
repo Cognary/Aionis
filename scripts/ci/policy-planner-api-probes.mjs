@@ -223,6 +223,139 @@ async function probeToolsDecisionReadback({ decisionId, expectedRunId, expectedS
   return out.body;
 }
 
+async function probeResolveChain({ ruleNodeId, decisionUri, commitUri }) {
+  const nodeUri = `aionis://${encodeURIComponent(tenantId)}/${encodeURIComponent(scope)}/rule/${encodeURIComponent(ruleNodeId)}`;
+
+  const nodeOut = await postJson(
+    baseUrl,
+    "/v1/memory/resolve",
+    {
+      tenant_id: tenantId,
+      scope,
+      uri: nodeUri,
+    },
+    headers,
+    label,
+  );
+  if (nodeOut.status === 404) {
+    return { skipped: true, reason: "resolve_endpoint_or_payload_unavailable", status: nodeOut.status };
+  }
+  ensure(nodeOut.status === 200, `${label}: resolve node must return 200 (got ${nodeOut.status})`);
+  ensure(nodeOut.body?.node && typeof nodeOut.body.node === "object", `${label}: resolve node missing node payload`);
+  ensure(typeof nodeOut.body?.node?.uri === "string", `${label}: resolve node missing node.uri`);
+
+  const decisionOut = await postJson(
+    baseUrl,
+    "/v1/memory/resolve",
+    {
+      tenant_id: tenantId,
+      scope,
+      uri: decisionUri,
+    },
+    headers,
+    label,
+  );
+  ensure(decisionOut.status === 200, `${label}: resolve decision must return 200 (got ${decisionOut.status})`);
+  ensure(decisionOut.body?.decision && typeof decisionOut.body.decision === "object", `${label}: resolve decision missing decision payload`);
+  ensure(
+    String(decisionOut.body?.decision?.decision_uri ?? "") === String(decisionUri),
+    `${label}: resolve decision_uri mismatch`,
+  );
+
+  const commitOut = await postJson(
+    baseUrl,
+    "/v1/memory/resolve",
+    {
+      tenant_id: tenantId,
+      scope,
+      uri: commitUri,
+    },
+    headers,
+    label,
+  );
+  ensure(commitOut.status === 200, `${label}: resolve commit must return 200 (got ${commitOut.status})`);
+  ensure(commitOut.body?.commit && typeof commitOut.body.commit === "object", `${label}: resolve commit missing commit payload`);
+  ensure(
+    typeof commitOut.body?.commit?.linked_object_counts?.nodes === "number",
+    `${label}: resolve commit missing linked_object_counts.nodes`,
+  );
+  ensure(
+    typeof commitOut.body?.commit?.linked_object_counts?.edges === "number",
+    `${label}: resolve commit missing linked_object_counts.edges`,
+  );
+  ensure(
+    typeof commitOut.body?.commit?.linked_object_counts?.decisions === "number",
+    `${label}: resolve commit missing linked_object_counts.decisions`,
+  );
+  ensure(
+    typeof commitOut.body?.commit?.linked_object_counts?.total === "number",
+    `${label}: resolve commit missing linked_object_counts.total`,
+  );
+
+  return {
+    skipped: false,
+    node_uri: nodeOut.body?.node?.uri ?? null,
+    decision_uri: decisionOut.body?.decision?.decision_uri ?? null,
+    commit_uri: commitOut.body?.commit?.uri ?? null,
+    linked_object_counts: commitOut.body?.commit?.linked_object_counts ?? null,
+  };
+}
+
+async function probePackExportDecisionUris() {
+  if (!hasAdminToken) {
+    return { skipped: true, reason: "admin_token_missing", status: 0 };
+  }
+  const out = await postJson(
+    baseUrl,
+    "/v1/memory/packs/export",
+    {
+      tenant_id: tenantId,
+      scope,
+      include_nodes: false,
+      include_edges: false,
+      include_commits: false,
+      include_decisions: true,
+      include_meta: false,
+      max_rows: 20,
+    },
+    adminHeaders,
+    label,
+  );
+
+  if (out.status === 401 || out.status === 403) {
+    return { skipped: true, reason: "admin_unauthorized", status: out.status };
+  }
+  if (out.status === 404) {
+    return { skipped: true, reason: "packs_export_unavailable", status: out.status };
+  }
+  if (out.status === 501 && out.body?.error === "backend_capability_unsupported") {
+    return { skipped: true, reason: "packs_export_capability_disabled", status: out.status };
+  }
+
+  ensure(out.status === 200, `${label}: packs/export include_decisions must return 200 (got ${out.status})`);
+  ensure(
+    typeof out.body?.manifest?.counts?.decisions === "number",
+    `${label}: packs/export manifest.counts.decisions missing`,
+  );
+  ensure(
+    typeof out.body?.manifest?.truncated?.decisions === "boolean",
+    `${label}: packs/export manifest.truncated.decisions missing`,
+  );
+  ensure(Array.isArray(out.body?.pack?.decisions), `${label}: packs/export pack.decisions must be array`);
+
+  const first = out.body.pack.decisions[0];
+  if (first) {
+    ensure(typeof first.decision_uri === "string", `${label}: packs/export decision row missing decision_uri`);
+  }
+
+  return {
+    skipped: false,
+    decisions: out.body.pack.decisions.length,
+    decisions_truncated: out.body.manifest.truncated.decisions,
+    decisions_count: out.body.manifest.counts.decisions,
+  };
+}
+
 async function probePlanningContext() {
   const out = await postJson(
     baseUrl,
@@ -398,6 +531,12 @@ try {
   const planning = await probePlanningContext();
   const assembled = await probeContextAssemble();
   const diagnostics = await probeDiagnostics();
+  const resolve = await probeResolveChain({
+    ruleNodeId: String(setup.rule_node_id),
+    decisionUri: String(feedbackProvided.decision_uri),
+    commitUri: String(feedbackProvided.commit_uri),
+  });
+  const packExportDecisions = await probePackExportDecisionUris();
 
   if (!planning.skipped) {
     ensure(
@@ -458,6 +597,16 @@ try {
       diagnostics: {
         scope,
         window_minutes: 60,
+      },
+      resolve: {
+        object_types: ["rule", "decision", "commit"],
+      },
+      pack_export_decisions: {
+        include_nodes: false,
+        include_edges: false,
+        include_commits: false,
+        include_decisions: true,
+        include_meta: false,
       },
     },
     results: {
@@ -538,6 +687,31 @@ try {
               layered_total: Number(diagnostics.body?.diagnostics?.context_assembly?.layered_total ?? 0),
               layered_adoption_rate: Number(diagnostics.body?.diagnostics?.context_assembly?.layered_adoption_rate ?? 0),
             },
+          },
+      resolve: resolve.skipped
+        ? {
+            skipped: true,
+            reason: resolve.reason,
+            status: resolve.status,
+          }
+        : {
+            skipped: false,
+            node_uri: resolve.node_uri,
+            decision_uri: resolve.decision_uri,
+            commit_uri: resolve.commit_uri,
+            linked_object_counts: resolve.linked_object_counts,
+          },
+      pack_export_decisions: packExportDecisions.skipped
+        ? {
+            skipped: true,
+            reason: packExportDecisions.reason,
+            status: packExportDecisions.status,
+          }
+        : {
+            skipped: false,
+            decisions: packExportDecisions.decisions,
+            decisions_count: packExportDecisions.decisions_count,
+            decisions_truncated: packExportDecisions.decisions_truncated,
           },
     },
   };
