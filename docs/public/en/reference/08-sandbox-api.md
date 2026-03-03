@@ -14,7 +14,7 @@ Required environment toggles:
 
 1. `SANDBOX_ENABLED=true`
 2. `SANDBOX_EXECUTOR_MODE=mock|local_process|http_remote`
-3. `SANDBOX_ALLOWED_COMMANDS_JSON=["echo","python3", ...]`
+3. `SANDBOX_ALLOWED_COMMANDS_JSON='["echo","python3", ...]'`
 
 Remote executor (when `SANDBOX_EXECUTOR_MODE=http_remote`):
 

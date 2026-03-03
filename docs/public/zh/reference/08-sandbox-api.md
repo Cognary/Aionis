@@ -14,7 +14,7 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
 
 1. `SANDBOX_ENABLED=true`
 2. `SANDBOX_EXECUTOR_MODE=mock|local_process|http_remote`
-3. `SANDBOX_ALLOWED_COMMANDS_JSON=["echo","python3", ...]`
+3. `SANDBOX_ALLOWED_COMMANDS_JSON='["echo","python3", ...]'`
 
 当 `SANDBOX_EXECUTOR_MODE=http_remote` 时还需配置：
 
