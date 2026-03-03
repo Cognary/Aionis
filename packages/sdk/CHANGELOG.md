@@ -4,6 +4,13 @@ All notable changes to `@aionis/sdk` will be documented in this file.
 
 The format is based on Keep a Changelog and this package follows SemVer.
 
+## [Unreleased]
+
+### Changed
+
+1. Added `toolsRun(...)` client method for `POST /v1/memory/tools/run` lifecycle inspection (`run_id` decisions + feedback linkage).
+2. Extended `toolsDecision(...)` request typing to support `run_id` lookup mode and response typing for `lookup_mode`.
+
 ## [0.2.3] - 2026-03-02
 
 ### Changed

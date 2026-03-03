@@ -32,6 +32,7 @@ export async function getToolsDecisionById(
   );
   const scope = tenancy.scope_key;
   let decisionId = parsed.decision_id ?? null;
+  const runId = parsed.run_id ?? null;
   if (parsed.decision_uri) {
     const uriParts = parseAionisUri(parsed.decision_uri);
     if (uriParts.type !== "decision") {
@@ -57,44 +58,84 @@ export async function getToolsDecisionById(
     }
     decisionId = uriParts.id;
   }
-  if (!decisionId) {
-    throw new HttpError(400, "invalid_request", "decision_id or decision_uri is required");
+  if (!decisionId && !runId) {
+    throw new HttpError(400, "invalid_request", "decision_id, decision_uri, or run_id is required");
   }
 
-  const res = await client.query<DecisionRow>(
-    `
-    SELECT
-      id::text,
-      scope,
-      decision_kind::text AS decision_kind,
-      run_id,
-      selected_tool,
-      candidates_json,
-      context_sha256,
-      policy_sha256,
-      source_rule_ids::text[] AS source_rule_ids,
-      metadata_json,
-      created_at::text AS created_at,
-      commit_id::text AS commit_id
-    FROM memory_execution_decisions
-    WHERE scope = $1
-      AND id = $2
-    LIMIT 1
-    `,
-    [scope, decisionId],
-  );
+  const res = decisionId
+    ? await client.query<DecisionRow>(
+        `
+        SELECT
+          id::text,
+          scope,
+          decision_kind::text AS decision_kind,
+          run_id,
+          selected_tool,
+          candidates_json,
+          context_sha256,
+          policy_sha256,
+          source_rule_ids::text[] AS source_rule_ids,
+          metadata_json,
+          created_at::text AS created_at,
+          commit_id::text AS commit_id
+        FROM memory_execution_decisions
+        WHERE scope = $1
+          AND id = $2
+        LIMIT 1
+        `,
+        [scope, decisionId],
+      )
+    : await client.query<DecisionRow>(
+        `
+        SELECT
+          id::text,
+          scope,
+          decision_kind::text AS decision_kind,
+          run_id,
+          selected_tool,
+          candidates_json,
+          context_sha256,
+          policy_sha256,
+          source_rule_ids::text[] AS source_rule_ids,
+          metadata_json,
+          created_at::text AS created_at,
+          commit_id::text AS commit_id
+        FROM memory_execution_decisions
+        WHERE scope = $1
+          AND run_id = $2
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [scope, runId],
+      );
   const row = res.rows[0] ?? null;
   if (!row) {
-    throw new HttpError(404, "decision_not_found_in_scope", "decision_id was not found in this scope", {
-      decision_id: decisionId,
+    if (decisionId) {
+      throw new HttpError(404, "decision_not_found_in_scope", "decision_id was not found in this scope", {
+        decision_id: decisionId,
+        scope: tenancy.scope,
+        tenant_id: tenancy.tenant_id,
+      });
+    }
+    throw new HttpError(404, "decision_not_found_for_run", "run_id has no decision in this scope", {
+      run_id: runId,
       scope: tenancy.scope,
       tenant_id: tenancy.tenant_id,
+    });
+  }
+
+  if (decisionId && runId && row.run_id && row.run_id !== runId) {
+    throw new HttpError(400, "decision_run_id_mismatch", "decision_id run_id does not match request run_id", {
+      decision_id: decisionId,
+      decision_run_id: row.run_id,
+      request_run_id: runId,
     });
   }
 
   return {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
+    lookup_mode: decisionId ? "decision_id" : "run_id_latest",
     decision: {
       decision_id: row.id,
       decision_uri: buildAionisUri({

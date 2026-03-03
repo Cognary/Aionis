@@ -16,7 +16,7 @@ Aionis integrates with agent runtimes and orchestration frameworks through stabl
 
 1. Start with memory retrieval (`recall_text` or `context/assemble`).
 2. Add policy loop (`rules/evaluate`, `tools/select`).
-3. Add decision and feedback tracing (`tools/decision`, `tools/feedback`).
+3. Add decision and run lifecycle tracing (`tools/decision`, `tools/run`, `tools/feedback`).
 4. Enable replay/debug workflows using `resolve` and URI-linked objects.
 
 ## Integration Contract

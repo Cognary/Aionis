@@ -56,9 +56,10 @@ If you set custom headers manually, the SDK will not override existing auth head
 11. `rulesEvaluate`
 12. `toolsSelect`
 13. `toolsDecision`
-14. `toolsFeedback`
-15. `health`
-16. `getCapabilityContract`
+14. `toolsRun`
+15. `toolsFeedback`
+16. `health`
+17. `getCapabilityContract`
 
 Admin/control methods (require `admin_token`):
 

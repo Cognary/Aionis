@@ -12,7 +12,8 @@ Aionis 的策略闭环决定“记忆如何影响执行行为”。
 2. 在策略约束下选择工具。
 3. 记录决策溯源。
 4. 写入结果反馈。
-5. 在后续运行中复用更新后的策略信号。
+5. 用 `tools/run` 检查运行生命周期（决策与反馈关联）。
+6. 在后续运行中复用更新后的策略信号。
 
 ```mermaid
 flowchart LR
@@ -20,7 +21,8 @@ flowchart LR
   B --> C["tools/decision"]
   C --> D["execution result"]
   D --> E["tools/feedback"]
-  E --> A
+  E --> F["tools/run"]
+  F --> A
 ```
 
 ## 规则生命周期

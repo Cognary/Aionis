@@ -12,7 +12,8 @@ Aionis policy loop governs how memory influences execution behavior.
 2. Select tools under policy constraints.
 3. Record decision provenance.
 4. Capture outcome feedback.
-5. Reapply updated policy in future runs.
+5. Inspect run lifecycle (`tools/run`) for decision/feedback linkage.
+6. Reapply updated policy in future runs.
 
 ```mermaid
 flowchart LR
@@ -20,7 +21,8 @@ flowchart LR
   B --> C["tools/decision"]
   C --> D["execution result"]
   D --> E["tools/feedback"]
-  E --> A
+  E --> F["tools/run"]
+  F --> A
 ```
 
 ## Rule Lifecycle

@@ -8,6 +8,7 @@ import {
   RulesEvaluateRequest,
   ToolsDecisionRequest,
   ToolsFeedbackRequest,
+  ToolsRunRequest,
   ToolsSelectRequest,
 } from "../../dist/memory/schemas.js";
 
@@ -33,6 +34,7 @@ const validators = {
   tools_select: ToolsSelectRequest,
   tools_feedback: ToolsFeedbackRequest,
   tools_decision: ToolsDecisionRequest,
+  tools_run: ToolsRunRequest,
   memory_resolve: MemoryResolveRequest,
   context_assemble: ContextAssembleRequest,
 };

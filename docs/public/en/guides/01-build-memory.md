@@ -65,7 +65,8 @@ This stage lets policy influence execution, not only retrieval.
 Endpoints:
 
 1. `POST /v1/memory/tools/decision`
-2. `POST /v1/memory/tools/feedback`
+2. `POST /v1/memory/tools/run`
+3. `POST /v1/memory/tools/feedback`
 
 Persist these IDs for replay and optimization:
 

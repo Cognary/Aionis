@@ -14,6 +14,7 @@ import type {
   RulesEvaluateInput,
   ToolsDecisionInput,
   ToolsFeedbackInput,
+  ToolsRunInput,
   ToolsSelectInput,
 } from "../memory/schemas.js";
 
@@ -32,6 +33,7 @@ export type {
   RulesEvaluateInput,
   ToolsDecisionInput,
   ToolsFeedbackInput,
+  ToolsRunInput,
   ToolsSelectInput,
 };
 
@@ -726,6 +728,7 @@ export type ToolsSelectResponse = {
 export type ToolsDecisionResponse = {
   tenant_id: string;
   scope: string;
+  lookup_mode?: "decision_id" | "run_id_latest";
   decision: {
     decision_id: string;
     decision_uri?: string;
@@ -740,6 +743,57 @@ export type ToolsDecisionResponse = {
     created_at: string;
     commit_id: string | null;
     commit_uri?: string | null;
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+};
+
+export type ToolsRunResponse = {
+  tenant_id: string;
+  scope: string;
+  run_id: string;
+  lifecycle: {
+    status: "decision_recorded" | "feedback_linked";
+    decision_count: number;
+    latest_decision_at: string | null;
+    latest_feedback_at: string | null;
+  };
+  decisions: Array<{
+    decision_id: string;
+    decision_uri?: string;
+    decision_kind: "tools_select";
+    run_id: string | null;
+    selected_tool: string | null;
+    candidates: string[];
+    context_sha256: string;
+    policy_sha256: string;
+    source_rule_ids: string[];
+    metadata: Record<string, unknown>;
+    created_at: string;
+    commit_id: string | null;
+    commit_uri?: string | null;
+    [k: string]: unknown;
+  }>;
+  feedback?: {
+    total: number;
+    by_outcome: {
+      positive: number;
+      negative: number;
+      neutral: number;
+    };
+    linked_decision_count: number;
+    tools_feedback_count: number;
+    recent: Array<{
+      id: string;
+      rule_node_id: string;
+      outcome: "positive" | "negative" | "neutral";
+      note: string | null;
+      source: "rule_feedback" | "tools_feedback";
+      decision_id: string | null;
+      commit_id: string | null;
+      created_at: string;
+      [k: string]: unknown;
+    }>;
     [k: string]: unknown;
   };
   [k: string]: unknown;

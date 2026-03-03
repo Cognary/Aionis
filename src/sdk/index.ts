@@ -86,6 +86,8 @@ export {
   type ToolsDecisionResponse,
   type ToolsFeedbackInput,
   type ToolsFeedbackResponse,
+  type ToolsRunInput,
+  type ToolsRunResponse,
   type ToolsSelectInput,
   type ToolsSelectResponse,
 } from "./types.js";

@@ -65,6 +65,7 @@ Aionis goes beyond recall with policy-loop endpoints:
 1. `POST /v1/memory/tools/select`
 2. `POST /v1/memory/tools/feedback`
 3. `POST /v1/memory/tools/decision`
+4. `POST /v1/memory/tools/run`
 
 Related:
 
@@ -158,7 +159,9 @@ Aionis recommends a stable planner-context shape for deterministic rule matching
 
 1. `POST /v1/memory/rules/evaluate`
 2. `POST /v1/memory/tools/select`
-3. `POST /v1/memory/tools/feedback`
+3. `POST /v1/memory/tools/decision`
+4. `POST /v1/memory/tools/run`
+5. `POST /v1/memory/tools/feedback`
 
 Related:
 

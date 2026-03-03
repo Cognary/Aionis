@@ -64,6 +64,7 @@ import { updateRuleState } from "./memory/rules.js";
 import { evaluateRules } from "./memory/rules-evaluate.js";
 import { selectTools } from "./memory/tools-select.js";
 import { getToolsDecisionById } from "./memory/tools-decision.js";
+import { getToolsRunLifecycle } from "./memory/tools-run.js";
 import { toolSelectionFeedback } from "./memory/tools-feedback.js";
 import { estimateTokenCountFromText } from "./memory/context.js";
 import { assembleLayeredContext } from "./memory/context-orchestrator.js";
@@ -3297,6 +3298,25 @@ app.post("/v1/memory/tools/decision", async (req, reply) => {
   return reply.code(200).send(out);
 });
 
+// Run lifecycle helper: inspect decisions + linked feedback using run_id.
+// Intended for planner-runtime observability and end-to-end policy-loop tracing.
+app.post("/v1/memory/tools/run", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "tools_run");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient(async (client) => {
+      return await getToolsRunLifecycle(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID);
+    });
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
 // Feedback loop for tool selection: attribute a (positive/negative/neutral) outcome to matched rules.
 // This updates memory_rule_defs positive/negative counts to drive future rule ordering.
 app.post("/v1/memory/tools/feedback", async (req, reply) => {
@@ -3539,6 +3559,7 @@ function withIdentityFromRequest(
     | "rules_evaluate"
     | "tools_select"
     | "tools_decision"
+    | "tools_run"
     | "tools_feedback",
 ): unknown {
   if (!body || typeof body !== "object" || Array.isArray(body)) return body;

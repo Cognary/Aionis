@@ -65,6 +65,7 @@ feedback_payload: ToolsFeedbackInput = {
     "selected_tool": "curl",
 }
 client.tools_feedback(feedback_payload)
+client.tools_run({"scope": "default", "run_id": "run_001"})
 ```
 
 ## Auth Options
@@ -88,9 +89,10 @@ client.tools_feedback(feedback_payload)
 11. `rules_evaluate`
 12. `tools_select`
 13. `tools_decision`
-14. `tools_feedback`
-15. `health`
-16. `get_capability_contract`
+14. `tools_run`
+15. `tools_feedback`
+16. `health`
+17. `get_capability_contract`
 
 Admin/control methods (require `admin_token`):
 

@@ -62,7 +62,8 @@ title: "API 合约（硬约束）"
 4. `POST /v1/memory/resolve`：URI 统一解析（node/edge/commit/decision）。
 5. `POST /v1/memory/tools/select`：工具选择。
 6. `POST /v1/memory/tools/decision`：决策记录。
-7. `POST /v1/memory/tools/feedback`：反馈闭环。
+7. `POST /v1/memory/tools/run`：运行生命周期查询。
+8. `POST /v1/memory/tools/feedback`：反馈闭环。
 
 ## 上线前最小检查
 

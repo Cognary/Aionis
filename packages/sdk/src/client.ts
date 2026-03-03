@@ -76,6 +76,8 @@ import type {
   ToolsDecisionResponse,
   ToolsFeedbackInput,
   ToolsFeedbackResponse,
+  ToolsRunInput,
+  ToolsRunResponse,
   ToolsSelectInput,
   ToolsSelectResponse,
 } from "./types.js";
@@ -262,6 +264,10 @@ export class AionisClient {
 
   async toolsDecision(input: ToolsDecisionInput, opts?: RequestOptions): Promise<AionisResponse<ToolsDecisionResponse>> {
     return this.requestPost<ToolsDecisionInput, ToolsDecisionResponse>("/v1/memory/tools/decision", input, opts);
+  }
+
+  async toolsRun(input: ToolsRunInput, opts?: RequestOptions): Promise<AionisResponse<ToolsRunResponse>> {
+    return this.requestPost<ToolsRunInput, ToolsRunResponse>("/v1/memory/tools/run", input, opts);
   }
 
   async toolsFeedback(input: ToolsFeedbackInput, opts?: RequestOptions): Promise<AionisResponse<ToolsFeedbackResponse>> {

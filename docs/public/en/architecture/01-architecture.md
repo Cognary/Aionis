@@ -37,7 +37,8 @@ Aionis architecture is designed for reliability, replayability, and controlled e
 1. Runtime sends planner context to `rules/evaluate`.
 2. Policy constraints apply in `tools/select`.
 3. Decision is persisted via `tools/decision`.
-4. Outcome feedback is written via `tools/feedback`.
+4. Run lifecycle is inspected via `tools/run`.
+5. Outcome feedback is written via `tools/feedback`.
 
 ## Control Points
 

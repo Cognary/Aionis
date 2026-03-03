@@ -11,7 +11,8 @@ Aionis policy controls turn memory into governed execution behavior.
 1. `POST /v1/memory/rules/evaluate`
 2. `POST /v1/memory/tools/select`
 3. `POST /v1/memory/tools/decision`
-4. `POST /v1/memory/tools/feedback`
+4. `POST /v1/memory/tools/run`
+5. `POST /v1/memory/tools/feedback`
 
 ## What This Enables
 

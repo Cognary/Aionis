@@ -13,7 +13,8 @@ Aionis connects memory retrieval with execution control through:
 1. `rules/evaluate`
 2. `tools/select`
 3. `tools/decision`
-4. `tools/feedback`
+4. `tools/run`
+5. `tools/feedback`
 
 This makes memory influence behavior, not only prompts.
 

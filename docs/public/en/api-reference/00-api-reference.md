@@ -39,7 +39,8 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
 1. `POST /v1/memory/rules/evaluate`
 2. `POST /v1/memory/tools/select`
 3. `POST /v1/memory/tools/decision`
-4. `POST /v1/memory/tools/feedback`
+4. `POST /v1/memory/tools/run`
+5. `POST /v1/memory/tools/feedback`
 
 ### Sessions and Events
 
@@ -83,7 +84,8 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
 2. `recall_text` to verify retrieval quality.
 3. `context/assemble` for layered context.
 4. `rules/evaluate` and `tools/select` for governed routing.
-5. `resolve` using `commit_uri` or `decision_uri` for replay.
+5. `tools/decision` or `tools/run` for decision/run replay checks.
+6. `resolve` using `commit_uri` or `decision_uri` for replay.
 
 ## Contract and SDK
 

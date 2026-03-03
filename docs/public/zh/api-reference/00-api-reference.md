@@ -39,7 +39,8 @@ Memory 路由使用以下任一方式：
 1. `POST /v1/memory/rules/evaluate`
 2. `POST /v1/memory/tools/select`
 3. `POST /v1/memory/tools/decision`
-4. `POST /v1/memory/tools/feedback`
+4. `POST /v1/memory/tools/run`
+5. `POST /v1/memory/tools/feedback`
 
 ### 会话与事件
 
@@ -83,7 +84,8 @@ Memory 路由使用以下任一方式：
 2. 用 `recall_text` 验证召回质量。
 3. 用 `context/assemble` 验证分层上下文。
 4. 接入 `rules/evaluate` + `tools/select`。
-5. 用 `resolve` + URI 做回放。
+5. 用 `tools/decision` 或 `tools/run` 做决策/运行轨迹核查。
+6. 用 `resolve` + URI 做回放。
 
 ## 相关页面
 

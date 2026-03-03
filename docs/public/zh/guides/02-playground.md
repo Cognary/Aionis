@@ -15,8 +15,9 @@ title: "Playground"
 5. `POST /v1/memory/tools/select`
 6. `POST /v1/memory/tools/feedback`
 7. `POST /v1/memory/tools/decision`
-8. `POST /v1/memory/resolve`
-9. `POST /v1/memory/context/assemble`
+8. `POST /v1/memory/tools/run`
+9. `POST /v1/memory/resolve`
+10. `POST /v1/memory/context/assemble`
 
 ## 主要能力
 

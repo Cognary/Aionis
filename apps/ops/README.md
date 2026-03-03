@@ -21,6 +21,7 @@ Governance page (`/governance`):
 - `GET /v1/admin/control/diagnostics/tenant/:tenant_id`
 - `GET /v1/admin/control/audit-events`
 - `POST /v1/memory/tools/decision` (decision replay lookup; `decision_uri` preferred)
+- `POST /v1/memory/tools/run` (run lifecycle lookup by `run_id`)
 - `POST /v1/memory/resolve` (commit URI integrity check)
 
 Audit page (`/audit`):

@@ -555,11 +555,23 @@ export const ToolsDecisionRequest = z.object({
   scope: z.string().min(1).optional(),
   decision_id: UUID.optional(),
   decision_uri: z.string().min(1).optional(),
-}).refine((v) => !!v.decision_id || !!v.decision_uri, {
-  message: "must set decision_id or decision_uri",
+  run_id: z.string().min(1).optional(),
+}).refine((v) => !!v.decision_id || !!v.decision_uri || !!v.run_id, {
+  message: "must set decision_id, decision_uri, or run_id",
 });
 
 export type ToolsDecisionInput = z.infer<typeof ToolsDecisionRequest>;
+
+export const ToolsRunRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  run_id: z.string().min(1),
+  decision_limit: z.number().int().positive().max(200).default(10),
+  include_feedback: z.boolean().default(true),
+  feedback_limit: z.number().int().positive().max(200).default(50),
+});
+
+export type ToolsRunInput = z.infer<typeof ToolsRunRequest>;
 
 export const ToolsFeedbackRequest = z
   .object({

@@ -12,6 +12,7 @@ Planner context is the normalized runtime input used by Aionis policy and tool-s
 2. `POST /v1/memory/tools/select`
 3. `POST /v1/memory/planning/context`
 4. `POST /v1/memory/context/assemble`
+5. `POST /v1/memory/tools/run` (via `run_id` lifecycle lookup)
 
 ## Core Fields
 
@@ -31,6 +32,7 @@ Planner context is the normalized runtime input used by Aionis policy and tool-s
 2. Prefer normalized identifiers over free-form prompt text.
 3. Use the same context object for both rule evaluation and tool selection.
 4. Include `run.id` in every policy decision flow.
+5. Keep `run.id` stable from `tools/select` to `tools/feedback` and `tools/run`.
 
 ## Minimal Example
 

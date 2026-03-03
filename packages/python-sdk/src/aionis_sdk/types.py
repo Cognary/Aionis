@@ -379,6 +379,16 @@ class ToolsDecisionInput(TypedDict, total=False):
     scope: str
     decision_id: str
     decision_uri: str
+    run_id: str
+
+
+class ToolsRunInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run_id: str
+    decision_limit: int
+    include_feedback: bool
+    feedback_limit: int
 
 
 class ToolsFeedbackInput(TypedDict, total=False):
@@ -466,7 +476,44 @@ class ToolsDecisionPayload(TypedDict, total=False):
 class ToolsDecisionResponse(TypedDict, total=False):
     tenant_id: str
     scope: str
+    lookup_mode: Literal["decision_id", "run_id_latest"]
     decision: ToolsDecisionPayload
+
+
+class ToolsRunFeedbackItem(TypedDict, total=False):
+    id: str
+    rule_node_id: str
+    outcome: FeedbackOutcome
+    note: Optional[str]
+    source: Literal["rule_feedback", "tools_feedback"]
+    decision_id: Optional[str]
+    commit_id: Optional[str]
+    created_at: str
+
+
+class ToolsRunDecisionPayload(TypedDict, total=False):
+    decision_id: str
+    decision_uri: str
+    decision_kind: Literal["tools_select"]
+    run_id: Optional[str]
+    selected_tool: Optional[str]
+    candidates: List[str]
+    context_sha256: str
+    policy_sha256: str
+    source_rule_ids: List[str]
+    metadata: Dict[str, Any]
+    created_at: str
+    commit_id: Optional[str]
+    commit_uri: Optional[str]
+
+
+class ToolsRunResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run_id: str
+    lifecycle: Dict[str, Any]
+    decisions: List[ToolsRunDecisionPayload]
+    feedback: Dict[str, Any]
 
 
 class ControlTenantInput(TypedDict, total=False):
@@ -689,6 +736,10 @@ __all__ = [
     "ToolsDecisionResponse",
     "ToolsFeedbackInput",
     "ToolsFeedbackResponse",
+    "ToolsRunDecisionPayload",
+    "ToolsRunFeedbackItem",
+    "ToolsRunInput",
+    "ToolsRunResponse",
     "ToolsSelectDecision",
     "ToolsSelectInput",
     "ToolsSelectResponse",

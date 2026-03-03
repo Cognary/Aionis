@@ -110,7 +110,23 @@ export const OPERATION_LIST = [
     template: {
       tenant_id: "default",
       scope: "default",
+      run_id: "{{last.run_id}}",
       decision_uri: "{{last.decision_uri}}"
+    }
+  },
+  {
+    key: "tools_run",
+    label: "tools/run",
+    method: "POST",
+    path: "/v1/memory/tools/run",
+    description: "Inspect run lifecycle (decisions + linked feedback).",
+    template: {
+      tenant_id: "default",
+      scope: "default",
+      run_id: "{{last.run_id}}",
+      decision_limit: 10,
+      include_feedback: true,
+      feedback_limit: 20
     }
   },
   {
@@ -174,14 +190,15 @@ export const FLOW_PRESETS = [
   {
     key: "policy_closed_loop",
     label: "Policy Closed Loop",
-    description: "Add feedback and decision replay after selection",
+    description: "Add feedback plus decision and run-level replay checks",
     steps: [
       { operation: "write" },
       { operation: "recall_text" },
       { operation: "rules_evaluate" },
       { operation: "tools_select" },
       { operation: "tools_feedback" },
-      { operation: "tools_decision" }
+      { operation: "tools_decision" },
+      { operation: "tools_run" }
     ]
   },
   {

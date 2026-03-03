@@ -47,6 +47,7 @@ if TYPE_CHECKING:
         RulesEvaluateInput,
         ToolsDecisionInput,
         ToolsFeedbackInput,
+        ToolsRunInput,
         ToolsSelectInput,
         ShadowDualWriteStrictFailureDetails,
     )
@@ -288,6 +289,9 @@ class AionisClient:
 
     def tools_decision(self, payload: "ToolsDecisionInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/tools/decision", payload, request_options)
+
+    def tools_run(self, payload: "ToolsRunInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/tools/run", payload, request_options)
 
     def tools_feedback(self, payload: "ToolsFeedbackInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/tools/feedback", payload, request_options)

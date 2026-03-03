@@ -45,7 +45,8 @@ This page defines the public API contract for integrating Aionis in production.
 1. `POST /v1/memory/rules/evaluate`
 2. `POST /v1/memory/tools/select`
 3. `POST /v1/memory/tools/decision`
-4. `POST /v1/memory/tools/feedback`
+4. `POST /v1/memory/tools/run`
+5. `POST /v1/memory/tools/feedback`
 
 ## Core Response Fields
 

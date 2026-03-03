@@ -187,6 +187,8 @@ Endpoints:
 - `POST /v1/memory/feedback` record rule feedback and update rule stats
 - `POST /v1/memory/rules/evaluate` evaluate ACTIVE/SHADOW rules against planner context, including `agent_visibility_summary`
 - `POST /v1/memory/tools/select` apply rule tool policy (`allow/deny/prefer`) to candidates with deterministic selection
+- `POST /v1/memory/tools/decision` read decision provenance by `decision_id/decision_uri` (or latest by `run_id`)
+- `POST /v1/memory/tools/run` inspect run-level lifecycle (decisions + linked feedback)
 - `POST /v1/memory/tools/feedback` write outcome feedback for matched tool rules
 - `POST /v1/memory/rules/state` manually promote/demote a rule (`draft/shadow/active/disabled`)
 

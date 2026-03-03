@@ -37,7 +37,8 @@ Aionis 架构围绕三点设计：可靠性、可回放、可控执行。
 1. 运行态上下文进入 `rules/evaluate`。
 2. `tools/select` 应用策略约束。
 3. `tools/decision` 持久化决策。
-4. `tools/feedback` 写入结果反馈。
+4. `tools/run` 查看运行生命周期。
+5. `tools/feedback` 写入结果反馈。
 
 ## 控制点
 

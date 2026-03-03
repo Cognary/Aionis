@@ -10,7 +10,7 @@ Aionis Playground is a visual API workbench for memory, context orchestration, a
 
 1. Write and recall behavior (`write`, `recall`, `recall_text`).
 2. Layered context assembly (`context/assemble`).
-3. Policy and tool routing flow (`rules/evaluate`, `tools/select`, `tools/decision`, `tools/feedback`).
+3. Policy and tool routing flow (`rules/evaluate`, `tools/select`, `tools/decision`, `tools/run`, `tools/feedback`).
 4. URI-based replay checks (`resolve`).
 
 ## Run Locally
@@ -54,7 +54,7 @@ LLM panel fields (for chat generation):
 1. Open `LLM` tab and click `Test connection`.
 2. In chat, enable recall injection and run a short conversation.
 3. Execute `write` and then `recall_text` to confirm memory visibility.
-4. Run one policy path: `rules/evaluate -> tools/select -> tools/decision -> tools/feedback`.
+4. Run one policy path: `rules/evaluate -> tools/select -> tools/decision -> tools/run -> tools/feedback`.
 5. Use inspector IDs (`request_id`, `decision_id`, `run_id`) for replay checks.
 
 ## Common Errors
