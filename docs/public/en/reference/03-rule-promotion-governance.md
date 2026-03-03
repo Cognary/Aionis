@@ -4,27 +4,30 @@ title: "Rule Promotion Governance"
 
 # Rule Promotion Governance
 
-Last updated: `2026-02-24`
+Rule Promotion Governance validates promotion readiness before a state transition is applied.
 
-## Purpose
-
-Provide deterministic, auditable promotion checks before state transitions:
+## Target Transitions
 
 1. `draft -> shadow`
 2. `shadow -> active`
 
-This is a read-only gate. It does not mutate rule state.
+## Governance Signals
 
-## Command
+1. positive/negative outcome balance
+2. distinct run coverage
+3. risk score and confidence
+4. deterministic transition hash for audit
+
+## Run
 
 ```bash
 npm run -s job:rule-promotion-governance -- \
   --scope default \
   --rule-node-id <rule_uuid> \
-  --target-state shadow
+  --target-state active
 ```
 
-For strict CI behavior:
+Strict mode:
 
 ```bash
 npm run -s job:rule-promotion-governance -- \
@@ -34,26 +37,15 @@ npm run -s job:rule-promotion-governance -- \
   --strict
 ```
 
-## Default Thresholds
-
-`draft -> shadow`
-
-1. `positive_count >= 3`
-2. `negative_count <= 0`
-3. `recent_distinct_runs >= 3` (window `168h`)
-
-`shadow -> active`
-
-1. `positive_count >= 10`
-2. `recent_negative_ratio <= 0.1` (window `168h`)
-3. `recent_distinct_runs >= 3`
-4. `score(positive-negative) >= 9`
-
 ## Output
 
-The report includes:
+1. Check list with pass/fail status
+2. `summary.pass` and failed checks
+3. structured next-step payload for state transition API
+4. governance hash for traceability
 
-1. `checks[]` with pass/fail per governance condition
-2. `summary.pass` and failed check names
-3. `next_step.apply.payload` ready for `/v1/memory/rules/state`
-4. `governance_hash` for audit traceability
+## Related
+
+1. [Rule Lifecycle](/public/en/control/02-rule-lifecycle)
+2. [Rule Conflict Report](/public/en/reference/04-rule-conflict-report)
+3. [Policy Adaptation Gate](/public/en/control/04-policy-adaptation-gate)

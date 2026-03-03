@@ -4,93 +4,44 @@ title: "Policy Adaptation Gate"
 
 # Policy Adaptation Gate
 
-Last updated: `2026-02-24`
+Policy Adaptation Gate evaluates whether rule lifecycle changes are safe to apply.
 
-## Purpose
+## Scope
 
-Production guardrail for rule lifecycle operations:
+1. Promotion candidates (`draft -> shadow`)
+2. Promotion candidates (`shadow -> active`)
+3. Disable candidates (`active -> disabled`)
+4. Canary and rollback recommendation payloads
 
-1. Produce reproducible `draft -> shadow` suggestions.
-2. Produce reproducible `shadow -> active` suggestions.
-3. Produce reproducible `active -> disabled` suggestions.
-4. Add objective gate checks for urgent disable pressure.
-5. Carry canary recommendation and rollback payloads per suggestion.
+This gate is read-only and does not mutate rule state.
 
-This job is read-only. It does not change rule state.
-
-## Command
+## Run
 
 ```bash
 npm run -s job:policy-adaptation-gate -- --scope default
 ```
 
-Strict warning mode:
+Strict mode:
 
 ```bash
 npm run -s job:policy-adaptation-gate -- --scope default --strict-warnings
 ```
 
-## Key Options
-
-1. `--window-hours <n>`: feedback window (default `168`)
-2. `--limit <n>`: number of draft+shadow+active rules scanned (default `200`)
-3. Promote thresholds:
-- `--min-promote-shadow-positives <n>` (default `3`) for `draft -> shadow`
-- `--max-promote-shadow-negatives <n>` (default `0`) for `draft -> shadow`
-- `--min-promote-shadow-distinct-runs <n>` (default `3`) for `draft -> shadow`
-- `--min-promote-shadow-confidence <ratio>` (default `0.50`)
-- `--min-promote-positives <n>` (default `10`)
-- `--min-promote-distinct-runs <n>` (default `3`)
-- `--max-promote-neg-ratio <ratio>` (default `0.1`)
-- `--min-promote-score <n>` (default `min_promote_positives - 1`)
-- `--min-promote-confidence <ratio>` (default `0.55`)
-4. Disable thresholds:
-- `--min-disable-negatives <n>` (default `5`)
-- `--min-disable-neg-ratio <ratio>` (default `0.6`)
-- `--min-disable-confidence <ratio>` (default `0.6`)
-- `--stale-active-hours <n>` (default `336`)
-5. Canary + gate thresholds:
-- `--canary-min-feedback <n>` (default `20`)
-- `--urgent-disable-confidence <ratio>` (default `0.85`)
-- `--max-urgent-disable-candidates <n>` (default `0`, error)
-- `--max-canary-disable-candidates <n>` (default `3`, warning)
-
 ## Output
 
-JSON output includes:
+1. Candidate lists by transition type
+2. Confidence and risk indicators
+3. Structured apply/rollback suggestions
+4. Gate checks with pass/warn/fail status
 
-1. `checks[]` gate checks
-2. `summary` with pass/fail and candidate counts
-3. `suggestions.promote_to_active[]`
-4. `suggestions.promote_to_shadow[]`
-5. `suggestions.disable_active[]`
+## Recommended Usage
 
-Each suggestion includes:
+1. Run before rule lifecycle transitions.
+2. Require strict pass for production promotion windows.
+3. Keep report artifacts with release records.
 
-1. `confidence`
-2. `risk_score` + `risk_level`
-3. `canary_recommended`
-4. `apply` payload
-5. `rollback` payload
+## Related
 
-## Health Gate Integration
-
-Run policy adaptation gate from health-gate:
-
-```bash
-npm run -s job:health-gate -- \
-  --strict-warnings \
-  --consistency-check-set scope \
-  --run-policy-adaptation-gate
-```
-
-Forward custom thresholds:
-
-```bash
-npm run -s job:health-gate -- \
-  --run-policy-adaptation-gate \
-  --policy-adaptation-arg --window-hours \
-  --policy-adaptation-arg 72 \
-  --policy-adaptation-arg --max-canary-disable-candidates \
-  --policy-adaptation-arg 1
-```
+1. [Rule Lifecycle](/public/en/control/02-rule-lifecycle)
+2. [Rule Promotion Governance](/public/en/reference/03-rule-promotion-governance)
+3. [Execution Loop Gate](/public/en/control/03-execution-loop-gate)

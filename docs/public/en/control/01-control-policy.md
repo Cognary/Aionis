@@ -1,25 +1,32 @@
 ---
-title: "Control & Policy"
+title: "Control and Policy"
 ---
 
-# Control & Policy
+# Control and Policy
 
-Aionis policy loop makes behavior controllable and replayable, not only retrievable.
+Aionis policy controls turn memory into governed execution behavior.
 
-## Decision Flow
+## Policy Loop Endpoints
 
 1. `POST /v1/memory/rules/evaluate`
 2. `POST /v1/memory/tools/select`
-3. `POST /v1/memory/tools/feedback`
-4. `POST /v1/memory/tools/decision`
+3. `POST /v1/memory/tools/decision`
+4. `POST /v1/memory/tools/feedback`
 
-## What To Validate
+## What This Enables
 
-1. Rule match quality and visibility behavior
-2. Tool selection determinism under policy
-3. Feedback attribution and decision replay traceability
+1. Deterministic rule matching for planner/runtime context
+2. Tool decisions constrained by explicit policy
+3. Feedback-linked adaptation with replayable provenance
 
-## Read
+## Integration Checklist
+
+1. Send normalized planner context to rules and tool selection endpoints.
+2. Persist `request_id`, `run_id`, `decision_id`, and `commit_uri`.
+3. Record feedback outcomes for each completed run.
+4. Monitor decision stability and negative-ratio drift.
+
+## Related
 
 1. [Rule Lifecycle](/public/en/control/02-rule-lifecycle)
 2. [Execution Loop Gate](/public/en/control/03-execution-loop-gate)

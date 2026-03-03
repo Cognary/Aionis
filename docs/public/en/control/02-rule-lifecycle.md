@@ -1,72 +1,41 @@
 ---
-title: "Rule Lifecycle (DRAFT -> SHADOW -> ACTIVE)"
+title: "Rule Lifecycle"
 ---
 
-# Rule Lifecycle (DRAFT -> SHADOW -> ACTIVE)
+# Rule Lifecycle
 
-This repo stores rule state in `memory_rule_defs.state`.
+Aionis rules move through explicit lifecycle states for safe rollout.
 
-## Recommended Promotion Policy (MVP)
+## States
 
-- DRAFT -> SHADOW:
-  - at least N=3 positive feedback events across distinct `run_id`s
-  - and `negative_count` = 0
-- SHADOW -> ACTIVE:
-  - at least N=10 positives
-  - and negatives/positives ratio < 0.1
-- Any -> DISABLED:
-  - explicit user disable
-  - or a high-severity negative signal
+1. `draft`: newly created rule, not used for enforcement
+2. `shadow`: evaluated for signal quality without hard enforcement
+3. `active`: used in policy decisions
+4. `disabled`: retained for audit, excluded from enforcement
 
-The exact thresholds should be configurable (environment or DB table later).
+## Promotion Principles
 
-## Offline Helper: Promotion Suggestions
+1. Promote only with sufficient positive signal volume.
+2. Verify stability across distinct runs before activation.
+3. Disable quickly when severe negative patterns appear.
+4. Keep transitions auditable and reversible.
 
-This repo includes a read-only job that scans SHADOW rules and lists those that meet the configured thresholds:
+## Lifecycle API
 
-```bash
-npm run job:rule-promotion-suggest
-```
+Use state transition endpoint for controlled changes:
 
-It does **not** mutate rule state. To promote, call `POST /v1/memory/rules/state`.
+`POST /v1/memory/rules/state`
 
-## Promotion Governance Gate (Deterministic)
+## Pre-Change Validation
 
-Before calling `/v1/memory/rules/state`, run governance checks for the exact transition:
+Before each promotion:
 
-```bash
-# draft -> shadow
-npm run -s job:rule-promotion-governance -- \
-  --scope default \
-  --rule-node-id <rule_uuid> \
-  --target-state shadow \
-  --strict
+1. Run rule governance checks.
+2. Review conflict and winner-change signals.
+3. Confirm tenant/scope visibility boundaries.
 
-# shadow -> active
-npm run -s job:rule-promotion-governance -- \
-  --scope default \
-  --rule-node-id <rule_uuid> \
-  --target-state active \
-  --strict
-```
+## Related
 
-See `docs/RULE_PROMOTION_GOVERNANCE.md` for thresholds and output fields.
-
-## Feedback Capture
-
-Write a `memory_rule_feedback` row when:
-
-- a rule suggestion was used and the run succeeded (positive)
-- a rule suggestion caused a failure/rollback (negative)
-- ambiguous outcome (neutral)
-
-For strict auditability, each feedback should be tied to a `memory_commit`.
-
-## Execution Injection
-
-Rules become "execution-relevant" when they are in `SHADOW` or `ACTIVE`.
-
-- Use `POST /v1/memory/rules/evaluate` to match rules against a planner/tool-selector `context` object.
-- Only `then_json` from matched rules should be injected into your execution system.
-- `then_json` is intentionally constrained to a minimal, strict policy patch schema (see `/public/en/api/01-api-contract`) so it remains stable and safe to apply automatically.
-- If a rule node is `memory_lane=private`, it must have an explicit owner (`owner_agent_id` or `owner_team_id`) before it can be promoted into `SHADOW`/`ACTIVE`.
+1. [Rule Promotion Governance](/public/en/reference/03-rule-promotion-governance)
+2. [Rule Conflict Report](/public/en/reference/04-rule-conflict-report)
+3. [Policy Adaptation Gate](/public/en/control/04-policy-adaptation-gate)
