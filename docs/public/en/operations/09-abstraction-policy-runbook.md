@@ -4,119 +4,51 @@ title: "Abstraction Policy Runbook"
 
 # Abstraction Policy Runbook
 
-Last updated: `2026-02-23`
+Last updated: `2026-03-03`
 
-## Purpose
+Use this runbook to operate topic/compression abstraction safely in production.
 
-This runbook defines how to operate Aionis abstraction safely in production:
+## Objective
 
-1. topic clustering behavior (`event -> topic`)
-2. compression rollup behavior (`topic -> concept summary`)
-3. replay / backfill flow after incidents or migrations
+Keep abstraction quality stable while preserving replayability and predictable latency.
 
-## Profiles
+## Operating Profiles
 
-Abstraction has three policy profiles:
+1. `conservative`: higher precision, lower churn.
+2. `balanced`: default production profile.
+3. `aggressive`: higher coverage, requires tighter monitoring.
 
-1. `conservative`: higher precision, lower abstraction churn
-2. `balanced`: default production profile
-3. `aggressive`: higher coverage and stronger summarization
+## Change Procedure
 
-Apply profile into `.env` (managed block only):
+1. Select profile in your environment config.
+2. Deploy config change to staging first.
+3. Run quality checks and core gate.
+4. Promote to production only after stable results.
 
-```bash
-npm run -s env:abstraction:balanced
-# or:
-# npm run -s env:abstraction:conservative
-# npm run -s env:abstraction:aggressive
-```
+## Quality Signals to Monitor
 
-The profile manages:
+1. Topic cohesion and orphan rates.
+2. Compression retention and summary quality.
+3. Decision replay consistency after abstraction updates.
+4. Recall quality drift on representative workflows.
 
-1. `MEMORY_ABSTRACTION_POLICY_PROFILE`
-2. `TOPIC_SIM_THRESHOLD`
-3. `TOPIC_MIN_EVENTS_PER_TOPIC`
-4. `TOPIC_CLUSTER_BATCH_SIZE`
-5. `TOPIC_MAX_CANDIDATES_PER_EVENT`
-6. `MEMORY_COMPRESSION_LOOKBACK_DAYS`
-7. `MEMORY_COMPRESSION_TOPIC_MIN_EVENTS`
-8. `MEMORY_COMPRESSION_MAX_TOPICS_PER_RUN`
-9. `MEMORY_COMPRESSION_MAX_EVENTS_PER_TOPIC`
-10. `MEMORY_COMPRESSION_MAX_TEXT_LEN`
+## Rollback Procedure
 
-## Backfill / Replay
+1. Revert profile to last known-good setting.
+2. Restart affected services.
+3. Re-run quality checks and production core gate.
+4. Keep aggressive updates paused until drift is resolved.
 
-### Topic clustering replay
+## Release Evidence
 
-Run once:
+For each profile change, record:
 
-```bash
-npm run -s job:topic-cluster
-```
+1. Profile before/after.
+2. Quality check summary.
+3. Core gate result.
+4. Approval owner and timestamp.
 
-Run until queue is drained (batch replay):
+## Related
 
-```bash
-for i in $(seq 1 20); do
-  out="$(npm run -s job:topic-cluster)"
-  echo "$out" | jq '{ok, processed_events, assigned, created_topics, promoted, quality}'
-  processed="$(echo "$out" | jq -r '.processed_events // 0')"
-  if [[ "$processed" == "0" ]]; then
-    break
-  fi
-done
-```
-
-### Compression rollup replay
-
-```bash
-npm run -s job:compression-rollup
-```
-
-For long backlog replay, run in bounded rounds:
-
-```bash
-for i in $(seq 1 10); do
-  out="$(npm run -s job:compression-rollup)"
-  echo "$out" | jq '{ok, scanned_topics, compressed_topics, created_summaries, updated_summaries, unchanged_summaries, citations_written}'
-done
-```
-
-## Verification
-
-Quality snapshot:
-
-```bash
-npm run -s job:quality-eval -- --scope "${SCOPE:-default}"
-```
-
-Core production gate (artifacts include abstraction counters):
-
-```bash
-npm run -s gate:core:prod -- \
-  --base-url "http://localhost:${PORT:-3001}" \
-  --scope "${SCOPE:-default}" \
-  --run-perf true
-```
-
-Check in gate summary:
-
-1. `blocking_metrics.abstraction_quality_counters.profile`
-2. `blocking_metrics.abstraction_quality_counters.observed.compression_summaries`
-3. `blocking_metrics.abstraction_quality_counters.observed.cluster_cohesion`
-4. `blocking_metrics.abstraction_quality_counters.observed.cluster_orphan_rate`
-5. `blocking_metrics.abstraction_quality_counters.observed.cluster_merge_rate_30d`
-
-## Rollback
-
-If abstraction quality regresses:
-
-1. Switch to conservative profile:
-
-```bash
-npm run -s env:abstraction:conservative
-```
-
-2. Restart API and worker.
-3. Re-run `job:quality-eval` and `gate:core:prod`.
-4. If needed, pause aggressive replay and keep only topic cluster until drift stabilizes.
+1. [Consolidation Replay Runbook](/public/en/operations/10-consolidation-replay-runbook)
+2. [Production Core Gate](/public/en/operations/03-production-core-gate)

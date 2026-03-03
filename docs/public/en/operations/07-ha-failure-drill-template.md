@@ -4,123 +4,83 @@ title: "HA Failure Drill Template"
 
 # HA Failure Drill Template
 
-Last updated: `2026-02-28`
+Last updated: `2026-03-03`
 
-Use this template to run and record high-value production resiliency drills for Aionis HA deployments.
+Use this template to run recurring resiliency drills for HA deployments.
 
-Reference filled example:
+Reference sample:
 
 1. [HA Failure Drill Sample](/public/en/operations/08-ha-failure-drill-sample)
 
-## Drill Metadata
+## Drill Header
 
-1. Drill id:
-2. Date (UTC):
-3. Environment:
-4. Scope/tenant sample:
-5. Owner:
-6. Observers:
-7. Release/tag:
+1. Drill ID
+2. Date (UTC)
+3. Environment
+4. Owner
+5. Participants
+6. Release/Tag
 
-## Preconditions
+## Scenario A: Database Restore
 
-1. Deployment topology is split service (`API` replicas + separate `worker` + external Postgres).
-2. Monitoring dashboards and alert channels are active.
-3. Rollback artifact for previous known-good release is ready.
-4. Backups/PITR policies are configured and tested at least once.
+Goal: validate backup/PITR recovery and RTO/RPO targets.
 
-## Scenario A: Database Restore Drill (PITR/Backup)
+Record:
 
-Goal:
-Verify DB restore capability and RTO/RPO assumptions.
-
-Steps:
-
-1. Choose restore target timestamp and capture current state snapshot metadata.
-2. Execute restore to isolated verification environment.
-3. Run migration/version checks on restored DB.
-4. Run API health and core read/write smoke against restored target.
-5. Validate critical records for selected scope/tenant sample.
+1. Restore start/end timestamps.
+2. Restored target timestamp.
+3. Validation commands (`/health`, write, recall).
+4. Measured RTO/RPO.
 
 Pass criteria:
 
-1. Restore completed within target RTO.
-2. Data loss is within target RPO window.
-3. API smoke passes (`/health`, write, recall_text).
+1. Restore finished within RTO target.
+2. Data loss stayed within RPO target.
+3. Critical APIs passed smoke checks.
 
-Evidence:
+## Scenario B: API Rollback
 
-1. Restore job logs/IDs.
-2. Validation command outputs and timestamps.
-3. RTO/RPO measured values.
+Goal: validate fast rollback to last known-good release.
 
-## Scenario B: API Rollback Drill
+Record:
 
-Goal:
-Validate safe rollback to previous release when current API build regresses.
-
-Steps:
-
-1. Deploy current candidate to canary or controlled slice.
-2. Trigger rollback to previous known-good API release.
-3. Confirm API readiness and error-rate recovery.
-4. Verify no schema incompatibility between rollback release and DB state.
+1. Canary start timestamp.
+2. Rollback trigger timestamp.
+3. Recovery completion timestamp.
+4. Latency/error recovery window.
 
 Pass criteria:
 
 1. Rollback completed within rollback SLO.
-2. API error rate and latency return to baseline envelope.
-3. No failed migrations or startup contract violations.
+2. Service returned to baseline health/performance.
+3. No schema compatibility incident occurred.
 
-Evidence:
+## Scenario C: Worker Recovery
 
-1. Deployment/rollback timestamps.
-2. Before/after latency and error rate metrics.
-3. API readiness/liveness probe logs.
+Goal: validate backlog drain and replay after worker interruption.
 
-## Scenario C: Worker Recovery + Replay Drill
+Record:
 
-Goal:
-Validate outbox/backfill recovery path after worker interruption.
-
-Steps:
-
-1. Pause/stop worker service while API continues writes.
-2. Generate controlled write traffic and verify backlog growth.
-3. Restart worker service.
-4. Verify backlog drains and derived jobs recover.
-5. Run consistency/health checks after drain.
+1. Worker pause duration.
+2. Peak backlog level.
+3. Drain completion time.
+4. Post-recovery health and consistency checks.
 
 Pass criteria:
 
-1. Backlog drains to expected steady-state range.
-2. No persistent failed outbox events.
-3. Post-recovery health gates pass.
-
-Evidence:
-
-1. Backlog metrics over time.
-2. Worker restart logs and replay duration.
-3. Post-recovery gate outputs.
-
-## Suggested Validation Commands
-
-1. `npm run -s gate:memory-store-p2:release`
-2. `npm run -s preflight:prod`
-3. `npm run -s gate:core:prod -- --base-url <url> --scope default`
-4. `npm run -s job:health-gate -- --strict-warnings --consistency-check-set scope`
-5. `npm run -s job:consistency-check:cross-tenant -- --strict-warnings`
+1. Backlog returned to expected steady-state.
+2. No persistent failed replay tasks.
+3. Post-recovery checks are passing.
 
 ## Incident Notes
 
-1. What failed:
-2. Blast radius:
-3. Mitigation applied:
-4. Follow-up actions:
-5. Owner + due date:
+1. What failed
+2. Blast radius
+3. Mitigation applied
+4. Follow-up owner and due date
 
 ## Final Sign-off
 
-1. Drill result: `pass` / `partial` / `fail`
-2. Signed by:
-3. Date (UTC):
+1. Result: `pass` / `partial` / `fail`
+2. Approver
+3. Date (UTC)

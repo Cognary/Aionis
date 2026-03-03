@@ -4,83 +4,71 @@ title: "E2E Regression Checklist"
 
 # E2E Regression Checklist
 
-Use this checklist to validate the external product loop end-to-end.
+Use this checklist to validate the full Aionis product loop before release.
 
-## Scope
+## Preconditions
 
-1. Memory write and recall correctness
-2. Policy-loop decision behavior
-3. URI-first replayability
-4. Basic production-readiness signals
+1. Target API is healthy.
+2. Test tenant/scope is isolated.
+3. Valid auth credentials are available.
 
-## Prerequisites
-
-1. API is running and healthy.
-2. Environment has valid auth credentials.
-3. Target tenant/scope is isolated test data.
-
-## Regression Steps
-
-1. Write a memory item
+Set variables:
 
 ```bash
-curl -sS http://localhost:${PORT:-3001}/v1/memory/write \
-  -H 'content-type: application/json' \
-  -d '{"tenant_id":"default","scope":"default","input_text":"regression write sample"}' | jq
+export BASE_URL="https://api.your-domain.com"
+export API_KEY="your_api_key"
 ```
 
-2. Recall text context
+## Regression Flow
+
+1. **Write** memory:
 
 ```bash
-curl -sS http://localhost:${PORT:-3001}/v1/memory/recall_text \
+curl -sS "$BASE_URL/v1/memory/write" \
   -H 'content-type: application/json' \
-  -d '{"tenant_id":"default","scope":"default","query_text":"regression write sample"}' | jq
+  -H "x-api-key: $API_KEY" \
+  -d '{"tenant_id":"default","scope":"default","input_text":"regression sample"}' | jq
 ```
 
-3. Assemble layered context
+2. **Recall** context:
 
 ```bash
-curl -sS http://localhost:${PORT:-3001}/v1/memory/context/assemble \
+curl -sS "$BASE_URL/v1/memory/recall_text" \
   -H 'content-type: application/json' \
-  -d '{"tenant_id":"default","scope":"default","query_text":"customer support case"}' | jq
+  -H "x-api-key: $API_KEY" \
+  -d '{"tenant_id":"default","scope":"default","query_text":"regression sample","limit":5}' | jq
 ```
 
-4. Evaluate rules and select a tool
+3. **Assemble** layered context:
 
 ```bash
-curl -sS http://localhost:${PORT:-3001}/v1/memory/rules/evaluate \
+curl -sS "$BASE_URL/v1/memory/context/assemble" \
   -H 'content-type: application/json' \
-  -d '{"tenant_id":"default","scope":"default","context":{"intent":"support_triage"}}' | jq
+  -H "x-api-key: $API_KEY" \
+  -d '{"tenant_id":"default","scope":"default","query_text":"support case","char_budget_total":1200}' | jq
 ```
 
-5. Record decision and feedback
+4. **Run policy path**:
 
 ```bash
-curl -sS http://localhost:${PORT:-3001}/v1/memory/tools/decision \
+curl -sS "$BASE_URL/v1/memory/rules/evaluate" \
   -H 'content-type: application/json' \
-  -d '{"tenant_id":"default","scope":"default","decision_kind":"tool_select"}' | jq
+  -H "x-api-key: $API_KEY" \
+  -d '{"tenant_id":"default","scope":"default","run_id":"regression-run-1","context":{"intent":"support_triage"}}' | jq
 ```
 
-6. Resolve URI from previous outputs
+5. **Core gate**:
 
 ```bash
-curl -sS http://localhost:${PORT:-3001}/v1/memory/resolve \
-  -H 'content-type: application/json' \
-  -d '{"tenant_id":"default","scope":"default","uri":"aionis://default/default/commit/<id>"}' | jq
-```
-
-7. Run production gate
-
-```bash
-npm run -s gate:core:prod -- --base-url "http://localhost:${PORT:-3001}" --scope default
+npm run -s gate:core:prod -- --base-url "$BASE_URL" --scope default
 ```
 
 ## Pass Criteria
 
-1. All API calls return expected 2xx responses.
-2. Returned IDs/URIs are consistent and resolvable.
-3. No tenant/scope leakage is observed.
-4. Gate output is passing for blocking checks.
+1. All required API calls return expected 2xx responses.
+2. IDs/URIs returned by write/policy routes are present and resolvable.
+3. No tenant/scope isolation regressions are observed.
+4. Core gate passes blocking checks.
 
 ## Related
 
