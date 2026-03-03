@@ -1,40 +1,39 @@
 ---
-title: "LangGraph Integration (Adapter Pattern)"
+title: "LangGraph Integration"
 ---
 
-# LangGraph Integration (Adapter Pattern)
+# LangGraph Integration
 
-This document provides a minimal integration pattern for LangGraph-style agent flows with Aionis.
+Aionis integrates into LangGraph-style agent flows as memory and policy infrastructure.
 
-## Flow Mapping
+## Recommended Flow Mapping
 
-1. `recall_text` before planning (retrieve compact context).
-2. `tools/select` during planning (apply active/shadow rules).
-3. execute tool / agent step.
-4. `write` + `tools/feedback` after step completion (persist outcome).
+1. Before planning: `recall_text` or `context/assemble`
+2. During planning: `rules/evaluate` and `tools/select`
+3. After execution: `write` and `tools/feedback`
+4. For audits: `resolve` by `decision_uri` or `commit_uri`
 
 ## Runtime Requirements
 
-1. Aionis API reachable (`AIONIS_BASE_URL` or `http://localhost:${PORT}`).
-2. If auth is enabled:
-   - `API_KEY` (or `PERF_API_KEY`) for `MEMORY_AUTH_MODE=api_key`.
-   - `AUTH_BEARER` (or `PERF_AUTH_BEARER`) for `MEMORY_AUTH_MODE=jwt`.
-3. Python runtime with local SDK source available in this repo.
+1. Aionis API reachable from your graph runtime.
+2. Auth credentials aligned with selected auth mode.
+3. SDK or HTTP client integration in your orchestrator node.
 
-## Smoke Command
+## Smoke Test
 
 ```bash
 set -a; source .env; set +a
 bash examples/langgraph_adapter_smoke.sh
 ```
 
-Expected output (JSON):
+## Success Criteria
 
-1. `ok: true`
-2. `project: "langgraph_style"`
-3. `steps.recall_text` / `steps.tools_select` / `steps.write` / `steps.tools_feedback` present
+1. Multi-step flow returns stable `request_id` correlation.
+2. Decision steps emit `run_id` and `decision_id`.
+3. Post-step writes emit resolvable `commit_uri` values.
 
-## Reference Script
+## Related
 
-1. `examples/langgraph_adapter_smoke.sh`
-2. `src/dev/langgraph-adapter-smoke.py`
+1. [API Contract](/public/en/api/01-api-contract)
+2. [SDK Guide](/public/en/reference/05-sdk)
+3. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)

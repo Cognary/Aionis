@@ -1,77 +1,44 @@
 ---
-title: "OpenWork (OpenCode Desktop) Integration"
+title: "OpenWork Integration"
 ---
 
-# OpenWork (OpenCode Desktop) Integration
+# OpenWork Integration
 
-This project exposes an **MCP server** so OpenWork/OpenCode can call Aionis Memory Graph as tools.
+Use the Aionis MCP server in OpenWork/OpenCode Desktop to add memory capabilities to desktop agent workflows.
 
-For a client-agnostic MCP overview, see [MCP Integration](/public/en/integrations/01-mcp).
+## What This Enables
 
-## What You Get
+1. Add memory retrieval before each task execution.
+2. Persist outcomes after each completed run.
+3. Keep memory operations auditable through Aionis APIs.
 
-- `memory_remember`: write one memory node (default type=event)
-- `memory_recall_text`: recall a compact, LLM-friendly text context
+## Setup
 
-Embeddings are **derived artifacts**: the MCP tool will not block on embeddings, and it never returns embeddings.
-
-## Prereqs
-
-- Aionis API running (default from `.env.example`: `http://localhost:3001`)
-- Node >= 18
-
-## Run The MCP Server
-
-Build:
+1. Build Aionis MCP server:
 
 ```bash
 npm run build
 ```
 
-Run (manual smoke):
+2. Configure OpenWork/OpenCode MCP entry to launch:
 
 ```bash
-AIONIS_BASE_URL=http://localhost:${PORT:-3001} AIONIS_SCOPE=default node dist/mcp/aionis-mcp.js
+node /path/to/Aionis/dist/mcp/aionis-mcp.js
 ```
 
-Repo smoke (stdio MCP handshake + tool call):
+3. Set environment values:
 
-```bash
-set -a; source .env; set +a
-bash examples/mcp_stdio_smoke.sh
-```
+1. `AIONIS_BASE_URL`
+2. `AIONIS_SCOPE`
+3. Optional auth variables (`AIONIS_API_KEY` or `AIONIS_AUTH_BEARER`)
 
-## Configure OpenWork / OpenCode
+## Recommended Agent Behavior
 
-OpenCode supports MCP servers via its config file. Add a local MCP server entry.
+1. Call `memory_recall_text` before planning complex actions.
+2. Call `memory_remember` after finishing steps.
+3. Include run metadata in memory text or slots for later replay.
 
-Example snippet (adjust path/env):
+## Related
 
-```jsonc
-{
-  "mcp": {
-    "aionis": {
-      "type": "local",
-      "command": ["node", "/path/to/Aionis/dist/mcp/aionis-mcp.js"],
-      "enabled": true,
-      "environment": {
-        "AIONIS_BASE_URL": "http://localhost:3001",
-        "AIONIS_SCOPE": "default"
-      }
-    }
-  }
-}
-```
-
-If your Aionis API requires admin-gated operations, you can also set:
-
-- `AIONIS_ADMIN_TOKEN`: forwarded as `X-Admin-Token` header to the API
-- `AIONIS_API_KEY`: forwarded as `X-Api-Key` (for `MEMORY_AUTH_MODE=api_key` / `api_key_or_jwt`)
-- `AIONIS_AUTH_BEARER`: forwarded as `Authorization: Bearer <jwt>` (for `MEMORY_AUTH_MODE=jwt` / `api_key_or_jwt`)
-
-## Recommended Agent Instruction
-
-To get consistent behavior, tell your agent to:
-
-- call `memory_recall_text` before planning/executing when the task is non-trivial
-- call `memory_remember` after finishing a run to store outcomes/decisions
+1. [MCP Integration](/public/en/integrations/01-mcp)
+2. [API Reference](/public/en/api-reference/00-api-reference)

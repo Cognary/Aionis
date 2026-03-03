@@ -4,109 +4,51 @@ title: "Differentiation Evidence"
 
 # Differentiation Evidence
 
-This runbook turns two claims into executable evidence:
+This page explains how to prove Aionis advantages over retrieval-only memory stacks.
 
-1. Aionis policy loop outperforms retrieval-only behavior on success/stability/controllability.
-2. Governance, replay, and audit are visible operational capabilities (not docs-only).
+## Claims Under Test
 
-Terminology note:
+1. Higher task success with policy loop enabled
+2. Better stability under repeated runs
+3. Stronger controllability via traceable decisions and feedback links
 
-1. "Self-learning" in Aionis means feedback-driven policy adaptation with explicit guardrails.
-2. It is not unconstrained autonomous model training.
+## Benchmark Method
 
-## Evidence Axes
-
-1. Success: task/tool outcome correctness under repeated runs.
-2. Stability: selection consistency under candidate-order perturbation.
-3. Controllability: decision traceability, source-rule attribution, and feedback linkage coverage.
-
-## Benchmark: Retrieval-Only vs Policy Loop
-
-Run the XMB benchmark suite (includes `XMB-006` A/B case):
+Run the Aionis benchmark suite with XMB scenarios:
 
 ```bash
 npm run -s bench:aionis:v01 -- --suites xmb
 ```
 
-Artifacts:
+Primary artifact outputs:
 
-1. `artifacts/aionisbench/runs/<run_id>/details.json`
-2. `artifacts/aionisbench/runs/<run_id>/summary.json`
-3. `artifacts/aionisbench/runs/<run_id>/report.md`
+1. `details.json`
+2. `summary.json`
+3. `report.md`
 
-`XMB-006` output contains:
+## Key Metrics
 
-1. `baseline.success_rate` (retrieval-only first-candidate heuristic)
-2. `policy_loop.success_rate`
-3. `delta.success_rate_gain`
-4. `baseline.selection_switches` vs `policy_loop.selection_switches`
-5. `policy_loop.feedback_link_coverage`
-6. `policy_loop.source_rule_coverage`
+1. `success_rate_gain`
+2. `selection_switch_reduction`
+3. `feedback_link_coverage`
+4. `source_rule_coverage`
 
-Interpretation guideline:
+Interpretation:
 
-1. `delta.success_rate_gain > 0` indicates policy-loop advantage.
-2. `selection_switch_reduction > 0` indicates higher selection stability.
-3. High feedback/source coverage indicates stronger controllability and governance observability.
+1. Positive success-rate delta supports policy-loop effectiveness.
+2. Lower switch count supports stability improvements.
+3. High coverage metrics support governance and replay visibility.
 
-## Case Demo (Narrative-Friendly)
-
-Use the killer demo for a concise before/after story:
-
-```bash
-bash examples/killer_demo.sh
-```
-
-Focus fields:
-
-1. `before/after selection.selected`
-2. `selection.denied`
-3. Recall value delta (`target_hit_delta`)
-
-## Governance, Replay, Audit Visibility
-
-Ops UI page map:
-
-1. `/` dashboard: runtime + telemetry + incident rollup
-2. `/audit`: write-risk audit stream
-3. `/actions`: guarded admin write actions
-4. `/governance`: execution-loop signals + decision replay inspector
-
-## One-Click Weekly Pack
-
-Run one command to collect benchmark + execution loop + governance weekly evidence:
-
-```bash
-npm run -s evidence:weekly -- --scope default --window-hours 168
-```
-
-Notes:
-
-1. The script runs XMB first, then executes gates on the XMB-006 scope to guarantee auditable same-run evidence.
-2. `requested_scope` is preserved in summary, while `gate_scope` records the actual scope used by gate checks.
-
-Main outputs:
-
-1. `artifacts/evidence/weekly/<report_week>_<run_id>/EVIDENCE_SUMMARY.json`
-2. `artifacts/evidence/weekly/<report_week>_<run_id>/EVIDENCE_WEEKLY.md`
-3. `artifacts/evidence/weekly/<report_week>_<run_id>/governance_weekly/summary.json`
-4. `artifacts/evidence/weekly/<report_week>_<run_id>/bench_xmb/summary.json`
-
-Optional strict mode:
+## Weekly Evidence Pack
 
 ```bash
 npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
 ```
 
-Recommended production checks:
+Use this for release-review evidence bundles.
 
-```bash
-npm run -s job:execution-loop-gate -- --scope default --strict-warnings
-npm run -s job:governance-weekly-report -- --scope default --strict-warnings
-```
-
-These outputs should be attached to release reviews together with benchmark artifacts.
-
-For manual executive write-up format, use:
+## Related
 
 1. [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public)
+2. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
+3. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)

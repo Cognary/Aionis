@@ -4,44 +4,39 @@ title: "MCP Integration"
 
 # MCP Integration
 
-Aionis exposes an MCP server so MCP-capable clients can call memory operations as tools.
+Aionis provides an MCP server so MCP-capable clients can use memory operations as tools.
 
-## Tools Exposed
+## Tools
 
-1. `memory_remember`: write one memory node (default `type=event`)
-2. `memory_recall_text`: return compact, LLM-ready context text
+1. `memory_remember`: write memory entries
+2. `memory_recall_text`: fetch compact LLM-ready context
 
-## Prerequisites
+## Quick Start
 
-1. Aionis API running (default `http://localhost:3001`)
-2. Node.js `>= 18`
-
-## Run MCP Server
-
-Build:
+1. Build the project:
 
 ```bash
 npm run build
 ```
 
-Run:
+2. Run MCP server:
 
 ```bash
-AIONIS_BASE_URL=http://localhost:${PORT:-3001} AIONIS_SCOPE=default node dist/mcp/aionis-mcp.js
+AIONIS_BASE_URL=http://localhost:${PORT:-3001} \
+AIONIS_SCOPE=default \
+node dist/mcp/aionis-mcp.js
 ```
 
-Stdio smoke:
+3. Run smoke check:
 
 ```bash
 set -a; source .env; set +a
 bash examples/mcp_stdio_smoke.sh
 ```
 
-## Client Configuration
+## Client Config Example
 
-Example local MCP config:
-
-```jsonc
+```json
 {
   "mcp": {
     "aionis": {
@@ -57,19 +52,14 @@ Example local MCP config:
 }
 ```
 
-## Optional Auth Headers
+## Optional Auth
 
-1. `AIONIS_ADMIN_TOKEN` -> forwarded as `X-Admin-Token`
-2. `AIONIS_API_KEY` -> forwarded as `X-Api-Key`
-3. `AIONIS_AUTH_BEARER` -> forwarded as `Authorization: Bearer <jwt>`
+1. `AIONIS_API_KEY` -> `X-Api-Key`
+2. `AIONIS_AUTH_BEARER` -> `Authorization: Bearer ...`
+3. `AIONIS_ADMIN_TOKEN` -> `X-Admin-Token` (admin routes)
 
-## Recommended Usage Pattern
+## Related
 
-1. Call `memory_recall_text` before planning/execution for non-trivial tasks.
-2. Call `memory_remember` after task completion to persist outcomes.
-
-## Related Docs
-
-1. [OpenWork (OpenCode Desktop) Integration](/public/en/integrations/02-openwork)
+1. [OpenWork Integration](/public/en/integrations/02-openwork)
 2. [LangGraph Integration](/public/en/integrations/03-langgraph)
 3. [API Contract](/public/en/api/01-api-contract)
