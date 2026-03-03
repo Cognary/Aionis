@@ -437,6 +437,7 @@ export type SandboxSessionCreateInput = {
 export type SandboxExecuteInput = {
   tenant_id?: string;
   scope?: string;
+  project_id?: string;
   actor?: string;
   session_id: string;
   planner_run_id?: string;
@@ -472,6 +473,7 @@ export type SandboxRunArtifactInput = {
   include_output?: boolean;
   include_result?: boolean;
   include_metadata?: boolean;
+  bundle_inline?: boolean;
 };
 
 export type SandboxRunCancelInput = {
@@ -620,6 +622,24 @@ export type ControlSandboxBudgetsQuery = {
 
 export type ControlSandboxBudgetGetQuery = {
   scope?: string;
+};
+
+export type ControlSandboxProjectBudgetInput = {
+  scope?: string;
+  daily_run_cap?: number | null;
+  daily_timeout_cap?: number | null;
+  daily_failure_cap?: number | null;
+};
+
+export type ControlSandboxProjectBudgetGetQuery = {
+  scope?: string;
+};
+
+export type ControlSandboxProjectBudgetsQuery = {
+  tenant_id?: string;
+  project_id?: string;
+  limit?: number;
+  offset?: number;
 };
 
 export type ControlAuditEventsQuery = {
@@ -1136,6 +1156,7 @@ export type SandboxExecuteResponse = {
   run: {
     run_id: string;
     session_id: string;
+    project_id: string | null;
     planner_run_id: string | null;
     decision_id: string | null;
     action: Record<string, unknown>;
@@ -1187,10 +1208,11 @@ export type SandboxRunArtifactResponse = {
   tenant_id: string;
   scope: string;
   artifact: {
-    artifact_version: "sandbox_run_artifact_v1";
+    artifact_version: "sandbox_run_artifact_v1" | "sandbox_run_artifact_v2";
     run_id: string;
     session_id: string;
     uri: string;
+    project_id?: string | null;
     planner_run_id: string | null;
     decision_id: string | null;
     mode: "async" | "sync";
@@ -1207,6 +1229,20 @@ export type SandboxRunArtifactResponse = {
     error: string | null;
     result?: Record<string, unknown>;
     metadata?: Record<string, unknown>;
+    bundle?: {
+      manifest_version: "sandbox_artifact_bundle_manifest_v1";
+      object_store_base_uri: string | null;
+      object_prefix: string;
+      generated_at: string;
+      objects: Array<{
+        name: string;
+        media_type: string;
+        bytes: number;
+        sha256: string;
+        uri: string | null;
+        inline?: unknown;
+      }>;
+    };
     started_at: string | null;
     finished_at: string | null;
     created_at: string;
@@ -1307,6 +1343,21 @@ export type ControlSandboxBudgetDeleteResponse = {
 };
 
 export type ControlSandboxBudgetsResponse = {
+  ok: boolean;
+  budgets: Array<Record<string, unknown>>;
+};
+
+export type ControlSandboxProjectBudgetResponse = {
+  ok: boolean;
+  budget: Record<string, unknown>;
+};
+
+export type ControlSandboxProjectBudgetDeleteResponse = {
+  ok: boolean;
+  deleted: boolean;
+};
+
+export type ControlSandboxProjectBudgetsResponse = {
   ok: boolean;
   budgets: Array<Record<string, unknown>>;
 };

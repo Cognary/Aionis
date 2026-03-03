@@ -469,6 +469,7 @@ test("sandbox probe validates sandbox API contract when enabled", async () => {
           run: {
             run_id: runId,
             session_id: sessionId,
+            project_id: "sandbox_probe_project",
             planner_run_id: "sandbox_probe_run",
             decision_id: decisionId,
             action: {
@@ -548,10 +549,11 @@ test("sandbox probe validates sandbox API contract when enabled", async () => {
           tenant_id: String(req.body?.tenant_id ?? "default"),
           scope: String(req.body?.scope ?? "default"),
           artifact: {
-            artifact_version: "sandbox_run_artifact_v1",
+            artifact_version: "sandbox_run_artifact_v2",
             run_id: runId,
             session_id: sessionId,
             uri: `aionis://${String(req.body?.tenant_id ?? "default")}/${String(req.body?.scope ?? "default")}/sandbox_run/${runId}`,
+            project_id: "sandbox_probe_project",
             planner_run_id: "sandbox_probe_run",
             decision_id: decisionId,
             mode: "sync",
@@ -567,6 +569,13 @@ test("sandbox probe validates sandbox API contract when enabled", async () => {
             error: null,
             result: { executor: "mock" },
             metadata: {},
+            bundle: {
+              manifest_version: "sandbox_artifact_bundle_manifest_v1",
+              object_store_base_uri: null,
+              object_prefix: `sandbox/${String(req.body?.tenant_id ?? "default")}/${String(req.body?.scope ?? "default")}/${runId}`,
+              generated_at: now,
+              objects: [],
+            },
             started_at: now,
             finished_at: now,
             created_at: now,

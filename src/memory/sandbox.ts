@@ -1,6 +1,10 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { lookup } from "node:dns/promises";
 import { mkdir } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { isIP } from "node:net";
 import type pg from "pg";
 import { HttpError, badRequest } from "../util/http.js";
 import {
@@ -27,6 +31,7 @@ type SandboxRunRow = {
   session_id: string;
   tenant_id: string;
   scope: string;
+  project_id?: string | null;
   planner_run_id: string | null;
   decision_id: string | null;
   action_kind: "command";
@@ -74,7 +79,14 @@ export type SandboxExecutorConfig = {
     authToken: string;
     timeoutMs: number;
     allowedHosts: Set<string>;
+    allowedEgressCidrs: Set<string>;
+    denyPrivateIps: boolean;
+    mtlsCertPem: string;
+    mtlsKeyPem: string;
+    mtlsCaPem: string;
+    mtlsServerName: string;
   };
+  artifactObjectStoreBaseUri: string | null;
   heartbeatIntervalMs: number;
   staleAfterMs: number;
   recoveryPollIntervalMs: number;
@@ -168,10 +180,273 @@ function sandboxRemoteHostAllowed(hostname: string, allowlist: Set<string>): boo
   return false;
 }
 
+type ParsedCidr = {
+  family: 4 | 6;
+  prefix: number;
+  network: bigint;
+  mask: bigint;
+};
+
+function trimTrailingSlash(v: string): string {
+  return v.replace(/\/+$/g, "");
+}
+
+function sha256Text(v: string): string {
+  return createHash("sha256").update(v, "utf8").digest("hex");
+}
+
+function normalizeIpv4(ip: string): string | null {
+  const parts = ip.trim().split(".");
+  if (parts.length !== 4) return null;
+  const octets: number[] = [];
+  for (const p of parts) {
+    if (!/^\d{1,3}$/.test(p)) return null;
+    const n = Number(p);
+    if (!Number.isFinite(n) || n < 0 || n > 255) return null;
+    octets.push(n);
+  }
+  return octets.join(".");
+}
+
+function parseIpv6ToHextets(raw: string): number[] | null {
+  const input = raw.trim().toLowerCase();
+  if (!input) return null;
+  const zone = input.indexOf("%");
+  const stripped = zone >= 0 ? input.slice(0, zone) : input;
+  const hasDouble = stripped.includes("::");
+  if (hasDouble && stripped.indexOf("::") !== stripped.lastIndexOf("::")) return null;
+  const [leftRaw, rightRaw] = hasDouble ? stripped.split("::") : [stripped, ""];
+  const left = leftRaw.length > 0 ? leftRaw.split(":") : [];
+  const right = rightRaw.length > 0 ? rightRaw.split(":") : [];
+
+  const parsePart = (part: string): number[] | null => {
+    if (!part) return [];
+    if (part.includes(".")) {
+      const normalized = normalizeIpv4(part);
+      if (!normalized) return null;
+      const octets = normalized.split(".").map((x) => Number(x));
+      return [((octets[0] << 8) | octets[1]) & 0xffff, ((octets[2] << 8) | octets[3]) & 0xffff];
+    }
+    if (!/^[0-9a-f]{1,4}$/i.test(part)) return null;
+    return [Number.parseInt(part, 16)];
+  };
+
+  const leftNums: number[] = [];
+  for (const part of left) {
+    const parsed = parsePart(part);
+    if (!parsed) return null;
+    leftNums.push(...parsed);
+  }
+  const rightNums: number[] = [];
+  for (const part of right) {
+    const parsed = parsePart(part);
+    if (!parsed) return null;
+    rightNums.push(...parsed);
+  }
+
+  if (hasDouble) {
+    const zeros = 8 - (leftNums.length + rightNums.length);
+    if (zeros < 0) return null;
+    return [...leftNums, ...new Array(zeros).fill(0), ...rightNums];
+  }
+  if (leftNums.length !== 8) return null;
+  return leftNums;
+}
+
+function ipToBigInt(ipRaw: string): { family: 4 | 6; value: bigint } | null {
+  const ip = ipRaw.trim();
+  const family = isIP(ip);
+  if (family === 4) {
+    const normalized = normalizeIpv4(ip);
+    if (!normalized) return null;
+    const value = normalized
+      .split(".")
+      .map((x) => BigInt(Number(x)))
+      .reduce((acc, oct) => (acc << 8n) + oct, 0n);
+    return { family: 4, value };
+  }
+  if (family === 6) {
+    const hextets = parseIpv6ToHextets(ip);
+    if (!hextets || hextets.length !== 8) return null;
+    let value = 0n;
+    for (const h of hextets) value = (value << 16n) + BigInt(h);
+    return { family: 6, value };
+  }
+  return null;
+}
+
+function parseCidrRule(raw: string): ParsedCidr | null {
+  const v = String(raw ?? "").trim();
+  if (!v) return null;
+  const slash = v.lastIndexOf("/");
+  if (slash <= 0 || slash >= v.length - 1) return null;
+  const ipPart = v.slice(0, slash).trim();
+  const prefixRaw = v.slice(slash + 1).trim();
+  const ip = ipToBigInt(ipPart);
+  if (!ip) return null;
+  const bits = ip.family === 4 ? 32 : 128;
+  const prefix = Number(prefixRaw);
+  if (!Number.isFinite(prefix) || Math.trunc(prefix) !== prefix || prefix < 0 || prefix > bits) return null;
+  const shift = BigInt(bits - prefix);
+  const fullMask = (1n << BigInt(bits)) - 1n;
+  const mask = prefix === 0 ? 0n : (fullMask << shift) & fullMask;
+  return {
+    family: ip.family,
+    prefix,
+    network: ip.value & mask,
+    mask,
+  };
+}
+
+function ipInCidrs(ip: string, cidrs: ParsedCidr[]): boolean {
+  const parsedIp = ipToBigInt(ip);
+  if (!parsedIp) return false;
+  for (const cidr of cidrs) {
+    if (cidr.family !== parsedIp.family) continue;
+    if ((parsedIp.value & cidr.mask) === cidr.network) return true;
+  }
+  return false;
+}
+
+function isPrivateOrLocalIp(ipRaw: string): boolean {
+  const parsed = ipToBigInt(ipRaw);
+  if (!parsed) return true;
+  if (parsed.family === 4) {
+    const n = Number(parsed.value);
+    const b1 = (n >>> 24) & 0xff;
+    const b2 = (n >>> 16) & 0xff;
+    if (b1 === 10) return true;
+    if (b1 === 127) return true;
+    if (b1 === 0) return true;
+    if (b1 === 169 && b2 === 254) return true;
+    if (b1 === 172 && b2 >= 16 && b2 <= 31) return true;
+    if (b1 === 192 && b2 === 168) return true;
+    if (b1 >= 224) return true;
+    return false;
+  }
+  const ip = parseIpv6ToHextets(ipRaw);
+  if (!ip || ip.length !== 8) return true;
+  if (ip.every((x) => x === 0)) return true; // ::
+  if (ip[0] === 0 && ip[1] === 0 && ip[2] === 0 && ip[3] === 0 && ip[4] === 0 && ip[5] === 0 && ip[6] === 0 && ip[7] === 1) return true; // ::1
+  if ((ip[0] & 0xfe00) === 0xfc00) return true; // fc00::/7
+  if ((ip[0] & 0xffc0) === 0xfe80) return true; // fe80::/10
+  if (ip[0] === 0xff00) return true; // ff00::/8 multicast
+  if (
+    ip[0] === 0
+    && ip[1] === 0
+    && ip[2] === 0
+    && ip[3] === 0
+    && ip[4] === 0
+    && ip[5] === 0xffff
+  ) {
+    const b1 = (ip[6] >>> 8) & 0xff;
+    const b2 = ip[6] & 0xff;
+    const b3 = (ip[7] >>> 8) & 0xff;
+    const b4 = ip[7] & 0xff;
+    return isPrivateOrLocalIp(`${b1}.${b2}.${b3}.${b4}`);
+  }
+  return false;
+}
+
+async function postJsonWithTls(
+  target: URL,
+  payload: string,
+  headers: Record<string, string>,
+  timeoutMs: number,
+  signal: AbortSignal,
+  tls: {
+    certPem: string;
+    keyPem: string;
+    caPem: string;
+    serverName: string;
+  },
+): Promise<{ status: number; bodyText: string }> {
+  const isHttps = target.protocol === "https:";
+  const defaultPort = isHttps ? 443 : 80;
+  const path = `${target.pathname}${target.search}`;
+
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    let abortHandler: (() => void) | null = null;
+    const done = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (abortHandler) signal.removeEventListener("abort", abortHandler);
+      fn();
+    };
+    const onAbort = () => done(() => reject(new Error("aborted")));
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+
+    const onResponse = (res: any) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer | string) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+      });
+      res.on("end", () => {
+        const bodyText = Buffer.concat(chunks).toString("utf8");
+        done(() => resolve({ status: Number(res.statusCode ?? 0), bodyText }));
+      });
+    };
+    const req = isHttps
+      ? httpsRequest(
+          {
+            protocol: target.protocol,
+            hostname: target.hostname,
+            port: target.port ? Number(target.port) : defaultPort,
+            method: "POST",
+            path,
+            headers,
+            timeout: timeoutMs,
+            cert: tls.certPem || undefined,
+            key: tls.keyPem || undefined,
+            ca: tls.caPem || undefined,
+            servername: tls.serverName || target.hostname,
+            rejectUnauthorized: true,
+          },
+          onResponse,
+        )
+      : httpRequest(
+          {
+            protocol: target.protocol,
+            hostname: target.hostname,
+            port: target.port ? Number(target.port) : defaultPort,
+            method: "POST",
+            path,
+            headers,
+            timeout: timeoutMs,
+          },
+          onResponse,
+        );
+    abortHandler = () => {
+      try {
+        req.destroy(new Error("aborted"));
+      } catch {
+        // ignore
+      }
+      onAbort();
+    };
+    signal.addEventListener("abort", abortHandler);
+    req.on("timeout", () => {
+      try {
+        req.destroy(new Error("request_timeout"));
+      } catch {
+        // ignore
+      }
+    });
+    req.on("error", (err) => done(() => reject(err)));
+    req.write(payload, "utf8");
+    req.end();
+  });
+}
+
 function toRunPayload(row: SandboxRunRow) {
   return {
     run_id: row.id,
     session_id: row.session_id,
+    project_id: row.project_id ?? null,
     planner_run_id: row.planner_run_id,
     decision_id: row.decision_id,
     action: {
@@ -393,6 +668,7 @@ export async function enqueueSandboxRun(
       session_id,
       tenant_id,
       scope,
+      project_id,
       planner_run_id,
       decision_id,
       action_kind,
@@ -403,13 +679,14 @@ export async function enqueueSandboxRun(
       metadata
     )
     VALUES (
-      $1, $2, $3, $4, $5, $6, 'command', $7::jsonb, $8, 'queued', $9, $10::jsonb
+      $1, $2, $3, $4, $5, $6, $7, 'command', $8::jsonb, $9, 'queued', $10, $11::jsonb
     )
     RETURNING
       id::text,
       session_id::text,
       tenant_id,
       scope,
+      project_id,
       planner_run_id,
       decision_id::text,
       action_kind::text AS action_kind,
@@ -436,6 +713,7 @@ export async function enqueueSandboxRun(
       parsed.session_id,
       tenancy.tenant_id,
       tenancy.scope,
+      trimOrNull(parsed.project_id),
       trimOrNull(parsed.planner_run_id),
       parsed.decision_id ?? null,
       JSON.stringify({ argv: parsed.action.argv }),
@@ -465,6 +743,7 @@ export async function getSandboxRun(client: pg.PoolClient, body: unknown, defaul
       session_id::text,
       tenant_id,
       scope,
+      project_id,
       planner_run_id,
       decision_id::text,
       action_kind::text AS action_kind,
@@ -555,7 +834,7 @@ export async function getSandboxRunLogs(client: pg.PoolClient, body: unknown, de
 export async function getSandboxRunArtifact(
   client: pg.PoolClient,
   body: unknown,
-  defaults: Omit<SandboxDefaults, "defaultTimeoutMs">,
+  defaults: Omit<SandboxDefaults, "defaultTimeoutMs"> & { artifactObjectStoreBaseUri?: string | null },
 ) {
   const parsed = SandboxRunArtifactRequest.parse(body);
   const tenancy = resolveTenantScope(
@@ -569,6 +848,7 @@ export async function getSandboxRunArtifact(
       session_id::text,
       tenant_id,
       scope,
+      project_id,
       planner_run_id,
       decision_id::text,
       action_kind::text AS action_kind,
@@ -609,35 +889,105 @@ export async function getSandboxRunArtifact(
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
     artifact: {
-      artifact_version: "sandbox_run_artifact_v1",
+      artifact_version: "sandbox_run_artifact_v2",
       run_id: row.id,
       session_id: row.session_id,
       uri: `aionis://${row.tenant_id}/${row.scope}/sandbox_run/${row.id}`,
+      project_id: row.project_id ?? null,
       planner_run_id: row.planner_run_id,
       decision_id: row.decision_id,
       mode: row.mode,
       status: row.status,
       timeout_ms: row.timeout_ms,
-      action:
-        parsed.include_action
-          ? {
-              kind: row.action_kind,
-              ...(row.action_json ?? {}),
-            }
-          : undefined,
-      output:
-        parsed.include_output
-          ? {
-              tail_bytes: parsed.tail_bytes,
-              stdout: tailText(row.stdout_text, parsed.tail_bytes),
-              stderr: tailText(row.stderr_text, parsed.tail_bytes),
-              truncated: !!row.output_truncated,
-            }
-          : undefined,
+      action: parsed.include_action
+        ? {
+            kind: row.action_kind,
+            ...(row.action_json ?? {}),
+          }
+        : undefined,
+      output: parsed.include_output
+        ? {
+            tail_bytes: parsed.tail_bytes,
+            stdout: tailText(row.stdout_text, parsed.tail_bytes),
+            stderr: tailText(row.stderr_text, parsed.tail_bytes),
+            truncated: !!row.output_truncated,
+          }
+        : undefined,
       exit_code: row.exit_code,
       error: row.error,
       result: parsed.include_result ? row.result_json ?? {} : undefined,
       metadata: parsed.include_metadata ? row.metadata ?? {} : undefined,
+      bundle: (() => {
+        const bundleBase = trimOrNull(defaults.artifactObjectStoreBaseUri);
+        const objectPrefix = `sandbox/${encodeURIComponent(row.tenant_id)}/${encodeURIComponent(row.scope)}/${row.id}`;
+        const objectUriFor = (name: string): string | null => {
+          if (!bundleBase) return null;
+          return `${trimTrailingSlash(bundleBase)}/${objectPrefix}/${name}`;
+        };
+        const objects: Array<Record<string, unknown>> = [];
+        const addObject = (
+          name: string,
+          mediaType: "application/json" | "text/plain",
+          payload: unknown,
+        ) => {
+          const serialized = mediaType === "text/plain" ? String(payload ?? "") : JSON.stringify(payload ?? {});
+          objects.push({
+            name,
+            media_type: mediaType,
+            bytes: Buffer.byteLength(serialized, "utf8"),
+            sha256: sha256Text(serialized),
+            uri: objectUriFor(name),
+            inline: parsed.bundle_inline ? payload : undefined,
+          });
+        };
+
+        if (parsed.include_action) {
+          addObject("action.json", "application/json", {
+            kind: row.action_kind,
+            ...(row.action_json ?? {}),
+          });
+        }
+        if (parsed.include_output) {
+          addObject("output.json", "application/json", {
+            tail_bytes: parsed.tail_bytes,
+            stdout: tailText(row.stdout_text, parsed.tail_bytes),
+            stderr: tailText(row.stderr_text, parsed.tail_bytes),
+            truncated: !!row.output_truncated,
+          });
+        }
+        if (parsed.include_result) {
+          addObject("result.json", "application/json", row.result_json ?? {});
+        }
+        if (parsed.include_metadata) {
+          addObject("metadata.json", "application/json", row.metadata ?? {});
+        }
+        addObject("run.json", "application/json", {
+          run_id: row.id,
+          session_id: row.session_id,
+          project_id: row.project_id ?? null,
+          tenant_id: row.tenant_id,
+          scope: row.scope,
+          planner_run_id: row.planner_run_id,
+          decision_id: row.decision_id,
+          mode: row.mode,
+          status: row.status,
+          timeout_ms: row.timeout_ms,
+          exit_code: row.exit_code,
+          error: row.error,
+          started_at: row.started_at,
+          finished_at: row.finished_at,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        });
+
+        return {
+          manifest_version: "sandbox_artifact_bundle_manifest_v1",
+          object_store_base_uri: bundleBase ?? null,
+          object_prefix: objectPrefix,
+          generated_at: new Date().toISOString(),
+          objects,
+        };
+      })(),
       started_at: row.started_at,
       finished_at: row.finished_at,
       created_at: row.created_at,
@@ -697,6 +1047,7 @@ export async function cancelSandboxRun(client: pg.PoolClient, body: unknown, def
         session_id::text,
         tenant_id,
         scope,
+        project_id,
         planner_run_id,
         decision_id::text,
         action_kind::text AS action_kind,
@@ -743,6 +1094,7 @@ export class SandboxExecutor {
   private readonly active = new Map<string, ActiveRunState>();
   private readonly heartbeatTimers = new Map<string, NodeJS.Timeout>();
   private readonly recoveryTimer: NodeJS.Timeout | null;
+  private readonly remoteAllowedCidrs: ParsedCidr[];
   private running = 0;
   private pumping = false;
   private shuttingDown = false;
@@ -752,6 +1104,9 @@ export class SandboxExecutor {
     private readonly store: SandboxStore,
     private readonly config: SandboxExecutorConfig,
   ) {
+    this.remoteAllowedCidrs = [...this.config.remote.allowedEgressCidrs.values()]
+      .map((rule) => parseCidrRule(rule))
+      .filter((rule): rule is ParsedCidr => !!rule);
     this.recoveryTimer =
       this.config.enabled && this.config.recoveryPollIntervalMs > 0
         ? setInterval(() => {
@@ -784,6 +1139,17 @@ export class SandboxExecutor {
       remote_executor_configured: this.config.mode === "http_remote" ? !!this.config.remote.url : false,
       remote_executor_timeout_ms: this.config.mode === "http_remote" ? this.config.remote.timeoutMs : null,
       remote_executor_allowlist_count: this.config.mode === "http_remote" ? this.config.remote.allowedHosts.size : null,
+      remote_executor_egress_cidr_count: this.config.mode === "http_remote" ? this.remoteAllowedCidrs.length : null,
+      remote_executor_deny_private_ips: this.config.mode === "http_remote" ? this.config.remote.denyPrivateIps : null,
+      remote_executor_mtls_enabled:
+        this.config.mode === "http_remote"
+          ? !!(
+              trimOrNull(this.config.remote.mtlsCertPem)
+              || trimOrNull(this.config.remote.mtlsKeyPem)
+              || trimOrNull(this.config.remote.mtlsCaPem)
+              || trimOrNull(this.config.remote.mtlsServerName)
+            )
+          : null,
       heartbeat_interval_ms: this.config.heartbeatIntervalMs,
       stale_after_ms: this.config.staleAfterMs,
       recovery_poll_interval_ms: this.config.recoveryPollIntervalMs,
@@ -944,6 +1310,7 @@ export class SandboxExecutor {
             session_id::text,
             tenant_id,
             scope,
+            project_id,
             planner_run_id,
             decision_id::text,
             action_kind::text AS action_kind,
@@ -1197,6 +1564,78 @@ export class SandboxExecutor {
       });
       return;
     }
+    let resolvedIps: string[] = [];
+    try {
+      const resolved = await lookup(parsedRemoteUrl.hostname, { all: true, verbatim: true });
+      resolvedIps = resolved
+        .map((entry) => String(entry?.address ?? "").trim())
+        .filter((entry) => isIP(entry) !== 0);
+    } catch {
+      await this.finalize(run.id, {
+        status: "failed",
+        stdout: "",
+        stderr: "",
+        truncated: false,
+        exitCode: null,
+        error: "remote_executor_dns_lookup_failed",
+        result: { executor: "http_remote", host: parsedRemoteUrl.hostname },
+      });
+      return;
+    }
+    if (resolvedIps.length === 0) {
+      await this.finalize(run.id, {
+        status: "failed",
+        stdout: "",
+        stderr: "",
+        truncated: false,
+        exitCode: null,
+        error: "remote_executor_no_resolved_ip",
+        result: { executor: "http_remote", host: parsedRemoteUrl.hostname },
+      });
+      return;
+    }
+    if (this.remoteAllowedCidrs.length > 0) {
+      const blocked = resolvedIps.filter((ip) => !ipInCidrs(ip, this.remoteAllowedCidrs));
+      if (blocked.length > 0) {
+        await this.finalize(run.id, {
+          status: "failed",
+          stdout: "",
+          stderr: "",
+          truncated: false,
+          exitCode: null,
+          error: "remote_executor_egress_cidr_blocked",
+          result: {
+            executor: "http_remote",
+            host: parsedRemoteUrl.hostname,
+            resolved_ips: resolvedIps,
+            blocked_ips: blocked,
+          },
+        });
+        return;
+      }
+    }
+    if (this.config.remote.denyPrivateIps) {
+      const blockedPrivate = resolvedIps.filter(
+        (ip) => isPrivateOrLocalIp(ip) && !ipInCidrs(ip, this.remoteAllowedCidrs),
+      );
+      if (blockedPrivate.length > 0) {
+        await this.finalize(run.id, {
+          status: "failed",
+          stdout: "",
+          stderr: "",
+          truncated: false,
+          exitCode: null,
+          error: "remote_executor_private_egress_blocked",
+          result: {
+            executor: "http_remote",
+            host: parsedRemoteUrl.hostname,
+            resolved_ips: resolvedIps,
+            blocked_private_ips: blockedPrivate,
+          },
+        });
+        return;
+      }
+    }
 
     const timeoutMs = normalizeTimeoutMs(
       Math.min(run.timeout_ms, this.config.remote.timeoutMs),
@@ -1225,6 +1664,8 @@ export class SandboxExecutor {
       executor: "http_remote",
       command: command.file,
       argv: command.argv,
+      host: parsedRemoteUrl.hostname,
+      resolved_ips: resolvedIps,
     };
 
     try {
@@ -1235,27 +1676,36 @@ export class SandboxExecutor {
       const authToken = trimOrNull(this.config.remote.authToken);
       if (authHeader && authToken) headers[authHeader.toLowerCase()] = authToken;
 
-      const response = await fetch(parsedRemoteUrl.toString(), {
-        method: "POST",
-        headers,
-        signal: abort.signal,
-        body: JSON.stringify({
-          run_id: run.id,
-          tenant_id: run.tenant_id,
-          scope: run.scope,
-          session_id: run.session_id,
-          planner_run_id: run.planner_run_id,
-          decision_id: run.decision_id,
-          mode: run.mode,
-          timeout_ms: timeoutMs,
-          action: {
-            kind: "command",
-            argv: command.argv,
-          },
-          metadata: jsonObject(run.metadata),
-        }),
+      const requestBody = JSON.stringify({
+        run_id: run.id,
+        tenant_id: run.tenant_id,
+        scope: run.scope,
+        project_id: run.project_id ?? null,
+        session_id: run.session_id,
+        planner_run_id: run.planner_run_id,
+        decision_id: run.decision_id,
+        mode: run.mode,
+        timeout_ms: timeoutMs,
+        action: {
+          kind: "command",
+          argv: command.argv,
+        },
+        metadata: jsonObject(run.metadata),
       });
-      const rawBodyText = await response.text();
+      const remoteResponse = await postJsonWithTls(
+        parsedRemoteUrl,
+        requestBody,
+        headers,
+        timeoutMs,
+        abort.signal,
+        {
+          certPem: this.config.remote.mtlsCertPem,
+          keyPem: this.config.remote.mtlsKeyPem,
+          caPem: this.config.remote.mtlsCaPem,
+          serverName: this.config.remote.mtlsServerName,
+        },
+      );
+      const rawBodyText = remoteResponse.bodyText;
       const body = rawBodyText.length > 0 ? (() => {
         try {
           return JSON.parse(rawBodyText);
@@ -1287,9 +1737,9 @@ export class SandboxExecutor {
         || (body && typeof body === "object" && (body as any).output_truncated)
       );
       exitCode = asFiniteIntOrNull(body && typeof body === "object" ? (body as any).exit_code : null);
-      if (!response.ok) {
+      if (remoteResponse.status < 200 || remoteResponse.status >= 300) {
         status = "failed";
-        error = `remote_executor_http_${response.status}`;
+        error = `remote_executor_http_${remoteResponse.status}`;
       } else {
         status = normalizeSandboxStatus(body && typeof body === "object" ? (body as any).status : null) ?? (exitCode === 0 ? "succeeded" : "failed");
         if (!TERMINAL_SANDBOX_STATUSES.has(status)) {
@@ -1304,7 +1754,7 @@ export class SandboxExecutor {
       const resultPayload = body && typeof body === "object" && body.result && typeof body.result === "object" ? body.result : {};
       result = {
         ...result,
-        remote_http_status: response.status,
+        remote_http_status: remoteResponse.status,
         remote_request_ms: Math.max(0, Date.now() - startedAt),
         result: resultPayload,
       };
@@ -1363,6 +1813,7 @@ export class SandboxExecutor {
           session_id::text,
           tenant_id,
           scope,
+          project_id,
           planner_run_id,
           decision_id::text,
           action_kind::text AS action_kind,
@@ -1399,6 +1850,7 @@ export class SandboxExecutor {
           session_id::text,
           tenant_id,
           scope,
+          project_id,
           planner_run_id,
           decision_id::text,
           action_kind::text AS action_kind,
@@ -1462,6 +1914,7 @@ export class SandboxExecutor {
           session_id::text,
           tenant_id,
           scope,
+          project_id,
           planner_run_id,
           decision_id::text,
           action_kind::text AS action_kind,
@@ -1525,6 +1978,7 @@ export class SandboxExecutor {
           session_id::text,
           tenant_id,
           scope,
+          project_id,
           planner_run_id,
           decision_id::text,
           action_kind::text AS action_kind,

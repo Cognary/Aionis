@@ -22,6 +22,10 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
 2. `SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER`
 3. `SANDBOX_REMOTE_EXECUTOR_AUTH_TOKEN`
 4. `SANDBOX_REMOTE_EXECUTOR_TIMEOUT_MS`
+5. `SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON`（主机白名单）
+6. `SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON`（解析 IP 的 CIDR 白名单）
+7. `SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS`（默认 `true`）
+8. 可选 mTLS：`SANDBOX_REMOTE_EXECUTOR_MTLS_CERT_PEM`、`SANDBOX_REMOTE_EXECUTOR_MTLS_KEY_PEM`、`SANDBOX_REMOTE_EXECUTOR_MTLS_CA_PEM`、`SANDBOX_REMOTE_EXECUTOR_MTLS_SERVER_NAME`
 
 可选流量控制：
 
@@ -74,8 +78,17 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
 2. 使用 `local_process` 或 `http_remote` 时，`argv[0]` 必须在 `SANDBOX_ALLOWED_COMMANDS_JSON` 内。
 3. `timeout_ms` 会被服务端上限约束。
 4. `http_remote` 模式可通过 `SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON` 限制目标主机。
-5. 执行器心跳与失联回收参数：
+5. `http_remote` 会解析 DNS 并执行 egress 约束（`SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON`、`SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS`）。
+6. `sandbox/execute` 支持可选 `project_id`，用于匹配项目级预算策略。
+7. 执行器心跳与失联回收参数：
    `SANDBOX_RUN_HEARTBEAT_INTERVAL_MS`、`SANDBOX_RUN_STALE_AFTER_MS`、`SANDBOX_RUN_RECOVERY_POLL_INTERVAL_MS`。
+
+Artifact 契约：
+
+1. `POST /v1/memory/sandbox/runs/artifact` 返回 `artifact_version=sandbox_run_artifact_v2`。
+2. 响应包含 `bundle.manifest_version=sandbox_artifact_bundle_manifest_v1`。
+3. `bundle_inline=false` 时仅返回 manifest/hash/uri 元数据，不内联 payload。
+4. 可选对象存储基址：`SANDBOX_ARTIFACT_OBJECT_STORE_BASE_URI`。
 
 ## 预算与保留策略
 
@@ -88,6 +101,11 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
    - `GET /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
    - `GET /v1/admin/control/sandbox-budgets`
    - `DELETE /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
+4. 项目级覆盖（优先级高于租户级预算）：
+   - `PUT /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id`
+   - `GET /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id?scope=*`
+   - `GET /v1/admin/control/sandbox-project-budgets`
+   - `DELETE /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id?scope=*`
 
 清理保留作业：
 

@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { z } from "zod";
 
 const RuntimeModeSchema = z.enum(["local", "service", "cloud"]);
@@ -19,6 +20,44 @@ function sandboxRemoteHostAllowed(hostname: string, allowlist: string[]): boolea
     if (host === rule) return true;
   }
   return false;
+}
+
+function normalizeSandboxRemoteEgressCidrs(raw: string): string[] {
+  let parsed: unknown = [];
+  try {
+    const normalized = raw.trim();
+    parsed = normalized.length === 0 ? [] : JSON.parse(normalized);
+  } catch {
+    throw new Error("SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON must be valid JSON array");
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON must be a JSON array");
+  }
+  const out: string[] = [];
+  for (const item of parsed) {
+    if (typeof item !== "string") {
+      throw new Error("SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON entries must be strings");
+    }
+    const rawRule = item.trim();
+    if (!rawRule) continue;
+    const slash = rawRule.lastIndexOf("/");
+    if (slash <= 0 || slash >= rawRule.length - 1) {
+      throw new Error(`SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON invalid CIDR: ${rawRule}`);
+    }
+    const ip = rawRule.slice(0, slash).trim();
+    const prefixRaw = rawRule.slice(slash + 1).trim();
+    const family = isIP(ip);
+    if (family !== 4 && family !== 6) {
+      throw new Error(`SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON invalid CIDR IP: ${rawRule}`);
+    }
+    const prefix = Number(prefixRaw);
+    const maxPrefix = family === 4 ? 32 : 128;
+    if (!Number.isFinite(prefix) || Math.trunc(prefix) !== prefix || prefix < 0 || prefix > maxPrefix) {
+      throw new Error(`SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON invalid CIDR prefix: ${rawRule}`);
+    }
+    out.push(`${ip.toLowerCase()}/${prefix}`);
+  }
+  return out;
 }
 
 const EnvSchema = z.object({
@@ -257,6 +296,18 @@ const EnvSchema = z.object({
   SANDBOX_REMOTE_EXECUTOR_AUTH_TOKEN: z.string().default(""),
   SANDBOX_REMOTE_EXECUTOR_TIMEOUT_MS: z.coerce.number().int().positive().max(600000).default(20000),
   SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON: z.string().default("[]"),
+  SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON: z.string().default("[]"),
+  SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  SANDBOX_REMOTE_EXECUTOR_MTLS_CERT_PEM: z.string().default(""),
+  SANDBOX_REMOTE_EXECUTOR_MTLS_KEY_PEM: z.string().default(""),
+  SANDBOX_REMOTE_EXECUTOR_MTLS_CA_PEM: z.string().default(""),
+  SANDBOX_REMOTE_EXECUTOR_MTLS_SERVER_NAME: z.string().default(""),
+  SANDBOX_ARTIFACT_OBJECT_STORE_BASE_URI: z.string().default(""),
   SANDBOX_LOCAL_PROCESS_ALLOW_IN_PROD: z
     .string()
     .optional()
@@ -574,6 +625,12 @@ export function loadEnv(): Env {
     const mode = parsed.data.SANDBOX_EXECUTOR_MODE;
     const remoteUrl = parsed.data.SANDBOX_REMOTE_EXECUTOR_URL.trim();
     let allowedHosts: string[] = [];
+    const allowedCidrs = normalizeSandboxRemoteEgressCidrs(parsed.data.SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON);
+    const mtlsCert = parsed.data.SANDBOX_REMOTE_EXECUTOR_MTLS_CERT_PEM.trim();
+    const mtlsKey = parsed.data.SANDBOX_REMOTE_EXECUTOR_MTLS_KEY_PEM.trim();
+    const mtlsCa = parsed.data.SANDBOX_REMOTE_EXECUTOR_MTLS_CA_PEM.trim();
+    const mtlsServerName = parsed.data.SANDBOX_REMOTE_EXECUTOR_MTLS_SERVER_NAME.trim();
+    const mtlsEnabled = mtlsCert.length > 0 || mtlsKey.length > 0 || mtlsCa.length > 0 || mtlsServerName.length > 0;
     if (parsed.data.SANDBOX_ENABLED && mode === "http_remote" && remoteUrl.length === 0) {
       throw new Error("SANDBOX_REMOTE_EXECUTOR_URL is required when SANDBOX_EXECUTOR_MODE=http_remote and SANDBOX_ENABLED=true");
     }
@@ -603,12 +660,29 @@ export function loadEnv(): Env {
       if (!sandboxRemoteHostAllowed(parsedUrl.hostname, allowedHosts)) {
         throw new Error("SANDBOX_REMOTE_EXECUTOR_URL host is not in SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON");
       }
+      if (mtlsEnabled && parsedUrl.protocol !== "https:") {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_URL must use https when SANDBOX remote mTLS is configured");
+      }
     }
     if (parsed.data.SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER.trim().length === 0) {
       throw new Error("SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER must be non-empty");
     }
+    if ((mtlsCert.length > 0 || mtlsKey.length > 0) && (mtlsCert.length === 0 || mtlsKey.length === 0)) {
+      throw new Error("SANDBOX_REMOTE_EXECUTOR_MTLS_CERT_PEM and SANDBOX_REMOTE_EXECUTOR_MTLS_KEY_PEM must be set together");
+    }
+    if (allowedCidrs.length === 0 && !parsed.data.SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS && parsed.data.SANDBOX_ENABLED && mode === "http_remote") {
+      throw new Error(
+        "SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS=false requires SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON to be non-empty when sandbox http_remote is enabled",
+      );
+    }
     if (parsed.data.SANDBOX_RUN_HEARTBEAT_INTERVAL_MS > 0 && parsed.data.SANDBOX_RUN_HEARTBEAT_INTERVAL_MS >= parsed.data.SANDBOX_RUN_STALE_AFTER_MS) {
       throw new Error("SANDBOX_RUN_HEARTBEAT_INTERVAL_MS must be less than SANDBOX_RUN_STALE_AFTER_MS");
+    }
+  }
+  {
+    const artifactBase = parsed.data.SANDBOX_ARTIFACT_OBJECT_STORE_BASE_URI.trim();
+    if (artifactBase.length > 0 && !/^[a-z][a-z0-9+.-]*:\/\//i.test(artifactBase)) {
+      throw new Error("SANDBOX_ARTIFACT_OBJECT_STORE_BASE_URI must be an absolute URI (for example s3://bucket/prefix)");
     }
   }
   {
@@ -671,6 +745,9 @@ export function loadEnv(): Env {
     if (parsed.data.SANDBOX_ENABLED && parsed.data.SANDBOX_EXECUTOR_MODE === "http_remote") {
       const remoteUrl = parsed.data.SANDBOX_REMOTE_EXECUTOR_URL.trim();
       const rawAllowlist = parsed.data.SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON.trim();
+      const mtlsCert = parsed.data.SANDBOX_REMOTE_EXECUTOR_MTLS_CERT_PEM.trim();
+      const mtlsKey = parsed.data.SANDBOX_REMOTE_EXECUTOR_MTLS_KEY_PEM.trim();
+      const allowedCidrs = normalizeSandboxRemoteEgressCidrs(parsed.data.SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON);
       let allowlist: string[] = [];
       try {
         allowlist = (rawAllowlist.length === 0 ? [] : JSON.parse(rawAllowlist))
@@ -696,6 +773,14 @@ export function loadEnv(): Env {
       }
       if (!sandboxRemoteHostAllowed(parsedUrl.hostname, allowlist)) {
         throw new Error("SANDBOX_REMOTE_EXECUTOR_URL host is not in SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON");
+      }
+      if ((mtlsCert.length > 0 || mtlsKey.length > 0) && (mtlsCert.length === 0 || mtlsKey.length === 0)) {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_MTLS_CERT_PEM and SANDBOX_REMOTE_EXECUTOR_MTLS_KEY_PEM must be set together");
+      }
+      if (!parsed.data.SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS && allowedCidrs.length === 0) {
+        throw new Error(
+          "SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS=false requires SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON in APP_ENV=prod",
+        );
       }
     }
   }

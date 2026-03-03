@@ -624,6 +624,7 @@ const SandboxCommandAction = z.object({
 export const SandboxExecuteRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
+  project_id: z.string().min(1).max(128).optional(),
   actor: z.string().min(1).optional(),
   session_id: UUID,
   planner_run_id: z.string().min(1).optional(),
@@ -662,6 +663,7 @@ export const SandboxRunArtifactRequest = z.object({
   include_output: z.boolean().default(true),
   include_result: z.boolean().default(true),
   include_metadata: z.boolean().default(true),
+  bundle_inline: z.boolean().default(true),
 });
 
 export type SandboxRunArtifactInput = z.infer<typeof SandboxRunArtifactRequest>;

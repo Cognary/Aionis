@@ -22,6 +22,10 @@ Remote executor (when `SANDBOX_EXECUTOR_MODE=http_remote`):
 2. `SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER`
 3. `SANDBOX_REMOTE_EXECUTOR_AUTH_TOKEN`
 4. `SANDBOX_REMOTE_EXECUTOR_TIMEOUT_MS`
+5. `SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON` (host allowlist)
+6. `SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON` (resolved IP CIDR allowlist)
+7. `SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS` (default `true`)
+8. optional mTLS: `SANDBOX_REMOTE_EXECUTOR_MTLS_CERT_PEM`, `SANDBOX_REMOTE_EXECUTOR_MTLS_KEY_PEM`, `SANDBOX_REMOTE_EXECUTOR_MTLS_CA_PEM`, `SANDBOX_REMOTE_EXECUTOR_MTLS_SERVER_NAME`
 
 Optional traffic shaping:
 
@@ -74,8 +78,17 @@ Constraints:
 2. `argv[0]` must be in `SANDBOX_ALLOWED_COMMANDS_JSON` when using `local_process` or `http_remote`.
 3. `timeout_ms` is bounded server-side.
 4. `http_remote` mode supports host allowlists via `SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON`.
-5. executor heartbeat + stale recovery is controlled by:
+5. `http_remote` mode resolves DNS and enforces egress controls (`SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON`, `SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS`).
+6. `sandbox/execute` supports optional `project_id` for project-level budget policy matching.
+7. executor heartbeat + stale recovery is controlled by:
    `SANDBOX_RUN_HEARTBEAT_INTERVAL_MS`, `SANDBOX_RUN_STALE_AFTER_MS`, `SANDBOX_RUN_RECOVERY_POLL_INTERVAL_MS`.
+
+Artifact contract:
+
+1. `POST /v1/memory/sandbox/runs/artifact` returns `artifact_version=sandbox_run_artifact_v2`.
+2. Response includes `bundle.manifest_version=sandbox_artifact_bundle_manifest_v1`.
+3. `bundle_inline=false` returns manifest/hash/uri metadata without inline payload bodies.
+4. Optional object-store pointer base: `SANDBOX_ARTIFACT_OBJECT_STORE_BASE_URI`.
 
 ## Budget and Retention
 
@@ -88,6 +101,11 @@ Optional tenant budget gates for `sandbox/execute`:
    - `GET /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
    - `GET /v1/admin/control/sandbox-budgets`
    - `DELETE /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
+4. Project-level overrides (higher priority than tenant-level profile):
+   - `PUT /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id`
+   - `GET /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id?scope=*`
+   - `GET /v1/admin/control/sandbox-project-budgets`
+   - `DELETE /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id?scope=*`
 
 Retention cleanup job:
 

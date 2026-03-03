@@ -528,6 +528,7 @@ class SandboxSessionCreateInput(TypedDict, total=False):
 class SandboxExecuteInput(TypedDict, total=False):
     tenant_id: str
     scope: str
+    project_id: str
     actor: str
     session_id: str
     planner_run_id: str
@@ -560,6 +561,7 @@ class SandboxRunArtifactInput(TypedDict, total=False):
     include_output: bool
     include_result: bool
     include_metadata: bool
+    bundle_inline: bool
 
 
 class SandboxRunCancelInput(TypedDict, total=False):
@@ -752,6 +754,24 @@ class ControlSandboxBudgetGetQuery(TypedDict, total=False):
     scope: str
 
 
+class ControlSandboxProjectBudgetInput(TypedDict, total=False):
+    scope: str
+    daily_run_cap: Optional[int]
+    daily_timeout_cap: Optional[int]
+    daily_failure_cap: Optional[int]
+
+
+class ControlSandboxProjectBudgetGetQuery(TypedDict, total=False):
+    scope: str
+
+
+class ControlSandboxProjectBudgetsQuery(TypedDict, total=False):
+    tenant_id: str
+    project_id: str
+    limit: int
+    offset: int
+
+
 class ControlAuditEventsQuery(TypedDict, total=False):
     tenant_id: str
     action: str
@@ -820,6 +840,9 @@ __all__ = [
     "ControlSandboxBudgetGetQuery",
     "ControlSandboxBudgetInput",
     "ControlSandboxBudgetsQuery",
+    "ControlSandboxProjectBudgetGetQuery",
+    "ControlSandboxProjectBudgetInput",
+    "ControlSandboxProjectBudgetsQuery",
     "ControlTenantDiagnosticsQuery",
     "ControlTenantInput",
     "ControlTenantKeyUsageQuery",

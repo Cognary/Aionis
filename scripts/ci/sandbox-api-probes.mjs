@@ -59,6 +59,7 @@ async function executeOne(sessionId) {
     {
       tenant_id: tenantId,
       scope,
+      project_id: "sandbox_probe_project",
       session_id: sessionId,
       mode: "sync",
       planner_run_id: `sandbox_probe_${Date.now().toString(36)}`,
@@ -79,6 +80,10 @@ async function executeOne(sessionId) {
   ensure(out.body?.run && typeof out.body.run === "object", `${label}: sandbox/execute missing run`);
   ensure(isUuid(out.body.run?.run_id), `${label}: sandbox/execute missing valid run_id`);
   ensure(isUuid(out.body.run?.session_id), `${label}: sandbox/execute missing valid run.session_id`);
+  ensure(
+    out.body.run?.project_id === "sandbox_probe_project" || out.body.run?.project_id === null,
+    `${label}: sandbox/execute missing project_id`,
+  );
   ensure(
     typeof out.body?.accepted === "boolean",
     `${label}: sandbox/execute missing accepted boolean`,
@@ -146,6 +151,7 @@ async function getArtifact(runId) {
       include_output: true,
       include_result: true,
       include_metadata: true,
+      bundle_inline: false,
     },
     headers,
     label,
@@ -154,6 +160,11 @@ async function getArtifact(runId) {
   ensure(out.body?.artifact && typeof out.body.artifact === "object", `${label}: sandbox/runs/artifact missing artifact`);
   ensure(typeof out.body.artifact?.artifact_version === "string", `${label}: sandbox/runs/artifact missing artifact_version`);
   ensure(typeof out.body.artifact?.uri === "string", `${label}: sandbox/runs/artifact missing artifact uri`);
+  ensure(
+    typeof out.body.artifact?.bundle?.manifest_version === "string",
+    `${label}: sandbox/runs/artifact missing bundle manifest`,
+  );
+  ensure(Array.isArray(out.body.artifact?.bundle?.objects), `${label}: sandbox/runs/artifact missing bundle objects`);
   return out.body;
 }
 
@@ -219,6 +230,7 @@ try {
     artifact: {
       artifact_version: String(artifact.artifact?.artifact_version ?? ""),
       uri: String(artifact.artifact?.uri ?? ""),
+      manifest_version: String(artifact.artifact?.bundle?.manifest_version ?? ""),
     },
   });
 } catch (err) {

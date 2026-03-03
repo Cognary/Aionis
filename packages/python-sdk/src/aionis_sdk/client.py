@@ -29,6 +29,9 @@ if TYPE_CHECKING:
         ControlSandboxBudgetGetQuery,
         ControlSandboxBudgetInput,
         ControlSandboxBudgetsQuery,
+        ControlSandboxProjectBudgetGetQuery,
+        ControlSandboxProjectBudgetInput,
+        ControlSandboxProjectBudgetsQuery,
         ControlTenantDiagnosticsQuery,
         ControlTenantInput,
         ControlTenantKeyUsageQuery,
@@ -511,6 +514,65 @@ class AionisClient:
         **request_options: Any,
     ) -> Dict[str, Any]:
         return self._request("/v1/admin/control/sandbox-budgets", query or {}, request_options, method="GET")
+
+    def control_upsert_sandbox_project_budget(
+        self,
+        tenant_id: str,
+        project_id: str,
+        payload: "ControlSandboxProjectBudgetInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        tid = str(tenant_id or "").strip()
+        pid = str(project_id or "").strip()
+        if not tid:
+            raise ValueError("tenant_id is required")
+        if not pid:
+            raise ValueError("project_id is required")
+        path = f"/v1/admin/control/sandbox-project-budgets/{quote(tid, safe='')}/{quote(pid, safe='')}"
+        return self._request(path, payload, request_options, method="PUT")
+
+    def control_get_sandbox_project_budget(
+        self,
+        tenant_id: str,
+        project_id: str,
+        query: Optional["ControlSandboxProjectBudgetGetQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        tid = str(tenant_id or "").strip()
+        pid = str(project_id or "").strip()
+        if not tid:
+            raise ValueError("tenant_id is required")
+        if not pid:
+            raise ValueError("project_id is required")
+        path = f"/v1/admin/control/sandbox-project-budgets/{quote(tid, safe='')}/{quote(pid, safe='')}"
+        return self._request(path, query or {}, request_options, method="GET")
+
+    def control_delete_sandbox_project_budget(
+        self,
+        tenant_id: str,
+        project_id: str,
+        query: Optional["ControlSandboxProjectBudgetGetQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        tid = str(tenant_id or "").strip()
+        pid = str(project_id or "").strip()
+        if not tid:
+            raise ValueError("tenant_id is required")
+        if not pid:
+            raise ValueError("project_id is required")
+        q = query or {}
+        qp = urlencode({k: str(v) for k, v in q.items() if v is not None})
+        path = f"/v1/admin/control/sandbox-project-budgets/{quote(tid, safe='')}/{quote(pid, safe='')}"
+        if qp:
+            path = f"{path}?{qp}"
+        return self._request(path, {}, request_options, method="DELETE")
+
+    def control_list_sandbox_project_budgets(
+        self,
+        query: Optional["ControlSandboxProjectBudgetsQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/sandbox-project-budgets", query or {}, request_options, method="GET")
 
     def control_list_audit_events(
         self,
