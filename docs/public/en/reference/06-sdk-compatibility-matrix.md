@@ -44,4 +44,4 @@ Last updated: `2026-03-02`
 9. Update:
    - `packages/sdk/CHANGELOG.md`
    - `packages/python-sdk/CHANGELOG.md`
-   - `docs/SDK_COMPATIBILITY_MATRIX.md`
+   - `docs/public/en/reference/06-sdk-compatibility-matrix.md`

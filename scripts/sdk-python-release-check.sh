@@ -35,7 +35,8 @@ has_match() {
 
 PKG_TOML="packages/python-sdk/pyproject.toml"
 CHANGELOG="packages/python-sdk/CHANGELOG.md"
-MATRIX="docs/SDK_COMPATIBILITY_MATRIX.md"
+MATRIX_PRIMARY="docs/public/en/reference/06-sdk-compatibility-matrix.md"
+MATRIX_LEGACY="docs/SDK_COMPATIBILITY_MATRIX.md"
 
 version="$(python3 - <<'PY'
 import re
@@ -71,8 +72,17 @@ if ! has_match "^## \\[$version\\]" "$CHANGELOG"; then
   exit 1
 fi
 
-if ! has_match "python|aionis-sdk|$minor_x|$version" "$MATRIX"; then
-  echo "missing compatibility matrix entry for python sdk $minor_x or $version in $MATRIX" >&2
+if [[ -f "$MATRIX_PRIMARY" ]]; then
+  MATRIX_FILE="$MATRIX_PRIMARY"
+elif [[ -f "$MATRIX_LEGACY" ]]; then
+  MATRIX_FILE="$MATRIX_LEGACY"
+else
+  echo "compatibility matrix not found: checked $MATRIX_PRIMARY and $MATRIX_LEGACY" >&2
+  exit 1
+fi
+
+if ! has_match "python|aionis-sdk|$minor_x|$version" "$MATRIX_FILE"; then
+  echo "missing compatibility matrix entry for python sdk $minor_x or $version in $MATRIX_FILE" >&2
   exit 1
 fi
 
