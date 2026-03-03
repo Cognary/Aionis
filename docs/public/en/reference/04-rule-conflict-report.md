@@ -4,13 +4,13 @@ title: "Rule Conflict Report"
 
 # Rule Conflict Report
 
-Rule Conflict Report produces deterministic artifacts for rollout review when multiple rules compete.
+Use this report to review competing rule outcomes before rollout.
 
 ## What It Reports
 
-1. conflict winner/loser outcomes
-2. stable conflict fingerprint hash
-3. delta vs previous baseline (`new`, `resolved`, `winner_changes`)
+1. Winner/loser outcomes for conflicting rules.
+2. Deterministic fingerprint of conflict state.
+3. Delta versus prior baseline (`new`, `resolved`, `winner_changes`).
 
 ## Run
 
@@ -31,17 +31,22 @@ npm run -s job:rule-conflict-report -- \
   --strict
 ```
 
-## Output
+## Output You Should Record
 
 1. `summary.fingerprint_sha256`
 2. `summary.delta.new_conflicts`
 3. `summary.delta.resolved_conflicts`
 4. `summary.delta.winner_changes`
-5. detailed change lists for review
 
-Default artifact location:
+Default artifact path:
 
 `artifacts/rule_conflicts/<run_id>/summary.json`
+
+## Rollout Guidance
+
+1. Treat large `winner_changes` spikes as release risk.
+2. Compare with last known-good baseline before promotion.
+3. Pair review with Rule Promotion Governance output.
 
 ## Related
 

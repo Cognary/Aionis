@@ -25,7 +25,7 @@ npm install @aionis/sdk
 pip install aionis-sdk
 ```
 
-## Client Configuration
+## Client Setup
 
 Configure once per environment:
 
@@ -34,16 +34,7 @@ Configure once per environment:
 3. `scope`
 4. auth (`api_key` or bearer token)
 
-## Core Methods
-
-1. `write`
-2. `recall` / `recall_text`
-3. `context_assemble`
-4. `find`
-5. `resolve`
-6. policy loop methods (`rules_evaluate`, `tools_select`, `tools_decision`, `tools_feedback`)
-
-## TypeScript Quick Example
+## Quick Start (TypeScript)
 
 ```ts
 import { AionisClient } from "@aionis/sdk";
@@ -66,7 +57,7 @@ const recallRes = await client.recallText({
 console.log(writeRes.commit_uri, recallRes.request_id);
 ```
 
-## Python Quick Example
+## Quick Start (Python)
 
 ```python
 from aionis_sdk import AionisClient
@@ -84,17 +75,21 @@ recall_res = client.recall_text(query_text="preferred follow-up channel")
 print(write_res.get("commit_uri"), recall_res.get("request_id"))
 ```
 
-## Error Handling
+## Core SDK Methods
 
-Both SDKs expose typed API/network errors and preserve server error codes.
+1. Memory: `write`, `recall`, `recall_text`
+2. Context: `context_assemble`
+3. Graph: `find`, `resolve`
+4. Policy loop: `rules_evaluate`, `tools_select`, `tools_decision`, `tools_feedback`
 
-Recommended handling:
+## Error Handling Baseline
 
-1. Retry on transient network errors and `429`.
-2. Log `request_id` and server `error` code.
-3. Surface actionable messages to operators.
+1. Retry transient network and `429` errors.
+2. Log server `error` code and `request_id`.
+3. Surface clear operator-facing error messages.
 
-## Compatibility
+## Next Steps
 
 1. [SDK Compatibility Matrix](/public/en/reference/06-sdk-compatibility-matrix)
 2. [API Contract](/public/en/api/01-api-contract)
+3. [Build Memory Workflows](/public/en/guides/01-build-memory)

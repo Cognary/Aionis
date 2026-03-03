@@ -4,7 +4,7 @@ title: "Planner Context"
 
 # Planner Context
 
-Planner context is the structured input shape used by policy and tool-selection endpoints.
+Planner context is the normalized runtime input used by Aionis policy and tool-selection routes.
 
 ## Used By
 
@@ -13,22 +13,24 @@ Planner context is the structured input shape used by policy and tool-selection 
 3. `POST /v1/memory/planning/context`
 4. `POST /v1/memory/context/assemble`
 
-## Recommended Fields
+## Core Fields
 
-1. `version`
-2. `run.id`
-3. `intent`
-4. `agent.id` and optional `agent.team_id`
-5. `tool.name` (when tool reasoning is involved)
-6. `request` metadata (`endpoint`, `method`)
-7. optional tags and content-type hints
+| Field | Purpose |
+| --- | --- |
+| `version` | contract version for context shape |
+| `run.id` | execution correlation key |
+| `intent` | high-level user/job intent |
+| `agent.id` | acting agent identifier |
+| `agent.team_id` | optional team boundary |
+| `tool.name` | current or candidate tool |
+| `request.endpoint` | route-level request context |
 
-## Design Guidelines
+## Design Rules
 
-1. Keep keys stable across runtimes and SDKs.
-2. Avoid high-entropy prompt blobs as rule predicates.
-3. Use canonical identity fields for lane visibility checks.
-4. Reuse the same context for rule evaluation and tool selection.
+1. Keep field names stable across services and SDKs.
+2. Prefer normalized identifiers over free-form prompt text.
+3. Use the same context object for both rule evaluation and tool selection.
+4. Include `run.id` in every policy decision flow.
 
 ## Minimal Example
 
@@ -38,12 +40,19 @@ Planner context is the structured input shape used by policy and tool-selection 
   "run": { "id": "run_001" },
   "intent": "support_triage",
   "agent": { "id": "agent_a", "team_id": "team_default" },
-  "tool": { "name": "ticket_router" }
+  "tool": { "name": "ticket_router" },
+  "request": { "endpoint": "/chat/reply", "method": "POST" }
 }
 ```
+
+## Validation Checklist
+
+1. Required fields are present and typed consistently.
+2. The same payload works for `rules/evaluate` and `tools/select`.
+3. `run.id` is persisted in application telemetry.
 
 ## Related
 
 1. [Control and Policy](/public/en/control/01-control-policy)
-2. [API Contract](/public/en/api/01-api-contract)
-3. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
+2. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
+3. [API Contract](/public/en/api/01-api-contract)

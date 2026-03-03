@@ -4,34 +4,30 @@ title: "Rule Conflict Report"
 
 # Rule Conflict Report
 
-Last updated: `2026-02-24`
+Rule Conflict Report produces deterministic artifacts for rollout review when multiple rules compete.
 
-## Purpose
+## What It Reports
 
-Generate a deterministic conflict artifact for rule rollout review:
+1. conflict winner/loser outcomes
+2. stable conflict fingerprint hash
+3. delta vs previous baseline (`new`, `resolved`, `winner_changes`)
 
-1. winner/loser outcomes per conflict path
-2. stable fingerprint for reproducibility
-3. baseline delta (`new/resolved/winner_changes/loser_deltas`)
-
-## Command
+## Run
 
 ```bash
 npm run -s job:rule-conflict-report -- \
   --scope default \
   --tenant-id default \
-  --contexts-file examples/planner_context.json \
-  --rules-limit 50
+  --contexts-file examples/planner_context.json
 ```
 
-Compare with previous rollout:
+With baseline comparison:
 
 ```bash
 npm run -s job:rule-conflict-report -- \
   --scope default \
   --contexts-file examples/planner_context.json \
   --baseline artifacts/rule_conflicts/prev_run/summary.json \
-  --max-winner-changes 0 \
   --strict
 ```
 
@@ -41,9 +37,13 @@ npm run -s job:rule-conflict-report -- \
 2. `summary.delta.new_conflicts`
 3. `summary.delta.resolved_conflicts`
 4. `summary.delta.winner_changes`
-5. `details.delta.winner_changes[]`
-6. `details.delta.loser_deltas[]`
+5. detailed change lists for review
 
-By default output path:
+Default artifact location:
 
 `artifacts/rule_conflicts/<run_id>/summary.json`
+
+## Related
+
+1. [Rule Promotion Governance](/public/en/reference/03-rule-promotion-governance)
+2. [Execution Loop Gate](/public/en/control/03-execution-loop-gate)

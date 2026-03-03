@@ -4,14 +4,14 @@ title: "Core Concepts"
 
 # Core Concepts
 
-This section defines the model behind Aionis as a Memory Kernel.
+This section defines the core model behind Aionis as a production memory kernel.
 
 ## Mental Model
 
-Aionis combines four concepts:
+Aionis combines four ideas:
 
 1. Verifiable memory state.
-2. Derived asynchronous processing.
+2. Derived async processing.
 3. Tenant/scope isolation.
 4. Decision-level execution provenance.
 
@@ -26,7 +26,7 @@ flowchart TD
   E --> F
 ```
 
-## Read in Order
+## Concept Map
 
 1. [Verifiable Memory Graph](/public/en/core-concepts/01-verifiable-memory-graph)
 2. [Derived Artifacts](/public/en/core-concepts/02-derived-artifacts)
@@ -36,13 +36,13 @@ flowchart TD
 ## Key Terms
 
 1. `commit`: immutable write anchor for state lineage.
-2. `decision`: policy decision linked to execution.
+2. `decision`: policy/planner decision object linked to execution.
 3. `run`: one execution chain instance.
 4. `scope`: logical memory partition inside a tenant.
 5. `context layer`: typed section of assembled planner context.
 
-## Next Steps
+## Read Order
 
-1. [Architecture](/public/en/architecture/01-architecture)
-2. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
-3. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
+1. Read all four concept pages in sequence.
+2. Continue with [Architecture](/public/en/architecture/01-architecture).
+3. Continue with [Context Orchestration](/public/en/context-orchestration/00-context-orchestration).

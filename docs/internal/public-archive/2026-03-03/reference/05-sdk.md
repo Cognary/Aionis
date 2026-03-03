@@ -1,273 +1,100 @@
 ---
-title: "Aionis SDK (TypeScript + Python)"
+title: "SDK Guide"
 ---
 
-# Aionis SDK (TypeScript + Python)
+# SDK Guide
 
-当前提供两个 SDK：
+Aionis provides official SDKs for TypeScript and Python.
 
-1. TypeScript: `packages/sdk`（`@aionis/sdk`）
-2. Python: `packages/python-sdk`（`aionis-sdk`）
+## Packages
 
-目标是替代直接手写 `curl` JSON，并保持同一错误语义与接口形态。
+1. TypeScript: `@aionis/sdk`
+2. Python: `aionis-sdk`
 
-## 1. Capability
+## Install
 
-当前已覆盖核心方法：
+### TypeScript
+
+```bash
+npm install @aionis/sdk
+```
+
+### Python
+
+```bash
+pip install aionis-sdk
+```
+
+## Client Configuration
+
+Configure once per environment:
+
+1. `base_url`
+2. `tenant_id`
+3. `scope`
+4. auth (`api_key` or bearer token)
+
+## Core Methods
 
 1. `write`
-2. `recall`
-3. `recallText`
-4. `contextAssemble` / `context_assemble`
-5. `find`
-6. `createSession`
-7. `writeEvent`
-8. `listSessionEvents`
-9. `packExport`
-10. `packImport`
-11. `rulesEvaluate`
-12. `toolsSelect`
-13. `toolsDecision`
-14. `toolsFeedback`
-15. `health`
-16. `getCapabilityContract` / `get_capability_contract`
+2. `recall` / `recall_text`
+3. `context_assemble`
+4. `find`
+5. `resolve`
+6. policy loop methods (`rules_evaluate`, `tools_select`, `tools_decision`, `tools_feedback`)
 
-admin/control 方法（需 `admin_token`）：
-
-1. tenant/project: `controlUpsertTenant`, `controlListTenants`, `controlUpsertProject`
-2. api keys: `controlCreateApiKey`, `controlListApiKeys`, `controlListStaleApiKeys`, `controlRevokeApiKey`, `controlRotateApiKey`
-3. alerts: `controlCreateAlertRoute`, `controlListAlertRoutes`, `controlUpdateAlertRouteStatus`, `controlListAlertDeliveries`
-4. incident publish: `controlEnqueueIncidentPublishJob`, `controlListIncidentPublishJobs`, `controlReplayIncidentPublishJobs`
-5. tenant quota: `controlUpsertTenantQuota`, `controlGetTenantQuota`, `controlDeleteTenantQuota`
-6. observability: `controlListAuditEvents`, `controlGetTenantDashboard`, `controlGetTenantDiagnostics`
-7. dashboard deep views: `controlGetTenantIncidentPublishRollup`, `controlGetTenantIncidentPublishSlo`, `controlGetTenantTimeseries`, `controlGetTenantKeyUsage`
-
-并内置：
-
-1. 统一错误模型（`AionisApiError` / `AionisNetworkError`）
-2. 429/5xx 退避重试（可配置）
-3. `x-request-id` 自动生成与透传
-
-## 2. TypeScript Import
+## TypeScript Quick Example
 
 ```ts
-import { AionisClient, AionisApiError } from "@aionis/sdk";
-```
+import { AionisClient } from "@aionis/sdk";
 
-## 3. TypeScript Quick Usage
-
-```ts
 const client = new AionisClient({
-  base_url: "http://localhost:3001",
-  timeout_ms: 10000,
-  retry: { max_retries: 2 },
-  api_key: process.env.API_KEY,          // optional
-  auth_bearer: process.env.AUTH_BEARER,  // optional
-});
-
-const write = await client.write({
-  tenant_id: "default",
+  baseUrl: "https://api.aionisos.com",
+  tenantId: "default",
   scope: "default",
-  input_text: "sdk write",
-  auto_embed: false,
-  nodes: [{ client_id: "sdk_evt_1", type: "event", text_summary: "hello sdk" }],
-  edges: [],
+  apiKey: process.env.AIONIS_API_KEY,
 });
 
-console.log(write.request_id, write.data.commit_id);
-
-const assembled = await client.contextAssemble({
-  tenant_id: "default",
-  scope: "default",
-  query_text: "Assemble context before reply",
-  include_rules: true,
-  tool_candidates: ["search_profile", "draft_answer"],
-  tool_strict: false,
-  return_layered_context: true,
-  context_layers: {
-    enabled: ["facts", "rules", "tools", "citations"],
-    char_budget_total: 1200,
-    include_merge_trace: true,
-  },
+const writeRes = await client.write({
+  input_text: "Customer prefers email follow-up",
 });
 
-console.log(assembled.data.layered_context?.order);
+const recallRes = await client.recallText({
+  query_text: "preferred follow-up channel",
+});
+
+console.log(writeRes.commit_uri, recallRes.request_id);
 ```
 
-## 4. Python Quick Usage
+## Python Quick Example
 
 ```python
-import os
-from aionis_sdk import AionisApiError, AionisClient
+from aionis_sdk import AionisClient
 
 client = AionisClient(
-    base_url="http://localhost:3001",
-    timeout_s=10.0,
-    api_key=os.getenv("API_KEY"),           # optional
-    auth_bearer=os.getenv("AUTH_BEARER"),   # optional
-)
-out = client.write({
-    "scope": "default",
-    "input_text": "python sdk write",
-    "auto_embed": False,
-    "nodes": [{"client_id": "py_evt_1", "type": "event", "text_summary": "hello python sdk"}],
-    "edges": [],
-})
-print(out["status"], out["request_id"], out["data"]["commit_id"])
-
-assembled = client.context_assemble(
-    {
-        "tenant_id": "default",
-        "scope": "default",
-        "query_text": "Assemble context before reply",
-        "include_rules": True,
-        "tool_candidates": ["search_profile", "draft_answer"],
-        "tool_strict": False,
-        "return_layered_context": True,
-        "context_layers": {
-            "enabled": ["facts", "rules", "tools", "citations"],
-            "char_budget_total": 1200,
-            "include_merge_trace": True,
-        },
-    }
-)
-print(assembled["data"].get("layered_context", {}).get("order"))
-```
-
-## 5. Error Semantics
-
-API 4xx/5xx 会抛出 `AionisApiError`：
-
-```ts
-try {
-  await client.recallText({ tenant_id: "default", scope: "default", query_text: "x", limit: 20 });
-} catch (err) {
-  if (err instanceof AionisApiError) {
-    console.error(err.status, err.code, err.message, err.request_id, err.details);
-  }
-}
-```
-
-网络与超时会抛出 `AionisNetworkError`。
-
-### 5.1 Backend capability negotiation
-
-当后端返回 `backend_capability_unsupported`（HTTP 501）时，可用 SDK helper 判断并读取标准化字段（`capability`, `failure_mode`, `degraded_mode`, `fallback_applied`）：
-
-TypeScript:
-
-```ts
-import { isBackendCapabilityUnsupportedError } from "@aionis/sdk";
-```
-
-Python:
-
-```python
-from aionis_sdk import is_backend_capability_unsupported_error
-```
-
-也可以通过 `health()` 或 `getCapabilityContract()`/`get_capability_contract()` 主动读取 `/health.memory_store_capability_contract` 做客户端行为协商。
-
-对于严格模式 shadow dual-write 失败（`error="shadow_dual_write_strict_failure"`），SDK 也提供专用 helper：
-
-- TypeScript: `isShadowDualWriteStrictFailureError`
-- Python: `is_shadow_dual_write_strict_failure_error`
-
-TypeScript example:
-
-```ts
-import { AionisApiError, isShadowDualWriteStrictFailureError } from "@aionis/sdk";
-
-try {
-  await client.write({
-    scope: "default",
-    input_text: "strict mirror write",
-    auto_embed: false,
-    nodes: [{ client_id: "strict_evt_1", type: "event", text_summary: "strict probe" }],
-    edges: [],
-  });
-} catch (err) {
-  if (isShadowDualWriteStrictFailureError(err)) {
-    console.error("strict mirror failure", err.details.degraded_mode, err.details.failure_mode, err.details.error);
-  } else if (err instanceof AionisApiError) {
-    console.error("api error", err.code, err.message);
-  } else {
-    throw err;
-  }
-}
-```
-
-Python example:
-
-```python
-from aionis_sdk import (
-    AionisApiError,
-    is_shadow_dual_write_strict_failure_error,
+    base_url="https://api.aionisos.com",
+    tenant_id="default",
+    scope="default",
+    api_key="<your-api-key>",
 )
 
-try:
-    client.write(
-        {
-            "scope": "default",
-            "input_text": "strict mirror write",
-            "auto_embed": False,
-            "nodes": [{"client_id": "strict_evt_1", "type": "event", "text_summary": "strict probe"}],
-            "edges": [],
-        }
-    )
-except Exception as err:
-    if is_shadow_dual_write_strict_failure_error(err):
-        print("strict mirror failure", err.details.get("degraded_mode"), err.details.get("failure_mode"), err.details.get("error"))
-    elif isinstance(err, AionisApiError):
-        print("api error", err.code, str(err))
-    else:
-        raise
+write_res = client.write(input_text="Customer prefers email follow-up")
+recall_res = client.recall_text(query_text="preferred follow-up channel")
+
+print(write_res.get("commit_uri"), recall_res.get("request_id"))
 ```
 
-## 6. Tenant-aware Calls
+## Error Handling
 
-- 所有 SDK 输入类型都支持 `tenant_id?: string`。
-- 若上游网关已注入 `X-Tenant-Id`，请求体可不传 `tenant_id`。
+Both SDKs expose typed API/network errors and preserve server error codes.
 
-## 6.1 Auth Header Strategy
+Recommended handling:
 
-1. `api_key` -> 自动注入 `X-Api-Key`
-2. `auth_bearer` -> 自动注入 `Authorization: Bearer <jwt>`
-3. `admin_token` 仍可用于 debug/admin 场景（`X-Admin-Token`）
+1. Retry on transient network errors and `429`.
+2. Log `request_id` and server `error` code.
+3. Surface actionable messages to operators.
 
-## 7. Smoke Commands
+## Compatibility
 
-```bash
-npm run sdk:smoke
-npm run sdk:tools-feedback-smoke
-npm run sdk:py:smoke
-```
-
-这两个脚本分别覆盖：
-
-1. `write + rulesEvaluate + toolsSelect (+ recallText 可选)`
-2. `toolsSelect + toolsFeedback`
-
-## 8. Build + Release Checks
-
-```bash
-npm run sdk:build
-npm run sdk:pack-dry-run
-npm run sdk:release-check
-npm run sdk:py:compile
-npm run sdk:py:release-check
-```
-
-Package files:
-
-1. `packages/sdk/package.json`
-2. `packages/sdk/README.md`
-3. `packages/sdk/CHANGELOG.md`
-4. `packages/python-sdk/pyproject.toml`
-5. `packages/python-sdk/README.md`
-6. `packages/python-sdk/CHANGELOG.md`
-
-Compatibility matrix:
-
-- `docs/SDK_COMPATIBILITY_MATRIX.md`
-- `docs/SDK_RELEASE.md`
+1. [SDK Compatibility Matrix](/public/en/reference/06-sdk-compatibility-matrix)
+2. [API Contract](/public/en/api/01-api-contract)

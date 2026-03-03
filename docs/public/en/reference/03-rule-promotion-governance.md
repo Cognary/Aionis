@@ -4,19 +4,19 @@ title: "Rule Promotion Governance"
 
 # Rule Promotion Governance
 
-Rule Promotion Governance validates promotion readiness before a state transition is applied.
+Use this report before moving a rule to a stronger lifecycle state.
 
-## Target Transitions
+## Promotion Targets
 
 1. `draft -> shadow`
 2. `shadow -> active`
 
-## Governance Signals
+## What It Evaluates
 
-1. positive/negative outcome balance
-2. distinct run coverage
-3. risk score and confidence
-4. deterministic transition hash for audit
+1. Positive and negative outcome balance.
+2. Coverage across distinct runs.
+3. Confidence and risk indicators.
+4. Stable transition fingerprint for release evidence.
 
 ## Run
 
@@ -37,12 +37,18 @@ npm run -s job:rule-promotion-governance -- \
   --strict
 ```
 
-## Output
+## Output You Should Record
 
-1. Check list with pass/fail status
-2. `summary.pass` and failed checks
-3. structured next-step payload for state transition API
-4. governance hash for traceability
+1. Overall pass/fail status.
+2. Failed checks and threshold details.
+3. Suggested next-state payload.
+4. Governance fingerprint hash.
+
+## Promotion Rule
+
+1. Promote only when strict checks pass.
+2. If checks fail, keep current state and gather more signal.
+3. Re-run after additional traffic evidence.
 
 ## Related
 

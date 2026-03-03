@@ -57,6 +57,7 @@ export default defineConfig({
         items: [
           { text: "Docs Home", link: "/index" },
           { text: "Overview", link: "/public/en/overview/01-overview" },
+          { text: "Docs Navigation Map", link: "/public/en/overview/02-docs-navigation" },
           { text: "Core Differentiators", link: "/public/en/about/01-core-differentiators" },
           { text: "Aionis Onepage", link: "/public/en/about/02-aionis-onepage" },
         ],

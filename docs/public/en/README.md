@@ -12,6 +12,7 @@ Aionis is a **Memory Kernel** for AI products: durable memory, policy-aware exec
 2. [Embedding Setup](/public/en/getting-started/03-embedding-setup)
 3. [Build Memory Workflows](/public/en/guides/01-build-memory)
 4. [Playground](/public/en/guides/02-playground)
+5. [Docs Navigation Map](/public/en/overview/02-docs-navigation)
 
 ## Choose Your Path
 
