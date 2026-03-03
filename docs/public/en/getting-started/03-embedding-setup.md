@@ -4,34 +4,33 @@ title: "Embedding Setup"
 
 # Embedding Setup
 
-This page is the single source for enabling and validating Aionis embedding capability.
+This page explains how to enable embedding-based recall in Aionis for development and production.
 
 ## Provider Modes
 
 `EMBEDDING_PROVIDER` supports:
 
-1. `fake`: deterministic local vectors (dev/smoke, not semantic quality)
-2. `openai`: real OpenAI embeddings
-3. `minimax`: real MiniMax embeddings
+1. `fake`: deterministic vectors for local smoke tests (not semantic quality)
+2. `openai`: OpenAI embeddings
+3. `minimax`: MiniMax embeddings
 4. `none`: disable server-side embeddings (client must provide vectors)
 
-## Quick Start
+## Quick Setup Flow
 
-1. Edit `.env`
-2. Set `EMBEDDING_PROVIDER` and required credentials
-3. Restart Aionis API
-4. Verify via `recall_text`
+1. Set provider and credentials in environment variables.
+2. Restart Aionis.
+3. Run one `recall_text` check and confirm `query.embedding_provider`.
 
-## Config: Fake (Default for Local Dev)
+## Configuration Examples
+
+### Fake (Local Dev)
 
 ```bash
 EMBEDDING_PROVIDER=fake
 EMBEDDING_DIM=1536
 ```
 
-Use this when validating API flow only.
-
-## Config: OpenAI Embeddings
+### OpenAI
 
 ```bash
 EMBEDDING_PROVIDER=openai
@@ -43,10 +42,10 @@ EMBEDDING_DIM=1536
 
 Notes:
 
-1. Do not add `/embeddings` to any URL; OpenAI endpoint is built in by Aionis provider adapter.
-2. `OPENAI_API_KEY` is required when `EMBEDDING_PROVIDER=openai`.
+1. `OPENAI_API_KEY` is required.
+2. Do not append `/embeddings` to your base URL; Aionis handles provider endpoint routing.
 
-## Config: MiniMax Embeddings
+### MiniMax
 
 ```bash
 EMBEDDING_PROVIDER=minimax
@@ -60,44 +59,46 @@ EMBEDDING_DIM=1536
 
 Notes:
 
-1. `MINIMAX_API_KEY` and `MINIMAX_GROUP_ID` are required when `EMBEDDING_PROVIDER=minimax`.
-2. For database recall, keep `MINIMAX_EMBED_TYPE=db` unless you intentionally split db/query vectors.
+1. `MINIMAX_API_KEY` and `MINIMAX_GROUP_ID` are required.
+2. Keep `MINIMAX_EMBED_TYPE=db` unless you intentionally use split query/db vectors.
 
-## Config: None (Server Embedding Off)
+### None (Server Embedding Off)
 
 ```bash
 EMBEDDING_PROVIDER=none
 ```
 
-Behavior:
+When set to `none`, write endpoints still work, but embedding-dependent recall routes return `no_embedding_provider`.
 
-1. `recall_text` / planning-context routes return `no_embedding_provider`
-2. `/write` still works, but server will not generate vectors
+## Restart Aionis
 
-## Restart
+Choose one path:
 
-After editing `.env`, restart API:
+1. Process mode: restart your API process manager (`systemd`, `pm2`, or equivalent).
+2. Docker Compose: `docker compose up -d --force-recreate`.
+3. Single container: recreate container with updated `--env-file`.
+
+## Verify Embeddings (Required)
+
+Set base URL and auth first:
 
 ```bash
-cd /Users/lucio/Desktop/Aionis
-PORT=3001 npm run dev
+export BASE_URL="https://api.your-domain.com"
+export API_KEY="your_api_key"
 ```
 
-## Verify (Required)
-
-### 1) Health
+Health:
 
 ```bash
-curl -sS http://127.0.0.1:3001/health | jq '.ok'
+curl -sS "$BASE_URL/health" | jq '.ok'
 ```
 
-Expected: `true`
-
-### 2) recall_text provider check
+Provider check:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:3001/v1/memory/recall_text \
+curl -sS -X POST "$BASE_URL/v1/memory/recall_text" \
   -H 'content-type: application/json' \
+  -H "x-api-key: $API_KEY" \
   -d '{"tenant_id":"default","scope":"default","query_text":"embedding check","limit":3}' \
   | jq '.query.embedding_provider'
 ```
@@ -110,13 +111,13 @@ Expected examples:
 
 ## Troubleshooting
 
-1. `no_embedding_provider`: set `EMBEDDING_PROVIDER` to `fake|openai|minimax` and restart.
-2. `invalid_api_key` / auth errors: credential is missing/invalid for selected provider.
-3. `upstream_embedding_rate_limited`: reduce burst/QPS, enable cache/batching, or retry with backoff.
-4. Route works but quality is poor: you are likely on `fake`; switch to `openai` or `minimax`.
+1. `no_embedding_provider`: provider is `none` or not set; configure `fake|openai|minimax` and restart.
+2. `invalid_api_key` or upstream auth error: verify provider credential and account scope.
+3. `upstream_embedding_rate_limited`: add retry/backoff and reduce burst concurrency.
+4. Low-quality results: you are likely using `fake`; use `openai` or `minimax` for semantic retrieval.
 
-## Security Notes
+## Security Baseline
 
-1. Never commit real API keys to git.
-2. Rotate keys immediately if exposed in terminal logs, screenshots, or backup env files.
-3. Use separate keys for local/dev/prod.
+1. Never commit API keys.
+2. Use separate keys for dev/staging/prod.
+3. Rotate keys immediately after exposure.
