@@ -11,6 +11,7 @@ Use this page to choose the fastest path through Aionis documentation.
 1. [Overview](/public/en/overview/01-overview)
 2. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
 3. [Build Memory Workflows](/public/en/guides/01-build-memory)
+4. [Role-Based Reading Paths](/public/en/overview/03-role-based-paths)
 
 ## If You Are Integrating in Production (30 Minutes)
 

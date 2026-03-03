@@ -1,55 +1,46 @@
 ---
-title: "Context Orchestration"
+title: "Context Orchestration Deep Dive"
 ---
 
-# Context Orchestration
+# Context Orchestration Deep Dive
 
-`POST /v1/memory/context/assemble` builds deterministic, layered, planner-ready context.
+This is the deep-dive companion to the primary page:
 
-## Layer Model
+1. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
 
-1. `facts`
-2. `episodes`
-3. `rules`
-4. `decisions`
-5. `tools`
-6. `citations`
+## When to Use This Page
 
-## Control Surface
+Use this page when you are tuning layer composition and budget strategy for production traffic.
 
-1. `context_layers.enabled`
-2. `context_layers.char_budget_total`
-3. `context_layers.char_budget_by_layer`
-4. `context_layers.max_items_by_layer`
-5. `context_layers.include_merge_trace`
+## Deep-Dive Focus Areas
 
-## Presets
+1. Layer interaction under fixed `char_budget_total`.
+2. Per-layer max item strategy (`max_items_by_layer`).
+3. Merge and drop behavior analysis (`include_merge_trace`).
+4. Preset selection (`compact`, `balanced`, `policy-first`) by latency/cost profile.
 
-1. Compact: minimal token footprint.
-2. Balanced: default production profile.
-3. Policy-first: emphasize rules/decisions/tools in final context.
+## Advanced Tuning Sequence
 
-## Why It Matters
+1. Start with `balanced` and collect baseline latency + answer quality.
+2. Reduce low-value layers first when latency/token cost is high.
+3. Increase `rules` and `decisions` share for policy-heavy flows.
+4. Keep `citations` enabled for replay and operator inspection paths.
 
-1. Predictable context size for latency and cost control.
-2. Clear policy-layer visibility for governed execution.
-3. Replay-friendly output using explicit layer traces.
-
-## Example Request
+## Example (Policy-Heavy Route)
 
 ```json
 {
   "tenant_id": "default",
   "scope": "default",
-  "query_text": "Assemble context before tool selection",
+  "query_text": "resolve escalation policy for enterprise support",
   "return_layered_context": true,
   "context_layers": {
-    "enabled": ["facts", "episodes", "rules", "tools", "citations"],
-    "char_budget_total": 1800,
+    "enabled": ["facts", "rules", "decisions", "tools", "citations"],
+    "char_budget_total": 1400,
     "max_items_by_layer": {
-      "facts": 8,
-      "episodes": 4,
-      "rules": 6,
+      "facts": 6,
+      "rules": 8,
+      "decisions": 6,
       "tools": 4,
       "citations": 8
     },
@@ -60,7 +51,6 @@ title: "Context Orchestration"
 
 ## Related
 
-1. [Context Orchestration Overview](/public/en/context-orchestration/00-context-orchestration)
-2. [Planner Context](/public/en/reference/02-planner-context)
-3. [Playground](/public/en/guides/02-playground)
-4. [API Contract](/public/en/api/01-api-contract)
+1. [Planner Context](/public/en/reference/02-planner-context)
+2. [Build Memory Workflows](/public/en/guides/01-build-memory)
+3. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)

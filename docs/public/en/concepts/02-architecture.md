@@ -1,57 +1,54 @@
 ---
-title: "Memory Graph Architecture"
+title: "Architecture Deep Dive"
 ---
 
-# Memory Graph Architecture
+# Architecture Deep Dive
 
-## Core Idea
+This page is the deep-dive companion to the primary architecture page:
 
-Postgres + pgvector is the system of record for:
+1. [Architecture](/public/en/architecture/01-architecture)
 
-- Nodes (Event/Entity/Topic/Rule/Evidence)
-- Edges (part_of/related_to/derived_from)
-- Commit chain (append-only, hash-chained)
+## When to Use This Page
 
-Graph traversal / spreading activation is done in the application layer.
+Use this page when you are planning scale, resilience, and replay behavior beyond first integration.
 
-## Layering
+## Storage and Execution Model
 
-- Raw / Evidence (immutable pointers):
-  - stored as references in `memory_nodes.raw_ref` / `memory_nodes.evidence_ref`
-- Normalized Nodes/Edges:
-  - the stable substrate used for recall
-- Derived artifacts:
-  - Topics (from clustering), edge weights, summaries
-  - should bump `derivation_version` so they can be recomputed
+1. Memory objects are persisted in a durable graph model with commit lineage.
+2. Graph traversal and ranking are executed at the application layer.
+3. Derived artifacts (embedding/topic/compression) are asynchronous and versioned.
 
-## Rule Lifecycle
+## Lifecycle Layers
 
-Rules are proposal-first:
+1. Raw and evidence references preserve source linkage.
+2. Normalized nodes and edges are the retrieval substrate.
+3. Derived artifacts enrich recall and planning context without blocking core writes.
 
-- `draft`: created from extraction/abstraction; not used by default recall
-- `shadow`: evaluated silently (produces suggestions but doesn't enforce)
-- `active`: can influence planner/policy/tool selection
-- `disabled`: kept for audit, excluded from recall
+## Policy Execution States
 
-Per-run ephemeral override should live in execution state (not persisted).
+Rule lifecycle is explicit and reversible:
 
-## Recall
+1. `draft`
+2. `shadow`
+3. `active`
+4. `disabled`
 
-1. Stage 1 (fast):
-   - pgvector candidate retrieval from active tiers (`hot` + `warm`)
-   - entity literal matches
-   - rules in `shadow/active`
-2. Stage 2 (smart):
-   - fetch 1-2 hop neighborhood for seeds
-   - spreading activation in app
-   - output a bounded subgraph + citations (node/edge/commit/evidence refs)
+## Recall Pipeline Notes
 
-## Jobs
+1. Candidate generation starts with vector and literal signals.
+2. Neighborhood expansion adds graph context around top seeds.
+3. Final context is bounded by orchestration budgets.
 
-- topic clustering:
-  - groups recent events into stable clusters
-  - creates/updates Topic nodes + `derived_from` edges
-- salience decay:
-  - applies salience decay to active tiers
-  - transitions by policy: `hot -> warm -> cold -> archive`
-  - protects pinned/legal-hold nodes and enforces mutation budget
+## Job Model
+
+Common background jobs include:
+
+1. Topic clustering.
+2. Compression rollups.
+3. Salience and quality maintenance checks.
+
+## Related
+
+1. [Architecture](/public/en/architecture/01-architecture)
+2. [Operate and Production](/public/en/operate-production/00-operate-production)
+3. [Consolidation Replay Runbook](/public/en/operations/10-consolidation-replay-runbook)

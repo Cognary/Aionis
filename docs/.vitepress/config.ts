@@ -58,6 +58,7 @@ export default defineConfig({
           { text: "Docs Home", link: "/index" },
           { text: "Overview", link: "/public/en/overview/01-overview" },
           { text: "Docs Navigation Map", link: "/public/en/overview/02-docs-navigation" },
+          { text: "Role-Based Reading Paths", link: "/public/en/overview/03-role-based-paths" },
           { text: "Core Differentiators", link: "/public/en/about/01-core-differentiators" },
           { text: "Aionis Onepage", link: "/public/en/about/02-aionis-onepage" },
         ],
