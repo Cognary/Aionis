@@ -137,12 +137,15 @@ Delivered in current batch:
 1. `http_remote` executor mode with remote adapter contract and `/health` surface.
 2. sandbox retention cleanup job (`npm run job:sandbox-retention`) with dry-run/apply mode.
 3. per-tenant sandbox budget policy gates (`SANDBOX_TENANT_BUDGET_POLICY_JSON` + execute-time enforcement).
+4. executor heartbeat + stale-run recovery semantics (`SANDBOX_RUN_HEARTBEAT_INTERVAL_MS`, stale recovery loop).
+5. sandbox artifact export endpoint (`/v1/memory/sandbox/runs/artifact`).
+6. admin budget control APIs (`/v1/admin/control/sandbox-budgets*`) + persistence table (`memory_sandbox_budget_profiles`).
 
 Remaining:
 
-1. network policy controls (egress allowlist)
-2. file I/O isolation and artifact contract
-3. admission controls by tenant/project policy
+1. enforce stronger remote executor network policy (CIDR/mTLS/egress classes) beyond host allowlist.
+2. file I/O isolation and artifact bundle contract (object-store pointers + lifecycle).
+3. extend admission controls with project-level identities and policy rollout workflow.
 
 ## 8. Acceptance Criteria
 

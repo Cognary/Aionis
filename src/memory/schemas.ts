@@ -653,6 +653,19 @@ export const SandboxRunLogsRequest = z.object({
 
 export type SandboxRunLogsInput = z.infer<typeof SandboxRunLogsRequest>;
 
+export const SandboxRunArtifactRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  run_id: UUID,
+  tail_bytes: z.number().int().positive().max(512000).default(65536),
+  include_action: z.boolean().default(true),
+  include_output: z.boolean().default(true),
+  include_result: z.boolean().default(true),
+  include_metadata: z.boolean().default(true),
+});
+
+export type SandboxRunArtifactInput = z.infer<typeof SandboxRunArtifactRequest>;
+
 export const SandboxRunCancelRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),

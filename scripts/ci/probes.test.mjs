@@ -541,6 +541,40 @@ test("sandbox probe validates sandbox API contract when enabled", async () => {
         },
       };
     }
+    if (req.path === "/v1/memory/sandbox/runs/artifact") {
+      return {
+        status: 200,
+        body: {
+          tenant_id: String(req.body?.tenant_id ?? "default"),
+          scope: String(req.body?.scope ?? "default"),
+          artifact: {
+            artifact_version: "sandbox_run_artifact_v1",
+            run_id: runId,
+            session_id: sessionId,
+            uri: `aionis://${String(req.body?.tenant_id ?? "default")}/${String(req.body?.scope ?? "default")}/sandbox_run/${runId}`,
+            planner_run_id: "sandbox_probe_run",
+            decision_id: decisionId,
+            mode: "sync",
+            status: "succeeded",
+            timeout_ms: 15000,
+            output: {
+              tail_bytes: 2048,
+              stdout: "sandbox probe\n",
+              stderr: "",
+              truncated: false,
+            },
+            exit_code: 0,
+            error: null,
+            result: { executor: "mock" },
+            metadata: {},
+            started_at: now,
+            finished_at: now,
+            created_at: now,
+            updated_at: now,
+          },
+        },
+      };
+    }
     if (req.path === "/v1/memory/sandbox/runs/cancel") {
       return {
         status: 200,

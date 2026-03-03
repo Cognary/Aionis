@@ -90,14 +90,15 @@ client.tools_run({"scope": "default", "run_id": "run_001"})
 12. `sandbox_execute`
 13. `sandbox_run_get`
 14. `sandbox_run_logs`
-15. `sandbox_run_cancel`
-16. `rules_evaluate`
-17. `tools_select`
-18. `tools_decision`
-19. `tools_run`
-20. `tools_feedback`
-21. `health`
-22. `get_capability_contract`
+15. `sandbox_run_artifact`
+16. `sandbox_run_cancel`
+17. `rules_evaluate`
+18. `tools_select`
+19. `tools_decision`
+20. `tools_run`
+21. `tools_feedback`
+22. `health`
+23. `get_capability_contract`
 
 Admin/control methods (require `admin_token`):
 
@@ -106,8 +107,9 @@ Admin/control methods (require `admin_token`):
 3. `control_create_alert_route`, `control_list_alert_routes`, `control_update_alert_route_status`, `control_list_alert_deliveries`
 4. `control_enqueue_incident_publish_job`, `control_list_incident_publish_jobs`, `control_replay_incident_publish_jobs`
 5. `control_upsert_tenant_quota`, `control_get_tenant_quota`, `control_delete_tenant_quota`
-6. `control_list_audit_events`, `control_get_tenant_dashboard`, `control_get_tenant_diagnostics`
-7. `control_get_tenant_incident_publish_rollup`, `control_get_tenant_incident_publish_slo`, `control_get_tenant_timeseries`, `control_get_tenant_key_usage`
+6. `control_upsert_sandbox_budget`, `control_get_sandbox_budget`, `control_delete_sandbox_budget`, `control_list_sandbox_budgets`
+7. `control_list_audit_events`, `control_get_tenant_dashboard`, `control_get_tenant_diagnostics`
+8. `control_get_tenant_incident_publish_rollup`, `control_get_tenant_incident_publish_slo`, `control_get_tenant_timeseries`, `control_get_tenant_key_usage`
 
 ## Error model
 

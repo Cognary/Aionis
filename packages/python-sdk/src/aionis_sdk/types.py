@@ -551,6 +551,17 @@ class SandboxRunLogsInput(TypedDict, total=False):
     tail_bytes: int
 
 
+class SandboxRunArtifactInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run_id: str
+    tail_bytes: int
+    include_action: bool
+    include_output: bool
+    include_result: bool
+    include_metadata: bool
+
+
 class SandboxRunCancelInput(TypedDict, total=False):
     tenant_id: str
     scope: str
@@ -584,6 +595,12 @@ class SandboxRunLogsResponse(TypedDict, total=False):
     run_id: str
     status: str
     logs: Dict[str, Any]
+
+
+class SandboxRunArtifactResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    artifact: Dict[str, Any]
 
 
 class SandboxRunCancelResponse(TypedDict, total=False):
@@ -718,6 +735,23 @@ class ControlTenantQuotaInput(TypedDict, total=False):
     recall_text_embed_max_wait_ms: int
 
 
+class ControlSandboxBudgetInput(TypedDict, total=False):
+    scope: str
+    daily_run_cap: Optional[int]
+    daily_timeout_cap: Optional[int]
+    daily_failure_cap: Optional[int]
+
+
+class ControlSandboxBudgetsQuery(TypedDict, total=False):
+    tenant_id: str
+    limit: int
+    offset: int
+
+
+class ControlSandboxBudgetGetQuery(TypedDict, total=False):
+    scope: str
+
+
 class ControlAuditEventsQuery(TypedDict, total=False):
     tenant_id: str
     action: str
@@ -783,6 +817,9 @@ __all__ = [
     "ControlIncidentPublishRollupQuery",
     "ControlIncidentPublishSloQuery",
     "ControlProjectInput",
+    "ControlSandboxBudgetGetQuery",
+    "ControlSandboxBudgetInput",
+    "ControlSandboxBudgetsQuery",
     "ControlTenantDiagnosticsQuery",
     "ControlTenantInput",
     "ControlTenantKeyUsageQuery",
@@ -815,6 +852,8 @@ __all__ = [
     "SandboxRunCancelResponse",
     "SandboxRunGetInput",
     "SandboxRunGetResponse",
+    "SandboxRunArtifactInput",
+    "SandboxRunArtifactResponse",
     "SandboxRunLogsInput",
     "SandboxRunLogsResponse",
     "SandboxSessionCreateInput",

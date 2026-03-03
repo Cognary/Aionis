@@ -57,14 +57,15 @@ If you set custom headers manually, the SDK will not override existing auth head
 12. `sandboxExecute`
 13. `sandboxRunGet`
 14. `sandboxRunLogs`
-15. `sandboxRunCancel`
-16. `rulesEvaluate`
-17. `toolsSelect`
-18. `toolsDecision`
-19. `toolsRun`
-20. `toolsFeedback`
-21. `health`
-22. `getCapabilityContract`
+15. `sandboxRunArtifact`
+16. `sandboxRunCancel`
+17. `rulesEvaluate`
+18. `toolsSelect`
+19. `toolsDecision`
+20. `toolsRun`
+21. `toolsFeedback`
+22. `health`
+23. `getCapabilityContract`
 
 Admin/control methods (require `admin_token`):
 
@@ -73,8 +74,9 @@ Admin/control methods (require `admin_token`):
 3. `controlCreateAlertRoute`, `controlListAlertRoutes`, `controlUpdateAlertRouteStatus`, `controlListAlertDeliveries`
 4. `controlEnqueueIncidentPublishJob`, `controlListIncidentPublishJobs`, `controlReplayIncidentPublishJobs`
 5. `controlUpsertTenantQuota`, `controlGetTenantQuota`, `controlDeleteTenantQuota`
-6. `controlListAuditEvents`, `controlGetTenantDashboard`, `controlGetTenantDiagnostics`
-7. `controlGetTenantIncidentPublishRollup`, `controlGetTenantIncidentPublishSlo`, `controlGetTenantTimeseries`, `controlGetTenantKeyUsage`
+6. `controlUpsertSandboxBudget`, `controlGetSandboxBudget`, `controlDeleteSandboxBudget`, `controlListSandboxBudgets`
+7. `controlListAuditEvents`, `controlGetTenantDashboard`, `controlGetTenantDiagnostics`
+8. `controlGetTenantIncidentPublishRollup`, `controlGetTenantIncidentPublishSlo`, `controlGetTenantTimeseries`, `controlGetTenantKeyUsage`
 
 ## Error model
 

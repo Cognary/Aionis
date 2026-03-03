@@ -37,6 +37,12 @@ import type {
   ControlTenantInput,
   ControlTenantKeyUsageQuery,
   ControlTenantKeyUsageResponse,
+  ControlSandboxBudgetDeleteResponse,
+  ControlSandboxBudgetGetQuery,
+  ControlSandboxBudgetInput,
+  ControlSandboxBudgetResponse,
+  ControlSandboxBudgetsQuery,
+  ControlSandboxBudgetsResponse,
   ControlTenantQuotaDeleteResponse,
   ControlTenantQuotaInput,
   ControlTenantQuotaResponse,
@@ -78,6 +84,8 @@ import type {
   SandboxRunCancelResponse,
   SandboxRunGetInput,
   SandboxRunGetResponse,
+  SandboxRunArtifactInput,
+  SandboxRunArtifactResponse,
   SandboxRunLogsInput,
   SandboxRunLogsResponse,
   SandboxSessionCreateInput,
@@ -286,6 +294,13 @@ export class AionisClient {
     return this.requestPost<SandboxRunLogsInput, SandboxRunLogsResponse>("/v1/memory/sandbox/runs/logs", input, opts);
   }
 
+  async sandboxRunArtifact(
+    input: SandboxRunArtifactInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<SandboxRunArtifactResponse>> {
+    return this.requestPost<SandboxRunArtifactInput, SandboxRunArtifactResponse>("/v1/memory/sandbox/runs/artifact", input, opts);
+  }
+
   async sandboxRunCancel(
     input: SandboxRunCancelInput,
     opts?: RequestOptions,
@@ -472,6 +487,57 @@ export class AionisClient {
     const tid = String(tenantId ?? "").trim();
     if (!tid) throw new Error("tenantId is required");
     return this.requestDelete<ControlTenantQuotaDeleteResponse>(`/v1/admin/control/tenant-quotas/${encodeURIComponent(tid)}`, opts);
+  }
+
+  async controlUpsertSandboxBudget(
+    tenantId: string,
+    input: ControlSandboxBudgetInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ControlSandboxBudgetResponse>> {
+    const tid = String(tenantId ?? "").trim();
+    if (!tid) throw new Error("tenantId is required");
+    return this.requestPut<ControlSandboxBudgetInput, ControlSandboxBudgetResponse>(
+      `/v1/admin/control/sandbox-budgets/${encodeURIComponent(tid)}`,
+      input,
+      opts,
+    );
+  }
+
+  async controlGetSandboxBudget(
+    tenantId: string,
+    query?: ControlSandboxBudgetGetQuery,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ControlSandboxBudgetResponse>> {
+    const tid = String(tenantId ?? "").trim();
+    if (!tid) throw new Error("tenantId is required");
+    return this.requestGet<ControlSandboxBudgetResponse>(
+      `/v1/admin/control/sandbox-budgets/${encodeURIComponent(tid)}`,
+      query,
+      opts,
+    );
+  }
+
+  async controlDeleteSandboxBudget(
+    tenantId: string,
+    query?: ControlSandboxBudgetGetQuery,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ControlSandboxBudgetDeleteResponse>> {
+    const tid = String(tenantId ?? "").trim();
+    if (!tid) throw new Error("tenantId is required");
+    return this.request<ControlSandboxBudgetDeleteResponse>(
+      "DELETE",
+      `/v1/admin/control/sandbox-budgets/${encodeURIComponent(tid)}`,
+      opts,
+      undefined,
+      query ?? {},
+    );
+  }
+
+  async controlListSandboxBudgets(
+    query?: ControlSandboxBudgetsQuery,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ControlSandboxBudgetsResponse>> {
+    return this.requestGet<ControlSandboxBudgetsResponse>("/v1/admin/control/sandbox-budgets", query, opts);
   }
 
   async controlListAuditEvents(

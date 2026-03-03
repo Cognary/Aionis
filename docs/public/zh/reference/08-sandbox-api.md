@@ -40,7 +40,8 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
 2. `POST /v1/memory/sandbox/execute`
 3. `POST /v1/memory/sandbox/runs/get`
 4. `POST /v1/memory/sandbox/runs/logs`
-5. `POST /v1/memory/sandbox/runs/cancel`
+5. `POST /v1/memory/sandbox/runs/artifact`
+6. `POST /v1/memory/sandbox/runs/cancel`
 
 ## 最小流程
 
@@ -72,6 +73,9 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
 1. 当前仅支持 `action.kind=command`。
 2. 使用 `local_process` 或 `http_remote` 时，`argv[0]` 必须在 `SANDBOX_ALLOWED_COMMANDS_JSON` 内。
 3. `timeout_ms` 会被服务端上限约束。
+4. `http_remote` 模式可通过 `SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON` 限制目标主机。
+5. 执行器心跳与失联回收参数：
+   `SANDBOX_RUN_HEARTBEAT_INTERVAL_MS`、`SANDBOX_RUN_STALE_AFTER_MS`、`SANDBOX_RUN_RECOVERY_POLL_INTERVAL_MS`。
 
 ## 预算与保留策略
 
@@ -79,6 +83,11 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
 
 1. `SANDBOX_TENANT_BUDGET_WINDOW_HOURS`
 2. `SANDBOX_TENANT_BUDGET_POLICY_JSON`（例如 `{"*":{"daily_run_cap":1000,"daily_timeout_cap":100}}`）
+3. 也可通过 admin API 管理运行时预算：
+   - `PUT /v1/admin/control/sandbox-budgets/:tenant_id`
+   - `GET /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
+   - `GET /v1/admin/control/sandbox-budgets`
+   - `DELETE /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
 
 清理保留作业：
 

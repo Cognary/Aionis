@@ -71,6 +71,7 @@ import {
   cancelSandboxRun,
   createSandboxSession,
   enqueueSandboxRun,
+  getSandboxRunArtifact,
   getSandboxRun,
   getSandboxRunLogs,
   parseAllowedSandboxCommands,
@@ -133,7 +134,26 @@ function parseSandboxTenantBudgetPolicy(raw: string): Map<string, SandboxTenantB
   return out;
 }
 
+function parseSandboxRemoteAllowedHosts(raw: string): Set<string> {
+  let parsed: unknown = [];
+  try {
+    const normalized = raw.trim();
+    parsed = normalized.length === 0 ? [] : JSON.parse(normalized);
+  } catch {
+    throw new Error("SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON must be valid JSON array");
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON must be a JSON array");
+  }
+  return new Set(
+    parsed
+      .map((v) => (typeof v === "string" ? v.trim().toLowerCase() : ""))
+      .filter((v) => v.length > 0),
+  );
+}
+
 const env = loadEnv();
+const sandboxRemoteAllowedHosts = parseSandboxRemoteAllowedHosts(env.SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON);
 const store = createMemoryStore({
   backend: env.MEMORY_STORE_BACKEND,
   databaseUrl: env.DATABASE_URL,
@@ -171,7 +191,12 @@ const sandboxExecutor = new SandboxExecutor(store, {
     authHeader: env.SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER.trim(),
     authToken: env.SANDBOX_REMOTE_EXECUTOR_AUTH_TOKEN,
     timeoutMs: env.SANDBOX_REMOTE_EXECUTOR_TIMEOUT_MS,
+    allowedHosts: sandboxRemoteAllowedHosts,
   },
+  heartbeatIntervalMs: env.SANDBOX_RUN_HEARTBEAT_INTERVAL_MS,
+  staleAfterMs: env.SANDBOX_RUN_STALE_AFTER_MS,
+  recoveryPollIntervalMs: env.SANDBOX_RUN_RECOVERY_POLL_INTERVAL_MS,
+  recoveryBatchSize: env.SANDBOX_RUN_RECOVERY_BATCH_SIZE,
 });
 const authResolver = createAuthResolver({
   mode: env.MEMORY_AUTH_MODE,
@@ -1212,6 +1237,10 @@ app.log.info(
     sandbox_executor_mode: env.SANDBOX_EXECUTOR_MODE,
     sandbox_executor_max_concurrency: env.SANDBOX_EXECUTOR_MAX_CONCURRENCY,
     sandbox_remote_executor_configured: env.SANDBOX_EXECUTOR_MODE === "http_remote" ? !!env.SANDBOX_REMOTE_EXECUTOR_URL.trim() : false,
+    sandbox_remote_executor_allowlist_count: sandboxRemoteAllowedHosts.size,
+    sandbox_run_heartbeat_interval_ms: env.SANDBOX_RUN_HEARTBEAT_INTERVAL_MS,
+    sandbox_run_stale_after_ms: env.SANDBOX_RUN_STALE_AFTER_MS,
+    sandbox_run_recovery_poll_interval_ms: env.SANDBOX_RUN_RECOVERY_POLL_INTERVAL_MS,
     sandbox_tenant_budget_window_hours: env.SANDBOX_TENANT_BUDGET_WINDOW_HOURS,
     sandbox_tenant_budget_tenant_count: sandboxTenantBudgetPolicy.size,
     tenant_quota_enabled: env.TENANT_QUOTA_ENABLED,
@@ -1392,6 +1421,18 @@ const ControlTenantQuotaSchema = z.object({
   recall_text_embed_burst: z.number().int().positive(),
   recall_text_embed_max_wait_ms: z.number().int().min(0),
 });
+
+const ControlSandboxBudgetUpsertSchema = z
+  .object({
+    scope: z.string().min(1).max(256).optional(),
+    daily_run_cap: z.number().int().min(0).nullable().optional(),
+    daily_timeout_cap: z.number().int().min(0).nullable().optional(),
+    daily_failure_cap: z.number().int().min(0).nullable().optional(),
+  })
+  .refine(
+    (v) => v.daily_run_cap !== undefined || v.daily_timeout_cap !== undefined || v.daily_failure_cap !== undefined,
+    { message: "at least one cap field is required" },
+  );
 
 const ControlAlertRouteSchema = z.object({
   tenant_id: z.string().min(1).max(128),
@@ -1747,6 +1788,69 @@ app.delete("/v1/admin/control/tenant-quotas/:tenant_id", async (req, reply) => {
     });
   }
   return reply.code(200).send({ ok: true, deleted });
+});
+
+app.put("/v1/admin/control/sandbox-budgets/:tenant_id", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const body = ControlSandboxBudgetUpsertSchema.parse(req.body ?? {});
+  const out = await upsertSandboxBudgetProfile({
+    tenant_id: tenantId,
+    scope: body.scope ?? "*",
+    daily_run_cap: body.daily_run_cap,
+    daily_timeout_cap: body.daily_timeout_cap,
+    daily_failure_cap: body.daily_failure_cap,
+  });
+  await emitControlAudit(req, {
+    action: "sandbox_budget.upsert",
+    resource_type: "sandbox_budget",
+    resource_id: `${tenantId}:${normalizeSandboxBudgetScope(body.scope)}`,
+    tenant_id: tenantId,
+    details: out as Record<string, unknown>,
+  });
+  return reply.code(200).send({ ok: true, budget: out });
+});
+
+app.get("/v1/admin/control/sandbox-budgets/:tenant_id", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const q = req.query as Record<string, unknown> | undefined;
+  const scope = typeof q?.scope === "string" ? q.scope : "*";
+  const out = await getSandboxBudgetProfile(tenantId, scope);
+  if (!out) return reply.code(404).send({ error: "not_found", message: "sandbox budget profile not found" });
+  return reply.code(200).send({ ok: true, budget: out });
+});
+
+app.delete("/v1/admin/control/sandbox-budgets/:tenant_id", async (req, reply) => {
+  requireAdminToken(req);
+  const tenantId = String((req.params as any)?.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const q = req.query as Record<string, unknown> | undefined;
+  const scope = typeof q?.scope === "string" ? q.scope : "*";
+  const deleted = await deleteSandboxBudgetProfile(tenantId, scope);
+  if (deleted) {
+    await emitControlAudit(req, {
+      action: "sandbox_budget.delete",
+      resource_type: "sandbox_budget",
+      resource_id: `${tenantId}:${normalizeSandboxBudgetScope(scope)}`,
+      tenant_id: tenantId,
+      details: { deleted: true },
+    });
+  }
+  return reply.code(200).send({ ok: true, deleted });
+});
+
+app.get("/v1/admin/control/sandbox-budgets", async (req, reply) => {
+  requireAdminToken(req);
+  const q = req.query as Record<string, unknown> | undefined;
+  const budgets = await listSandboxBudgetProfiles({
+    tenant_id: typeof q?.tenant_id === "string" ? q.tenant_id : undefined,
+    limit: typeof q?.limit === "string" ? Number(q.limit) : undefined,
+    offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
+  });
+  return reply.code(200).send({ ok: true, budgets });
 });
 
 app.get("/v1/admin/control/audit-events", async (req, reply) => {
@@ -3456,10 +3560,11 @@ app.post("/v1/memory/sandbox/execute", async (req, reply) => {
   const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "sandbox_execute");
   const tenantId = tenantFromBody(body);
+  const scope = scopeFromBody(body);
   assertSandboxEnabled(req);
   await enforceRateLimit(req, reply, "sandbox_write");
   await enforceTenantQuota(req, reply, "write", tenantId);
-  await enforceSandboxTenantBudget(reply, tenantId);
+  await enforceSandboxTenantBudget(reply, tenantId, scope);
   const queued = await store.withTx((client) =>
     enqueueSandboxRun(client, body, {
       defaultScope: env.MEMORY_SCOPE,
@@ -3521,6 +3626,21 @@ app.post("/v1/memory/sandbox/runs/logs", async (req, reply) => {
   await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
   const out = await store.withClient((client) =>
     getSandboxRunLogs(client, body, {
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+    }),
+  );
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/memory/sandbox/runs/artifact", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "sandbox_run_artifact");
+  assertSandboxEnabled(req);
+  await enforceRateLimit(req, reply, "sandbox_read");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const out = await store.withClient((client) =>
+    getSandboxRunArtifact(client, body, {
       defaultScope: env.MEMORY_SCOPE,
       defaultTenantId: env.MEMORY_TENANT_ID,
     }),
@@ -3801,6 +3921,7 @@ function withIdentityFromRequest(
     | "sandbox_execute"
     | "sandbox_run_get"
     | "sandbox_run_logs"
+    | "sandbox_run_artifact"
     | "sandbox_run_cancel",
 ): unknown {
   if (!body || typeof body !== "object" || Array.isArray(body)) return body;
@@ -3887,6 +4008,14 @@ function tenantFromBody(body: unknown): string {
   return env.MEMORY_TENANT_ID;
 }
 
+function scopeFromBody(body: unknown): string {
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    const s = (body as any).scope;
+    if (typeof s === "string" && s.trim().length > 0) return s.trim();
+  }
+  return env.MEMORY_SCOPE;
+}
+
 async function enforceTenantQuota(req: any, reply: any, kind: "recall" | "debug_embeddings" | "write", tenantId: string) {
   if (!env.TENANT_QUOTA_ENABLED) return;
   const quota = await tenantQuotaResolver.resolve(tenantId);
@@ -3914,17 +4043,245 @@ async function enforceTenantQuota(req: any, reply: any, kind: "recall" | "debug_
   );
 }
 
-function resolveSandboxTenantBudget(tenantIdRaw: string): SandboxTenantBudgetPolicy | null {
-  if (sandboxTenantBudgetPolicy.size === 0) return null;
-  const tenantId = String(tenantIdRaw ?? "").trim() || env.MEMORY_TENANT_ID;
-  return sandboxTenantBudgetPolicy.get(tenantId) ?? sandboxTenantBudgetPolicy.get("*") ?? null;
+function normalizeSandboxBudgetScope(scopeRaw: string | null | undefined): string {
+  const scope = String(scopeRaw ?? "").trim();
+  return scope.length > 0 ? scope : "*";
 }
 
-async function enforceSandboxTenantBudget(reply: any, tenantIdRaw: string): Promise<void> {
-  const policy = resolveSandboxTenantBudget(tenantIdRaw);
-  if (!policy) return;
+function nullableBudgetCap(v: number | null | undefined): number | null {
+  if (v === undefined || v === null) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.trunc(n);
+}
+
+async function listSandboxBudgetProfiles(args: {
+  tenant_id?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<Array<Record<string, unknown>>> {
+  const tenantId = typeof args.tenant_id === "string" && args.tenant_id.trim().length > 0 ? args.tenant_id.trim() : null;
+  const limit = Math.max(1, Math.min(500, Math.trunc(Number(args.limit ?? 100))));
+  const offset = Math.max(0, Math.trunc(Number(args.offset ?? 0)));
+  try {
+    const out = await db.pool.query(
+      `
+      SELECT
+        tenant_id,
+        scope,
+        daily_run_cap,
+        daily_timeout_cap,
+        daily_failure_cap,
+        updated_at::text AS updated_at
+      FROM memory_sandbox_budget_profiles
+      WHERE ($1::text IS NULL OR tenant_id = $1)
+      ORDER BY tenant_id ASC, scope ASC
+      LIMIT $2 OFFSET $3
+      `,
+      [tenantId, limit, offset],
+    );
+    return out.rows;
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+async function getSandboxBudgetProfile(tenantIdRaw: string, scopeRaw: string): Promise<Record<string, unknown> | null> {
+  const tenantId = String(tenantIdRaw ?? "").trim();
+  const scope = normalizeSandboxBudgetScope(scopeRaw);
+  if (!tenantId) return null;
+  try {
+    const out = await db.pool.query(
+      `
+      SELECT
+        tenant_id,
+        scope,
+        daily_run_cap,
+        daily_timeout_cap,
+        daily_failure_cap,
+        updated_at::text AS updated_at
+      FROM memory_sandbox_budget_profiles
+      WHERE tenant_id = $1
+        AND scope = $2
+      LIMIT 1
+      `,
+      [tenantId, scope],
+    );
+    return out.rows[0] ?? null;
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return null;
+    throw err;
+  }
+}
+
+async function upsertSandboxBudgetProfile(args: {
+  tenant_id: string;
+  scope: string;
+  daily_run_cap?: number | null;
+  daily_timeout_cap?: number | null;
+  daily_failure_cap?: number | null;
+}): Promise<Record<string, unknown>> {
+  const tenantId = String(args.tenant_id ?? "").trim();
+  if (!tenantId) throw new HttpError(400, "invalid_request", "tenant_id is required");
+  const scope = normalizeSandboxBudgetScope(args.scope);
+  const runCap = nullableBudgetCap(args.daily_run_cap);
+  const timeoutCap = nullableBudgetCap(args.daily_timeout_cap);
+  const failureCap = nullableBudgetCap(args.daily_failure_cap);
+  const anyCap = runCap !== null || timeoutCap !== null || failureCap !== null;
+  if (!anyCap) {
+    throw new HttpError(400, "invalid_request", "at least one positive cap is required");
+  }
+  try {
+    const out = await db.pool.query(
+      `
+      INSERT INTO memory_sandbox_budget_profiles (
+        tenant_id,
+        scope,
+        daily_run_cap,
+        daily_timeout_cap,
+        daily_failure_cap
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (tenant_id, scope)
+      DO UPDATE
+      SET
+        daily_run_cap = EXCLUDED.daily_run_cap,
+        daily_timeout_cap = EXCLUDED.daily_timeout_cap,
+        daily_failure_cap = EXCLUDED.daily_failure_cap,
+        updated_at = now()
+      RETURNING
+        tenant_id,
+        scope,
+        daily_run_cap,
+        daily_timeout_cap,
+        daily_failure_cap,
+        updated_at::text AS updated_at
+      `,
+      [tenantId, scope, runCap, timeoutCap, failureCap],
+    );
+    return out.rows[0] ?? {};
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      throw new HttpError(503, "sandbox_budget_table_missing", "sandbox budget table is unavailable", {
+        table: "memory_sandbox_budget_profiles",
+      });
+    }
+    throw err;
+  }
+}
+
+async function deleteSandboxBudgetProfile(tenantIdRaw: string, scopeRaw: string): Promise<boolean> {
+  const tenantId = String(tenantIdRaw ?? "").trim();
+  const scope = normalizeSandboxBudgetScope(scopeRaw);
+  if (!tenantId) return false;
+  try {
+    const out = await db.pool.query(
+      `
+      DELETE FROM memory_sandbox_budget_profiles
+      WHERE tenant_id = $1
+        AND scope = $2
+      `,
+      [tenantId, scope],
+    );
+    return Number(out.rowCount ?? 0) > 0;
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return false;
+    throw err;
+  }
+}
+
+type ResolvedSandboxTenantBudget = {
+  policy: SandboxTenantBudgetPolicy;
+  scope_filter: string | null;
+  source: "db_exact" | "db_tenant_default" | "db_global_scope" | "db_global_default" | "env_tenant_default" | "env_global_default";
+};
+
+async function resolveSandboxTenantBudget(tenantIdRaw: string, scopeRaw: string): Promise<ResolvedSandboxTenantBudget | null> {
   const tenantId = String(tenantIdRaw ?? "").trim() || env.MEMORY_TENANT_ID;
+  const scope = String(scopeRaw ?? "").trim() || env.MEMORY_SCOPE;
+  try {
+    const out = await db.pool.query<{
+      tenant_id: string;
+      scope: string;
+      daily_run_cap: number | null;
+      daily_timeout_cap: number | null;
+      daily_failure_cap: number | null;
+    }>(
+      `
+      SELECT
+        tenant_id,
+        scope,
+        daily_run_cap,
+        daily_timeout_cap,
+        daily_failure_cap
+      FROM memory_sandbox_budget_profiles
+      WHERE
+        (tenant_id = $1 AND scope = $2)
+        OR (tenant_id = $1 AND scope = '*')
+        OR (tenant_id = '*' AND scope = $2)
+        OR (tenant_id = '*' AND scope = '*')
+      ORDER BY
+        CASE
+          WHEN tenant_id = $1 AND scope = $2 THEN 1
+          WHEN tenant_id = $1 AND scope = '*' THEN 2
+          WHEN tenant_id = '*' AND scope = $2 THEN 3
+          ELSE 4
+        END
+      LIMIT 1
+      `,
+      [tenantId, scope],
+    );
+    const row = out.rows[0] ?? null;
+    if (row) {
+      return {
+        policy: {
+          daily_run_cap: sanitizeBudgetCap(row.daily_run_cap),
+          daily_timeout_cap: sanitizeBudgetCap(row.daily_timeout_cap),
+          daily_failure_cap: sanitizeBudgetCap(row.daily_failure_cap),
+        },
+        scope_filter: row.scope === "*" ? null : row.scope,
+        source:
+          row.tenant_id === tenantId && row.scope === scope
+            ? "db_exact"
+            : row.tenant_id === tenantId && row.scope === "*"
+              ? "db_tenant_default"
+              : row.tenant_id === "*" && row.scope === scope
+                ? "db_global_scope"
+                : "db_global_default",
+      };
+    }
+  } catch (err: any) {
+    if (String(err?.code ?? "") !== "42P01") throw err;
+  }
+
+  if (sandboxTenantBudgetPolicy.size === 0) return null;
+  const tenantPolicy = sandboxTenantBudgetPolicy.get(tenantId);
+  if (tenantPolicy) {
+    return {
+      policy: tenantPolicy,
+      scope_filter: null,
+      source: "env_tenant_default",
+    };
+  }
+  const globalPolicy = sandboxTenantBudgetPolicy.get("*");
+  if (globalPolicy) {
+    return {
+      policy: globalPolicy,
+      scope_filter: null,
+      source: "env_global_default",
+    };
+  }
+  return null;
+}
+
+async function enforceSandboxTenantBudget(reply: any, tenantIdRaw: string, scopeRaw: string): Promise<void> {
+  const resolved = await resolveSandboxTenantBudget(tenantIdRaw, scopeRaw);
+  if (!resolved) return;
+  const tenantId = String(tenantIdRaw ?? "").trim() || env.MEMORY_TENANT_ID;
+  const scope = String(scopeRaw ?? "").trim() || env.MEMORY_SCOPE;
   const windowHours = env.SANDBOX_TENANT_BUDGET_WINDOW_HOURS;
+  const policy = resolved.policy;
   let usage: { total_runs: number; timeout_runs: number; failed_runs: number };
   try {
     const out = await db.pool.query<{
@@ -3940,8 +4297,9 @@ async function enforceSandboxTenantBudget(reply: any, tenantIdRaw: string): Prom
       FROM memory_sandbox_runs
       WHERE tenant_id = $1
         AND created_at >= now() - make_interval(hours => $2::int)
+        AND ($3::text IS NULL OR scope = $3)
       `,
-      [tenantId, windowHours],
+      [tenantId, windowHours, resolved.scope_filter],
     );
     usage = {
       total_runs: Number(out.rows[0]?.total_runs ?? "0"),
@@ -3966,6 +4324,9 @@ async function enforceSandboxTenantBudget(reply: any, tenantIdRaw: string): Prom
       used: usage[metric],
       cap,
       window_hours: windowHours,
+      scope,
+      scope_filter: resolved.scope_filter,
+      policy_source: resolved.source,
     });
   };
   if (policy.daily_run_cap && usage.total_runs >= policy.daily_run_cap) {

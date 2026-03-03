@@ -40,7 +40,8 @@ Recommended for production:
 2. `POST /v1/memory/sandbox/execute`
 3. `POST /v1/memory/sandbox/runs/get`
 4. `POST /v1/memory/sandbox/runs/logs`
-5. `POST /v1/memory/sandbox/runs/cancel`
+5. `POST /v1/memory/sandbox/runs/artifact`
+6. `POST /v1/memory/sandbox/runs/cancel`
 
 ## Minimal Flow
 
@@ -72,6 +73,9 @@ Constraints:
 1. `action.kind` currently supports `command` only.
 2. `argv[0]` must be in `SANDBOX_ALLOWED_COMMANDS_JSON` when using `local_process` or `http_remote`.
 3. `timeout_ms` is bounded server-side.
+4. `http_remote` mode supports host allowlists via `SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON`.
+5. executor heartbeat + stale recovery is controlled by:
+   `SANDBOX_RUN_HEARTBEAT_INTERVAL_MS`, `SANDBOX_RUN_STALE_AFTER_MS`, `SANDBOX_RUN_RECOVERY_POLL_INTERVAL_MS`.
 
 ## Budget and Retention
 
@@ -79,6 +83,11 @@ Optional tenant budget gates for `sandbox/execute`:
 
 1. `SANDBOX_TENANT_BUDGET_WINDOW_HOURS`
 2. `SANDBOX_TENANT_BUDGET_POLICY_JSON` (for example `{"*":{"daily_run_cap":1000,"daily_timeout_cap":100}}`)
+3. Runtime profiles can also be managed via admin API:
+   - `PUT /v1/admin/control/sandbox-budgets/:tenant_id`
+   - `GET /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
+   - `GET /v1/admin/control/sandbox-budgets`
+   - `DELETE /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
 
 Retention cleanup job:
 

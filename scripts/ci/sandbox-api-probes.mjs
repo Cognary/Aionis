@@ -133,6 +133,30 @@ async function getLogs(runId) {
   return out.body;
 }
 
+async function getArtifact(runId) {
+  const out = await postJson(
+    baseUrl,
+    "/v1/memory/sandbox/runs/artifact",
+    {
+      tenant_id: tenantId,
+      scope,
+      run_id: runId,
+      tail_bytes: 2048,
+      include_action: true,
+      include_output: true,
+      include_result: true,
+      include_metadata: true,
+    },
+    headers,
+    label,
+  );
+  ensure(out.status === 200, `${label}: sandbox/runs/artifact must return 200 (got ${out.status})`);
+  ensure(out.body?.artifact && typeof out.body.artifact === "object", `${label}: sandbox/runs/artifact missing artifact`);
+  ensure(typeof out.body.artifact?.artifact_version === "string", `${label}: sandbox/runs/artifact missing artifact_version`);
+  ensure(typeof out.body.artifact?.uri === "string", `${label}: sandbox/runs/artifact missing artifact uri`);
+  return out.body;
+}
+
 async function cancelRun(runId) {
   const out = await postJson(
     baseUrl,
@@ -173,6 +197,7 @@ try {
 
   const run = await getRun(runId);
   const logs = await getLogs(runId);
+  const artifact = await getArtifact(runId);
   const cancel = await cancelRun(runId);
 
   writeJson(process.stdout, {
@@ -190,6 +215,10 @@ try {
       stdout_len: Number(logs.logs?.stdout?.length ?? 0),
       stderr_len: Number(logs.logs?.stderr?.length ?? 0),
       truncated: Boolean(logs.logs?.truncated),
+    },
+    artifact: {
+      artifact_version: String(artifact.artifact?.artifact_version ?? ""),
+      uri: String(artifact.artifact?.uri ?? ""),
     },
   });
 } catch (err) {

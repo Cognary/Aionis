@@ -26,6 +26,9 @@ if TYPE_CHECKING:
         ControlIncidentPublishRollupQuery,
         ControlIncidentPublishSloQuery,
         ControlProjectInput,
+        ControlSandboxBudgetGetQuery,
+        ControlSandboxBudgetInput,
+        ControlSandboxBudgetsQuery,
         ControlTenantDiagnosticsQuery,
         ControlTenantInput,
         ControlTenantKeyUsageQuery,
@@ -48,6 +51,7 @@ if TYPE_CHECKING:
         SandboxExecuteInput,
         SandboxRunCancelInput,
         SandboxRunGetInput,
+        SandboxRunArtifactInput,
         SandboxRunLogsInput,
         SandboxSessionCreateInput,
         ToolsDecisionInput,
@@ -298,6 +302,9 @@ class AionisClient:
     def sandbox_run_logs(self, payload: "SandboxRunLogsInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/sandbox/runs/logs", payload, request_options)
 
+    def sandbox_run_artifact(self, payload: "SandboxRunArtifactInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/sandbox/runs/artifact", payload, request_options)
+
     def sandbox_run_cancel(self, payload: "SandboxRunCancelInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/sandbox/runs/cancel", payload, request_options)
 
@@ -457,6 +464,53 @@ class AionisClient:
             raise ValueError("tenant_id is required")
         path = f"/v1/admin/control/tenant-quotas/{quote(sid, safe='')}"
         return self._request(path, {}, request_options, method="DELETE")
+
+    def control_upsert_sandbox_budget(
+        self,
+        tenant_id: str,
+        payload: "ControlSandboxBudgetInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/sandbox-budgets/{quote(sid, safe='')}"
+        return self._request(path, payload, request_options, method="PUT")
+
+    def control_get_sandbox_budget(
+        self,
+        tenant_id: str,
+        query: Optional["ControlSandboxBudgetGetQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        path = f"/v1/admin/control/sandbox-budgets/{quote(sid, safe='')}"
+        return self._request(path, query or {}, request_options, method="GET")
+
+    def control_delete_sandbox_budget(
+        self,
+        tenant_id: str,
+        query: Optional["ControlSandboxBudgetGetQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        sid = str(tenant_id or "").strip()
+        if not sid:
+            raise ValueError("tenant_id is required")
+        q = query or {}
+        qp = urlencode({k: str(v) for k, v in q.items() if v is not None})
+        path = f"/v1/admin/control/sandbox-budgets/{quote(sid, safe='')}"
+        if qp:
+            path = f"{path}?{qp}"
+        return self._request(path, {}, request_options, method="DELETE")
+
+    def control_list_sandbox_budgets(
+        self,
+        query: Optional["ControlSandboxBudgetsQuery"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/admin/control/sandbox-budgets", query or {}, request_options, method="GET")
 
     def control_list_audit_events(
         self,

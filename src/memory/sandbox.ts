@@ -5,6 +5,7 @@ import type pg from "pg";
 import { HttpError, badRequest } from "../util/http.js";
 import {
   SandboxExecuteRequest,
+  SandboxRunArtifactRequest,
   SandboxRunCancelRequest,
   SandboxRunGetRequest,
   SandboxRunLogsRequest,
@@ -72,7 +73,12 @@ export type SandboxExecutorConfig = {
     authHeader: string;
     authToken: string;
     timeoutMs: number;
+    allowedHosts: Set<string>;
   };
+  heartbeatIntervalMs: number;
+  staleAfterMs: number;
+  recoveryPollIntervalMs: number;
+  recoveryBatchSize: number;
 };
 
 type SandboxStore = {
@@ -142,6 +148,24 @@ function normalizeSandboxStatus(input: unknown): SandboxRunStatus | null {
 function asFiniteIntOrNull(input: unknown): number | null {
   if (!Number.isFinite(Number(input))) return null;
   return Math.trunc(Number(input));
+}
+
+function sandboxRemoteHostAllowed(hostname: string, allowlist: Set<string>): boolean {
+  const host = hostname.trim().toLowerCase();
+  if (!host) return false;
+  if (allowlist.size === 0) return true;
+  for (const raw of allowlist.values()) {
+    const rule = raw.trim().toLowerCase();
+    if (!rule) continue;
+    if (rule.startsWith("*.")) {
+      const suffix = rule.slice(2);
+      if (!suffix) continue;
+      if (host === suffix || host.endsWith(`.${suffix}`)) return true;
+      continue;
+    }
+    if (host === rule) return true;
+  }
+  return false;
 }
 
 function toRunPayload(row: SandboxRunRow) {
@@ -528,6 +552,100 @@ export async function getSandboxRunLogs(client: pg.PoolClient, body: unknown, de
   };
 }
 
+export async function getSandboxRunArtifact(
+  client: pg.PoolClient,
+  body: unknown,
+  defaults: Omit<SandboxDefaults, "defaultTimeoutMs">,
+) {
+  const parsed = SandboxRunArtifactRequest.parse(body);
+  const tenancy = resolveTenantScope(
+    { scope: parsed.scope, tenant_id: parsed.tenant_id },
+    { defaultScope: defaults.defaultScope, defaultTenantId: defaults.defaultTenantId },
+  );
+  const out = await client.query<SandboxRunRow>(
+    `
+    SELECT
+      id::text,
+      session_id::text,
+      tenant_id,
+      scope,
+      planner_run_id,
+      decision_id::text,
+      action_kind::text AS action_kind,
+      action_json,
+      mode::text,
+      status::text,
+      timeout_ms,
+      stdout_text,
+      stderr_text,
+      output_truncated,
+      exit_code,
+      error,
+      cancel_requested,
+      cancel_reason,
+      metadata,
+      result_json,
+      started_at::text,
+      finished_at::text,
+      created_at::text,
+      updated_at::text
+    FROM memory_sandbox_runs
+    WHERE id = $1
+      AND tenant_id = $2
+      AND scope = $3
+    LIMIT 1
+    `,
+    [parsed.run_id, tenancy.tenant_id, tenancy.scope],
+  );
+  const row = out.rows[0] ?? null;
+  if (!row) {
+    throw new HttpError(404, "sandbox_run_not_found", "sandbox run was not found in this tenant/scope", {
+      run_id: parsed.run_id,
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+    });
+  }
+  return {
+    tenant_id: tenancy.tenant_id,
+    scope: tenancy.scope,
+    artifact: {
+      artifact_version: "sandbox_run_artifact_v1",
+      run_id: row.id,
+      session_id: row.session_id,
+      uri: `aionis://${row.tenant_id}/${row.scope}/sandbox_run/${row.id}`,
+      planner_run_id: row.planner_run_id,
+      decision_id: row.decision_id,
+      mode: row.mode,
+      status: row.status,
+      timeout_ms: row.timeout_ms,
+      action:
+        parsed.include_action
+          ? {
+              kind: row.action_kind,
+              ...(row.action_json ?? {}),
+            }
+          : undefined,
+      output:
+        parsed.include_output
+          ? {
+              tail_bytes: parsed.tail_bytes,
+              stdout: tailText(row.stdout_text, parsed.tail_bytes),
+              stderr: tailText(row.stderr_text, parsed.tail_bytes),
+              truncated: !!row.output_truncated,
+            }
+          : undefined,
+      exit_code: row.exit_code,
+      error: row.error,
+      result: parsed.include_result ? row.result_json ?? {} : undefined,
+      metadata: parsed.include_metadata ? row.metadata ?? {} : undefined,
+      started_at: row.started_at,
+      finished_at: row.finished_at,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    },
+  };
+}
+
 export async function cancelSandboxRun(client: pg.PoolClient, body: unknown, defaults: Omit<SandboxDefaults, "defaultTimeoutMs">) {
   const parsed = SandboxRunCancelRequest.parse(body);
   const tenancy = resolveTenantScope(
@@ -623,14 +741,24 @@ export class SandboxExecutor {
   private readonly queue: string[] = [];
   private readonly queued = new Set<string>();
   private readonly active = new Map<string, ActiveRunState>();
+  private readonly heartbeatTimers = new Map<string, NodeJS.Timeout>();
+  private readonly recoveryTimer: NodeJS.Timeout | null;
   private running = 0;
   private pumping = false;
   private shuttingDown = false;
+  private recoveryInFlight = false;
 
   constructor(
     private readonly store: SandboxStore,
     private readonly config: SandboxExecutorConfig,
-  ) {}
+  ) {
+    this.recoveryTimer =
+      this.config.enabled && this.config.recoveryPollIntervalMs > 0
+        ? setInterval(() => {
+            void this.recoverStaleRuns();
+          }, this.config.recoveryPollIntervalMs)
+        : null;
+  }
 
   enqueue(runId: string): void {
     if (!this.config.enabled || this.shuttingDown) return;
@@ -655,6 +783,10 @@ export class SandboxExecutor {
       max_concurrency: this.config.maxConcurrency,
       remote_executor_configured: this.config.mode === "http_remote" ? !!this.config.remote.url : false,
       remote_executor_timeout_ms: this.config.mode === "http_remote" ? this.config.remote.timeoutMs : null,
+      remote_executor_allowlist_count: this.config.mode === "http_remote" ? this.config.remote.allowedHosts.size : null,
+      heartbeat_interval_ms: this.config.heartbeatIntervalMs,
+      stale_after_ms: this.config.staleAfterMs,
+      recovery_poll_interval_ms: this.config.recoveryPollIntervalMs,
     };
   }
 
@@ -681,6 +813,9 @@ export class SandboxExecutor {
 
   shutdown(): void {
     this.shuttingDown = true;
+    if (this.recoveryTimer) clearInterval(this.recoveryTimer);
+    for (const t of this.heartbeatTimers.values()) clearInterval(t);
+    this.heartbeatTimers.clear();
     for (const state of this.active.values()) {
       state.canceled = true;
       if (state.kind === "local_process") {
@@ -742,14 +877,125 @@ export class SandboxExecutor {
       return;
     }
     if (this.config.mode === "mock") {
-      await this.executeMock(run);
+      const stopHeartbeat = this.startRunHeartbeat(run.id);
+      try {
+        await this.executeMock(run);
+      } finally {
+        stopHeartbeat();
+      }
       return;
     }
     if (this.config.mode === "local_process") {
-      await this.executeLocalProcess(run);
+      const stopHeartbeat = this.startRunHeartbeat(run.id);
+      try {
+        await this.executeLocalProcess(run);
+      } finally {
+        stopHeartbeat();
+      }
       return;
     }
-    await this.executeRemote(run);
+    const stopHeartbeat = this.startRunHeartbeat(run.id);
+    try {
+      await this.executeRemote(run);
+    } finally {
+      stopHeartbeat();
+    }
+  }
+
+  private startRunHeartbeat(runId: string): () => void {
+    const intervalMs = this.config.heartbeatIntervalMs;
+    if (intervalMs <= 0) return () => {};
+    const id = String(runId ?? "").trim();
+    if (!id) return () => {};
+    const prev = this.heartbeatTimers.get(id);
+    if (prev) clearInterval(prev);
+    const timer = setInterval(() => {
+      void this.store.withClient(async (client) => {
+        await client.query(
+          `
+          UPDATE memory_sandbox_runs
+          SET updated_at = now()
+          WHERE id = $1
+            AND status = 'running'
+          `,
+          [id],
+        );
+      }).catch(() => {
+        // heartbeat failures are best-effort and should not crash executor loop
+      });
+    }, intervalMs);
+    this.heartbeatTimers.set(id, timer);
+    return () => {
+      const active = this.heartbeatTimers.get(id);
+      if (active) clearInterval(active);
+      this.heartbeatTimers.delete(id);
+    };
+  }
+
+  private async recoverStaleRuns(): Promise<void> {
+    if (!this.config.enabled || this.shuttingDown || this.recoveryInFlight || this.config.recoveryPollIntervalMs <= 0) return;
+    this.recoveryInFlight = true;
+    try {
+      const staleRows = await this.store.withClient(async (client) => {
+        const out = await client.query<SandboxRunRow>(
+          `
+          SELECT
+            id::text,
+            session_id::text,
+            tenant_id,
+            scope,
+            planner_run_id,
+            decision_id::text,
+            action_kind::text AS action_kind,
+            action_json,
+            mode::text,
+            status::text,
+            timeout_ms,
+            stdout_text,
+            stderr_text,
+            output_truncated,
+            exit_code,
+            error,
+            cancel_requested,
+            cancel_reason,
+            metadata,
+            result_json,
+            started_at::text,
+            finished_at::text,
+            created_at::text,
+            updated_at::text
+          FROM memory_sandbox_runs
+          WHERE status = 'running'
+            AND updated_at < now() - make_interval(secs => $1::int)
+          ORDER BY updated_at ASC
+          LIMIT $2
+          `,
+          [Math.max(1, Math.trunc(this.config.staleAfterMs / 1000)), this.config.recoveryBatchSize],
+        );
+        return out.rows;
+      });
+
+      for (const row of staleRows) {
+        if (this.active.has(row.id)) continue;
+        await this.finalizeIfRunning(row.id, {
+          status: "timeout",
+          stdout: row.stdout_text ?? "",
+          stderr: row.stderr_text ?? "",
+          truncated: !!row.output_truncated,
+          exitCode: row.exit_code,
+          error: row.error ?? "executor_stale_recovered",
+          result: {
+            ...(row.result_json && typeof row.result_json === "object" ? row.result_json : {}),
+            recovery: {
+              stale_recovered: true,
+              stale_after_ms: this.config.staleAfterMs,
+            },
+          },
+        });
+      }
+    } finally {
+      this.recoveryInFlight = false;
+    }
   }
 
   private async executeMock(run: SandboxRunRow): Promise<void> {
@@ -924,6 +1170,33 @@ export class SandboxExecutor {
       });
       return;
     }
+    let parsedRemoteUrl: URL;
+    try {
+      parsedRemoteUrl = new URL(remoteUrl);
+    } catch {
+      await this.finalize(run.id, {
+        status: "failed",
+        stdout: "",
+        stderr: "",
+        truncated: false,
+        exitCode: null,
+        error: "remote_executor_url_invalid",
+        result: { executor: "http_remote" },
+      });
+      return;
+    }
+    if (!sandboxRemoteHostAllowed(parsedRemoteUrl.hostname, this.config.remote.allowedHosts)) {
+      await this.finalize(run.id, {
+        status: "failed",
+        stdout: "",
+        stderr: "",
+        truncated: false,
+        exitCode: null,
+        error: "remote_executor_host_not_allowed",
+        result: { executor: "http_remote", host: parsedRemoteUrl.hostname },
+      });
+      return;
+    }
 
     const timeoutMs = normalizeTimeoutMs(
       Math.min(run.timeout_ms, this.config.remote.timeoutMs),
@@ -962,7 +1235,7 @@ export class SandboxExecutor {
       const authToken = trimOrNull(this.config.remote.authToken);
       if (authHeader && authToken) headers[authHeader.toLowerCase()] = authToken;
 
-      const response = await fetch(remoteUrl, {
+      const response = await fetch(parsedRemoteUrl.toString(), {
         method: "POST",
         headers,
         signal: abort.signal,
@@ -1184,6 +1457,69 @@ export class SandboxExecutor {
           finished_at = now(),
           updated_at = now()
         WHERE id = $1
+        RETURNING
+          id::text,
+          session_id::text,
+          tenant_id,
+          scope,
+          planner_run_id,
+          decision_id::text,
+          action_kind::text AS action_kind,
+          action_json,
+          mode::text,
+          status::text,
+          timeout_ms,
+          stdout_text,
+          stderr_text,
+          output_truncated,
+          exit_code,
+          error,
+          cancel_requested,
+          cancel_reason,
+          metadata,
+          result_json,
+          started_at::text,
+          finished_at::text,
+          created_at::text,
+          updated_at::text
+        `,
+        [runId, args.status, args.stdout, args.stderr, args.truncated, args.exitCode, args.error, JSON.stringify(args.result)],
+      );
+      const row = out.rows[0] ?? null;
+      if (row) {
+        await recordSandboxRunTelemetryRow(client, row);
+      }
+    });
+  }
+
+  private async finalizeIfRunning(
+    runId: string,
+    args: {
+      status: SandboxRunStatus;
+      stdout: string;
+      stderr: string;
+      truncated: boolean;
+      exitCode: number | null;
+      error: string | null;
+      result: Record<string, unknown>;
+    },
+  ): Promise<void> {
+    await this.store.withClient(async (client) => {
+      const out = await client.query<SandboxRunRow>(
+        `
+        UPDATE memory_sandbox_runs
+        SET
+          status = $2,
+          stdout_text = $3,
+          stderr_text = $4,
+          output_truncated = $5,
+          exit_code = $6,
+          error = $7,
+          result_json = $8::jsonb,
+          finished_at = now(),
+          updated_at = now()
+        WHERE id = $1
+          AND status = 'running'
         RETURNING
           id::text,
           session_id::text,

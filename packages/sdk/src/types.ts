@@ -463,6 +463,17 @@ export type SandboxRunLogsInput = {
   tail_bytes?: number;
 };
 
+export type SandboxRunArtifactInput = {
+  tenant_id?: string;
+  scope?: string;
+  run_id: string;
+  tail_bytes?: number;
+  include_action?: boolean;
+  include_output?: boolean;
+  include_result?: boolean;
+  include_metadata?: boolean;
+};
+
 export type SandboxRunCancelInput = {
   tenant_id?: string;
   scope?: string;
@@ -592,6 +603,23 @@ export type ControlTenantQuotaInput = {
   recall_text_embed_rps: number;
   recall_text_embed_burst: number;
   recall_text_embed_max_wait_ms: number;
+};
+
+export type ControlSandboxBudgetInput = {
+  scope?: string;
+  daily_run_cap?: number | null;
+  daily_timeout_cap?: number | null;
+  daily_failure_cap?: number | null;
+};
+
+export type ControlSandboxBudgetsQuery = {
+  tenant_id?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type ControlSandboxBudgetGetQuery = {
+  scope?: string;
 };
 
 export type ControlAuditEventsQuery = {
@@ -1155,6 +1183,39 @@ export type SandboxRunLogsResponse = {
   [k: string]: unknown;
 };
 
+export type SandboxRunArtifactResponse = {
+  tenant_id: string;
+  scope: string;
+  artifact: {
+    artifact_version: "sandbox_run_artifact_v1";
+    run_id: string;
+    session_id: string;
+    uri: string;
+    planner_run_id: string | null;
+    decision_id: string | null;
+    mode: "async" | "sync";
+    status: "queued" | "running" | "succeeded" | "failed" | "canceled" | "timeout";
+    timeout_ms: number;
+    action?: Record<string, unknown>;
+    output?: {
+      tail_bytes: number;
+      stdout: string;
+      stderr: string;
+      truncated: boolean;
+    };
+    exit_code: number | null;
+    error: string | null;
+    result?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+    started_at: string | null;
+    finished_at: string | null;
+    created_at: string;
+    updated_at: string;
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+};
+
 export type SandboxRunCancelResponse = {
   tenant_id: string;
   scope: string;
@@ -1233,6 +1294,21 @@ export type ControlTenantQuotaResponse = {
 export type ControlTenantQuotaDeleteResponse = {
   ok: boolean;
   deleted: boolean;
+};
+
+export type ControlSandboxBudgetResponse = {
+  ok: boolean;
+  budget: Record<string, unknown>;
+};
+
+export type ControlSandboxBudgetDeleteResponse = {
+  ok: boolean;
+  deleted: boolean;
+};
+
+export type ControlSandboxBudgetsResponse = {
+  ok: boolean;
+  budgets: Array<Record<string, unknown>>;
 };
 
 export type ControlAuditEventsResponse = {

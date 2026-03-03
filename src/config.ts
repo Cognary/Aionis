@@ -3,6 +3,24 @@ import { z } from "zod";
 const RuntimeModeSchema = z.enum(["local", "service", "cloud"]);
 const AbstractionPolicyProfileSchema = z.enum(["conservative", "balanced", "aggressive"]);
 
+function sandboxRemoteHostAllowed(hostname: string, allowlist: string[]): boolean {
+  const host = hostname.trim().toLowerCase();
+  if (!host) return false;
+  if (allowlist.length === 0) return true;
+  for (const raw of allowlist) {
+    const rule = raw.trim().toLowerCase();
+    if (!rule) continue;
+    if (rule.startsWith("*.")) {
+      const suffix = rule.slice(2);
+      if (!suffix) continue;
+      if (host === suffix || host.endsWith(`.${suffix}`)) return true;
+      continue;
+    }
+    if (host === rule) return true;
+  }
+  return false;
+}
+
 const EnvSchema = z.object({
   AIONIS_MODE: RuntimeModeSchema.default("local"),
   APP_ENV: z.enum(["dev", "ci", "prod"]).default("dev"),
@@ -238,12 +256,17 @@ const EnvSchema = z.object({
   SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER: z.string().default("authorization"),
   SANDBOX_REMOTE_EXECUTOR_AUTH_TOKEN: z.string().default(""),
   SANDBOX_REMOTE_EXECUTOR_TIMEOUT_MS: z.coerce.number().int().positive().max(600000).default(20000),
+  SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON: z.string().default("[]"),
   SANDBOX_LOCAL_PROCESS_ALLOW_IN_PROD: z
     .string()
     .optional()
     .transform((v) => (v ?? "false").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  SANDBOX_RUN_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(0).max(60000).default(5000),
+  SANDBOX_RUN_STALE_AFTER_MS: z.coerce.number().int().positive().max(86400000).default(120000),
+  SANDBOX_RUN_RECOVERY_POLL_INTERVAL_MS: z.coerce.number().int().min(0).max(300000).default(15000),
+  SANDBOX_RUN_RECOVERY_BATCH_SIZE: z.coerce.number().int().positive().max(10000).default(100),
   SANDBOX_RETENTION_DAYS: z.coerce.number().int().positive().max(3650).default(30),
   SANDBOX_RETENTION_BATCH_SIZE: z.coerce.number().int().positive().max(200000).default(10000),
   SANDBOX_TENANT_BUDGET_WINDOW_HOURS: z.coerce.number().int().positive().max(168).default(24),
@@ -550,8 +573,22 @@ export function loadEnv(): Env {
   {
     const mode = parsed.data.SANDBOX_EXECUTOR_MODE;
     const remoteUrl = parsed.data.SANDBOX_REMOTE_EXECUTOR_URL.trim();
+    let allowedHosts: string[] = [];
     if (parsed.data.SANDBOX_ENABLED && mode === "http_remote" && remoteUrl.length === 0) {
       throw new Error("SANDBOX_REMOTE_EXECUTOR_URL is required when SANDBOX_EXECUTOR_MODE=http_remote and SANDBOX_ENABLED=true");
+    }
+    try {
+      const raw = parsed.data.SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON.trim();
+      const parsedHosts = raw.length === 0 ? [] : JSON.parse(raw);
+      if (!Array.isArray(parsedHosts)) {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON must be a JSON array of host rules");
+      }
+      allowedHosts = parsedHosts
+        .map((v) => (typeof v === "string" ? v.trim().toLowerCase() : ""))
+        .filter((v) => v.length > 0);
+    } catch (err: any) {
+      if (String(err?.message ?? "").includes("JSON array of host rules")) throw err;
+      throw new Error("SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON must be valid JSON array");
     }
     if (remoteUrl.length > 0) {
       let parsedUrl: URL;
@@ -563,9 +600,15 @@ export function loadEnv(): Env {
       if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
         throw new Error("SANDBOX_REMOTE_EXECUTOR_URL must use http or https scheme");
       }
+      if (!sandboxRemoteHostAllowed(parsedUrl.hostname, allowedHosts)) {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_URL host is not in SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON");
+      }
     }
     if (parsed.data.SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER.trim().length === 0) {
       throw new Error("SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER must be non-empty");
+    }
+    if (parsed.data.SANDBOX_RUN_HEARTBEAT_INTERVAL_MS > 0 && parsed.data.SANDBOX_RUN_HEARTBEAT_INTERVAL_MS >= parsed.data.SANDBOX_RUN_STALE_AFTER_MS) {
+      throw new Error("SANDBOX_RUN_HEARTBEAT_INTERVAL_MS must be less than SANDBOX_RUN_STALE_AFTER_MS");
     }
   }
   {
@@ -627,8 +670,20 @@ export function loadEnv(): Env {
     }
     if (parsed.data.SANDBOX_ENABLED && parsed.data.SANDBOX_EXECUTOR_MODE === "http_remote") {
       const remoteUrl = parsed.data.SANDBOX_REMOTE_EXECUTOR_URL.trim();
+      const rawAllowlist = parsed.data.SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON.trim();
+      let allowlist: string[] = [];
+      try {
+        allowlist = (rawAllowlist.length === 0 ? [] : JSON.parse(rawAllowlist))
+          .map((v: unknown) => (typeof v === "string" ? v.trim().toLowerCase() : ""))
+          .filter((v: string) => v.length > 0);
+      } catch {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON must be valid JSON array");
+      }
       if (remoteUrl.length === 0) {
         throw new Error("SANDBOX_REMOTE_EXECUTOR_URL is required when SANDBOX_EXECUTOR_MODE=http_remote and APP_ENV=prod");
+      }
+      if (allowlist.length === 0) {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON must be non-empty in APP_ENV=prod when SANDBOX_EXECUTOR_MODE=http_remote");
       }
       let parsedUrl: URL;
       try {
@@ -638,6 +693,9 @@ export function loadEnv(): Env {
       }
       if (parsedUrl.protocol !== "https:") {
         throw new Error("SANDBOX_REMOTE_EXECUTOR_URL must use https in APP_ENV=prod");
+      }
+      if (!sandboxRemoteHostAllowed(parsedUrl.hostname, allowlist)) {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_URL host is not in SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON");
       }
     }
   }

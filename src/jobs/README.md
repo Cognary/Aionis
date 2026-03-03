@@ -279,6 +279,13 @@ Optional tenancy filters:
 npm run job:sandbox-retention -- --apply --tenant-id default --scope default
 ```
 
+Executor stale-run recovery (runtime):
+
+1. `SANDBOX_RUN_HEARTBEAT_INTERVAL_MS`
+2. `SANDBOX_RUN_STALE_AFTER_MS`
+3. `SANDBOX_RUN_RECOVERY_POLL_INTERVAL_MS`
+4. `SANDBOX_RUN_RECOVERY_BATCH_SIZE`
+
 ## Rule Promotion Governance (Offline)
 
 Deterministic preflight checks for lifecycle promotions:
