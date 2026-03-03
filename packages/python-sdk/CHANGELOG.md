@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-03-03
+
+### Changed
+
+1. Aligned coordinated release baseline from `0.2.4` to `0.2.5` across core, npm, PyPI, and Docker channels.
+2. No Python SDK API surface break in this patch release.
+
 ## [0.2.4] - 2026-03-03
 
 ### Changed

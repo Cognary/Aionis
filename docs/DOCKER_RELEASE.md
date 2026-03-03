@@ -48,7 +48,7 @@ npm run docker:publish:ghcr:dry-run
 Standalone image dry run:
 
 ```bash
-TAG=standalone-v0.2.4 npm run docker:publish:standalone:ghcr:dry-run
+TAG=standalone-v0.2.5 npm run docker:publish:standalone:ghcr:dry-run
 ```
 
 Main image push:
@@ -57,7 +57,7 @@ Main image push:
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
 IMAGE_REPO=ghcr.io/<owner>/aionis \
-TAG=v0.2.4 \
+TAG=v0.2.5 \
 PLATFORMS=linux/amd64,linux/arm64 \
 PUBLISH_LATEST=true \
 npm run docker:publish:ghcr
@@ -69,7 +69,7 @@ Standalone image push:
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
 IMAGE_REPO=ghcr.io/<owner>/aionis \
-TAG=standalone-v0.2.4 \
+TAG=standalone-v0.2.5 \
 PLATFORMS=linux/amd64,linux/arm64 \
 PUBLISH_LATEST=true \
 npm run docker:publish:standalone:ghcr
@@ -80,15 +80,15 @@ npm run docker:publish:standalone:ghcr
 Main lane auto trigger:
 
 ```bash
-git tag docker-v0.2.4
-git push origin docker-v0.2.4
+git tag docker-v0.2.5
+git push origin docker-v0.2.5
 ```
 
 Standalone lane auto trigger:
 
 ```bash
-git tag standalone-v0.2.4
-git push origin standalone-v0.2.4
+git tag standalone-v0.2.5
+git push origin standalone-v0.2.5
 ```
 
 You can also run each workflow via `workflow_dispatch`.
@@ -104,17 +104,17 @@ Credential behavior in both workflows:
 Main image:
 
 ```bash
-docker pull ghcr.io/cognary/aionis:v0.2.4
+docker pull ghcr.io/cognary/aionis:v0.2.5
 docker pull ghcr.io/cognary/aionis:latest
-docker manifest inspect ghcr.io/cognary/aionis:v0.2.4 | head
+docker manifest inspect ghcr.io/cognary/aionis:v0.2.5 | head
 ```
 
 Standalone image:
 
 ```bash
-docker pull ghcr.io/cognary/aionis:standalone-v0.2.4
+docker pull ghcr.io/cognary/aionis:standalone-v0.2.5
 docker pull ghcr.io/cognary/aionis:standalone-latest
-docker manifest inspect ghcr.io/cognary/aionis:standalone-v0.2.4 | head
+docker manifest inspect ghcr.io/cognary/aionis:standalone-v0.2.5 | head
 ```
 
 ## Rollback
