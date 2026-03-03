@@ -58,6 +58,11 @@ bash examples/mcp_stdio_smoke.sh
 2. `AIONIS_AUTH_BEARER` -> `Authorization: Bearer ...`
 3. `AIONIS_ADMIN_TOKEN` -> `X-Admin-Token` (admin routes)
 
+## Version Consistency
+
+1. MCP `initialize` response `serverInfo.version` is auto-synced from Aionis package version.
+2. You can override it with `AIONIS_VERSION` for custom build labeling.
+
 ## Related
 
 1. [OpenWork Integration](/public/en/integrations/02-openwork)

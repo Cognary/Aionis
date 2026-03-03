@@ -1,4 +1,5 @@
 import { createInterface } from "node:readline";
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 
 type JsonRpcId = string | number | null;
@@ -13,6 +14,26 @@ type JsonRpcRequest = {
 type JsonRpcResponse =
   | { jsonrpc: "2.0"; id: JsonRpcId; result: unknown }
   | { jsonrpc: "2.0"; id: JsonRpcId; error: { code: number; message: string; data?: unknown } };
+
+function resolveServerVersion(): string {
+  const explicit = String(process.env.AIONIS_VERSION ?? "").trim();
+  if (explicit) return explicit;
+  const npmVersion = String(process.env.npm_package_version ?? "").trim();
+  if (npmVersion) return npmVersion;
+  try {
+    const pkgUrl = new URL("../../package.json", import.meta.url);
+    const raw = readFileSync(pkgUrl, "utf8");
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    if (typeof parsed.version === "string" && parsed.version.trim().length > 0) {
+      return parsed.version.trim();
+    }
+  } catch {
+    // fallback below
+  }
+  return "0.0.0";
+}
+
+const SERVER_VERSION = resolveServerVersion();
 
 const EnvSchema = z.object({
   AIONIS_BASE_URL: z.string().default("http://localhost:3001"),
@@ -336,7 +357,7 @@ async function handle(env: Env, msg: JsonRpcRequest) {
         },
         serverInfo: {
           name: "aionis-memory-graph",
-          version: "0.2.1",
+          version: SERVER_VERSION,
         },
       });
     }
