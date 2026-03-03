@@ -60,6 +60,56 @@ function normalizeSandboxRemoteEgressCidrs(raw: string): string[] {
   return out;
 }
 
+function parseSandboxAllowedCommandsJson(raw: string): string[] {
+  const input = raw.trim();
+  const candidates: string[] = [];
+  if (input.length === 0) {
+    candidates.push("[]");
+  } else {
+    candidates.push(input);
+    // Accept shell-quoted env-file values, e.g. '["echo"]' or "[\"echo\"]".
+    if (
+      (input.startsWith("'") && input.endsWith("'") && input.length >= 2)
+      || (input.startsWith("\"") && input.endsWith("\"") && input.length >= 2)
+    ) {
+      candidates.push(input.slice(1, -1).trim());
+    }
+  }
+
+  let sawNonArrayJson = false;
+  for (const candidate of candidates) {
+    if (candidate.length === 0) continue;
+    try {
+      const parsed = JSON.parse(candidate);
+      if (!Array.isArray(parsed)) {
+        sawNonArrayJson = true;
+        continue;
+      }
+      return parsed
+        .map((v) => (typeof v === "string" ? v.trim() : ""))
+        .filter((v) => v.length > 0);
+    } catch {
+      // fall through to other candidate forms
+    }
+  }
+
+  // Accept shell-expanded bare list form, e.g. [echo,python3] after `source`.
+  if (input.startsWith("[") && input.endsWith("]")) {
+    const body = input.slice(1, -1).trim();
+    if (body.length === 0) return [];
+    const parts = body.split(",").map((v) => v.trim()).filter((v) => v.length > 0);
+    const safeToken = /^[a-zA-Z0-9._/+:-]+$/;
+    if (parts.every((v) => safeToken.test(v))) {
+      return parts;
+    }
+  }
+
+  if (sawNonArrayJson) {
+    throw new Error("SANDBOX_ALLOWED_COMMANDS_JSON must be a JSON array");
+  }
+  throw new Error("SANDBOX_ALLOWED_COMMANDS_JSON must be a valid JSON array of command names");
+}
+
 const EnvSchema = z.object({
   AIONIS_MODE: RuntimeModeSchema.default("local"),
   APP_ENV: z.enum(["dev", "ci", "prod"]).default("dev"),
@@ -600,19 +650,7 @@ export function loadEnv(): Env {
     }
   }
   {
-    let allowedCommandsRaw: unknown;
-    try {
-      const raw = parsed.data.SANDBOX_ALLOWED_COMMANDS_JSON.trim();
-      allowedCommandsRaw = raw.length === 0 ? [] : JSON.parse(raw);
-    } catch {
-      throw new Error("SANDBOX_ALLOWED_COMMANDS_JSON must be a valid JSON array of command names");
-    }
-    if (!Array.isArray(allowedCommandsRaw)) {
-      throw new Error("SANDBOX_ALLOWED_COMMANDS_JSON must be a JSON array");
-    }
-    const normalized = allowedCommandsRaw
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
-      .filter((v) => v.length > 0);
+    const normalized = parseSandboxAllowedCommandsJson(parsed.data.SANDBOX_ALLOWED_COMMANDS_JSON);
     if (
       parsed.data.SANDBOX_ENABLED
       && (parsed.data.SANDBOX_EXECUTOR_MODE === "local_process" || parsed.data.SANDBOX_EXECUTOR_MODE === "http_remote")
@@ -620,6 +658,8 @@ export function loadEnv(): Env {
     ) {
       throw new Error("SANDBOX_ALLOWED_COMMANDS_JSON must include at least one command when local_process/http_remote sandbox is enabled");
     }
+    // Normalize to stable JSON so downstream parsers see a consistent shape.
+    parsed.data.SANDBOX_ALLOWED_COMMANDS_JSON = JSON.stringify(normalized);
   }
   {
     const mode = parsed.data.SANDBOX_EXECUTOR_MODE;

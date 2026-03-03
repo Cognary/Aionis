@@ -18,3 +18,36 @@ test(".env.example keeps SANDBOX_ALLOWED_COMMANDS_JSON valid when sourced by she
   assert.ok(parsed.length > 0, "SANDBOX_ALLOWED_COMMANDS_JSON should include at least one command in example env");
   assert.equal(parsed[0], "echo");
 });
+
+function runLoadEnvSandboxCommands(raw) {
+  const out = execFileSync(
+    "npx",
+    [
+      "tsx",
+      "-e",
+      'import { loadEnv } from "./src/config.ts"; process.stdout.write(loadEnv().SANDBOX_ALLOWED_COMMANDS_JSON);',
+    ],
+    {
+      encoding: "utf8",
+      env: {
+        PATH: process.env.PATH ?? "",
+        HOME: process.env.HOME ?? "",
+        APP_ENV: "dev",
+        MEMORY_AUTH_MODE: "off",
+        DATABASE_URL: "postgres://aionis:aionis@localhost:5432/aionis_memory",
+        SANDBOX_ALLOWED_COMMANDS_JSON: raw,
+      },
+    },
+  ).trim();
+  return JSON.parse(out);
+}
+
+test("loadEnv normalizes shell-quoted SANDBOX_ALLOWED_COMMANDS_JSON", () => {
+  const parsed = runLoadEnvSandboxCommands("'[\"echo\",\"python3\"]'");
+  assert.deepEqual(parsed, ["echo", "python3"]);
+});
+
+test("loadEnv accepts shell-expanded list SANDBOX_ALLOWED_COMMANDS_JSON=[echo,python3]", () => {
+  const parsed = runLoadEnvSandboxCommands("[echo,python3]");
+  assert.deepEqual(parsed, ["echo", "python3"]);
+});
