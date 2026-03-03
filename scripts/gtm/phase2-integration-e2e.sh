@@ -81,15 +81,19 @@ if [[ "${openwork_doc_exists}" == "true" \
    && "${langgraph_doc_exists}" == "true" \
    && "${mcp_smoke_script_exists}" == "true" \
    && "${langgraph_smoke_script_exists}" == "true" ]]; then
-  if [[ "${PHASE2_INTEGRATIONS_REQUIRE_API}" == "true" ]]; then
-    if [[ "${api_healthy}" == "true" \
-       && "${mcp_smoke_ok}" == "true" \
+  # If API is reachable, runtime smokes must pass; avoid false-green docs-only passes.
+  if [[ "${api_healthy}" == "true" ]]; then
+    if [[ "${mcp_smoke_ok}" == "true" \
        && "${langgraph_smoke_ok}" == "true" \
        && "${ts_sdk_smoke_ok}" == "true" ]]; then
       phase2_integrations_ok=true
     fi
   else
-    phase2_integrations_ok=true
+    if [[ "${PHASE2_INTEGRATIONS_REQUIRE_API}" == "true" ]]; then
+      phase2_integrations_ok=false
+    else
+      phase2_integrations_ok=true
+    fi
   fi
 fi
 

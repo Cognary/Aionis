@@ -127,7 +127,7 @@ api_post_json() {
   local path="$1"
   local payload="$2"
   local tmp code
-  tmp="$(mktemp /tmp/aionis_killer_api_XXXXXX.json)"
+  tmp="$(mktemp -t aionis_killer_api.XXXXXX)"
   code="$(
     curl -sS -o "${tmp}" -w "%{http_code}" "http://localhost:${PORT}${path}" \
       -H 'content-type: application/json' \

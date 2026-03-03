@@ -29,8 +29,8 @@ if [[ -z "${AIONIS_API_KEY}" && -z "${AIONIS_AUTH_BEARER}" && -n "${MEMORY_API_K
   AIONIS_API_KEY="$(echo "${MEMORY_API_KEYS_JSON}" | jq -r 'keys[0] // empty' 2>/dev/null || true)"
 fi
 
-out="$(mktemp /tmp/aionis_mcp_smoke_out_XXXXXX.jsonl)"
-err="$(mktemp /tmp/aionis_mcp_smoke_err_XXXXXX.log)"
+out="$(mktemp -t aionis_mcp_smoke_out.XXXXXX)"
+err="$(mktemp -t aionis_mcp_smoke_err.XXXXXX)"
 trap 'rm -f "${out}" "${err}"' EXIT
 
 cd "${ROOT_DIR}"

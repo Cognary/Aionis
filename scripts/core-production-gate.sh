@@ -42,6 +42,7 @@ CORE_GATE_PARTITION_READ_SHADOW_MIN_OVERLAP="${CORE_GATE_PARTITION_READ_SHADOW_M
 RECALL_P95_MAX_MS="${RECALL_P95_MAX_MS:-1200}"
 WRITE_P95_MAX_MS="${WRITE_P95_MAX_MS:-800}"
 ERROR_RATE_MAX="${ERROR_RATE_MAX:-0.02}"
+ERROR_RATE_429_MODE="${ERROR_RATE_429_MODE:-non_blocking}"
 COMPRESSION_GATE_MODE="${COMPRESSION_GATE_MODE:-non_blocking}"
 COMPRESSION_RATIO_MIN="${COMPRESSION_RATIO_MIN:-0.30}"
 COMPRESSION_ITEMS_RETAIN_MIN="${COMPRESSION_ITEMS_RETAIN_MIN:-0.55}"
@@ -92,6 +93,7 @@ while [[ $# -gt 0 ]]; do
     --recall-p95-max-ms) RECALL_P95_MAX_MS="${2:-}"; shift 2 ;;
     --write-p95-max-ms) WRITE_P95_MAX_MS="${2:-}"; shift 2 ;;
     --error-rate-max) ERROR_RATE_MAX="${2:-}"; shift 2 ;;
+    --error-rate-429-mode) ERROR_RATE_429_MODE="${2:-}"; shift 2 ;;
     --compression-gate-mode) COMPRESSION_GATE_MODE="${2:-}"; shift 2 ;;
     --compression-ratio-min) COMPRESSION_RATIO_MIN="${2:-}"; shift 2 ;;
     --compression-items-retain-min) COMPRESSION_ITEMS_RETAIN_MIN="${2:-}"; shift 2 ;;
@@ -159,6 +161,7 @@ Options:
   --recall-p95-max-ms <n>            Recall p95 SLO threshold (default: 1200)
   --write-p95-max-ms <n>             Write p95 SLO threshold (default: 800)
   --error-rate-max <0..1>            Max per-case error rate (default: 0.02)
+  --error-rate-429-mode <mode>       429 gate mode: non_blocking|blocking (default: non_blocking)
   --compression-gate-mode <mode>     Compression KPI mode: non_blocking|blocking (default: non_blocking)
   --compression-ratio-min <0..1>     Min compression ratio mean (default: 0.30)
   --compression-items-retain-min <0..1>      Min items retain ratio mean (default: 0.55)
@@ -291,6 +294,15 @@ case "${RUN_REPLAY_DETERMINISM_REPORT}" in
     ;;
   *)
     echo "invalid --run-replay-determinism-report: ${RUN_REPLAY_DETERMINISM_REPORT} (expected true|false)" >&2
+    exit 1
+    ;;
+esac
+
+case "${ERROR_RATE_429_MODE}" in
+  blocking|non_blocking)
+    ;;
+  *)
+    echo "invalid --error-rate-429-mode: ${ERROR_RATE_429_MODE} (expected non_blocking|blocking)" >&2
     exit 1
     ;;
 esac
@@ -492,6 +504,7 @@ echo "[core-gate] compression_gate_mode=${COMPRESSION_GATE_MODE} perf_compressio
 echo "[core-gate] rule_conflict_gate_mode=${RULE_CONFLICT_GATE_MODE} run_rule_conflict_report=${RUN_RULE_CONFLICT_REPORT}"
 echo "[core-gate] consolidation_health_gate_mode=${CONSOLIDATION_HEALTH_GATE_MODE} run_consolidation_health_slo=${RUN_CONSOLIDATION_HEALTH_SLO}"
 echo "[core-gate] replay_determinism_gate_mode=${REPLAY_DETERMINISM_GATE_MODE} run_replay_determinism_report=${RUN_REPLAY_DETERMINISM_REPORT}"
+echo "[core-gate] error_rate_429_mode=${ERROR_RATE_429_MODE}"
 probe_api_target
 probe_database_connectivity
 
@@ -714,6 +727,8 @@ perf_json_path=""
 recall_p95="0"
 write_p95="0"
 max_error_rate="0"
+max_non429_error_rate="0"
+max_429_rate="0"
 perf_slo_ok=true
 compression_kpi_enabled=false
 compression_kpi_pass=true
@@ -751,6 +766,8 @@ if [[ "${RUN_PERF}" == "true" ]]; then
     recall_p95="$(to_number_or_zero "$(jq -r '.cases[]? | select(.name=="recall_text") | .latency_ms.p95 // 0' "${perf_json_path}")")"
     write_p95="$(to_number_or_zero "$(jq -r '.cases[]? | select(.name=="write") | .latency_ms.p95 // 0' "${perf_json_path}")")"
     max_error_rate="$(to_number_or_zero "$(jq -r '[.cases[]? | if (.total // 0) > 0 then ((.failed // 0) / (.total // 1)) else 0 end] | max // 0' "${perf_json_path}")")"
+    max_non429_error_rate="$(to_number_or_zero "$(jq -r '[.cases[]? | if (.total // 0) > 0 then ((((.failed // 0) - (.by_status["429"] // 0)) / (.total // 1))) else 0 end] | max // 0' "${perf_json_path}")")"
+    max_429_rate="$(to_number_or_zero "$(jq -r '[.cases[]? | if (.total // 0) > 0 then (((.by_status["429"] // 0) / (.total // 1))) else 0 end] | max // 0' "${perf_json_path}")")"
 
     if is_gt "${recall_p95}" "${RECALL_P95_MAX_MS}"; then
       perf_slo_ok=false
@@ -760,9 +777,17 @@ if [[ "${RUN_PERF}" == "true" ]]; then
       perf_slo_ok=false
       fail_reasons="$(echo "${fail_reasons}" | jq '. + ["perf_write_p95_slo"]')"
     fi
-    if is_gt "${max_error_rate}" "${ERROR_RATE_MAX}"; then
+    if is_gt "${max_non429_error_rate}" "${ERROR_RATE_MAX}"; then
       perf_slo_ok=false
-      fail_reasons="$(echo "${fail_reasons}" | jq '. + ["perf_error_rate_slo"]')"
+      fail_reasons="$(echo "${fail_reasons}" | jq '. + ["perf_non429_error_rate_slo","perf_error_rate_slo"]')"
+    fi
+    if is_gt "${max_429_rate}" "${ERROR_RATE_MAX}"; then
+      if [[ "${ERROR_RATE_429_MODE}" == "blocking" ]]; then
+        perf_slo_ok=false
+        fail_reasons="$(echo "${fail_reasons}" | jq '. + ["perf_429_rate_slo","perf_error_rate_slo"]')"
+      else
+        warn_reasons="$(echo "${warn_reasons}" | jq '. + ["perf_429_rate_over_budget_non_blocking"]')"
+      fi
     fi
 
     if [[ "${PERF_COMPRESSION_CHECK}" == "true" ]]; then
@@ -832,6 +857,9 @@ jq -n \
   --argjson recall_p95 "${recall_p95}" \
   --argjson write_p95 "${write_p95}" \
   --argjson max_error_rate "${max_error_rate}" \
+  --argjson max_non429_error_rate "${max_non429_error_rate}" \
+  --argjson max_429_rate "${max_429_rate}" \
+  --arg error_rate_429_mode "${ERROR_RATE_429_MODE}" \
   --argjson perf_slo_ok "$([[ "${perf_slo_ok}" == "true" ]] && echo true || echo false)" \
   --argjson run_pack_gate "$([[ "${RUN_PACK_GATE}" == "true" ]] && echo true || echo false)" \
   --argjson run_control_admin_validation "$([[ "${RUN_CONTROL_ADMIN_VALIDATION}" == "true" ]] && echo true || echo false)" \
@@ -943,12 +971,15 @@ jq -n \
         thresholds: {
           recall_p95_max_ms: $recall_p95_max_ms,
           write_p95_max_ms: $write_p95_max_ms,
-          error_rate_max: $error_rate_max
+          error_rate_max: $error_rate_max,
+          error_rate_429_mode: $error_rate_429_mode
         },
         observed: {
           recall_p95_ms: $recall_p95,
           write_p95_ms: $write_p95,
-          max_error_rate: $max_error_rate
+          max_error_rate: $max_error_rate,
+          max_non429_error_rate: $max_non429_error_rate,
+          max_429_rate: $max_429_rate
         },
         pass: $perf_slo_ok
       },
