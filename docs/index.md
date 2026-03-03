@@ -54,8 +54,8 @@ Use the docs in this order:
 
 1. [Core Differentiators](./public/en/about/01-core-differentiators.md)
 2. [Differentiation Evidence](./public/en/benchmarks/03-differentiation-evidence.md)
-3. [Execution Loop Gate](./EXECUTION_LOOP_GATE.md)
-4. [Policy Adaptation Gate](./POLICY_ADAPTATION_GATE.md)
+3. [Execution Loop Gate](./public/en/control/03-execution-loop-gate.md)
+4. [Policy Adaptation Gate](./public/en/control/04-policy-adaptation-gate.md)
 
 ## Quick Entry Points
 
@@ -63,5 +63,5 @@ Use the docs in this order:
 2. [Embedding Setup](./public/en/getting-started/03-embedding-setup.md)
 3. [Playground](./public/en/guides/02-playground.md)
 4. [API Contract](./public/en/api/01-api-contract.md)
-5. [URI Expansion Plan](./URI_EXPANSION_PLAN.md)
+5. [URI Expansion Plan](./public/en/reference/07-uri-expansion-plan.md)
 6. [Docs Index](./README.md)

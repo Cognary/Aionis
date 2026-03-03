@@ -63,7 +63,7 @@ export default defineConfig({
         text: "Build",
         items: [
           { text: "Build Memory", link: "/public/en/guides/01-build-memory" },
-          { text: "Context Orchestration", link: "/CONTEXT_ORCHESTRATION" },
+          { text: "Context Orchestration", link: "/public/en/concepts/01-context-orchestration" },
           { text: "Context Orchestrator Plan", link: "/CONTEXT_ORCHESTRATOR_PLAN" },
           { text: "Playground", link: "/public/en/guides/02-playground" },
         ],
@@ -73,8 +73,8 @@ export default defineConfig({
         items: [
           { text: "Control & Policy", link: "/public/en/control/01-control-policy" },
           { text: "Rule Lifecycle", link: "/public/en/control/02-rule-lifecycle" },
-          { text: "Execution Loop Gate", link: "/EXECUTION_LOOP_GATE" },
-          { text: "Policy Adaptation Gate", link: "/POLICY_ADAPTATION_GATE" },
+          { text: "Execution Loop Gate", link: "/public/en/control/03-execution-loop-gate" },
+          { text: "Policy Adaptation Gate", link: "/public/en/control/04-policy-adaptation-gate" },
         ],
       },
       {
@@ -98,8 +98,8 @@ export default defineConfig({
         items: [
           { text: "Integrations", link: "/public/en/integrations/00-overview" },
           { text: "MCP Integration", link: "/public/en/integrations/01-mcp" },
-          { text: "OpenWork", link: "/OPENWORK_INTEGRATION" },
-          { text: "LangGraph", link: "/LANGGRAPH_INTEGRATION" },
+          { text: "OpenWork", link: "/public/en/integrations/02-openwork" },
+          { text: "LangGraph", link: "/public/en/integrations/03-langgraph" },
         ],
       },
       {
@@ -112,7 +112,8 @@ export default defineConfig({
           { text: "Planner Context", link: "/public/en/reference/02-planner-context" },
           { text: "Rule Promotion Governance", link: "/public/en/reference/03-rule-promotion-governance" },
           { text: "Rule Conflict Report", link: "/public/en/reference/04-rule-conflict-report" },
-          { text: "Architecture", link: "/ARCHITECTURE" },
+          { text: "URI Expansion Plan", link: "/public/en/reference/07-uri-expansion-plan" },
+          { text: "Architecture", link: "/public/en/concepts/02-architecture" },
           { text: "Docs Index", link: "/README" },
         ],
       },
@@ -121,8 +122,8 @@ export default defineConfig({
         items: [
           { text: "Benchmarks", link: "/public/en/benchmarks/01-benchmarks" },
           { text: "Benchmark Snapshot", link: "/public/en/benchmarks/02-benchmark-snapshot-public" },
-          { text: "Performance Baseline", link: "/PERFORMANCE_BASELINE" },
-          { text: "AionisBench v0.1", link: "/AIONIS_BENCH_V01" },
+          { text: "Performance Baseline", link: "/public/en/benchmarks/05-performance-baseline" },
+          { text: "AionisBench v0.1", link: "/public/en/benchmarks/06-aionis-bench-v01" },
           { text: "Differentiation Evidence", link: "/public/en/benchmarks/03-differentiation-evidence" },
           { text: "Governance Weekly Report", link: "/public/en/benchmarks/04-governance-weekly-report" },
         ],
