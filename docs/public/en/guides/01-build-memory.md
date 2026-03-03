@@ -1,123 +1,112 @@
 ---
-title: "Build Memory"
+title: "Build Memory Workflows"
 ---
 
-# Build Memory
+# Build Memory Workflows
 
-This guide maps real product tasks to Aionis memory and policy APIs.
+Use this guide to connect Aionis to an existing product workflow from first write to governed execution.
 
-## Build Workflow
+## End-to-End Flow
 
 ```mermaid
 flowchart LR
-  A["Add Context"] --> B["Assemble Context"]
-  B --> C["Apply Policy"]
-  C --> D["Execute and Record Decision"]
-  D --> E["Write Feedback"]
-  E --> A
+  A["Write Memory"] --> B["Recall Context"]
+  B --> C["Assemble Layered Context"]
+  C --> D["Evaluate Rules and Select Tool"]
+  D --> E["Record Decision and Feedback"]
 ```
 
-## 1) Add Context
+## 1) Write Memory
 
-Goal: persist new memory signals with verifiable lineage.
-
-Primary endpoints:
+Endpoint:
 
 1. `POST /v1/memory/write`
-2. `POST /v1/memory/sessions`
-3. `POST /v1/memory/events`
 
-Recommended write payload pattern:
+Minimal payload:
 
-1. include `tenant_id` and `scope`
-2. include clear `input_text`
-3. include structured node metadata when available
+```json
+{
+  "tenant_id": "default",
+  "scope": "default",
+  "input_text": "Customer prefers email follow-up"
+}
+```
 
-Success criteria:
+Success signal: response includes `request_id` and write metadata.
 
-1. response includes `commit_id` and `commit_uri`
-2. written memory can be found by recall or find
+## 2) Recall Useful Context
 
-## 2) Assemble Context
+Endpoints:
 
-Goal: produce LLM-ready context for planning and generation.
+1. `POST /v1/memory/recall_text` for compact prompt-ready context
+2. `POST /v1/memory/recall` for structured candidates
 
-Primary endpoints:
+Start with `recall_text` for the fastest integration loop.
 
-1. `POST /v1/memory/recall`
-2. `POST /v1/memory/recall_text`
-3. `POST /v1/memory/context/assemble`
-4. `POST /v1/memory/planning/context`
+## 3) Assemble Layered Context
 
-When to use what:
+Endpoint:
 
-1. `recall_text`: fastest path for prompt-ready context.
-2. `context/assemble`: layered and budget-controlled context.
-3. `planning/context`: one-call recall + policy context surface.
+1. `POST /v1/memory/context/assemble`
 
-## 3) Customize Context
+Use this when you need explicit control over layers, budgets, and merge trace for debugging quality/cost tradeoffs.
 
-Goal: tune quality, latency, and cost.
+## 4) Apply Policy Before Action
 
-Main knobs:
-
-1. `context_layers.enabled`
-2. `char_budget_total`
-3. `char_budget_by_layer`
-4. `max_items_by_layer`
-5. `include_merge_trace`
-
-Practical tuning sequence:
-
-1. start with `Balanced` preset
-2. measure latency and answer quality
-3. tighten budgets for high-traffic paths
-4. keep policy-relevant layers visible for tool routing
-
-## 4) Work with Graph Objects
-
-Goal: inspect and reuse memory graph objects directly.
-
-Primary endpoints:
-
-1. `POST /v1/memory/find`
-2. `POST /v1/memory/resolve`
-
-Use cases:
-
-1. inspect object lineage by URI
-2. validate write results in operator workflows
-3. replay incident chains from decision/commit anchors
-
-## 5) Connect Memory to Execution
-
-Goal: make memory affect behavior in a controlled way.
-
-Policy endpoints:
+Endpoints:
 
 1. `POST /v1/memory/rules/evaluate`
 2. `POST /v1/memory/tools/select`
-3. `POST /v1/memory/tools/decision`
-4. `POST /v1/memory/tools/feedback`
 
-Recommended integration:
+This stage lets policy influence execution, not only retrieval.
 
-1. call recall/context first
-2. evaluate rules before tool selection
-3. persist decisions and feedback per run
+## 5) Persist Decision Outcomes
 
-## Implementation Checklist
+Endpoints:
 
-1. Scope strategy defined (`tenant_id`, `scope`).
-2. Core write/recall path passing in staging.
-3. Context assembly preset selected and measured.
-4. Policy loop wired for at least one critical workflow.
-5. Required IDs persisted in telemetry (`request_id/run_id/decision_id/commit_uri`).
+1. `POST /v1/memory/tools/decision`
+2. `POST /v1/memory/tools/feedback`
+
+Persist these IDs for replay and optimization:
+
+1. `request_id`
+2. `run_id`
+3. `decision_id`
+4. `commit_uri`
+
+## Quick Curl Sequence
+
+```bash
+export BASE_URL="https://api.your-domain.com"
+export API_KEY="your_api_key"
+
+curl -sS "$BASE_URL/v1/memory/write" \
+  -H 'content-type: application/json' \
+  -H "x-api-key: $API_KEY" \
+  -d '{"tenant_id":"default","scope":"default","input_text":"Customer prefers email"}' | jq
+
+curl -sS "$BASE_URL/v1/memory/recall_text" \
+  -H 'content-type: application/json' \
+  -H "x-api-key: $API_KEY" \
+  -d '{"tenant_id":"default","scope":"default","query_text":"preferred follow-up","limit":5}' | jq
+
+curl -sS "$BASE_URL/v1/memory/rules/evaluate" \
+  -H 'content-type: application/json' \
+  -H "x-api-key: $API_KEY" \
+  -d '{"tenant_id":"default","scope":"default","run_id":"run-demo-1","context":{"user_intent":"follow-up"}}' | jq
+```
+
+## Production Checklist
+
+1. Tenant/scope model is explicitly defined.
+2. Write and recall are stable under real traffic shape.
+3. Context budgets are tuned for latency and token cost.
+4. Policy loop covers at least one critical decision path.
+5. IDs are persisted for replay and incident diagnostics.
 
 ## Related
 
 1. [Get Started](/public/en/getting-started/01-get-started)
 2. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
-3. [API Contract](/public/en/api/01-api-contract)
+3. [Policy & Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
 4. [API Reference](/public/en/api-reference/00-api-reference)
-5. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)

@@ -4,61 +4,68 @@ title: "API Reference"
 
 # API Reference
 
-This page provides a functional map of Aionis APIs for integrators.
+This page is the practical API map for integrating Aionis into product workflows.
 
 ## Base Path
 
+All memory-kernel routes are under:
+
 `/v1/memory/*`
 
-## Authentication Headers
+## Authentication
 
-1. `X-Api-Key` (API key mode)
-2. `Authorization: Bearer <token>` (JWT mode)
-3. `X-Admin-Token` (admin/control surfaces where required)
-4. `X-Tenant-Id` (optional tenant header fallback)
+Use one of these for memory routes:
 
-## Core Memory Endpoints
+1. `X-Api-Key: <key>`
+2. `Authorization: Bearer <token>`
 
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /write` | persist memory and commit lineage |
-| `POST /recall` | structured recall response |
-| `POST /recall_text` | compact LLM-ready text recall |
-| `POST /context/assemble` | layered context composition |
-| `POST /find` | exact object lookup |
-| `POST /resolve` | URI-based object resolution |
+Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
 
-## Policy Loop Endpoints
+## Endpoint Groups
 
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /rules/evaluate` | rule matching for runtime context |
-| `POST /tools/select` | policy-aware tool routing |
-| `POST /tools/decision` | persist decision provenance |
-| `POST /tools/feedback` | write outcome feedback |
+### Memory Write and Recall
 
-## Session and Event Endpoints
+1. `POST /v1/memory/write`
+2. `POST /v1/memory/recall`
+3. `POST /v1/memory/recall_text`
 
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /sessions` | create/update session memory anchor |
-| `POST /events` | append session events |
-| `POST /sessions/events/list` | list session event history |
+### Context Orchestration
+
+1. `POST /v1/memory/context/assemble`
+2. `POST /v1/memory/planning/context`
+
+### Policy and Execution Loop
+
+1. `POST /v1/memory/rules/evaluate`
+2. `POST /v1/memory/tools/select`
+3. `POST /v1/memory/tools/decision`
+4. `POST /v1/memory/tools/feedback`
+
+### Sessions and Events
+
+1. `POST /v1/memory/sessions`
+2. `POST /v1/memory/events`
+3. `POST /v1/memory/sessions/events/list`
+
+### Graph and Replay Utilities
+
+1. `POST /v1/memory/find`
+2. `POST /v1/memory/resolve`
 
 ## Common Request Fields
 
 1. `tenant_id`
 2. `scope`
 3. `run_id` (policy flows)
-4. `context` (policy/planner flows)
+4. `context` (policy/planning inputs)
 
 ## Common Response Fields
 
 1. `request_id`
 2. `tenant_id`
 3. `scope`
-4. `commit_id` / `commit_uri`
-5. `decision_id` / `decision_uri` (where applicable)
+4. `commit_id` / `commit_uri` (write flows)
+5. `decision_id` / `decision_uri` (tool-decision flows)
 
 ## Error Shape
 
@@ -70,15 +77,15 @@ This page provides a functional map of Aionis APIs for integrators.
 }
 ```
 
-## Quick Integration Path
+## Minimal Integration Sequence
 
-1. `write` one memory record.
-2. `recall_text` for retrieval validation.
-3. `context/assemble` for layered planner context.
-4. `rules/evaluate` + `tools/select` for governed routing.
-5. `resolve` for replay/inspection using URI references.
+1. `write` one memory item.
+2. `recall_text` to verify retrieval quality.
+3. `context/assemble` for layered context.
+4. `rules/evaluate` and `tools/select` for governed routing.
+5. `resolve` using `commit_uri` or `decision_uri` for replay.
 
-## Related
+## Contract and SDK
 
 1. [API Contract](/public/en/api/01-api-contract)
 2. [SDK Guide](/public/en/reference/05-sdk)
