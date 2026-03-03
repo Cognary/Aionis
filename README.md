@@ -12,12 +12,13 @@
 
 Aionis combines durable memory, policy-aware execution, and replayable operations in one production-ready runtime.
 
-## Why Teams Trust Aionis
+## Five Core Differentiators
 
-1. **Verifiable memory lineage**: writes return `commit_id` / `commit_uri`, and graph objects are URI-resolvable.
-2. **Governed execution loop**: memory can influence tool routing through `rules/evaluate -> tools/select -> tools/decision -> tools/feedback`.
-3. **Production guardrails**: release gates, runbooks, and E2E checks are first-class operating surfaces.
-4. **Reproducible evidence**: benchmark and governance outputs can be regenerated with documented commands.
+1. **Verifiable write chain**: every mutation is anchored by `commit_id` and `commit_uri` for audit and replay.
+2. **URI-first object model**: nodes, edges, commits, and decisions are consistently referenceable across API, SDK, and ops tools.
+3. **Layered context orchestration**: context is assembled with explicit layers (`facts/episodes/rules/decisions/tools/citations`) and budget controls.
+4. **Memory -> Policy -> Action -> Replay loop**: memory can directly influence runtime decisions via governed policy routes.
+5. **Production-grade evidence and gates**: release readiness is validated by reproducible checks, runbooks, and benchmark artifacts.
 
 ## What You Can Build
 
