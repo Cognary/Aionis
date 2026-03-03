@@ -70,6 +70,6 @@ Example local MCP config:
 
 ## Related Docs
 
-1. [OpenWork (OpenCode Desktop) Integration](/OPENWORK_INTEGRATION)
-2. [LangGraph Integration](/LANGGRAPH_INTEGRATION)
+1. [OpenWork (OpenCode Desktop) Integration](/public/en/integrations/02-openwork)
+2. [LangGraph Integration](/public/en/integrations/03-langgraph)
 3. [API Contract](/public/en/api/01-api-contract)

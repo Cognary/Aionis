@@ -1,52 +1,29 @@
 ---
-title: "Public Docs (EN)"
+title: "Aionis Public Docs"
 ---
 
-# Public Docs (EN)
+# Aionis Public Docs
 
-IA migration is in progress (Phase 3 public structure rollout).
+This public documentation site is structured for external product usage.
 
-Core migrated pages:
+## Top-Level Sections
 
-1. [Get Started](./getting-started/01-get-started.md)
-2. [5-Minute Onboarding](./getting-started/02-onboarding-5min.md)
-3. [Embedding Setup](./getting-started/03-embedding-setup.md)
-4. [Build Memory](./guides/01-build-memory.md)
-5. [Playground](./guides/02-playground.md)
-6. [Operate](./operations/00-operate.md)
-7. [Ops Console](./operations/01-ops-console.md)
-8. [Integrations](./integrations/00-overview.md)
-9. [MCP Integration](./integrations/01-mcp.md)
-10. [Control & Policy](./control/01-control-policy.md)
-11. [Rule Lifecycle](./control/02-rule-lifecycle.md)
-12. [Reference](./reference/01-reference.md)
-13. [Planner Context](./reference/02-planner-context.md)
-14. [Rule Promotion Governance](./reference/03-rule-promotion-governance.md)
-15. [Rule Conflict Report](./reference/04-rule-conflict-report.md)
-16. [SDK Guide](./reference/05-sdk.md)
-17. [SDK Compatibility Matrix](./reference/06-sdk-compatibility-matrix.md)
-18. [API Contract](./api/01-api-contract.md)
-19. [Operator Runbook](./operations/02-operator-runbook.md)
-20. [Production Core Gate](./operations/03-production-core-gate.md)
-21. [Prod Go-Live Gate](./operations/04-prod-go-live-gate.md)
-22. [E2E Regression](./operations/05-e2e-regression.md)
-23. [Standalone to HA Runbook](./operations/06-standalone-to-ha-runbook.md)
-24. [HA Failure Drill Template](./operations/07-ha-failure-drill-template.md)
-25. [HA Failure Drill Sample](./operations/08-ha-failure-drill-sample.md)
-26. [Core Differentiators](./about/01-core-differentiators.md)
-27. [Benchmarks](./benchmarks/01-benchmarks.md)
-28. [Benchmark Snapshot (Public)](./benchmarks/02-benchmark-snapshot-public.md)
-29. [Differentiation Evidence](./benchmarks/03-differentiation-evidence.md)
-30. [Governance Weekly Report](./benchmarks/04-governance-weekly-report.md)
-31. [Context Orchestration](./concepts/01-context-orchestration.md)
-32. [Architecture](./concepts/02-architecture.md)
-33. [Execution Loop Gate](./control/03-execution-loop-gate.md)
-34. [Policy Adaptation Gate](./control/04-policy-adaptation-gate.md)
-35. [OpenWork Integration](./integrations/02-openwork.md)
-36. [LangGraph Integration](./integrations/03-langgraph.md)
-37. [Abstraction Policy Runbook](./operations/09-abstraction-policy-runbook.md)
-38. [Consolidation Replay Runbook](./operations/10-consolidation-replay-runbook.md)
-39. [Performance Baseline](./benchmarks/05-performance-baseline.md)
-40. [AionisBench v0.1](./benchmarks/06-aionis-bench-v01.md)
-41. [URI Expansion Plan](./reference/07-uri-expansion-plan.md)
-42. [Aionis Onepage](./about/02-aionis-onepage.md)
+1. [Overview](/public/en/overview/01-overview)
+2. [Get Started](/public/en/getting-started/01-get-started)
+3. [Core Concepts](/public/en/core-concepts/00-core-concepts)
+4. [Architecture](/public/en/architecture/01-architecture)
+5. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
+6. [Policy & Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
+7. [Operate & Production](/public/en/operate-production/00-operate-production)
+8. [Benchmarks](/public/en/benchmarks/01-benchmarks)
+9. [Integrations](/public/en/integrations/00-overview)
+10. [API Reference](/public/en/api-reference/00-api-reference)
+11. [Roadmap](/public/en/roadmap/00-roadmap)
+
+## Quick Start Path
+
+1. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
+2. [Embedding Setup](/public/en/getting-started/03-embedding-setup)
+3. [Build Memory](/public/en/guides/01-build-memory)
+4. [Playground](/public/en/guides/02-playground)
+5. [API Contract](/public/en/api/01-api-contract)

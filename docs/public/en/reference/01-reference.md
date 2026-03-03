@@ -11,7 +11,7 @@ Specification and compatibility source for implementation teams.
 1. [API Contract](/public/en/api/01-api-contract)
 2. [SDK Guide](/public/en/reference/05-sdk)
 3. [SDK Compatibility Matrix](/public/en/reference/06-sdk-compatibility-matrix)
-4. [URI Expansion Plan](/URI_EXPANSION_PLAN)
+4. [URI Object Coverage](/public/en/reference/07-uri-expansion-plan)
 
 ## Policy/Planner Reference
 
@@ -22,4 +22,4 @@ Specification and compatibility source for implementation teams.
 
 ## Full Catalog
 
-1. [Docs Index](/README)
+1. [Docs Index](/index)

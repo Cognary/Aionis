@@ -342,7 +342,7 @@ npm run job:embedding-model-backfill -- --limit 5000
 
 Note: this labels existing vectors with the **currently configured** provider/model name. If you need full correctness across historical model changes, use `force_reembed=true` to refresh embeddings.
 
-## 13) Phase 4 Loop Smoke (Rehydrate + Activate + Adaptive Decay + Quality Gate)
+## 13) Loop Smoke (Rehydrate + Activate + Adaptive Decay + Quality Gate)
 
 One-command smoke:
 
@@ -573,18 +573,18 @@ Optional strict mode (if you want unresolved rows to stay private and fail the r
 npm run job:private-rule-owner-backfill -- --limit 5000 --no-shared-fallback
 ```
 
-## 17) Phase C Tenant Isolation + Cross-Tenant Consistency
+## 17) Tenant Isolation + Cross-Tenant Consistency
 
 Run strict tenant e2e:
 
 ```bash
-npm run e2e:phasec-tenant
+npm run e2e:tenant-isolation-smoke
 ```
 
 Expected:
 
 1. tenant A/B evaluate only see their own rule source ids.
-2. Script exits 0 with `ok: phase-c tenant e2e passed`.
+2. Script exits 0 with `ok: tenant isolation e2e passed`.
 3. Embedded consistency step shows all cross-tenant checks count=0.
 
 Manual spot-check:

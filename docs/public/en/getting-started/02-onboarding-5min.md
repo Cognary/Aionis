@@ -266,5 +266,5 @@ Recommended runbooks:
 
 1. [Operator Runbook](/public/en/operations/02-operator-runbook)
 2. [Standalone to HA Runbook](/public/en/operations/06-standalone-to-ha-runbook)
-3. [Docker Release Runbook](/DOCKER_RELEASE)
+3. [Docker Release Runbook](/public/en/operations/06-standalone-to-ha-runbook)
 4. [E2E Regression Checklist](/public/en/operations/05-e2e-regression)

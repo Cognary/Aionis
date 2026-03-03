@@ -8,7 +8,7 @@ Last updated: `2026-02-24`
 
 ## Purpose
 
-Phase C guardrail for rule lifecycle operations:
+Production guardrail for rule lifecycle operations:
 
 1. Produce reproducible `draft -> shadow` suggestions.
 2. Produce reproducible `shadow -> active` suggestions.

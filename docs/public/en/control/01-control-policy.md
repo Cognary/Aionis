@@ -22,6 +22,6 @@ Aionis policy loop makes behavior controllable and replayable, not only retrieva
 ## Read
 
 1. [Rule Lifecycle](/public/en/control/02-rule-lifecycle)
-2. [Execution Loop Gate](/EXECUTION_LOOP_GATE)
-3. [Policy Adaptation Gate](/POLICY_ADAPTATION_GATE)
-4. [API Contract](/API_CONTRACT)
+2. [Execution Loop Gate](/public/en/control/03-execution-loop-gate)
+3. [Policy Adaptation Gate](/public/en/control/04-policy-adaptation-gate)
+4. [API Contract](/public/en/api/01-api-contract)

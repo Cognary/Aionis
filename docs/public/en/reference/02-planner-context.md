@@ -16,7 +16,7 @@ The endpoint currently accepts any JSON (`context: any`) for flexibility, but **
 
 - Keep rule matching deterministic and portable.
 - Make rule conditions easy to write and review.
-- Avoid leaking arbitrary caller internals into memory/rule systems.
+- Avoid leaking arbitrary caller implementation details into memory/rule systems.
 
 ## Recommended Context Shape
 

@@ -1,8 +1,8 @@
 ---
-title: "Performance Baseline (Scale Version, Phase D)"
+title: "Performance Baseline (Scale Version)"
 ---
 
-# Performance Baseline (Scale Version, Phase D)
+# Performance Baseline (Scale Version)
 
 This document is the reproducible baseline kit for:
 
@@ -90,7 +90,7 @@ Output fields:
 One-command matrix (seed + bench + explain + report):
 
 ```bash
-npm run perf:phase-d-matrix
+npm run perf:production-matrix
 ```
 
 Current defaults (recommended):
@@ -106,7 +106,7 @@ When you must reset a fixed scope, use offline-window guard:
 ```bash
 SCOPE_STRATEGY=fixed RESET_MODE=always PERF_OFFLINE_WINDOW=true \
 RESET_IMPL=scope_purge RESET_PURGE_MODE=partition \
-npm run perf:phase-d-matrix
+npm run perf:production-matrix
 ```
 
 Temporary compatibility mode (allows fallback delete):
@@ -114,23 +114,23 @@ Temporary compatibility mode (allows fallback delete):
 ```bash
 SCOPE_STRATEGY=fixed RESET_MODE=always PERF_OFFLINE_WINDOW=true \
 RESET_IMPL=scope_purge RESET_PURGE_MODE=auto RESET_PURGE_ALLOW_FALLBACK_DELETE=true \
-RESET_PURGE_FAIL_ON_DELETE=false npm run perf:phase-d-matrix
+RESET_PURGE_FAIL_ON_DELETE=false npm run perf:production-matrix
 ```
 
 SLO profile variants:
 
 ```bash
 # 1) Recall SLO
-PERF_PROFILE=recall_slo SCALES=100000 npm run perf:phase-d-matrix
+PERF_PROFILE=recall_slo SCALES=100000 npm run perf:production-matrix
 
 # 2) Write SLO
-PERF_PROFILE=write_slo SCALES=100000 npm run perf:phase-d-matrix
+PERF_PROFILE=write_slo SCALES=100000 npm run perf:production-matrix
 
 # 3) Worker SLO (auto build embed backlog before worker benchmark)
-PERF_PROFILE=worker_slo SCALES=100000 npm run perf:phase-d-matrix
+PERF_PROFILE=worker_slo SCALES=100000 npm run perf:production-matrix
 
 # 4) Compression SLO (focus on compaction KPI, non-blocking by default in core gate)
-PERF_PROFILE=compression_slo SCALES=100000 npm run perf:phase-d-matrix
+PERF_PROFILE=compression_slo SCALES=100000 npm run perf:production-matrix
 ```
 
 Artifacts default path:

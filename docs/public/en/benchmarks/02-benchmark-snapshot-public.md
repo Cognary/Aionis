@@ -104,8 +104,8 @@ No manual seed step is required when running `bench:aionis:v01` or `evidence:wee
 
 Reference docs:
 
-1. [Performance Baseline](/PERFORMANCE_BASELINE)
-2. [AionisBench v0.1](/AIONIS_BENCH_V01)
+1. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)
+2. [AionisBench v0.1](/public/en/benchmarks/06-aionis-bench-v01)
 3. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
 4. [Production Core Gate](/public/en/operations/03-production-core-gate)
 
@@ -131,7 +131,7 @@ Key files:
 ### 7.1 Performance Snapshot
 
 ```bash
-PERF_PROFILE=perf_gate SCALES=100000 npm run -s perf:phase-d-matrix
+PERF_PROFILE=perf_gate SCALES=100000 npm run -s perf:production-matrix
 ```
 
 ### 7.2 Policy + Governance Snapshot (Strict)

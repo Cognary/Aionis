@@ -16,8 +16,8 @@ Use this section for production readiness, reliability checks, and incident dril
 ## Runtime Operations
 
 1. [Ops Console](/public/en/operations/01-ops-console)
-2. [Abstraction Policy Runbook](/ABSTRACTION_POLICY_RUNBOOK)
-3. [Consolidation Replay Runbook](/CONSOLIDATION_REPLAY_RUNBOOK)
+2. [Abstraction Policy Runbook](/public/en/operations/09-abstraction-policy-runbook)
+3. [Consolidation Replay Runbook](/public/en/operations/10-consolidation-replay-runbook)
 
 ## Failure Preparedness
 

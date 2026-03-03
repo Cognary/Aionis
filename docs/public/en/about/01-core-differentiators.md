@@ -40,6 +40,6 @@ Aionis includes runbooks, release gates, and ops diagnostics as first-class capa
 
 1. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
 2. [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public)
-3. [Execution Loop Gate](/EXECUTION_LOOP_GATE)
-4. [Policy Adaptation Gate](/POLICY_ADAPTATION_GATE)
+3. [Execution Loop Gate](/public/en/control/03-execution-loop-gate)
+4. [Policy Adaptation Gate](/public/en/control/04-policy-adaptation-gate)
 5. [Production Core Gate](/public/en/operations/03-production-core-gate)

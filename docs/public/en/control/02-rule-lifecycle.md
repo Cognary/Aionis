@@ -68,5 +68,5 @@ Rules become "execution-relevant" when they are in `SHADOW` or `ACTIVE`.
 
 - Use `POST /v1/memory/rules/evaluate` to match rules against a planner/tool-selector `context` object.
 - Only `then_json` from matched rules should be injected into your execution system.
-- `then_json` is intentionally constrained to a minimal, strict policy patch schema (see `docs/API_CONTRACT.md`) so it remains stable and safe to apply automatically.
+- `then_json` is intentionally constrained to a minimal, strict policy patch schema (see `/public/en/api/01-api-contract`) so it remains stable and safe to apply automatically.
 - If a rule node is `memory_lane=private`, it must have an explicit owner (`owner_agent_id` or `owner_team_id`) before it can be promoted into `SHADOW`/`ACTIVE`.

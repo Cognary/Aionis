@@ -214,10 +214,10 @@ npm run -s job:rule-conflict-report -- \
 npm run e2e:phase4-smoke
 ```
 
-7. Tenant isolation smoke (Phase C):
+7. Tenant isolation smoke:
 
 ```bash
-npm run e2e:phasec-tenant
+npm run e2e:tenant-isolation-smoke
 ```
 
 8. Auxiliary benchmark regression (non-blocking):

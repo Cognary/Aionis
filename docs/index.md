@@ -4,64 +4,46 @@ title: "Aionis Docs"
 
 hero:
   name: "Aionis"
-  text: "Memory Infrastructure For Production Agents"
-  tagline: "Verifiable writes, policy-aware execution, and operable memory pipelines."
+  text: "Memory Kernel for Production Agents"
+  tagline: "Production-first memory infrastructure with verifiable writes, policy-aware execution, and operational controls."
   actions:
     - theme: brand
-      text: Start Here
+      text: Overview
+      link: /public/en/overview/01-overview
+    - theme: alt
+      text: Get Started
       link: /public/en/getting-started/01-get-started
     - theme: alt
-      text: Core Differentiators
-      link: /public/en/about/01-core-differentiators
-    - theme: alt
       text: API Reference
-      link: /public/en/reference/01-reference
+      link: /public/en/api-reference/00-api-reference
     - theme: alt
       text: Benchmarks
       link: /public/en/benchmarks/01-benchmarks
 
 features:
-  - title: Memory -> Policy -> Action
-    details: Move from retrieval to controlled execution using rules evaluation, tool selection, feedback, and replay.
-  - title: Verifiable and Replayable
-    details: Commit lineage, decision IDs, and run IDs make behavior auditable and root-cause friendly.
-  - title: Reliable Write Path
-    details: Derived-async architecture decouples write durability from upstream embedding volatility.
-  - title: Governed Adaptation
-    details: Feedback can adapt behavior under explicit policy and release gates, not black-box drift.
+  - title: "Category: Memory Kernel"
+    details: Aionis provides memory as executable infrastructure, not only retrieval.
+  - title: "Production-first Engineering"
+    details: Verifiable writes, tenant/scope isolation, and operational gates are built in.
+  - title: "Executable Loop"
+    details: Memory -> Policy -> Action is modeled as auditable contracts and runtime IDs.
+  - title: "Context Orchestration"
+    details: Layered context assembly with budgets, presets, and merge traces.
 ---
 
-## User Journey
+## Documentation Goals
 
-Use the docs in this order:
+1. Understand what Aionis is in 3 minutes.
+2. Run your first integration in 10 minutes.
+3. Grasp the kernel architecture in 30 minutes.
 
-1. [Get Started](./public/en/getting-started/01-get-started.md)
-2. [Build Memory](./public/en/guides/01-build-memory.md)
-3. [Control & Policy](./public/en/control/01-control-policy.md)
-4. [Operate](./public/en/operations/00-operate.md)
-5. [Integrations](./public/en/integrations/00-overview.md)
-6. [Reference](./public/en/reference/01-reference.md)
-7. [Benchmarks](./public/en/benchmarks/01-benchmarks.md)
+## Recommended Reading Path
 
-## Build Memory: 4 Core Tasks
-
-1. [Adding Context](./public/en/guides/01-build-memory.md#adding-context)
-2. [Assembling Context](./public/en/guides/01-build-memory.md#assembling-context)
-3. [Customizing Context](./public/en/guides/01-build-memory.md#customizing-context)
-4. [Working with Graphs](./public/en/guides/01-build-memory.md#working-with-graphs)
-
-## Core Differentiation
-
-1. [Core Differentiators](./public/en/about/01-core-differentiators.md)
-2. [Differentiation Evidence](./public/en/benchmarks/03-differentiation-evidence.md)
-3. [Execution Loop Gate](./public/en/control/03-execution-loop-gate.md)
-4. [Policy Adaptation Gate](./public/en/control/04-policy-adaptation-gate.md)
-
-## Quick Entry Points
-
-1. [5-Minute Onboarding](./public/en/getting-started/02-onboarding-5min.md)
-2. [Embedding Setup](./public/en/getting-started/03-embedding-setup.md)
-3. [Playground](./public/en/guides/02-playground.md)
-4. [API Contract](./public/en/api/01-api-contract.md)
-5. [URI Expansion Plan](./public/en/reference/07-uri-expansion-plan.md)
-6. [Docs Index](./README.md)
+1. [Overview](/public/en/overview/01-overview)
+2. [Get Started](/public/en/getting-started/01-get-started)
+3. [Core Concepts](/public/en/core-concepts/00-core-concepts)
+4. [Architecture](/public/en/architecture/01-architecture)
+5. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
+6. [Policy & Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
+7. [Operate & Production](/public/en/operate-production/00-operate-production)
+8. [API Reference](/public/en/api-reference/00-api-reference)

@@ -125,4 +125,4 @@ Playground 已内置：
 3. 启用层勾选与预算输入
 4. `layered_context` 摘要与 `merge_trace` 预览
 
-See also: [Playground](/PLAYGROUND), [Planner Context](/PLANNER_CONTEXT), [API Contract](/API_CONTRACT)
+See also: [Playground](/public/en/guides/02-playground), [Planner Context](/public/en/reference/02-planner-context), [API Contract](/public/en/api/01-api-contract)

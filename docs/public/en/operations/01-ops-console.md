@@ -4,7 +4,7 @@ title: "Ops Console"
 
 # Ops Console
 
-`apps/ops` is the internal Next.js control and monitoring console built on top of existing `admin/control` APIs.
+`apps/ops` is the control and monitoring console built on top of `admin/control` APIs.
 
 It provides:
 

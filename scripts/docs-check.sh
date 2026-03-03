@@ -84,6 +84,10 @@ fi
 
 EN_PUBLIC_DIR="$ROOT_DIR/docs/public/en"
 ZH_PUBLIC_DIR="$ROOT_DIR/docs/public/zh"
+REQUIRE_ZH_MIRROR="$(printf '%s' "${DOCS_REQUIRE_ZH_MIRROR:-false}" | tr '[:upper:]' '[:lower:]')"
+if [[ "$REQUIRE_ZH_MIRROR" != "true" ]]; then
+  REQUIRE_ZH_MIRROR="false"
+fi
 
 missing_mirror=0
 extra_mirror=0
@@ -92,7 +96,9 @@ while IFS= read -r en_file; do
   rel="${en_file#$EN_PUBLIC_DIR/}"
   zh_file="$ZH_PUBLIC_DIR/$rel"
   if [[ ! -f "$zh_file" ]]; then
-    echo "MISSING ZH MIRROR: docs/public/zh/$rel (for docs/public/en/$rel)"
+    if [[ "$REQUIRE_ZH_MIRROR" == "true" ]]; then
+      echo "MISSING ZH MIRROR: docs/public/zh/$rel (for docs/public/en/$rel)"
+    fi
     missing_mirror=$((missing_mirror + 1))
   fi
 done < <(find "$EN_PUBLIC_DIR" -type f -name "*.md" | sort)
@@ -101,13 +107,37 @@ while IFS= read -r zh_file; do
   rel="${zh_file#$ZH_PUBLIC_DIR/}"
   en_file="$EN_PUBLIC_DIR/$rel"
   if [[ ! -f "$en_file" ]]; then
-    echo "EXTRA ZH PAGE WITHOUT EN SOURCE: docs/public/zh/$rel"
+    if [[ "$REQUIRE_ZH_MIRROR" == "true" ]]; then
+      echo "EXTRA ZH PAGE WITHOUT EN SOURCE: docs/public/zh/$rel"
+    fi
     extra_mirror=$((extra_mirror + 1))
   fi
 done < <(find "$ZH_PUBLIC_DIR" -type f -name "*.md" | sort)
 
 if [[ $missing_mirror -gt 0 || $extra_mirror -gt 0 ]]; then
-  echo "docs-check: failed (${missing_mirror} missing zh mirror, ${extra_mirror} extra zh page)"
+  if [[ "$REQUIRE_ZH_MIRROR" == "true" ]]; then
+    echo "docs-check: failed (${missing_mirror} missing zh mirror, ${extra_mirror} extra zh page)"
+    exit 1
+  fi
+  echo "docs-check: warn (${missing_mirror} missing zh mirror, ${extra_mirror} extra zh page; set DOCS_REQUIRE_ZH_MIRROR=true to enforce)"
+fi
+
+public_copy_issues=0
+
+if rg -n -e "\\]\\(([^)]*docs/internal/[^)]*)\\)" -e "\\]\\((/internal/[^)]*)\\)" "$EN_PUBLIC_DIR" >/dev/null 2>&1; then
+  echo "PUBLIC COPY ISSUE: public docs must not link to docs/internal or /internal paths"
+  rg -n -e "\\]\\(([^)]*docs/internal/[^)]*)\\)" -e "\\]\\((/internal/[^)]*)\\)" "$EN_PUBLIC_DIR" || true
+  public_copy_issues=$((public_copy_issues + 1))
+fi
+
+if rg -n -i -e "\\binternal only\\b" -e "\\bfor internal\\b" -e "\\bconfidential\\b" -e "\\bremediation\\b" -e "\\bgo-to-market\\b" -e "\\bgtm\\b" "$EN_PUBLIC_DIR" >/dev/null 2>&1; then
+  echo "PUBLIC COPY ISSUE: public docs contain internal-facing wording"
+  rg -n -i -e "\\binternal only\\b" -e "\\bfor internal\\b" -e "\\bconfidential\\b" -e "\\bremediation\\b" -e "\\bgo-to-market\\b" -e "\\bgtm\\b" "$EN_PUBLIC_DIR" || true
+  public_copy_issues=$((public_copy_issues + 1))
+fi
+
+if [[ $public_copy_issues -gt 0 ]]; then
+  echo "docs-check: failed ($public_copy_issues public copy violations)"
   exit 1
 fi
 

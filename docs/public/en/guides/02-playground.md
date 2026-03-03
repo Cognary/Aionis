@@ -62,4 +62,4 @@ Default local API target is `http://127.0.0.1:3001` and can be changed from the 
 
 1. The playground forwards requests through its own server route (`/api/playground/execute`) to avoid browser CORS blocking during local debugging.
 2. Credentials are runtime form values, not committed configuration.
-3. Keep playground access internal when testing with production credentials.
+3. Restrict playground access when testing with production credentials.

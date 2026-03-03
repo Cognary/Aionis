@@ -141,7 +141,7 @@ Operational checks:
 
 ## References
 
-1. [README](/README)
+1. [README](/index)
 2. [Operator Runbook](/public/en/operations/02-operator-runbook)
 3. [Prod Go-Live Gate](/public/en/operations/04-prod-go-live-gate)
 4. [Production Core Gate](/public/en/operations/03-production-core-gate)

@@ -9,8 +9,8 @@ Connect Aionis into your agent runtime and orchestration stack.
 ## Official Paths
 
 1. [MCP Integration](/public/en/integrations/01-mcp)
-2. [OpenWork Integration](/OPENWORK_INTEGRATION)
-3. [LangGraph Integration](/LANGGRAPH_INTEGRATION)
+2. [OpenWork Integration](/public/en/integrations/02-openwork)
+3. [LangGraph Integration](/public/en/integrations/03-langgraph)
 
 ## Suggested Integration Order
 

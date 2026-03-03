@@ -109,4 +109,4 @@ These outputs should be attached to release reviews together with benchmark arti
 
 For manual executive write-up format, use:
 
-1. [Weekly Evidence Template](/EVIDENCE_WEEKLY_TEMPLATE)
+1. [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public)

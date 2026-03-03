@@ -1,8 +1,8 @@
 ---
-title: "Memory Graph Architecture (Phase 1)"
+title: "Memory Graph Architecture"
 ---
 
-# Memory Graph Architecture (Phase 1)
+# Memory Graph Architecture
 
 ## Core Idea
 

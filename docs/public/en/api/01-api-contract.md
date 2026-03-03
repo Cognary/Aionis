@@ -26,14 +26,14 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
 - All memory endpoints support `tenant_id?: string` (default: `MEMORY_TENANT_ID`, normally `default`).
 - Header fallback is supported:
   - if request body omits `tenant_id`, server reads `X-Tenant-Id`.
-- Isolation key is `(tenant_id, scope)` (internally encoded as a tenant-aware scope key).
+- Isolation key is `(tenant_id, scope)` (encoded as a tenant-aware scope key).
 - Backward compatibility:
   - `tenant_id=default` keeps legacy single-tenant scope behavior.
 - Scope naming:
   - `scope` must be non-empty
-  - `scope` must not start with reserved prefix `tenant:` (reserved for internal tenant-derived scope keys)
+  - `scope` must not start with reserved prefix `tenant:` (reserved for system-generated tenant-derived scope keys)
 
-## Auth Identity Mapping (Phase C MVP)
+## Auth Identity Mapping
 
 - Runtime mode presets:
   - `AIONIS_MODE=local` => defaults to dev-safe local settings (`APP_ENV=dev`, `MEMORY_AUTH_MODE=off`)
@@ -57,7 +57,7 @@ The DB layer uses explicit `SELECT` lists and **does not fetch embeddings** unle
     - rules/tools context: `context.agent.id`, `context.agent.team_id`
   - identity mismatch in caller-provided fields returns `403 identity_mismatch`
 
-## Tenant Quotas (Phase C MVP)
+## Tenant Quotas
 
 - Enabled by `TENANT_QUOTA_ENABLED=true`.
 - Buckets are tenant-scoped and per-process:
@@ -945,7 +945,7 @@ Create an alert delivery route.
 **Target validation**
 - `target` must be an absolute `https://` URL.
 - URL credentials (`user:pass@`) are rejected.
-- Host must be publicly routable (no loopback/private/reserved/local-internal hosts).
+- Host must be publicly routable (no loopback/private/reserved/local hosts).
 - Channel-specific host constraints:
   - `slack_webhook`: `hooks.slack.com` or `hooks.slack-gov.com`
   - `pagerduty_events`: `events.pagerduty.com` or `events.eu.pagerduty.com`
@@ -1349,7 +1349,7 @@ Behavior:
   - visible: `private` + `owner_team_id == consumer_team_id` (when team id provided)
 - Recall read-side audit is recorded in `memory_recall_audit` (best-effort, non-blocking).
 
-## Consolidation Canonicalization (Phase 3)
+## Consolidation Canonicalization
 
 - Canonicalization is implemented as offline jobs and writes only node `slots` metadata:
   - duplicate node: `alias_of`, `superseded_by`
@@ -1361,7 +1361,7 @@ Behavior:
 - Default mode is dry-run; explicit apply is required.
 - API contract remains stable: these fields are visible only when `include_slots=true` (or via `slots_preview`).
 
-## Archive Rehydrate (Phase 4)
+## Archive Rehydrate
 
 ### `POST /v1/memory/archive/rehydrate`
 

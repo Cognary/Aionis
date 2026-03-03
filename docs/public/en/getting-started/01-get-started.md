@@ -14,8 +14,8 @@ Start here if you are integrating Aionis for the first time.
 
 ## 2) Core Concepts (Minimal)
 
-1. [Architecture](/ARCHITECTURE)
-2. [Aionis Onepage](/AIONIS_ONEPAGE)
+1. [Architecture](/public/en/architecture/01-architecture)
+2. [Aionis Onepage](/public/en/about/02-aionis-onepage)
 
 ## 3) Production Readiness Entry
 

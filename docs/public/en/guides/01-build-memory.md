@@ -43,9 +43,9 @@ Purpose: control recall behavior for quality, latency, and token budget.
 Read:
 
 1. [API Contract](/public/en/api/01-api-contract)
-2. [Recall Tail Latency Plan](/RECALL_TAIL_LATENCY_PLAN)
-3. [Adaptive Compression Plan](/ADAPTIVE_COMPRESSION_PLAN)
-4. [Context Orchestrator Plan](/CONTEXT_ORCHESTRATOR_PLAN)
+2. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
+3. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)
+4. [Roadmap](/public/en/roadmap/00-roadmap)
 
 ## Working with Graphs
 
@@ -58,4 +58,4 @@ Purpose: operate directly on graph-level objects and relationships.
 Read:
 
 1. [API Contract](/public/en/api/01-api-contract)
-2. [Aionis Onepage](/AIONIS_ONEPAGE)
+2. [Aionis Onepage](/public/en/about/02-aionis-onepage)

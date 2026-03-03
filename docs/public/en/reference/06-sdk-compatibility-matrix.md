@@ -15,15 +15,15 @@ Last updated: `2026-03-02`
 3. New optional fields/endpoints:
    - API minor bump.
    - SDK minor bump when types/methods are added.
-4. Internal fixes without API/type surface change:
+4. Implementation fixes without API/type surface change:
    - SDK patch bump.
 
 ## Matrix
 
 | SDK | SDK version | API contract baseline | Core methods | Error model | Retry + request_id | Status |
 |---|---|---|---|---|---|---|
-| `@aionis/sdk` (TypeScript) | `0.2.3` (`0.2.x`) | `docs/API_CONTRACT.md` (2026-03-02) | `write/recall/recallText/contextAssemble/find/createSession/writeEvent/listSessionEvents/packExport/packImport/rulesEvaluate/toolsSelect/toolsDecision/toolsFeedback + control* admin APIs` | `AionisApiError` + `AionisNetworkError` | yes | current |
-| `aionis-sdk` (Python) | `0.2.3` (`0.2.x`) | `docs/API_CONTRACT.md` (2026-03-02) | `write/recall/recall_text/context_assemble/find/create_session/write_event/list_session_events/pack_export/pack_import/rules_evaluate/tools_select/tools_decision/tools_feedback + control_* admin APIs` | `AionisApiError` + `AionisNetworkError` | yes | current |
+| `@aionis/sdk` (TypeScript) | `0.2.3` (`0.2.x`) | `/public/en/api/01-api-contract` (2026-03-02) | `write/recall/recallText/contextAssemble/find/createSession/writeEvent/listSessionEvents/packExport/packImport/rulesEvaluate/toolsSelect/toolsDecision/toolsFeedback + control* admin APIs` | `AionisApiError` + `AionisNetworkError` | yes | current |
+| `aionis-sdk` (Python) | `0.2.3` (`0.2.x`) | `/public/en/api/01-api-contract` (2026-03-02) | `write/recall/recall_text/context_assemble/find/create_session/write_event/list_session_events/pack_export/pack_import/rules_evaluate/tools_select/tools_decision/tools_feedback + control_* admin APIs` | `AionisApiError` + `AionisNetworkError` | yes | current |
 
 ## Backward compatibility notes
 
