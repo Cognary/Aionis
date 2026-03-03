@@ -4,155 +4,58 @@ title: "Production Core Gate"
 
 # Production Core Gate
 
-This is the blocking release gate for production go-live decisions.
+This gate is the minimum quality bar before production traffic changes.
 
-## Policy
+## What This Gate Must Prove
 
-Blocking metrics:
-1. Integrity: scope health gate (`strict_warnings`) + cross-tenant consistency (`strict_warnings`)
-2. Operability: build/contract/docs/sdk release checks
-3. Pack roundtrip: export -> verify import -> import -> re-import singleton check
-4. Control-plane input safety (optional): control admin validation smoke
-5. Availability and SLO: recall/write perf benchmark thresholds
-6. Weekly differentiation evidence pack (`evidence:weekly --strict`): benchmark + execution-loop + governance gates
-7. Compression KPI (optional blocking): context compression ratio + retain metrics
-8. Abstraction quality counters (non-blocking): clustering + compression signals from health gate
-9. Rule conflict resolution report (optional blocking): winner/loser delta against baseline
-10. Consolidation health SLO (optional blocking): candidate depth + apply/redirect completeness
-11. Replay determinism report (optional blocking): combined consolidation+abstraction fingerprint stability
+1. **Integrity**: tenant/scope isolation and consistency checks pass.
+2. **Availability**: health checks pass and service is stable.
+3. **Performance**: recall/write latency and error-rate stay within your SLO baseline.
+4. **Policy reliability**: rule and tool-decision traces are replayable.
+5. **Operational evidence**: release artifacts are captured and reviewable.
 
-Auxiliary only (non-blocking):
-1. LongMemEval
-2. LoCoMo
+## Standard Execution
 
-## One-command execution
+Run from repo root against the target environment:
 
 ```bash
 npm run -s gate:core:prod -- \
-  --base-url "http://localhost:${PORT:-3001}" \
-  --db-runner local \
-  --scope default \
-  --run-pack-gate true \
-  --run-control-admin-validation false \
-  --pack-gate-max-rows 2000 \
-  --run-perf true \
-  --recall-p95-max-ms 1200 \
-  --write-p95-max-ms 800 \
-  --error-rate-max 0.02 \
-  --compression-gate-mode non_blocking \
-  --compression-ratio-min 0.30 \
-  --compression-items-retain-min 0.55 \
-  --compression-citations-retain-min 0.55 \
-  --perf-compression-token-budget 1400 \
-  --perf-compression-profile balanced \
-  --run-rule-conflict-report true \
-  --rule-conflict-gate-mode non_blocking \
-  --rule-conflict-contexts-file examples/planner_context.json \
-  --run-consolidation-health-slo true \
-  --consolidation-health-gate-mode non_blocking \
-  --run-replay-determinism-report true \
-  --replay-determinism-gate-mode non_blocking
+  --base-url "https://api.your-domain.com" \
+  --scope default
 ```
 
-`--db-runner` notes:
-- `local` (default): run DB-backed checks on local host using local `DATABASE_URL`.
-- `auto`: currently aliases to `local` for compatibility.
+If your release process uses stricter thresholds, pass them as explicit CLI flags in your environment profile.
 
-The gate now compares API `/health.database_target_hash` and local `DATABASE_URL` target hash. If they differ, gate fails fast to prevent false green on the wrong database.
+## Pass/Fail Interpretation
 
-Artifacts:
-- `artifacts/core_gate/<run_id>/summary.json`
-- `artifacts/evidence/ci/<github_run_id>_<github_run_attempt>/EVIDENCE_SUMMARY.json`
-- `artifacts/core_gate/<run_id>/06_health_gate_scope.json`
-- `artifacts/core_gate/<run_id>/07_consistency_cross_tenant.json`
-- `artifacts/core_gate/<run_id>/07b_pack_roundtrip_gate.json`
-- `artifacts/core_gate/<run_id>/07c_control_admin_validation.log` (when enabled)
-- `artifacts/core_gate/<run_id>/07e_consolidation_health_slo.json`
-- `artifacts/core_gate/<run_id>/07f_replay_determinism.json`
-- `artifacts/core_gate/<run_id>/08_perf_benchmark.json`
+1. **Pass**: no blocking checks failed.
+2. **Pass with warnings**: non-blocking checks drifted; release can proceed only if risk owner approves.
+3. **Fail**: at least one blocking check failed; release must stop.
 
-Pack gate controls:
-- `--run-pack-gate true|false`
-- `--pack-gate-scope <scope>`
-- `--pack-gate-max-rows <n>`
+## Required Evidence Per Run
 
-Control admin validation controls:
-- `--run-control-admin-validation true|false` (default `false`)
-- when enabled, gate runs `npm run -s e2e:control-admin-validation`
+Store and attach these to your release record:
 
-## Compression KPI Gate
+1. Gate summary JSON.
+2. Health and consistency outputs.
+3. Performance output (latency/error snapshot).
+4. Decision/replay sample evidence for one real workflow.
 
-Compression KPI is collected via `job:perf-benchmark` and surfaced in `summary.json`:
+## If the Gate Fails
 
-- `blocking_metrics.compression_kpi.thresholds`
-- `blocking_metrics.compression_kpi.observed`
-- `blocking_metrics.compression_kpi.pass`
+1. Stop rollout immediately.
+2. Fix the failing dimension (integrity, performance, or policy reliability).
+3. Re-run the gate from the same target environment.
+4. Release only after a clean pass.
 
-Abstraction counters are surfaced from health-gate quality metrics:
+## Recommended Cadence
 
-- `blocking_metrics.abstraction_quality_counters.profile`
-- `blocking_metrics.abstraction_quality_counters.observed.compression_summaries`
-- `blocking_metrics.abstraction_quality_counters.observed.cluster_cohesion`
-- `blocking_metrics.abstraction_quality_counters.observed.cluster_orphan_rate`
-- `blocking_metrics.abstraction_quality_counters.observed.cluster_merge_rate_30d`
+1. Run in staging before every production release.
+2. Run in production after every high-impact config or policy change.
+3. Run at least once daily for active production clusters.
 
-Rule conflict report is surfaced in:
+## Related
 
-- `blocking_metrics.rule_conflict_resolution.thresholds`
-- `blocking_metrics.rule_conflict_resolution.observed`
-- `blocking_metrics.rule_conflict_resolution.pass`
-
-Consolidation health SLO is surfaced in:
-
-- `blocking_metrics.consolidation_health_slo.thresholds`
-- `blocking_metrics.consolidation_health_slo.observed`
-- `blocking_metrics.consolidation_health_slo.pass`
-
-Replay determinism is surfaced in:
-
-- `blocking_metrics.replay_determinism.thresholds`
-- `blocking_metrics.replay_determinism.observed`
-- `blocking_metrics.replay_determinism.pass`
-
-Modes:
-
-1. `non_blocking` (default): threshold breaches are added to `warn_reasons`, gate can still pass.
-2. `blocking`: threshold breaches are added to `fail_reasons`, gate fails.
-
-Control knobs:
-
-- `--compression-gate-mode non_blocking|blocking`
-- `--compression-ratio-min <0..1>`
-- `--compression-items-retain-min <0..1>`
-- `--compression-citations-retain-min <0..1>`
-- `--perf-compression-check true|false`
-- `--compression-pair-gate-mode non_blocking|blocking` (normally follows `--compression-gate-mode`)
-- `--perf-compression-samples <n>`
-- `--perf-compression-token-budget <n>`
-- `--perf-compression-profile balanced|aggressive`
-- `--run-rule-conflict-report true|false`
-- `--rule-conflict-gate-mode non_blocking|blocking`
-- `--rule-conflict-contexts-file <json|jsonl>`
-- `--rule-conflict-baseline <summary.json>`
-- `--rule-conflict-rules-limit <n>`
-- `--rule-conflict-max-winner-changes <n>`
-- `--run-consolidation-health-slo true|false`
-- `--consolidation-health-gate-mode non_blocking|blocking`
-- `--consolidation-health-max-candidate-queue-depth <n>`
-- `--consolidation-health-min-apply-success-rate <0..1>`
-- `--consolidation-health-min-redirect-completeness <0..1>`
-- `--consolidation-health-max-pending-alias-edges <n>`
-- `--run-replay-determinism-report true|false`
-- `--replay-determinism-gate-mode non_blocking|blocking`
-- `--replay-determinism-runs <n>`
-- `--replay-determinism-max-fingerprint-variants <n>`
-
-## CI workflow
-
-- `.github/workflows/core-production-gate.yml`
-
-This workflow is the main branch gate.
-
-## Verification Stamp
-
-- Last reviewed: `2026-02-24`
+1. [Production Go-Live Gate](/public/en/operations/04-prod-go-live-gate)
+2. [Operator Runbook](/public/en/operations/02-operator-runbook)
+3. [Operate and Production](/public/en/operate-production/00-operate-production)

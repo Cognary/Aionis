@@ -4,50 +4,30 @@ title: "Standalone to HA Runbook"
 
 # Standalone to HA Runbook
 
-Last updated: `2026-02-28`
+Last updated: `2026-03-03`
 
-This runbook clarifies deployment tiers and the promotion path from local-first standalone to production HA service.
+This runbook defines the migration path from local/standalone usage to production-grade high availability.
 
 ## Deployment Tiers
 
-## Tier 0: `standalone` (local/demo/CI smoke)
+### Tier 0: Standalone
 
-Shape:
+1. Single-container runtime for local dev, demos, and smoke validation.
+2. Not suitable for production traffic.
 
-1. Single container: Postgres + migrations + API + worker.
-2. Best for local agent usage, demos, and smoke checks.
+### Tier 1: Single-Host Service
 
-Boundary:
+1. Split services (`db`, `api`, `worker`) on one host.
+2. Better isolation than standalone, but still single-host failure risk.
 
-1. Not HA.
-2. No process-level isolation between DB/API/worker.
-3. Not suitable as production serving topology.
+### Tier 2: HA Service (Production Target)
 
-## Tier 1: Compose service (single-host production-like)
-
-Shape:
-
-1. Split services in `docker-compose`: `db`, `api`, `worker`, `migrate`.
-2. Operationally closer to production than standalone.
-
-Boundary:
-
-1. Still single-host unless you externalize DB and add redundancy.
-2. Host-level failure is still a full outage.
-
-## Tier 2: HA service (recommended for production)
-
-Target shape:
-
-1. External managed Postgres with backups + PITR.
+1. Managed Postgres with backup and restore policy.
 2. Multiple API replicas behind load balancer.
-3. Worker deployed independently from API.
-4. Rolling deployment and rollback support.
-5. Continuous gate evidence (`core-production-gate`, backend parity, sdk-ci).
+3. Worker deployed independently.
+4. Rolling deployment and tested rollback path.
 
-## HA Minimal Env Baseline
-
-Use this as the minimum runtime baseline before external traffic:
+## Production Baseline (Minimum)
 
 ```bash
 AIONIS_MODE=service
@@ -58,92 +38,47 @@ TENANT_QUOTA_ENABLED=true
 RATE_LIMIT_BYPASS_LOOPBACK=false
 TRUST_PROXY=true
 CORS_ALLOW_ORIGINS=https://your-app.example.com
-MEMORY_RECALL_PROFILE=strict_edges
 DATABASE_URL=postgres://<user>:<pass>@<managed-postgres-host>:5432/<db>
 ```
 
-Notes:
+Requirements:
 
-1. Do not run production with `MEMORY_AUTH_MODE=off`.
-2. Use secret manager values for credentials/tokens; do not hardcode in committed env files.
-3. Keep `standalone` image only for local/demo/CI smoke paths.
-
-## HA Topology Reference (Minimal)
-
-1. `LB` -> `API x2+` replicas.
-2. `Worker x1+` deployed as separate service.
-3. `Managed Postgres` externalized from app hosts.
-4. Optional read replica/reporting DB is non-blocking for initial cutover.
-
-Operational checks:
-
-1. API readiness/liveness probes enabled.
-2. Worker restart policy enabled with log shipping.
-3. DB backup + PITR policy verified with restore drill evidence.
+1. Never expose production with `MEMORY_AUTH_MODE=off`.
+2. Use secret manager values for keys/tokens.
+3. Keep standalone image for local/demo only.
 
 ## Promotion Checklist (Tier 0/1 -> Tier 2)
 
-## A. Data and durability
+1. Externalize database and validate restore drill.
+2. Split API and worker as independent services.
+3. Run at least 2 API replicas behind load balancer.
+4. Enable auth, rate limit, quota, and explicit CORS allowlists.
+5. Run core gate and smoke workflow against target environment.
 
-1. Move to managed/external Postgres (`DATABASE_URL` not tied to single Docker host).
-2. Enable automated backups and verify restore drill.
-3. Enforce migration discipline before rollout (`docker compose run --rm migrate` or CI release gate equivalent).
+## Cutover Plan
 
-## B. Runtime split and scaling
+1. Freeze schema-changing work in cutover window.
+2. Run migrations on target database.
+3. Bring up worker, then API replicas.
+4. Validate health and smoke path.
+5. Shift traffic gradually and observe latency/error metrics.
 
-1. Deploy API and worker as separate services/process groups.
-2. Run at least 2 API replicas behind a load balancer.
-3. Configure health probes on API and worker restart policy.
+## Rollback Plan
 
-## C. Security and traffic controls
+1. Redirect traffic to last known-good deployment.
+2. Keep failed release artifacts for audit.
+3. Re-run health and consistency checks.
+4. Resume traffic only after gate passes.
 
-1. `AIONIS_MODE=service` or `AIONIS_MODE=cloud`.
-2. `MEMORY_AUTH_MODE` must not be `off`.
-3. `RATE_LIMIT_ENABLED=true`, `TENANT_QUOTA_ENABLED=true`.
-4. `RATE_LIMIT_BYPASS_LOOPBACK=false`.
-5. `CORS_ALLOW_ORIGINS` set to explicit allowlist.
+## Success Criteria
 
-## D. Memory/profile baseline
+1. Production core gate is passing.
+2. P95 latency/error rate are within baseline.
+3. Replay IDs (`request_id`, `run_id`, `decision_id`, `commit_uri`) are available in telemetry.
 
-1. Set production recall baseline (`MEMORY_RECALL_PROFILE=strict_edges` or policy override).
-2. Apply throughput production profile (`npm run -s env:throughput:prod`).
-3. Keep standalone/lite profile only for local/demo paths.
+## Related
 
-## E. Gate evidence before cutover
-
-1. Local precheck:
-   - `npm run -s gate:memory-store-p2:local`
-2. Remote CI evidence precheck (local machine with `gh` auth):
-   - `npm run -s gate:memory-store-p2:remote`
-3. CI must be green:
-   - `backend-parity-smoke`
-   - `sdk-ci`
-   - `core-production-gate`
-4. Ops checks:
-   - `npm run -s preflight:prod`
-   - `npm run -s gate:core:prod -- --base-url <url> --scope default`
-
-## Cutover Plan (Minimal)
-
-1. Freeze schema changes during cutover window.
-2. Run migrations on target DB.
-3. Bring up worker first, then API replicas.
-4. Run health + capability probes on target environment.
-5. Switch traffic gradually and monitor request/error/latency telemetry.
-
-## Rollback Plan (Minimal)
-
-1. Route traffic back to previous known-good deployment.
-2. Keep failed release image/tag immutable for audit.
-3. Re-run:
-   - `npm run -s job:health-gate -- --strict-warnings --consistency-check-set scope`
-   - `npm run -s job:consistency-check:cross-tenant -- --strict-warnings`
-
-## References
-
-1. [README](/index)
-2. [Operator Runbook](/public/en/operations/02-operator-runbook)
-3. [Prod Go-Live Gate](/public/en/operations/04-prod-go-live-gate)
-4. [Production Core Gate](/public/en/operations/03-production-core-gate)
-5. [HA Failure Drill Template](/public/en/operations/07-ha-failure-drill-template)
-6. [HA Failure Drill Sample](/public/en/operations/08-ha-failure-drill-sample)
+1. [Production Core Gate](/public/en/operations/03-production-core-gate)
+2. [Production Go-Live Gate](/public/en/operations/04-prod-go-live-gate)
+3. [HA Failure Drill Template](/public/en/operations/07-ha-failure-drill-template)
+4. [HA Failure Drill Sample](/public/en/operations/08-ha-failure-drill-sample)

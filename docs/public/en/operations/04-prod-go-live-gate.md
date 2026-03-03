@@ -4,140 +4,60 @@ title: "Production Go-Live Gate"
 
 # Production Go-Live Gate
 
-Last updated: `2026-02-23`
+Last updated: `2026-03-03`
 
-This document is the release gate for deciding whether Aionis can go to production traffic.
+Use this gate to decide if a release can receive production traffic.
 
-For deployment topology boundaries and promotion sequencing (`standalone` -> split service -> HA),
-read [Standalone to HA Runbook](/public/en/operations/06-standalone-to-ha-runbook) first.
+## Go/No-Go Rule
 
-## Release Decision
+Mark **go** only when:
 
-Only mark **go** when all P0/P1 items are closed and all **production core gate** checks below pass.
-
-Auxiliary benchmarks (`LongMemEval` / `LoCoMo`) are non-blocking regression evidence and should not block release decisions.
+1. P0/P1 issues are closed.
+2. [Production Core Gate](/public/en/operations/03-production-core-gate) is passing.
+3. Rollback plan is validated and owned.
 
 ## T-24h Checklist
 
-1. Secrets and config
-- `.env` / runtime env must use production credentials and secret manager sources.
-- Apply throughput production profile baseline:
-  - `npm run -s env:throughput:prod`
-- `APP_ENV=prod`
-- `MEMORY_AUTH_MODE` is not `off` (`api_key`, `jwt`, or `api_key_or_jwt`).
-- `RATE_LIMIT_ENABLED=true`
-- `TENANT_QUOTA_ENABLED=true`
-- `RATE_LIMIT_BYPASS_LOOPBACK=false`
-- If deployed behind reverse proxy/load-balancer, set `TRUST_PROXY=true` and verify real client IP attribution.
-- Set route-scoped CORS allowlists explicitly:
-  - `CORS_ALLOW_ORIGINS` for memory POST routes.
-  - keep `CORS_ADMIN_ALLOW_ORIGINS` empty by default; only set for trusted admin-console origins.
-
-2. Build and contract
-- `npm run -s build`
-- `npm run -s test:contract`
-- `npm run -s docs:check`
-- `npm run -s gate:memory-store-p2:release` (includes local checks + remote CI evidence)
-  - evidence artifact: `artifacts/memory_store_p2_release/<run_id>/summary.json`
-
-3. Integrity gates
-- `npm run -s job:health-gate -- --strict-warnings --consistency-check-set scope`
-- `npm run -s job:consistency-check:cross-tenant -- --strict-warnings`
-- `npm run -s evidence:weekly -- --scope default --window-hours 168 --strict`
-  - evidence artifact: `artifacts/evidence/weekly/<report_week>_<run_id>/EVIDENCE_SUMMARY.json`
-
-4. SDK and packaging
-- `npm run -s sdk:build`
-- `npm run -s sdk:release-check`
-- `npm run -s sdk:py:compile`
-- `npm run -s sdk:py:release-check`
-- `npm run -s sdk:pack-dry-run`
+1. Production auth, rate limits, and tenant controls are enabled.
+2. CORS allowlists are explicit for public and admin surfaces.
+3. Build, contract checks, and docs checks are green.
+4. SDK/package versioning is consistent with release tag.
+5. Release owner and rollback owner are assigned.
 
 ## T-2h Checklist
 
-1. Runtime readiness
-- `docker compose up -d`
-- `docker compose ps` shows `api` and `worker` as `Up`.
-- `docker compose logs worker --tail=200` has no `tsx: not found` and no crash loop.
+1. Target environment health is green.
+2. Write -> recall -> policy flow smoke passes on production-like scope.
+3. Core gate re-run passes against target URL.
+4. Monitoring and alert channels are active.
 
-2. Smoke value path (isolated scope)
-- `make quickstart`
-- Must pass strict demo criteria:
-  - `memory_recall_improved=true`
-  - `cross_session_recall_stable=true`
-
-3. Preflight gate
-- Run production preflight in strict orchestration mode:
-
-```bash
-APP_ENV=prod \
-MEMORY_AUTH_MODE=api_key \
-RATE_LIMIT_ENABLED=true \
-TENANT_QUOTA_ENABLED=true \
-RATE_LIMIT_BYPASS_LOOPBACK=false \
-PREFLIGHT_START_SERVICES_IF_NEEDED=false \
-SKIP_MIGRATE=true \
-npm run -s preflight:prod
-```
-
-## One-Command Acceptance (recommended)
-
-Run this from repo root to fail-fast on hard blockers:
+## One-Command Acceptance
 
 ```bash
 npm run -s gate:core:prod -- \
-  --base-url "http://localhost:${PORT:-3001}" \
-  --scope default \
-  --run-control-admin-validation true \
-  --run-perf true \
-  --recall-p95-max-ms 1200 \
-  --write-p95-max-ms 800 \
-  --error-rate-max 0.02
+  --base-url "https://api.your-domain.com" \
+  --scope default
 ```
 
-## Publish Commands
+## Release Record (Required)
 
-1. Docker image dry-run:
+Capture these for every release:
 
-```bash
-npm run -s docker:publish:ghcr:dry-run
-```
-
-2. Docker image publish:
-
-```bash
-export GHCR_USERNAME=<your_user>
-export GHCR_TOKEN=<your_token>
-IMAGE_REPO=ghcr.io/cognary/aionis \
-TAG=vX.Y.Z \
-PLATFORMS=linux/amd64,linux/arm64 \
-PUBLISH_LATEST=true \
-npm run -s docker:publish:ghcr
-```
-
-3. SDK publish (if version changed and release approved):
-
-```bash
-npm run -s sdk:publish:dry-run
-npm run -s sdk:py:build-dist
-npm run -s sdk:py:publish:dry-run
-```
-
-4. GitHub checks must be green for release commit before announcing GA.
+1. Release tag and image digest.
+2. Core gate run summary.
+3. Smoke validation evidence.
+4. Rollback target version.
+5. Release decision (`go` / `no-go`) with approver.
 
 ## Rollback Minimum
 
-1. Re-point deployment to previous known-good Docker tag.
-2. Keep failed tag immutable for audit.
-3. Re-run:
-- `npm run -s job:health-gate -- --strict-warnings --consistency-check-set scope`
-- `npm run -s job:consistency-check:cross-tenant -- --strict-warnings`
+1. Route traffic to last known-good version.
+2. Keep failed version immutable for audit.
+3. Re-run health and consistency checks.
+4. Publish an incident/release note with next action.
 
-## Final Gate Output
+## Related
 
-Record these artifacts per release:
-
-- `artifacts/preflight/<run_id>/summary.json`
-- CI run URLs (SDK CI + Docs Pages)
-- Docker image digest for released tag
-- SDK version evidence (npm/PyPI)
+1. [Production Core Gate](/public/en/operations/03-production-core-gate)
+2. [Standalone to HA Runbook](/public/en/operations/06-standalone-to-ha-runbook)
+3. [Operator Runbook](/public/en/operations/02-operator-runbook)
