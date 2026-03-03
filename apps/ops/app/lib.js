@@ -75,6 +75,8 @@ export function readGovernanceQuery(searchParams) {
     scope: normalizeText(searchParams?.scope, ""),
     windowHours: normalizeInt(searchParams?.window_hours, 168, 1, 24 * 30),
     decisionId: normalizeText(searchParams?.decision_id, ""),
+    decisionUri: normalizeText(searchParams?.decision_uri, ""),
+    commitUri: normalizeText(searchParams?.commit_uri, ""),
     auditLimit: normalizeInt(searchParams?.audit_limit, 100, 10, 500)
   };
 }

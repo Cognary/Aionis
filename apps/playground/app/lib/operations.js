@@ -110,7 +110,22 @@ export const OPERATION_LIST = [
     template: {
       tenant_id: "default",
       scope: "default",
-      decision_id: "{{last.decision_id}}"
+      decision_uri: "{{last.decision_uri}}"
+    }
+  },
+  {
+    key: "memory_resolve",
+    label: "memory/resolve",
+    method: "POST",
+    path: "/v1/memory/resolve",
+    description: "Resolve Aionis URI (node/edge/commit/decision) into canonical object payload.",
+    template: {
+      tenant_id: "default",
+      scope: "default",
+      uri: "{{last.decision_uri}}",
+      include_meta: false,
+      include_slots: false,
+      include_slots_preview: false
     }
   },
   {

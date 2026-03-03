@@ -57,8 +57,9 @@ Operationalized evidence surface for memory-policy execution:
 1. Execution-loop snapshot from diagnostics (`recall_text` error/latency + outbox state).
 2. Context orchestration snapshot (`planning_context` and `context_assemble` throughput/latency + layer drop pressure).
 3. Audit risk slice (write-like/high-risk/replay action counts).
-4. Decision replay inspector via `POST /v1/memory/tools/decision`.
-5. One-screen evidence commands for governance gates and benchmark runs.
+4. Decision replay inspector via `POST /v1/memory/tools/decision` (`decision_uri` preferred, `decision_id` compatible).
+5. Commit URI integrity check via `POST /v1/memory/resolve` (linked object counts + hash lineage).
+6. One-screen evidence commands for governance gates and benchmark runs.
 
 ### Actions (`/actions`)
 
@@ -87,7 +88,7 @@ AIONIS_ADMIN_TOKEN=your-admin-token
 
 `AIONIS_ADMIN_TOKEN` can fall back to `ADMIN_TOKEN`.
 
-Optional memory-auth headers (for decision replay lookup):
+Optional memory-auth headers (for decision replay + URI resolve lookup):
 
 ```bash
 AIONIS_API_KEY=your-memory-api-key

@@ -21,6 +21,7 @@ Started implementation and completed first production slice:
 9. Added contract-smoke coverage for `memory/resolve` typed payload resolution and filter conflict handling.
 10. Added optional decision export (`include_decisions`) so replay bundles can include URI-linked `decision -> commit` provenance objects.
 11. Added CI probe coverage for `/v1/memory/resolve` and `packs/export(include_decisions=true)`, including commit linked-object count checks.
+12. Ops Governance and Playground now support URI-first inspect/replay ergonomics (`decision_uri` and `commit_uri`, plus one-click URI resolve).
 
 ## Phase Status
 
@@ -28,6 +29,7 @@ Started implementation and completed first production slice:
 2. `P2 Commit URI`: completed
 3. `P3 Decision URI`: completed
 4. `P4 Unified resolver + trajectory linking + URI-first export`: completed
+5. `P5 Ops/Playground URI-only inspect/replay ergonomics`: completed
 
 ## Goal
 

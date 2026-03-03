@@ -6,8 +6,9 @@ Highlights:
 
 1. Scenario presets for fast end-to-end demos.
 2. Step-flow runner with editable JSON workflow.
-3. Runtime placeholder injection (`{{last.*}}`, `{{connection.*}}`).
-4. Response diff viewer against previous same-operation run.
+3. Runtime placeholder injection (`{{last.*}}`, `{{connection.*}}`) including URI fields (`decision_uri`, `commit_uri`).
+4. URI-first inspector with copy + one-click resolve (`POST /v1/memory/resolve`).
+5. Response diff viewer against previous same-operation run.
 
 ## Run
 

@@ -1,6 +1,7 @@
 import { OPERATION_LIST, SCENARIO_PRESETS } from "../../apps/playground/app/lib/operations.js";
 import {
   ContextAssembleRequest,
+  MemoryResolveRequest,
   MemoryRecallRequest,
   MemoryRecallTextRequest,
   MemoryWriteRequest,
@@ -14,7 +15,9 @@ const UUID_SAMPLE = "00000000-0000-0000-0000-000000000001";
 
 const runtimeContext = {
   decision_id: UUID_SAMPLE,
+  decision_uri: `aionis://default/default/decision/${UUID_SAMPLE}`,
   run_id: "run_playground_ci",
+  commit_uri: `aionis://default/default/commit/${UUID_SAMPLE}`,
 };
 
 const connection = {
@@ -30,6 +33,7 @@ const validators = {
   tools_select: ToolsSelectRequest,
   tools_feedback: ToolsFeedbackRequest,
   tools_decision: ToolsDecisionRequest,
+  memory_resolve: MemoryResolveRequest,
   context_assemble: ContextAssembleRequest,
 };
 

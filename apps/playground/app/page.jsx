@@ -103,10 +103,16 @@ const I18N = {
     inspector_empty: "Select one request from history.",
     request_id: "request_id",
     decision_id: "decision_id",
+    decision_uri: "decision_uri",
     run_id: "run_id",
+    commit_uri: "commit_uri",
     copy_request_id: "Copy request_id",
     copy_decision_id: "Copy decision_id",
+    copy_decision_uri: "Copy decision_uri",
     copy_run_id: "Copy run_id",
+    copy_commit_uri: "Copy commit_uri",
+    resolve_decision_uri: "Resolve decision URI",
+    resolve_commit_uri: "Resolve commit URI",
     request_payload: "request payload",
     response_body: "response body",
     response_diff: "response diff",
@@ -236,10 +242,16 @@ const I18N = {
     inspector_empty: "请先在历史中选择一条请求。",
     request_id: "request_id",
     decision_id: "decision_id",
+    decision_uri: "decision_uri",
     run_id: "run_id",
+    commit_uri: "commit_uri",
     copy_request_id: "复制 request_id",
     copy_decision_id: "复制 decision_id",
+    copy_decision_uri: "复制 decision_uri",
     copy_run_id: "复制 run_id",
+    copy_commit_uri: "复制 commit_uri",
+    resolve_decision_uri: "解析 decision URI",
+    resolve_commit_uri: "解析 commit URI",
     request_payload: "请求载荷",
     response_body: "响应内容",
     response_diff: "响应差异",
@@ -370,6 +382,7 @@ const I18N_META = {
       tools_select: { label: "工具选择", description: "在策略约束下进行工具选择。" },
       tools_feedback: { label: "反馈回写", description: "写入执行结果反馈以支持策略适配。" },
       tools_decision: { label: "决策回放", description: "回放或检查持久化决策证据。" },
+      memory_resolve: { label: "URI 解析", description: "按 URI 解析节点、边、commit、decision 的规范对象。" },
       context_assemble: { label: "上下文编排", description: "按层预算和策略信息组装可回放上下文。" }
     }
   }
@@ -451,6 +464,54 @@ function findRunId(input) {
     }
   }
   return "";
+}
+
+function parseAionisUri(input) {
+  const raw = String(input || "").trim();
+  const match = /^aionis:\/\/([^/]+)\/([^/]+)\/([^/]+)\/([^/?#]+)$/.exec(raw);
+  if (!match) return null;
+  return {
+    tenant_id: match[1],
+    scope: match[2],
+    type: match[3],
+    id: match[4],
+    raw
+  };
+}
+
+function findUriByType(input, expectedType) {
+  const wanted = String(expectedType || "").trim();
+  if (!wanted) return "";
+  const seen = new Set();
+  const stack = [input];
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object") continue;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    const byNamedKey = cur[`${wanted}_uri`];
+    if (typeof byNamedKey === "string" && byNamedKey.trim()) {
+      const parsed = parseAionisUri(byNamedKey);
+      if (parsed?.type === wanted) return parsed.raw;
+    }
+    for (const value of Object.values(cur)) {
+      if (typeof value === "string") {
+        const parsed = parseAionisUri(value);
+        if (parsed?.type === wanted) return parsed.raw;
+      } else if (value && typeof value === "object") {
+        stack.push(value);
+      }
+    }
+  }
+  return "";
+}
+
+function findDecisionUri(input) {
+  return findUriByType(input, "decision");
+}
+
+function findCommitUri(input) {
+  return findUriByType(input, "commit");
 }
 
 function maskSecret(value) {
@@ -703,14 +764,18 @@ function computeRuntimeContext(history) {
   const context = {
     request_id: "",
     decision_id: "",
-    run_id: ""
+    decision_uri: "",
+    run_id: "",
+    commit_uri: ""
   };
 
   for (const item of history) {
     if (!context.request_id && item.request_id) context.request_id = item.request_id;
     if (!context.decision_id && item.decision_id) context.decision_id = item.decision_id;
+    if (!context.decision_uri && item.decision_uri) context.decision_uri = item.decision_uri;
     if (!context.run_id && item.run_id) context.run_id = item.run_id;
-    if (context.request_id && context.decision_id && context.run_id) break;
+    if (!context.commit_uri && item.commit_uri) context.commit_uri = item.commit_uri;
+    if (context.request_id && context.decision_id && context.decision_uri && context.run_id && context.commit_uri) break;
   }
 
   return context;
@@ -1225,7 +1290,9 @@ export default function PlaygroundPage() {
     const result = await response.json().catch(() => ({ ok: false, error: "invalid_json_response" }));
     const id = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
     const decisionId = findDecisionId(result.data) || findDecisionId(normalizedPayload);
+    const decisionUri = findDecisionUri(result.data) || findDecisionUri(normalizedPayload);
     const runId = findRunId(result.data) || findRunId(normalizedPayload);
+    const commitUri = findCommitUri(result.data) || findCommitUri(normalizedPayload);
 
     const entry = {
       id,
@@ -1241,7 +1308,9 @@ export default function PlaygroundPage() {
       data: result.data ?? null,
       error: result.error || "",
       decision_id: decisionId,
-      run_id: runId
+      decision_uri: decisionUri,
+      run_id: runId,
+      commit_uri: commitUri
     };
 
     setHistory((prev) => [entry, ...prev]);
@@ -1305,7 +1374,9 @@ export default function PlaygroundPage() {
         flowRuntime = {
           request_id: entry.request_id || flowRuntime.request_id,
           decision_id: entry.decision_id || flowRuntime.decision_id,
-          run_id: entry.run_id || flowRuntime.run_id
+          decision_uri: entry.decision_uri || flowRuntime.decision_uri,
+          run_id: entry.run_id || flowRuntime.run_id,
+          commit_uri: entry.commit_uri || flowRuntime.commit_uri
         };
 
         const assertResult = evaluateStepAssert(entry, step.assert);
@@ -1458,6 +1529,30 @@ export default function PlaygroundPage() {
       return;
     }
     setInspectNote(tr("copy_success", { kind }));
+  }
+
+  async function resolveActiveUri(uriValue) {
+    const uri = String(uriValue || "").trim();
+    if (!uri || running || chatRunning) return;
+    setInspectNote("");
+    setErrorMessage("");
+    setFlowError("");
+    setFlowRunNote("");
+    setFlowReport(null);
+    setFlowReportNote("");
+    setRunning(true);
+    try {
+      const payload = materializePayload({
+        tenant_id: connection.tenant_id,
+        scope: connection.scope,
+        uri
+      });
+      setOperation("memory_resolve");
+      setPayloadText(pretty(payload));
+      await executeOne("memory_resolve", payload);
+    } finally {
+      setRunning(false);
+    }
   }
 
   async function sendChatMessage() {
@@ -2045,7 +2140,12 @@ export default function PlaygroundPage() {
           <div>
             <p className="kicker">{tr("session")}</p>
             <h2>{activeChatSession?.title || tr("untitled_chat")}</h2>
-            <p className="muted tiny">{tr("request_id")} <span className="mono">{runtimeContext.request_id || "-"}</span> · {tr("decision_id")} <span className="mono">{runtimeContext.decision_id || "-"}</span> · {tr("run_id")} <span className="mono">{runtimeContext.run_id || "-"}</span></p>
+            <p className="muted tiny">
+              {tr("request_id")} <span className="mono">{runtimeContext.request_id || "-"}</span> · {tr("decision_id")} <span className="mono">{runtimeContext.decision_id || "-"}</span> · {tr("run_id")} <span className="mono">{runtimeContext.run_id || "-"}</span>
+            </p>
+            <p className="muted tiny">
+              {tr("decision_uri")} <span className="mono">{runtimeContext.decision_uri || "-"}</span> · {tr("commit_uri")} <span className="mono">{runtimeContext.commit_uri || "-"}</span>
+            </p>
           </div>
           <div className="inline-actions">
             <button type="button" onClick={runCurrent} disabled={running || chatRunning}>{running ? tr("running") : tr("run_op")}</button>
@@ -2087,11 +2187,17 @@ export default function PlaygroundPage() {
               <div className="inspect-block">
                 <p className="tiny muted">{tr("request_id")}: <span className="mono">{active.request_id || "-"}</span></p>
                 <p className="tiny muted">{tr("decision_id")}: <span className="mono">{active.decision_id || "-"}</span></p>
+                <p className="tiny muted">{tr("decision_uri")}: <span className="mono">{active.decision_uri || "-"}</span></p>
                 <p className="tiny muted">{tr("run_id")}: <span className="mono">{active.run_id || "-"}</span></p>
+                <p className="tiny muted">{tr("commit_uri")}: <span className="mono">{active.commit_uri || "-"}</span></p>
                 <div className="inline-actions mini-actions">
                   <button type="button" className="ghost" onClick={() => copyActiveId("request_id", active.request_id)} disabled={!active.request_id}>{tr("copy_request_id")}</button>
                   <button type="button" className="ghost" onClick={() => copyActiveId("decision_id", active.decision_id)} disabled={!active.decision_id}>{tr("copy_decision_id")}</button>
+                  <button type="button" className="ghost" onClick={() => copyActiveId("decision_uri", active.decision_uri)} disabled={!active.decision_uri}>{tr("copy_decision_uri")}</button>
                   <button type="button" className="ghost" onClick={() => copyActiveId("run_id", active.run_id)} disabled={!active.run_id}>{tr("copy_run_id")}</button>
+                  <button type="button" className="ghost" onClick={() => copyActiveId("commit_uri", active.commit_uri)} disabled={!active.commit_uri}>{tr("copy_commit_uri")}</button>
+                  <button type="button" className="ghost" onClick={() => resolveActiveUri(active.decision_uri)} disabled={!active.decision_uri || running || chatRunning}>{tr("resolve_decision_uri")}</button>
+                  <button type="button" className="ghost" onClick={() => resolveActiveUri(active.commit_uri)} disabled={!active.commit_uri || running || chatRunning}>{tr("resolve_commit_uri")}</button>
                 </div>
                 {inspectNote ? <p className="note-line">{inspectNote}</p> : null}
                 {active.error ? <p className="error">{tr("error_prefix")}: {active.error}</p> : null}

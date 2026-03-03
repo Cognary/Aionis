@@ -17,7 +17,8 @@ The playground focuses on these routes:
 5. `POST /v1/memory/tools/select`
 6. `POST /v1/memory/tools/feedback`
 7. `POST /v1/memory/tools/decision`
-8. `POST /v1/memory/context/assemble`
+8. `POST /v1/memory/resolve`
+9. `POST /v1/memory/context/assemble`
 
 ## Included capabilities
 
@@ -32,13 +33,14 @@ The playground focuses on these routes:
 9. Runtime preferences (scenario/operation/flow + non-secret connection fields + chat toggles) persist across reloads.
 10. Connection settings in UI (`base_url`, `tenant_id`, `scope`, API key, bearer token, admin token).
 11. Scenario presets (`Support Triage`, `Sales Follow-up`, `Personal Assistant`) to seed tenant/scope + payload defaults.
-12. Per-operation payload editor with JSON templates and runtime variable injection (`\{\{last.decision_id\}\}`, `\{\{last.request_id\}\}`, `\{\{last.run_id\}\}`, `\{\{connection.*\}\}`).
+12. Per-operation payload editor with JSON templates and runtime variable injection (`\{\{last.decision_id\}\}`, `\{\{last.decision_uri\}\}`, `\{\{last.request_id\}\}`, `\{\{last.run_id\}\}`, `\{\{last.commit_uri\}\}`, `\{\{connection.*\}\}`).
 13. Step Flow orchestrator with editable flow JSON and reusable flow presets (including closed-loop policy flow).
 14. Per-step flow assertions (`expect_ok`, `require_decision_id`, `require_request_id`, `max_duration_ms`, `error_includes`) with optional stop-on-fail behavior.
 15. Latest flow report panel plus one-click export as JSON/Markdown.
 16. Share link export (`?pg=...`), request chain filters, response diff inspector, and session export.
 17. `context/assemble` 专用 orchestration panel（层预设、启用层勾选、总预算、merge trace 开关），无需手改 JSON 即可调参。
 18. Inspector 内置 `layered_context` 摘要、`dropped_reasons` 和 `merge_trace` 预览，便于回放与审计。
+19. URI-first inspector actions: copy and one-click resolve for `decision_uri` / `commit_uri` via `POST /v1/memory/resolve`.
 
 ## Run locally
 

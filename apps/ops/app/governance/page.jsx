@@ -44,7 +44,7 @@ export default async function GovernancePage({ searchParams }) {
   const query = readGovernanceQuery(searchParams);
   const tenant = encodeURIComponent(query.tenantId);
   const hasAdminToken = Boolean(process.env.AIONIS_ADMIN_TOKEN?.trim() || process.env.ADMIN_TOKEN?.trim());
-  const decisionRequested = query.decisionId.length > 0;
+  const decisionRequested = query.decisionId.length > 0 || query.decisionUri.length > 0;
 
   const requests = {
     dashboard: fetchOps(`/v1/admin/control/dashboard/tenant/${tenant}`, { admin: true }),
@@ -76,7 +76,8 @@ export default async function GovernancePage({ searchParams }) {
         {
           tenant_id: query.tenantId,
           scope: query.scope || undefined,
-          decision_id: query.decisionId
+          decision_id: query.decisionId || undefined,
+          decision_uri: query.decisionUri || undefined
         },
         { memoryAuth: true }
       )
@@ -85,7 +86,7 @@ export default async function GovernancePage({ searchParams }) {
         skipped: true,
         status: 0,
         data: null,
-        error: "decision_id_not_provided",
+        error: "decision_identifier_not_provided",
         auth: null
       };
 
@@ -106,6 +107,28 @@ export default async function GovernancePage({ searchParams }) {
   const highRiskWrites = writeAuditEvents.filter((event) => classifyRisk(event?.action) === "high");
   const replayWrites = writeAuditEvents.filter((event) => String(event?.action || "").toLowerCase().includes("replay"));
   const decision = decisionResult.data?.decision ?? null;
+  const commitUriForResolve = query.commitUri || String(decision?.commit_uri || "");
+  const commitResolveResult = commitUriForResolve
+    ? await postOps(
+        "/v1/memory/resolve",
+        {
+          tenant_id: query.tenantId,
+          scope: query.scope || undefined,
+          uri: commitUriForResolve
+        },
+        { memoryAuth: true }
+      )
+    : {
+        ok: false,
+        skipped: true,
+        status: 0,
+        data: null,
+        error: "commit_uri_not_provided",
+        auth: null
+      };
+  const resolvedCommit = commitResolveResult.ok && commitResolveResult.data?.type === "commit"
+    ? commitResolveResult.data?.commit ?? null
+    : null;
 
   const commandScope = query.scope || "default";
   const commandLines = [
@@ -150,6 +173,14 @@ export default async function GovernancePage({ searchParams }) {
             <label>
               decision_id (optional)
               <input type="text" name="decision_id" defaultValue={query.decisionId} maxLength={128} />
+            </label>
+            <label>
+              decision_uri (optional)
+              <input type="text" name="decision_uri" defaultValue={query.decisionUri} maxLength={512} />
+            </label>
+            <label>
+              commit_uri (optional)
+              <input type="text" name="commit_uri" defaultValue={query.commitUri} maxLength={512} />
             </label>
             <button type="submit">Refresh Governance View</button>
           </form>
@@ -227,24 +258,51 @@ export default async function GovernancePage({ searchParams }) {
             <StatusChip result={decisionResult} />
           </div>
           {!decisionRequested ? (
-            <p className="muted">Provide `decision_id` to load persisted decision provenance for replay debug.</p>
+            <p className="muted">Provide `decision_uri` (preferred) or `decision_id` to load persisted decision provenance for replay debug.</p>
           ) : decisionResult.ok && decision ? (
-            <div className="kv">
-              <p>decision_id</p>
-              <p className="mono">{String(decision.decision_id || "-")}</p>
-              <p>decision_kind</p>
-              <p>{String(decision.decision_kind || "-")}</p>
-              <p>run_id</p>
-              <p>{String(decision.run_id || "-")}</p>
-              <p>selected_tool</p>
-              <p>{String(decision.selected_tool || "-")}</p>
-              <p>source_rule_ids</p>
-              <p>{Array.isArray(decision.source_rule_ids) ? decision.source_rule_ids.length : 0}</p>
-              <p>created_at</p>
-              <p>{formatIso(decision.created_at)}</p>
-              <p>policy_sha256</p>
-              <p className="mono">{String(decision.policy_sha256 || "-")}</p>
-            </div>
+            <>
+              <div className="kv">
+                <p>decision_id</p>
+                <p className="mono">{String(decision.decision_id || "-")}</p>
+                <p>decision_uri</p>
+                <p className="mono">{String(decision.decision_uri || "-")}</p>
+                <p>decision_kind</p>
+                <p>{String(decision.decision_kind || "-")}</p>
+                <p>run_id</p>
+                <p>{String(decision.run_id || "-")}</p>
+                <p>selected_tool</p>
+                <p>{String(decision.selected_tool || "-")}</p>
+                <p>source_rule_ids</p>
+                <p>{Array.isArray(decision.source_rule_ids) ? decision.source_rule_ids.length : 0}</p>
+                <p>created_at</p>
+                <p>{formatIso(decision.created_at)}</p>
+                <p>policy_sha256</p>
+                <p className="mono">{String(decision.policy_sha256 || "-")}</p>
+                <p>commit_uri</p>
+                <p className="mono">{String(decision.commit_uri || "-")}</p>
+              </div>
+              {resolvedCommit ? (
+                <div className="kv" style={{ marginTop: "0.8rem" }}>
+                  <p>resolved commit_uri</p>
+                  <p className="mono">{String(resolvedCommit.uri || "-")}</p>
+                  <p>commit_hash</p>
+                  <p className="mono">{String(resolvedCommit.commit_hash || "-")}</p>
+                  <p>parent_uri</p>
+                  <p className="mono">{String(resolvedCommit.parent_uri || "-")}</p>
+                  <p>linked nodes/edges/decisions</p>
+                  <p>
+                    {formatNumber(resolvedCommit?.linked_object_counts?.nodes)} / {formatNumber(resolvedCommit?.linked_object_counts?.edges)} / {formatNumber(resolvedCommit?.linked_object_counts?.decisions)}
+                  </p>
+                  <p>linked total</p>
+                  <p>{formatNumber(resolvedCommit?.linked_object_counts?.total)}</p>
+                </div>
+              ) : commitUriForResolve ? (
+                <p className="muted" style={{ marginTop: "0.8rem" }}>
+                  commit_uri resolve failed. error=`{String(commitResolveResult.error || "unknown")}` status=
+                  {String(commitResolveResult.status || 0)}
+                </p>
+              ) : null}
+            </>
           ) : (
             <div>
               <p className="muted">
