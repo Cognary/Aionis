@@ -19,9 +19,9 @@ Start here if you are integrating Aionis for the first time.
 
 ## 3) Production Readiness Entry
 
-1. [Production Core Gate](/PRODUCTION_CORE_GATE)
-2. [Prod Go-Live Gate](/PROD_GO_LIVE_GATE)
-3. [Operator Runbook](/OPERATOR_RUNBOOK)
+1. [Production Core Gate](/public/en/operations/03-production-core-gate)
+2. [Prod Go-Live Gate](/public/en/operations/04-prod-go-live-gate)
+3. [Operator Runbook](/public/en/operations/02-operator-runbook)
 
 ## What You Should Achieve In 30 Minutes
 

@@ -4,7 +4,7 @@ title: "Public Docs (EN)"
 
 # Public Docs (EN)
 
-Phase 1 IA pilot is active.
+IA migration is in progress (Phase 3 public structure rollout).
 
 Core migrated pages:
 
@@ -17,5 +17,24 @@ Core migrated pages:
 7. [Ops Console](./operations/01-ops-console.md)
 8. [Integrations](./integrations/00-overview.md)
 9. [MCP Integration](./integrations/01-mcp.md)
-10. [Reference](./reference/01-reference.md)
-11. [API Contract](./api/01-api-contract.md)
+10. [Control & Policy](./control/01-control-policy.md)
+11. [Rule Lifecycle](./control/02-rule-lifecycle.md)
+12. [Reference](./reference/01-reference.md)
+13. [Planner Context](./reference/02-planner-context.md)
+14. [Rule Promotion Governance](./reference/03-rule-promotion-governance.md)
+15. [Rule Conflict Report](./reference/04-rule-conflict-report.md)
+16. [SDK Guide](./reference/05-sdk.md)
+17. [SDK Compatibility Matrix](./reference/06-sdk-compatibility-matrix.md)
+18. [API Contract](./api/01-api-contract.md)
+19. [Operator Runbook](./operations/02-operator-runbook.md)
+20. [Production Core Gate](./operations/03-production-core-gate.md)
+21. [Prod Go-Live Gate](./operations/04-prod-go-live-gate.md)
+22. [E2E Regression](./operations/05-e2e-regression.md)
+23. [Standalone to HA Runbook](./operations/06-standalone-to-ha-runbook.md)
+24. [HA Failure Drill Template](./operations/07-ha-failure-drill-template.md)
+25. [HA Failure Drill Sample](./operations/08-ha-failure-drill-sample.md)
+26. [Core Differentiators](./about/01-core-differentiators.md)
+27. [Benchmarks](./benchmarks/01-benchmarks.md)
+28. [Benchmark Snapshot (Public)](./benchmarks/02-benchmark-snapshot-public.md)
+29. [Differentiation Evidence](./benchmarks/03-differentiation-evidence.md)
+30. [Governance Weekly Report](./benchmarks/04-governance-weekly-report.md)

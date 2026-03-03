@@ -7,6 +7,17 @@ cd "$ROOT_DIR"
 TMP_LINKS="$(mktemp -t aionis-doc-links.XXXXXX)"
 trap 'rm -f "$TMP_LINKS"' EXIT
 
+FILES=(
+  "README.md"
+  "docs/index.md"
+  "docs/README.md"
+  "src/jobs/README.md"
+)
+
+while IFS= read -r file; do
+  FILES+=("$file")
+done < <(find docs/public -type f -name "*.md" | sort)
+
 perl -ne '
   while (/\[[^\]]*\]\(([^)]+)\)/g) {
     $l = $1;
@@ -18,7 +29,21 @@ perl -ne '
     next if $l eq "";
     print "$ARGV:$.:$l\n";
   }
-' README.md docs/*.md src/jobs/README.md > "$TMP_LINKS"
+' "${FILES[@]}" > "$TMP_LINKS"
+
+resolve_candidate_exists() {
+  local base="$1"
+  if [[ -e "$base" ]]; then
+    return 0
+  fi
+  if [[ -e "${base}.md" ]]; then
+    return 0
+  fi
+  if [[ -e "${base}/index.md" ]]; then
+    return 0
+  fi
+  return 1
+}
 
 missing=0
 while IFS= read -r entry; do
@@ -32,7 +57,7 @@ while IFS= read -r entry; do
   fi
 
   if [[ "$target" == /* ]]; then
-    resolved="$target"
+    resolved="$ROOT_DIR/docs$target"
   else
     src_dir="$(dirname "$src")"
     if [[ "$src_dir" == "." ]]; then
@@ -42,7 +67,7 @@ while IFS= read -r entry; do
     fi
   fi
 
-  if [[ ! -e "$resolved" ]]; then
+  if ! resolve_candidate_exists "$resolved"; then
     if [[ "$target" == /* ]]; then
       echo "MISSING: $target"
     else

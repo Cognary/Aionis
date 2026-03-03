@@ -264,7 +264,7 @@ Hard safety rules:
 
 Recommended runbooks:
 
-1. [Operator Runbook](/OPERATOR_RUNBOOK)
-2. [Standalone to HA Runbook](/STANDALONE_TO_HA_RUNBOOK)
+1. [Operator Runbook](/public/en/operations/02-operator-runbook)
+2. [Standalone to HA Runbook](/public/en/operations/06-standalone-to-ha-runbook)
 3. [Docker Release Runbook](/DOCKER_RELEASE)
-4. [E2E Regression Checklist](/E2E_REGRESSION)
+4. [E2E Regression Checklist](/public/en/operations/05-e2e-regression)

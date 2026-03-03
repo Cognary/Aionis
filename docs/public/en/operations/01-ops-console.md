@@ -148,5 +148,5 @@ npm --prefix apps/ops run test:e2e:smoke
 ## Related References
 
 1. [API Contract](/public/en/api/01-api-contract)
-2. [Operator Runbook](/OPERATOR_RUNBOOK)
-3. [Prod Go-Live Gate](/PROD_GO_LIVE_GATE)
+2. [Operator Runbook](/public/en/operations/02-operator-runbook)
+3. [Prod Go-Live Gate](/public/en/operations/04-prod-go-live-gate)

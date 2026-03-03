@@ -34,6 +34,14 @@ Phase 2 (core public migration) started:
 3. Updated VitePress nav/sidebar and docs indexes to new public paths.
 4. Added `public/zh` mirrored placeholders for core onboarding/build/api/ops/integration/reference pages.
 
+Phase 3 (internal isolation + broader public migration) progressed:
+
+1. Migrated `control/reference/operations/benchmarks/about` core pages into `docs/public/en`.
+2. Added legacy compatibility stubs for migrated root paths.
+3. Added mirrored `docs/public/zh` placeholders for the expanded section set.
+4. Moved internal remediation/strategy/plan docs into `docs/internal/{remediation,strategy,plans}`.
+5. Updated `docs-check` to validate public-doc sets (`docs/public/**`) plus primary entry documents.
+
 ## 1. Objective
 
 Refactor Aionis docs to an OpenViking-style information architecture:
@@ -181,8 +189,9 @@ Internal-only candidates (move out of public build):
 
 ## 10. Immediate Next Step
 
-Start Phase 1 with a non-breaking pilot:
+Continue Phase 3 -> Phase 4 transition:
 
-1. Introduce `docs/public/en` skeleton.
-2. Migrate `GET_STARTED`, `BUILD_MEMORY`, `API_CONTRACT`, `PLAYGROUND`, `OPS_CONSOLE`.
-3. Switch sidebar to new paths while keeping old-page compatibility stubs.
+1. Migrate remaining public pages (`CONTEXT_ORCHESTRATION`, `EXECUTION_LOOP_GATE`, `POLICY_ADAPTATION_GATE`, selected architecture/perf docs) into `docs/public/en`.
+2. Move remaining internal-only plans/remediation docs into `docs/internal`.
+3. Reduce reliance on root compatibility stubs by updating all nav/entry links to canonical `docs/public` paths.
+4. Run dead-link sweep and finalize cleanup.

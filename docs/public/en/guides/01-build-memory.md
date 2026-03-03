@@ -30,7 +30,7 @@ Purpose: retrieve LLM-ready context for reasoning and generation.
 Read:
 
 1. [API Contract](/public/en/api/01-api-contract)
-2. [Planner Context](/PLANNER_CONTEXT)
+2. [Planner Context](/public/en/reference/02-planner-context)
 
 ## Customizing Context
 

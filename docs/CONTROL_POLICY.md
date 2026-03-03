@@ -4,24 +4,8 @@ title: "Control & Policy"
 
 # Control & Policy
 
-Aionis policy loop makes behavior controllable and replayable, not only retrievable.
+This page moved to:
 
-## Decision Flow
+1. [Control & Policy (new IA path)](./public/en/control/01-control-policy.md)
 
-1. `POST /v1/memory/rules/evaluate`
-2. `POST /v1/memory/tools/select`
-3. `POST /v1/memory/tools/feedback`
-4. `POST /v1/memory/tools/decision`
-
-## What To Validate
-
-1. Rule match quality and visibility behavior
-2. Tool selection determinism under policy
-3. Feedback attribution and decision replay traceability
-
-## Read
-
-1. [Rule Lifecycle](./RULE_LIFECYCLE.md)
-2. [Execution Loop Gate](./EXECUTION_LOOP_GATE.md)
-3. [Policy Adaptation Gate](./POLICY_ADAPTATION_GATE.md)
-4. [API Contract](./API_CONTRACT.md)
+Legacy root path is kept as a compatibility stub.

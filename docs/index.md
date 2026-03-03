@@ -9,16 +9,16 @@ hero:
   actions:
     - theme: brand
       text: Start Here
-      link: /GET_STARTED
+      link: /public/en/getting-started/01-get-started
     - theme: alt
       text: Core Differentiators
-      link: /CORE_DIFFERENTIATORS
+      link: /public/en/about/01-core-differentiators
     - theme: alt
       text: API Reference
-      link: /REFERENCE
+      link: /public/en/reference/01-reference
     - theme: alt
       text: Benchmarks
-      link: /BENCHMARKS
+      link: /public/en/benchmarks/01-benchmarks
 
 features:
   - title: Memory -> Policy -> Action
@@ -37,11 +37,11 @@ Use the docs in this order:
 
 1. [Get Started](./public/en/getting-started/01-get-started.md)
 2. [Build Memory](./public/en/guides/01-build-memory.md)
-3. [Control & Policy](./CONTROL_POLICY.md)
+3. [Control & Policy](./public/en/control/01-control-policy.md)
 4. [Operate](./public/en/operations/00-operate.md)
 5. [Integrations](./public/en/integrations/00-overview.md)
 6. [Reference](./public/en/reference/01-reference.md)
-7. [Benchmarks](./BENCHMARKS.md)
+7. [Benchmarks](./public/en/benchmarks/01-benchmarks.md)
 
 ## Build Memory: 4 Core Tasks
 
@@ -52,8 +52,8 @@ Use the docs in this order:
 
 ## Core Differentiation
 
-1. [Core Differentiators](./CORE_DIFFERENTIATORS.md)
-2. [Differentiation Evidence](./DIFFERENTIATION_EVIDENCE.md)
+1. [Core Differentiators](./public/en/about/01-core-differentiators.md)
+2. [Differentiation Evidence](./public/en/benchmarks/03-differentiation-evidence.md)
 3. [Execution Loop Gate](./EXECUTION_LOOP_GATE.md)
 4. [Policy Adaptation Gate](./POLICY_ADAPTATION_GATE.md)
 
