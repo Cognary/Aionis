@@ -48,6 +48,14 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
 2. `POST /v1/memory/events`
 3. `POST /v1/memory/sessions/events/list`
 
+### Sandbox (Experimental)
+
+1. `POST /v1/memory/sandbox/sessions`
+2. `POST /v1/memory/sandbox/execute`
+3. `POST /v1/memory/sandbox/runs/get`
+4. `POST /v1/memory/sandbox/runs/logs`
+5. `POST /v1/memory/sandbox/runs/cancel`
+
 ### Graph and Replay Utilities
 
 1. `POST /v1/memory/find`
@@ -92,3 +100,4 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
 1. [API Contract](/public/en/api/01-api-contract)
 2. [SDK Guide](/public/en/reference/05-sdk)
 3. [SDK Compatibility Matrix](/public/en/reference/06-sdk-compatibility-matrix)
+4. [Sandbox API (Experimental)](/public/en/reference/08-sandbox-api)

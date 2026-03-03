@@ -64,6 +64,11 @@ title: "API 合约（硬约束）"
 6. `POST /v1/memory/tools/decision`：决策记录。
 7. `POST /v1/memory/tools/run`：运行生命周期查询。
 8. `POST /v1/memory/tools/feedback`：反馈闭环。
+9. `POST /v1/memory/sandbox/sessions`：创建 Sandbox 会话。
+10. `POST /v1/memory/sandbox/execute`：提交 Sandbox 执行。
+11. `POST /v1/memory/sandbox/runs/get`：查询执行状态。
+12. `POST /v1/memory/sandbox/runs/logs`：查看执行日志。
+13. `POST /v1/memory/sandbox/runs/cancel`：取消排队/运行中的任务。
 
 ## 上线前最小检查
 

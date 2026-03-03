@@ -45,6 +45,11 @@ if TYPE_CHECKING:
         MemorySessionEventsListInput,
         MemoryWriteInput,
         RulesEvaluateInput,
+        SandboxExecuteInput,
+        SandboxRunCancelInput,
+        SandboxRunGetInput,
+        SandboxRunLogsInput,
+        SandboxSessionCreateInput,
         ToolsDecisionInput,
         ToolsFeedbackInput,
         ToolsRunInput,
@@ -280,6 +285,21 @@ class AionisClient:
 
     def pack_import(self, payload: "MemoryPackImportInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/packs/import", payload, request_options)
+
+    def sandbox_create_session(self, payload: "SandboxSessionCreateInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/sandbox/sessions", payload, request_options)
+
+    def sandbox_execute(self, payload: "SandboxExecuteInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/sandbox/execute", payload, request_options)
+
+    def sandbox_run_get(self, payload: "SandboxRunGetInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/sandbox/runs/get", payload, request_options)
+
+    def sandbox_run_logs(self, payload: "SandboxRunLogsInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/sandbox/runs/logs", payload, request_options)
+
+    def sandbox_run_cancel(self, payload: "SandboxRunCancelInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/sandbox/runs/cancel", payload, request_options)
 
     def rules_evaluate(self, payload: "RulesEvaluateInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/rules/evaluate", payload, request_options)

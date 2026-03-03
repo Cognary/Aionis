@@ -42,6 +42,9 @@ Aionis is built to solve these as a long-running system core.
 5. **Production-Grade Evidence and Gates**
    Release readiness is validated with reproducible checks, runbooks, and benchmark artifacts.
 
+6. **Sandbox Interface (Experimental)**
+   A controlled execution API surface (`sandbox/sessions`, `sandbox/execute`, `sandbox/runs/*`) can be linked to policy-loop provenance.
+
 ## Architecture Snapshot
 
 Aionis uses a verifiable memory graph as the system-of-record, with write durability separated from derived async processing.

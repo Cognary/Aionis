@@ -86,13 +86,18 @@ client.tools_run({"scope": "default", "run_id": "run_001"})
 8. `list_session_events`
 9. `pack_export`
 10. `pack_import`
-11. `rules_evaluate`
-12. `tools_select`
-13. `tools_decision`
-14. `tools_run`
-15. `tools_feedback`
-16. `health`
-17. `get_capability_contract`
+11. `sandbox_create_session`
+12. `sandbox_execute`
+13. `sandbox_run_get`
+14. `sandbox_run_logs`
+15. `sandbox_run_cancel`
+16. `rules_evaluate`
+17. `tools_select`
+18. `tools_decision`
+19. `tools_run`
+20. `tools_feedback`
+21. `health`
+22. `get_capability_contract`
 
 Admin/control methods (require `admin_token`):
 

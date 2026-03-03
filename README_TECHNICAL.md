@@ -190,6 +190,9 @@ Endpoints:
 - `POST /v1/memory/tools/decision` read decision provenance by `decision_id/decision_uri` (or latest by `run_id`)
 - `POST /v1/memory/tools/run` inspect run-level lifecycle (decisions + linked feedback)
 - `POST /v1/memory/tools/feedback` write outcome feedback for matched tool rules
+- `POST /v1/memory/sandbox/sessions` create sandbox session envelope
+- `POST /v1/memory/sandbox/execute` submit sandbox execution request
+- `POST /v1/memory/sandbox/runs/get|logs|cancel` inspect/cancel sandbox runs
 - `POST /v1/memory/rules/state` manually promote/demote a rule (`draft/shadow/active/disabled`)
 
 ### SDK (TypeScript + Python)

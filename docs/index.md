@@ -167,6 +167,7 @@ Related:
 
 1. [Planner Context](/public/en/reference/02-planner-context)
 2. [Rule Promotion Governance](/public/en/reference/03-rule-promotion-governance)
+3. [Sandbox API (Experimental)](/public/en/reference/08-sandbox-api)
 
 ## 6) Quickstart and Distribution
 

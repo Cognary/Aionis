@@ -72,6 +72,16 @@ import type {
   RetryPolicy,
   RulesEvaluateInput,
   RulesEvaluateResponse,
+  SandboxExecuteInput,
+  SandboxExecuteResponse,
+  SandboxRunCancelInput,
+  SandboxRunCancelResponse,
+  SandboxRunGetInput,
+  SandboxRunGetResponse,
+  SandboxRunLogsInput,
+  SandboxRunLogsResponse,
+  SandboxSessionCreateInput,
+  SandboxSessionCreateResponse,
   ToolsDecisionInput,
   ToolsDecisionResponse,
   ToolsFeedbackInput,
@@ -252,6 +262,35 @@ export class AionisClient {
 
   async packImport(input: MemoryPackImportInput, opts?: RequestOptions): Promise<AionisResponse<MemoryPackImportResponse>> {
     return this.requestPost<MemoryPackImportInput, MemoryPackImportResponse>("/v1/memory/packs/import", input, opts);
+  }
+
+  async sandboxCreateSession(
+    input: SandboxSessionCreateInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<SandboxSessionCreateResponse>> {
+    return this.requestPost<SandboxSessionCreateInput, SandboxSessionCreateResponse>("/v1/memory/sandbox/sessions", input, opts);
+  }
+
+  async sandboxExecute(input: SandboxExecuteInput, opts?: RequestOptions): Promise<AionisResponse<SandboxExecuteResponse>> {
+    return this.requestPost<SandboxExecuteInput, SandboxExecuteResponse>("/v1/memory/sandbox/execute", input, opts);
+  }
+
+  async sandboxRunGet(input: SandboxRunGetInput, opts?: RequestOptions): Promise<AionisResponse<SandboxRunGetResponse>> {
+    return this.requestPost<SandboxRunGetInput, SandboxRunGetResponse>("/v1/memory/sandbox/runs/get", input, opts);
+  }
+
+  async sandboxRunLogs(
+    input: SandboxRunLogsInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<SandboxRunLogsResponse>> {
+    return this.requestPost<SandboxRunLogsInput, SandboxRunLogsResponse>("/v1/memory/sandbox/runs/logs", input, opts);
+  }
+
+  async sandboxRunCancel(
+    input: SandboxRunCancelInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<SandboxRunCancelResponse>> {
+    return this.requestPost<SandboxRunCancelInput, SandboxRunCancelResponse>("/v1/memory/sandbox/runs/cancel", input, opts);
   }
 
   async rulesEvaluate(input: RulesEvaluateInput, opts?: RequestOptions): Promise<AionisResponse<RulesEvaluateResponse>> {

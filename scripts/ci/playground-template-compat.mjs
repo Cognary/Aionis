@@ -4,6 +4,11 @@ import {
   MemoryResolveRequest,
   MemoryRecallRequest,
   MemoryRecallTextRequest,
+  SandboxExecuteRequest,
+  SandboxRunCancelRequest,
+  SandboxRunGetRequest,
+  SandboxRunLogsRequest,
+  SandboxSessionCreateRequest,
   MemoryWriteRequest,
   RulesEvaluateRequest,
   ToolsDecisionRequest,
@@ -17,7 +22,8 @@ const UUID_SAMPLE = "00000000-0000-0000-0000-000000000001";
 const runtimeContext = {
   decision_id: UUID_SAMPLE,
   decision_uri: `aionis://default/default/decision/${UUID_SAMPLE}`,
-  run_id: "run_playground_ci",
+  run_id: UUID_SAMPLE,
+  session_id: UUID_SAMPLE,
   commit_uri: `aionis://default/default/commit/${UUID_SAMPLE}`,
 };
 
@@ -37,6 +43,11 @@ const validators = {
   tools_run: ToolsRunRequest,
   memory_resolve: MemoryResolveRequest,
   context_assemble: ContextAssembleRequest,
+  sandbox_create_session: SandboxSessionCreateRequest,
+  sandbox_execute: SandboxExecuteRequest,
+  sandbox_run_get: SandboxRunGetRequest,
+  sandbox_run_logs: SandboxRunLogsRequest,
+  sandbox_run_cancel: SandboxRunCancelRequest,
 };
 
 function deepClone(value) {

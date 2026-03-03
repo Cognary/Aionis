@@ -40,6 +40,14 @@ This page defines the public API contract for integrating Aionis in production.
 2. `POST /v1/memory/events`
 3. `POST /v1/memory/sessions/events/list`
 
+### Sandbox (Experimental)
+
+1. `POST /v1/memory/sandbox/sessions`
+2. `POST /v1/memory/sandbox/execute`
+3. `POST /v1/memory/sandbox/runs/get`
+4. `POST /v1/memory/sandbox/runs/logs`
+5. `POST /v1/memory/sandbox/runs/cancel`
+
 ### Policy Loop
 
 1. `POST /v1/memory/rules/evaluate`

@@ -604,3 +604,61 @@ export const ToolsFeedbackRequest = z
   .refine((v) => !!v.input_text || !!v.input_sha256, { message: "must set input_text or input_sha256" });
 
 export type ToolsFeedbackInput = z.infer<typeof ToolsFeedbackRequest>;
+
+export const SandboxSessionCreateRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  profile: z.enum(["default", "restricted"]).default("default"),
+  ttl_seconds: z.number().int().positive().max(7 * 24 * 3600).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type SandboxSessionCreateInput = z.infer<typeof SandboxSessionCreateRequest>;
+
+const SandboxCommandAction = z.object({
+  kind: z.literal("command"),
+  argv: z.array(z.string().min(1)).min(1).max(64),
+});
+
+export const SandboxExecuteRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  session_id: UUID,
+  planner_run_id: z.string().min(1).optional(),
+  decision_id: UUID.optional(),
+  mode: z.enum(["async", "sync"]).default("async"),
+  timeout_ms: z.number().int().positive().max(600000).optional(),
+  action: SandboxCommandAction,
+  metadata: z.record(z.any()).optional(),
+});
+
+export type SandboxExecuteInput = z.infer<typeof SandboxExecuteRequest>;
+
+export const SandboxRunGetRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  run_id: UUID,
+});
+
+export type SandboxRunGetInput = z.infer<typeof SandboxRunGetRequest>;
+
+export const SandboxRunLogsRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  run_id: UUID,
+  tail_bytes: z.number().int().positive().max(512000).default(65536),
+});
+
+export type SandboxRunLogsInput = z.infer<typeof SandboxRunLogsRequest>;
+
+export const SandboxRunCancelRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  reason: z.string().min(1).max(400).optional(),
+});
+
+export type SandboxRunCancelInput = z.infer<typeof SandboxRunCancelRequest>;

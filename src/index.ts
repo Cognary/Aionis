@@ -66,6 +66,15 @@ import { selectTools } from "./memory/tools-select.js";
 import { getToolsDecisionById } from "./memory/tools-decision.js";
 import { getToolsRunLifecycle } from "./memory/tools-run.js";
 import { toolSelectionFeedback } from "./memory/tools-feedback.js";
+import {
+  SandboxExecutor,
+  cancelSandboxRun,
+  createSandboxSession,
+  enqueueSandboxRun,
+  getSandboxRun,
+  getSandboxRunLogs,
+  parseAllowedSandboxCommands,
+} from "./memory/sandbox.js";
 import { estimateTokenCountFromText } from "./memory/context.js";
 import { assembleLayeredContext } from "./memory/context-orchestrator.js";
 import { createEmbeddingProviderFromEnv } from "./embeddings/index.js";
@@ -108,6 +117,15 @@ if (embeddedRuntime) {
   await embeddedRuntime.loadSnapshot();
 }
 const embedder = createEmbeddingProviderFromEnv(process.env);
+const sandboxExecutor = new SandboxExecutor(store, {
+  enabled: env.SANDBOX_ENABLED,
+  mode: env.SANDBOX_EXECUTOR_MODE,
+  maxConcurrency: env.SANDBOX_EXECUTOR_MAX_CONCURRENCY,
+  defaultTimeoutMs: env.SANDBOX_EXECUTOR_TIMEOUT_MS,
+  stdioMaxBytes: env.SANDBOX_STDIO_MAX_BYTES,
+  workdir: env.SANDBOX_EXECUTOR_WORKDIR,
+  allowedCommands: parseAllowedSandboxCommands(env.SANDBOX_ALLOWED_COMMANDS_JSON),
+});
 const authResolver = createAuthResolver({
   mode: env.MEMORY_AUTH_MODE,
   apiKeysJson: env.MEMORY_API_KEYS_JSON,
@@ -3334,7 +3352,124 @@ app.post("/v1/memory/tools/feedback", async (req, reply) => {
   return reply.code(200).send(out);
 });
 
+function assertSandboxEnabled(req: any) {
+  if (!env.SANDBOX_ENABLED) {
+    throw new HttpError(400, "sandbox_disabled", "sandbox interface is disabled");
+  }
+  if (env.SANDBOX_ADMIN_ONLY) {
+    requireAdminTokenHeader(req, env.ADMIN_TOKEN);
+  }
+}
+
+app.post("/v1/memory/sandbox/sessions", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "sandbox_session_create");
+  assertSandboxEnabled(req);
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const out = await store.withTx((client) =>
+    createSandboxSession(client, body, {
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+    }),
+  );
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/memory/sandbox/execute", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "sandbox_execute");
+  assertSandboxEnabled(req);
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const queued = await store.withTx((client) =>
+    enqueueSandboxRun(client, body, {
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+      defaultTimeoutMs: env.SANDBOX_EXECUTOR_TIMEOUT_MS,
+    }),
+  );
+
+  let runPayload = queued.run;
+  if (runPayload.mode === "sync") {
+    await sandboxExecutor.executeSync(runPayload.run_id);
+    const final = await store.withClient((client) =>
+      getSandboxRun(
+        client,
+        {
+          tenant_id: queued.tenant_id,
+          scope: queued.scope,
+          run_id: runPayload.run_id,
+        },
+        {
+          defaultScope: env.MEMORY_SCOPE,
+          defaultTenantId: env.MEMORY_TENANT_ID,
+        },
+      ),
+    );
+    runPayload = final.run;
+  } else {
+    sandboxExecutor.enqueue(runPayload.run_id);
+  }
+
+  return reply.code(200).send({
+    tenant_id: queued.tenant_id,
+    scope: queued.scope,
+    accepted: runPayload.mode === "async",
+    run: runPayload,
+  });
+});
+
+app.post("/v1/memory/sandbox/runs/get", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "sandbox_run_get");
+  assertSandboxEnabled(req);
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const out = await store.withClient((client) =>
+    getSandboxRun(client, body, {
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+    }),
+  );
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/memory/sandbox/runs/logs", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "sandbox_run_logs");
+  assertSandboxEnabled(req);
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const out = await store.withClient((client) =>
+    getSandboxRunLogs(client, body, {
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+    }),
+  );
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/memory/sandbox/runs/cancel", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "sandbox_run_cancel");
+  assertSandboxEnabled(req);
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const out = await store.withTx((client) =>
+    cancelSandboxRun(client, body, {
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+    }),
+  );
+  if (out.status === "running") {
+    sandboxExecutor.requestCancel(out.run_id);
+  }
+  return reply.code(200).send(out);
+});
+
 app.addHook("onClose", async () => {
+  sandboxExecutor.shutdown();
   await store.close();
 });
 
@@ -3560,7 +3695,12 @@ function withIdentityFromRequest(
     | "tools_select"
     | "tools_decision"
     | "tools_run"
-    | "tools_feedback",
+    | "tools_feedback"
+    | "sandbox_session_create"
+    | "sandbox_execute"
+    | "sandbox_run_get"
+    | "sandbox_run_logs"
+    | "sandbox_run_cancel",
 ): unknown {
   if (!body || typeof body !== "object" || Array.isArray(body)) return body;
   const obj = { ...(body as Record<string, any>) };

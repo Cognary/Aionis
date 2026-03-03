@@ -10,6 +10,7 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 1. Added `tools_run(...)` for `POST /v1/memory/tools/run` lifecycle inspection (`run_id` decisions + feedback linkage).
 2. Extended `tools_decision(...)` request typing to support `run_id` lookup mode and response typing for `lookup_mode`.
+3. Added sandbox methods (`sandbox_create_session`, `sandbox_execute`, `sandbox_run_get`, `sandbox_run_logs`, `sandbox_run_cancel`) for experimental sandbox API surface.
 
 ## [0.2.3] - 2026-03-02
 

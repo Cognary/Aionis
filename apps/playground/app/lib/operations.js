@@ -172,6 +172,80 @@ export const OPERATION_LIST = [
       },
       limit: 12
     }
+  },
+  {
+    key: "sandbox_create_session",
+    label: "sandbox/sessions",
+    method: "POST",
+    path: "/v1/memory/sandbox/sessions",
+    description: "Create an isolated sandbox session envelope.",
+    template: {
+      tenant_id: "default",
+      scope: "default",
+      profile: "restricted",
+      ttl_seconds: 3600,
+      metadata: {
+        purpose: "playground_demo"
+      }
+    }
+  },
+  {
+    key: "sandbox_execute",
+    label: "sandbox/execute",
+    method: "POST",
+    path: "/v1/memory/sandbox/execute",
+    description: "Execute one sandbox action (command mode).",
+    template: {
+      tenant_id: "default",
+      scope: "default",
+      session_id: "{{last.session_id}}",
+      mode: "sync",
+      action: {
+        kind: "command",
+        argv: ["echo", "hello from sandbox"]
+      },
+      metadata: {
+        source: "playground"
+      }
+    }
+  },
+  {
+    key: "sandbox_run_get",
+    label: "sandbox/runs/get",
+    method: "POST",
+    path: "/v1/memory/sandbox/runs/get",
+    description: "Get run status and result payload.",
+    template: {
+      tenant_id: "default",
+      scope: "default",
+      run_id: "{{last.run_id}}"
+    }
+  },
+  {
+    key: "sandbox_run_logs",
+    label: "sandbox/runs/logs",
+    method: "POST",
+    path: "/v1/memory/sandbox/runs/logs",
+    description: "Read sandbox run logs (stdout/stderr).",
+    template: {
+      tenant_id: "default",
+      scope: "default",
+      run_id: "{{last.run_id}}",
+      tail_bytes: 4096
+    }
+  },
+  {
+    key: "sandbox_run_cancel",
+    label: "sandbox/runs/cancel",
+    method: "POST",
+    path: "/v1/memory/sandbox/runs/cancel",
+    description: "Cancel a queued/running sandbox run.",
+    template: {
+      tenant_id: "default",
+      scope: "default",
+      run_id: "{{last.run_id}}",
+      reason: "manual_cancel_from_playground"
+    }
   }
 ];
 
@@ -208,6 +282,17 @@ export const FLOW_PRESETS = [
     steps: [
       { operation: "write" },
       { operation: "context_assemble" }
+    ]
+  },
+  {
+    key: "sandbox_smoke",
+    label: "Sandbox Smoke",
+    description: "create session -> execute -> get -> logs",
+    steps: [
+      { operation: "sandbox_create_session" },
+      { operation: "sandbox_execute" },
+      { operation: "sandbox_run_get" },
+      { operation: "sandbox_run_logs" }
     ]
   }
 ];

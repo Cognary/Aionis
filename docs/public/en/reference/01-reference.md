@@ -30,6 +30,7 @@ Use this section for stable contracts, SDK usage, and governance-related referen
 
 1. [URI Object Coverage](/public/en/reference/07-uri-expansion-plan)
 2. [Planner Context](/public/en/reference/02-planner-context)
+3. [Sandbox API (Experimental)](/public/en/reference/08-sandbox-api)
 
 ## Next Steps
 

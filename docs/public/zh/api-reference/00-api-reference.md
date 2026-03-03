@@ -48,6 +48,14 @@ Memory 路由使用以下任一方式：
 2. `POST /v1/memory/events`
 3. `POST /v1/memory/sessions/events/list`
 
+### Sandbox（实验）
+
+1. `POST /v1/memory/sandbox/sessions`
+2. `POST /v1/memory/sandbox/execute`
+3. `POST /v1/memory/sandbox/runs/get`
+4. `POST /v1/memory/sandbox/runs/logs`
+5. `POST /v1/memory/sandbox/runs/cancel`
+
 ### 图与回放工具
 
 1. `POST /v1/memory/find`
@@ -92,3 +100,4 @@ Memory 路由使用以下任一方式：
 1. [API 合约](/public/zh/api/01-api-contract)
 2. [SDK 指南](/public/zh/reference/05-sdk)
 3. [SDK 兼容矩阵](/public/zh/reference/06-sdk-compatibility-matrix)
+4. [Sandbox API（实验）](/public/zh/reference/08-sandbox-api)

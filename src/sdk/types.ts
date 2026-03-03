@@ -1,4 +1,9 @@
 import type {
+  SandboxExecuteInput,
+  SandboxRunCancelInput,
+  SandboxRunGetInput,
+  SandboxRunLogsInput,
+  SandboxSessionCreateInput,
   ContextAssembleInput,
   ContextLayerConfigInput,
   MemoryEventWriteInput,
@@ -19,6 +24,11 @@ import type {
 } from "../memory/schemas.js";
 
 export type {
+  SandboxExecuteInput,
+  SandboxRunCancelInput,
+  SandboxRunGetInput,
+  SandboxRunLogsInput,
+  SandboxSessionCreateInput,
   ContextAssembleInput,
   ContextLayerConfigInput,
   MemoryEventWriteInput,
@@ -812,6 +822,85 @@ export type ToolsFeedbackResponse = {
   decision_uri?: string;
   decision_link_mode?: "provided" | "inferred" | "created_from_feedback";
   decision_policy_sha256?: string;
+  [k: string]: unknown;
+};
+
+export type SandboxSessionCreateResponse = {
+  tenant_id: string;
+  scope: string;
+  session: {
+    session_id: string;
+    profile: "default" | "restricted";
+    metadata: Record<string, unknown>;
+    expires_at: string | null;
+    created_at: string;
+    updated_at: string;
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+};
+
+export type SandboxExecuteResponse = {
+  tenant_id: string;
+  scope: string;
+  accepted: boolean;
+  run: {
+    run_id: string;
+    session_id: string;
+    planner_run_id: string | null;
+    decision_id: string | null;
+    action: Record<string, unknown>;
+    mode: "async" | "sync";
+    status: "queued" | "running" | "succeeded" | "failed" | "canceled" | "timeout";
+    timeout_ms: number;
+    output: {
+      stdout: string;
+      stderr: string;
+      truncated: boolean;
+    };
+    exit_code: number | null;
+    error: string | null;
+    cancel_requested: boolean;
+    cancel_reason: string | null;
+    result: Record<string, unknown>;
+    started_at: string | null;
+    finished_at: string | null;
+    created_at: string;
+    updated_at: string;
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+};
+
+export type SandboxRunGetResponse = {
+  tenant_id: string;
+  scope: string;
+  run: SandboxExecuteResponse["run"];
+  [k: string]: unknown;
+};
+
+export type SandboxRunLogsResponse = {
+  tenant_id: string;
+  scope: string;
+  run_id: string;
+  status: SandboxExecuteResponse["run"]["status"];
+  logs: {
+    tail_bytes: number;
+    stdout: string;
+    stderr: string;
+    truncated: boolean;
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+};
+
+export type SandboxRunCancelResponse = {
+  tenant_id: string;
+  scope: string;
+  run_id: string;
+  status: SandboxExecuteResponse["run"]["status"];
+  cancel_requested: boolean;
+  cancel_reason: string | null;
   [k: string]: unknown;
 };
 

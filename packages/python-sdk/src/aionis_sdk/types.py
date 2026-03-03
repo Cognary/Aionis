@@ -516,6 +516,85 @@ class ToolsRunResponse(TypedDict, total=False):
     feedback: Dict[str, Any]
 
 
+class SandboxSessionCreateInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    profile: Literal["default", "restricted"]
+    ttl_seconds: int
+    metadata: Dict[str, Any]
+
+
+class SandboxExecuteInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    session_id: str
+    planner_run_id: str
+    decision_id: str
+    mode: Literal["async", "sync"]
+    timeout_ms: int
+    action: Dict[str, Any]
+    metadata: Dict[str, Any]
+
+
+class SandboxRunGetInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run_id: str
+
+
+class SandboxRunLogsInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run_id: str
+    tail_bytes: int
+
+
+class SandboxRunCancelInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    reason: str
+
+
+class SandboxSessionCreateResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    session: Dict[str, Any]
+
+
+class SandboxExecuteResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    accepted: bool
+    run: Dict[str, Any]
+
+
+class SandboxRunGetResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run: Dict[str, Any]
+
+
+class SandboxRunLogsResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run_id: str
+    status: str
+    logs: Dict[str, Any]
+
+
+class SandboxRunCancelResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run_id: str
+    status: str
+    cancel_requested: bool
+    cancel_reason: Optional[str]
+
+
 class ControlTenantInput(TypedDict, total=False):
     tenant_id: str
     display_name: Optional[str]
@@ -730,6 +809,16 @@ __all__ = [
     "MemorySessionEventsListInput",
     "MemoryWriteInput",
     "RulesEvaluateInput",
+    "SandboxExecuteInput",
+    "SandboxExecuteResponse",
+    "SandboxRunCancelInput",
+    "SandboxRunCancelResponse",
+    "SandboxRunGetInput",
+    "SandboxRunGetResponse",
+    "SandboxRunLogsInput",
+    "SandboxRunLogsResponse",
+    "SandboxSessionCreateInput",
+    "SandboxSessionCreateResponse",
     "Tier",
     "ToolsDecisionInput",
     "ToolsDecisionPayload",

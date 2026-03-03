@@ -466,6 +466,27 @@ function findRunId(input) {
   return "";
 }
 
+function findSessionId(input) {
+  const seen = new Set();
+  const stack = [input];
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object") continue;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    if (typeof cur.session_id === "string" && cur.session_id.trim()) {
+      return cur.session_id.trim();
+    }
+    if (cur.session && typeof cur.session === "object" && typeof cur.session.session_id === "string" && cur.session.session_id.trim()) {
+      return cur.session.session_id.trim();
+    }
+    for (const value of Object.values(cur)) {
+      if (value && typeof value === "object") stack.push(value);
+    }
+  }
+  return "";
+}
+
 function parseAionisUri(input) {
   const raw = String(input || "").trim();
   const match = /^aionis:\/\/([^/]+)\/([^/]+)\/([^/]+)\/([^/?#]+)$/.exec(raw);
@@ -766,7 +787,8 @@ function computeRuntimeContext(history) {
     decision_id: "",
     decision_uri: "",
     run_id: "",
-    commit_uri: ""
+    commit_uri: "",
+    session_id: ""
   };
 
   for (const item of history) {
@@ -775,7 +797,8 @@ function computeRuntimeContext(history) {
     if (!context.decision_uri && item.decision_uri) context.decision_uri = item.decision_uri;
     if (!context.run_id && item.run_id) context.run_id = item.run_id;
     if (!context.commit_uri && item.commit_uri) context.commit_uri = item.commit_uri;
-    if (context.request_id && context.decision_id && context.decision_uri && context.run_id && context.commit_uri) break;
+    if (!context.session_id && item.session_id) context.session_id = item.session_id;
+    if (context.request_id && context.decision_id && context.decision_uri && context.run_id && context.commit_uri && context.session_id) break;
   }
 
   return context;
@@ -1293,6 +1316,7 @@ export default function PlaygroundPage() {
     const decisionUri = findDecisionUri(result.data) || findDecisionUri(normalizedPayload);
     const runId = findRunId(result.data) || findRunId(normalizedPayload);
     const commitUri = findCommitUri(result.data) || findCommitUri(normalizedPayload);
+    const sessionId = findSessionId(result.data) || findSessionId(normalizedPayload);
 
     const entry = {
       id,
@@ -1310,7 +1334,8 @@ export default function PlaygroundPage() {
       decision_id: decisionId,
       decision_uri: decisionUri,
       run_id: runId,
-      commit_uri: commitUri
+      commit_uri: commitUri,
+      session_id: sessionId
     };
 
     setHistory((prev) => [entry, ...prev]);
@@ -1376,7 +1401,8 @@ export default function PlaygroundPage() {
           decision_id: entry.decision_id || flowRuntime.decision_id,
           decision_uri: entry.decision_uri || flowRuntime.decision_uri,
           run_id: entry.run_id || flowRuntime.run_id,
-          commit_uri: entry.commit_uri || flowRuntime.commit_uri
+          commit_uri: entry.commit_uri || flowRuntime.commit_uri,
+          session_id: entry.session_id || flowRuntime.session_id
         };
 
         const assertResult = evaluateStepAssert(entry, step.assert);

@@ -212,6 +212,30 @@ const EnvSchema = z.object({
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
   MAX_TEXT_LEN: z.coerce.number().int().positive().default(8000),
+  SANDBOX_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  SANDBOX_ADMIN_ONLY: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  SANDBOX_EXECUTOR_MODE: z.enum(["mock", "local_process"]).default("mock"),
+  SANDBOX_EXECUTOR_MAX_CONCURRENCY: z.coerce.number().int().positive().max(16).default(2),
+  SANDBOX_EXECUTOR_TIMEOUT_MS: z.coerce.number().int().positive().max(600000).default(15000),
+  SANDBOX_STDIO_MAX_BYTES: z.coerce.number().int().positive().max(1024 * 1024).default(65536),
+  SANDBOX_ALLOWED_COMMANDS_JSON: z.string().default("[\"echo\"]"),
+  SANDBOX_EXECUTOR_WORKDIR: z.string().default(".tmp/sandbox"),
+  SANDBOX_LOCAL_PROCESS_ALLOW_IN_PROD: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
 
   // Abstraction policy profile: coarse operating mode for topic clustering + compression rollup defaults.
   MEMORY_ABSTRACTION_POLICY_PROFILE: AbstractionPolicyProfileSchema.default("balanced"),
@@ -489,6 +513,24 @@ export function loadEnv(): Env {
       }
     }
   }
+  {
+    let allowedCommandsRaw: unknown;
+    try {
+      const raw = parsed.data.SANDBOX_ALLOWED_COMMANDS_JSON.trim();
+      allowedCommandsRaw = raw.length === 0 ? [] : JSON.parse(raw);
+    } catch {
+      throw new Error("SANDBOX_ALLOWED_COMMANDS_JSON must be a valid JSON array of command names");
+    }
+    if (!Array.isArray(allowedCommandsRaw)) {
+      throw new Error("SANDBOX_ALLOWED_COMMANDS_JSON must be a JSON array");
+    }
+    const normalized = allowedCommandsRaw
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .filter((v) => v.length > 0);
+    if (parsed.data.SANDBOX_ENABLED && parsed.data.SANDBOX_EXECUTOR_MODE === "local_process" && normalized.length === 0) {
+      throw new Error("SANDBOX_ALLOWED_COMMANDS_JSON must include at least one command when local_process sandbox is enabled");
+    }
+  }
   if (parsed.data.APP_ENV === "prod") {
     if (parsed.data.MEMORY_AUTH_MODE === "off") {
       throw new Error("MEMORY_AUTH_MODE=off is not allowed when APP_ENV=prod");
@@ -513,6 +555,9 @@ export function loadEnv(): Env {
       if (keys.length === 0) {
         throw new Error("MEMORY_API_KEYS_JSON must contain at least one key when APP_ENV=prod and auth uses api keys");
       }
+    }
+    if (parsed.data.SANDBOX_ENABLED && parsed.data.SANDBOX_EXECUTOR_MODE === "local_process" && !parsed.data.SANDBOX_LOCAL_PROCESS_ALLOW_IN_PROD) {
+      throw new Error("SANDBOX local_process executor is blocked in APP_ENV=prod unless SANDBOX_LOCAL_PROCESS_ALLOW_IN_PROD=true");
     }
   }
   return parsed.data;

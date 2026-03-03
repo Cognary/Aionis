@@ -53,13 +53,18 @@ If you set custom headers manually, the SDK will not override existing auth head
 8. `listSessionEvents`
 9. `packExport`
 10. `packImport`
-11. `rulesEvaluate`
-12. `toolsSelect`
-13. `toolsDecision`
-14. `toolsRun`
-15. `toolsFeedback`
-16. `health`
-17. `getCapabilityContract`
+11. `sandboxCreateSession`
+12. `sandboxExecute`
+13. `sandboxRunGet`
+14. `sandboxRunLogs`
+15. `sandboxRunCancel`
+16. `rulesEvaluate`
+17. `toolsSelect`
+18. `toolsDecision`
+19. `toolsRun`
+20. `toolsFeedback`
+21. `health`
+22. `getCapabilityContract`
 
 Admin/control methods (require `admin_token`):
 
