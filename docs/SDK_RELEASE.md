@@ -4,7 +4,7 @@ title: "SDK Release Runbook"
 
 # SDK Release Runbook
 
-Last updated: `2026-03-02`
+Last updated: `2026-03-03`
 
 ## Release prerequisites
 
@@ -13,7 +13,7 @@ Last updated: `2026-03-02`
 3. Matching changelog entries exist in:
    - `packages/sdk/CHANGELOG.md`
    - `packages/python-sdk/CHANGELOG.md`
-4. Compatibility matrix updated in `docs/SDK_COMPATIBILITY_MATRIX.md`.
+4. Compatibility matrix updated in `docs/public/en/reference/06-sdk-compatibility-matrix.md`.
 5. Local checks pass:
 
 ```bash
@@ -74,7 +74,7 @@ npm run sdk:py:publish
 
 Use `workflow_dispatch` on `SDK Publish` with:
 
-1. `tag`: optional (`sdk-v0.2.3`)
+1. `tag`: optional (`sdk-v0.2.4`)
 2. `dry_run`: `true`
 
 ## Secrets

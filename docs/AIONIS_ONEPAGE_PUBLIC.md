@@ -4,7 +4,7 @@ title: "Aionis Onepage (Public)"
 
 # Aionis Onepage (Public)
 
-Last updated: `2026-02-28`
+Last updated: `2026-03-03`
 
 ## Aionis 是什么
 
@@ -76,10 +76,10 @@ npm run -s docker:run:standalone
 
 当前发布基线：
 
-1. Core: `v0.2.3`
-2. npm: `0.2.3`
-3. PyPI: `0.2.3`
-4. Docker: `v0.2.3` / `standalone-v0.2.3`
+1. Core: `v0.2.4`
+2. npm: `0.2.4`
+3. PyPI: `0.2.4`
+4. Docker: `v0.2.4` / `standalone-v0.2.4`
 
 ## 一句话总结
 

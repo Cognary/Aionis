@@ -4,6 +4,14 @@ All notable changes to Aionis core are documented in this file.
 
 The format is based on Keep a Changelog and this project follows SemVer for tagged core releases.
 
+## [0.2.4] - 2026-03-03
+
+### Changed
+
+1. Promoted URI-first and planner lifecycle updates to release baseline, including `/v1/memory/tools/run` execution lifecycle coverage and expanded URI-linked object surfaces.
+2. Added experimental sandbox runtime capabilities with remote execution hardening, budget controls, retention handling, telemetry probes, and stress tooling.
+3. Synced docs and integration contracts (MCP/OpenWork/LangGraph), plus coordinated release metadata for core, npm, PyPI, and Docker channels.
+
 ## [0.2.3] - 2026-03-02
 
 ### Changed

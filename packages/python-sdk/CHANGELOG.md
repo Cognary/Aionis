@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-03-03
+
 ### Changed
 
 1. Added `tools_run(...)` for `POST /v1/memory/tools/run` lifecycle inspection (`run_id` decisions + feedback linkage).
