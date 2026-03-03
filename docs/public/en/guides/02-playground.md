@@ -23,7 +23,7 @@ The playground focuses on these routes:
 ## Included capabilities
 
 1. Three-pane console layout: left navigation/history, center chat + inspector, right run settings.
-2. Full bilingual UI (`EN` / `中文`) with language preference persistence in local storage.
+2. Full bilingual UI (`EN` / `ZH`) with language preference persistence in local storage.
 3. LLM settings panel (`provider`, `base_url`, `model`, `api_key`, `temperature`, `max_tokens`, `system_prompt`) with local persistence.
 4. Built-in chat session manager (new/delete/switch/rename/clear) and multi-turn chat thread.
 5. Optional `recall_text` context injection before each chat turn.
@@ -38,8 +38,8 @@ The playground focuses on these routes:
 14. Per-step flow assertions (`expect_ok`, `require_decision_id`, `require_request_id`, `max_duration_ms`, `error_includes`) with optional stop-on-fail behavior.
 15. Latest flow report panel plus one-click export as JSON/Markdown.
 16. Share link export (`?pg=...`), request chain filters, response diff inspector, and session export.
-17. `context/assemble` 专用 orchestration panel（层预设、启用层勾选、总预算、merge trace 开关），无需手改 JSON 即可调参。
-18. Inspector 内置 `layered_context` 摘要、`dropped_reasons` 和 `merge_trace` 预览，便于回放与审计。
+17. Dedicated `context/assemble` orchestration panel (layer presets, enabled-layer toggles, total budget, merge-trace switch) for no-code tuning.
+18. Inspector preview for `layered_context`, `dropped_reasons`, and `merge_trace` to support replay and audit workflows.
 19. URI-first inspector actions: copy and one-click resolve for `decision_uri` / `commit_uri` via `POST /v1/memory/resolve`.
 
 ## Run locally
