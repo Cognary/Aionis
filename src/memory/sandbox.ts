@@ -144,6 +144,108 @@ function toRunPayload(row: SandboxRunRow) {
   };
 }
 
+function isoToMs(v: string | null): number | null {
+  if (!v) return null;
+  const ms = new Date(v).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function deltaMs(startMs: number | null, endMs: number | null): number {
+  if (!Number.isFinite(startMs ?? NaN) || !Number.isFinite(endMs ?? NaN)) return 0;
+  return Math.max(0, Number(endMs) - Number(startMs));
+}
+
+function normalizeTelemetryErrorCode(v: string | null): string | null {
+  const raw = trimOrNull(v);
+  if (!raw) return null;
+  const compact = raw.toLowerCase().replace(/[^a-z0-9:_-]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!compact) return null;
+  return compact.slice(0, 120);
+}
+
+function telemetryExecutor(row: SandboxRunRow): string | null {
+  const value = row.result_json && typeof row.result_json === "object" ? (row.result_json as any).executor : null;
+  const normalized = trimOrNull(typeof value === "string" ? value : null);
+  return normalized ? normalized.slice(0, 32) : null;
+}
+
+function isTerminalStatus(status: SandboxRunStatus): boolean {
+  return status === "succeeded" || status === "failed" || status === "canceled" || status === "timeout";
+}
+
+async function recordSandboxRunTelemetryRow(client: pg.PoolClient, row: SandboxRunRow): Promise<void> {
+  if (!isTerminalStatus(row.status)) return;
+  const createdMs = isoToMs(row.created_at);
+  const startedMs = isoToMs(row.started_at);
+  const finishedMs = isoToMs(row.finished_at) ?? isoToMs(row.updated_at);
+
+  const queueWaitMs = startedMs !== null ? deltaMs(createdMs, startedMs) : deltaMs(createdMs, finishedMs);
+  const runtimeMs = startedMs !== null ? deltaMs(startedMs, finishedMs) : 0;
+  const totalLatencyMs = deltaMs(createdMs, finishedMs);
+
+  try {
+    await client.query(
+      `
+      INSERT INTO memory_sandbox_run_telemetry (
+        run_id,
+        session_id,
+        tenant_id,
+        scope,
+        mode,
+        status,
+        executor,
+        timeout_ms,
+        queue_wait_ms,
+        runtime_ms,
+        total_latency_ms,
+        cancel_requested,
+        output_truncated,
+        exit_code,
+        error_code
+      )
+      VALUES (
+        $1::uuid,
+        $2::uuid,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        $13,
+        $14,
+        $15
+      )
+      ON CONFLICT (run_id) DO NOTHING
+      `,
+      [
+        row.id,
+        row.session_id,
+        row.tenant_id,
+        row.scope,
+        row.mode,
+        row.status,
+        telemetryExecutor(row),
+        row.timeout_ms,
+        queueWaitMs,
+        runtimeMs,
+        totalLatencyMs,
+        row.cancel_requested,
+        row.output_truncated,
+        row.exit_code,
+        normalizeTelemetryErrorCode(row.error),
+      ],
+    );
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return;
+    throw err;
+  }
+}
+
 export async function createSandboxSession(
   client: pg.PoolClient,
   body: unknown,
@@ -431,7 +533,7 @@ export async function cancelSandboxRun(client: pg.PoolClient, body: unknown, def
   }
 
   if (row.status === "queued") {
-    const canceled = await client.query<{ id: string; status: string }>(
+    const canceled = await client.query<SandboxRunRow>(
       `
       UPDATE memory_sandbox_runs
       SET
@@ -442,11 +544,39 @@ export async function cancelSandboxRun(client: pg.PoolClient, body: unknown, def
         updated_at = now()
       WHERE id = $1
         AND status = 'queued'
-      RETURNING id::text, status::text
+      RETURNING
+        id::text,
+        session_id::text,
+        tenant_id,
+        scope,
+        planner_run_id,
+        decision_id::text,
+        action_kind::text AS action_kind,
+        action_json,
+        mode::text,
+        status::text,
+        timeout_ms,
+        stdout_text,
+        stderr_text,
+        output_truncated,
+        exit_code,
+        error,
+        cancel_requested,
+        cancel_reason,
+        metadata,
+        result_json,
+        started_at::text,
+        finished_at::text,
+        created_at::text,
+        updated_at::text
       `,
       [parsed.run_id],
     );
-    if (canceled.rowCount) row.status = "canceled";
+    const canceledRow = canceled.rows[0] ?? null;
+    if (canceledRow) {
+      row.status = "canceled";
+      await recordSandboxRunTelemetryRow(client, canceledRow);
+    }
   }
 
   return {
@@ -802,7 +932,7 @@ export class SandboxExecutor {
     },
   ): Promise<void> {
     await this.store.withClient(async (client) => {
-      await client.query(
+      const out = await client.query<SandboxRunRow>(
         `
         UPDATE memory_sandbox_runs
         SET
@@ -816,9 +946,38 @@ export class SandboxExecutor {
           finished_at = now(),
           updated_at = now()
         WHERE id = $1
+        RETURNING
+          id::text,
+          session_id::text,
+          tenant_id,
+          scope,
+          planner_run_id,
+          decision_id::text,
+          action_kind::text AS action_kind,
+          action_json,
+          mode::text,
+          status::text,
+          timeout_ms,
+          stdout_text,
+          stderr_text,
+          output_truncated,
+          exit_code,
+          error,
+          cancel_requested,
+          cancel_reason,
+          metadata,
+          result_json,
+          started_at::text,
+          finished_at::text,
+          created_at::text,
+          updated_at::text
         `,
         [runId, args.status, args.stdout, args.stderr, args.truncated, args.exitCode, args.error, JSON.stringify(args.result)],
       );
+      const row = out.rows[0] ?? null;
+      if (row) {
+        await recordSandboxRunTelemetryRow(client, row);
+      }
     });
   }
 }

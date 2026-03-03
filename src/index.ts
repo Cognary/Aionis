@@ -218,6 +218,24 @@ const writeLimiter = env.RATE_LIMIT_ENABLED
     })
   : null;
 
+const sandboxWriteLimiter = env.RATE_LIMIT_ENABLED
+  ? new TokenBucketLimiter({
+      rate_per_sec: env.SANDBOX_WRITE_RATE_LIMIT_RPS,
+      burst: env.SANDBOX_WRITE_RATE_LIMIT_BURST,
+      ttl_ms: env.RATE_LIMIT_TTL_MS,
+      sweep_every_n: 500,
+    })
+  : null;
+
+const sandboxReadLimiter = env.RATE_LIMIT_ENABLED
+  ? new TokenBucketLimiter({
+      rate_per_sec: env.SANDBOX_READ_RATE_LIMIT_RPS,
+      burst: env.SANDBOX_READ_RATE_LIMIT_BURST,
+      ttl_ms: env.RATE_LIMIT_TTL_MS,
+      sweep_every_n: 500,
+    })
+  : null;
+
 const recallTextEmbedLimiter = env.RATE_LIMIT_ENABLED
   ? new TokenBucketLimiter({
       rate_per_sec: env.RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
@@ -3365,7 +3383,7 @@ app.post("/v1/memory/sandbox/sessions", async (req, reply) => {
   const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "sandbox_session_create");
   assertSandboxEnabled(req);
-  await enforceRateLimit(req, reply, "write");
+  await enforceRateLimit(req, reply, "sandbox_write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
   const out = await store.withTx((client) =>
     createSandboxSession(client, body, {
@@ -3380,7 +3398,7 @@ app.post("/v1/memory/sandbox/execute", async (req, reply) => {
   const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "sandbox_execute");
   assertSandboxEnabled(req);
-  await enforceRateLimit(req, reply, "write");
+  await enforceRateLimit(req, reply, "sandbox_write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
   const queued = await store.withTx((client) =>
     enqueueSandboxRun(client, body, {
@@ -3424,7 +3442,7 @@ app.post("/v1/memory/sandbox/runs/get", async (req, reply) => {
   const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "sandbox_run_get");
   assertSandboxEnabled(req);
-  await enforceRateLimit(req, reply, "recall");
+  await enforceRateLimit(req, reply, "sandbox_read");
   await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
   const out = await store.withClient((client) =>
     getSandboxRun(client, body, {
@@ -3439,7 +3457,7 @@ app.post("/v1/memory/sandbox/runs/logs", async (req, reply) => {
   const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "sandbox_run_logs");
   assertSandboxEnabled(req);
-  await enforceRateLimit(req, reply, "recall");
+  await enforceRateLimit(req, reply, "sandbox_read");
   await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
   const out = await store.withClient((client) =>
     getSandboxRunLogs(client, body, {
@@ -3454,7 +3472,7 @@ app.post("/v1/memory/sandbox/runs/cancel", async (req, reply) => {
   const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "sandbox_run_cancel");
   assertSandboxEnabled(req);
-  await enforceRateLimit(req, reply, "write");
+  await enforceRateLimit(req, reply, "sandbox_write");
   await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
   const out = await store.withTx((client) =>
     cancelSandboxRun(client, body, {
@@ -3525,9 +3543,22 @@ async function acquireInflightSlot(kind: "recall" | "write"): Promise<InflightGa
   }
 }
 
-async function enforceRateLimit(req: any, reply: any, kind: "recall" | "debug_embeddings" | "write") {
+async function enforceRateLimit(
+  req: any,
+  reply: any,
+  kind: "recall" | "debug_embeddings" | "write" | "sandbox_read" | "sandbox_write",
+) {
   if (!env.RATE_LIMIT_ENABLED) return;
-  const limiter = kind === "debug_embeddings" ? debugEmbedLimiter : kind === "write" ? writeLimiter : recallLimiter;
+  const limiter =
+    kind === "debug_embeddings"
+      ? debugEmbedLimiter
+      : kind === "write"
+        ? writeLimiter
+        : kind === "sandbox_write"
+          ? sandboxWriteLimiter
+          : kind === "sandbox_read"
+            ? sandboxReadLimiter
+            : recallLimiter;
   if (!limiter) return;
 
   const ip = String(req.ip ?? req.socket?.remoteAddress ?? "");
@@ -3539,16 +3570,26 @@ async function enforceRateLimit(req: any, reply: any, kind: "recall" | "debug_em
   const key = rateLimitKey(req, kind);
   let waitedMs = 0;
   let res = limiter.check(key, 1);
-  if (!res.allowed && kind === "write" && env.WRITE_RATE_LIMIT_MAX_WAIT_MS > 0) {
+  if (!res.allowed && (kind === "write" || kind === "sandbox_write") && env.WRITE_RATE_LIMIT_MAX_WAIT_MS > 0) {
     waitedMs = Math.min(env.WRITE_RATE_LIMIT_MAX_WAIT_MS, Math.max(1, res.retry_after_ms));
     await sleep(waitedMs);
     res = limiter.check(key, 1);
   }
   if (res.allowed) return;
   reply.header("retry-after", Math.ceil(res.retry_after_ms / 1000));
+  const code =
+    kind === "debug_embeddings"
+      ? "rate_limited_debug_embeddings"
+      : kind === "write"
+        ? "rate_limited_write"
+        : kind === "sandbox_write"
+          ? "rate_limited_sandbox_write"
+          : kind === "sandbox_read"
+            ? "rate_limited_sandbox_read"
+            : "rate_limited_recall";
   throw new HttpError(
     429,
-    kind === "debug_embeddings" ? "rate_limited_debug_embeddings" : kind === "write" ? "rate_limited_write" : "rate_limited_recall",
+    code,
     `rate limited (${kind}); retry later`,
     { retry_after_ms: res.retry_after_ms, waited_ms: waitedMs },
   );

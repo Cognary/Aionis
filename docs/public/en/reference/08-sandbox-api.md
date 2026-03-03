@@ -16,6 +16,11 @@ Required environment toggles:
 2. `SANDBOX_EXECUTOR_MODE=mock|local_process`
 3. `SANDBOX_ALLOWED_COMMANDS_JSON=["echo","python3", ...]`
 
+Optional traffic shaping:
+
+1. `SANDBOX_WRITE_RATE_LIMIT_RPS` / `SANDBOX_WRITE_RATE_LIMIT_BURST`
+2. `SANDBOX_READ_RATE_LIMIT_RPS` / `SANDBOX_READ_RATE_LIMIT_BURST`
+
 Recommended for production:
 
 1. Keep `SANDBOX_ADMIN_ONLY=true`.
@@ -66,6 +71,32 @@ Constraints:
 1. This API does not replace host/container isolation strategy.
 2. `local_process` mode is intended for controlled environments and staging validation.
 3. Keep credentials out of `argv` and persist only required metadata.
+
+## Operability Signals
+
+Sandbox runs are aggregated into tenant diagnostics (`GET /v1/admin/control/diagnostics/tenant/:tenant_id`) under `diagnostics.sandbox`.
+
+Current rollup fields include:
+
+1. throughput and status distribution (`total`, `by_status`, `by_mode`)
+2. latency distribution (`queue_wait_p50/p95`, `runtime_p50/p95`, `total_latency_p95`)
+3. stability indicators (`timeout_rate`, `cancel_rate`, `output_truncated_rate`)
+4. top error categories (`top_errors`)
+
+## Stress Validation (Quick Command)
+
+Run a queue/timeout smoke benchmark against your environment:
+
+```bash
+npm run -s bench:sandbox:stress
+```
+
+Tune with env vars when needed:
+
+1. `SANDBOX_STRESS_RUNS`
+2. `SANDBOX_STRESS_CONCURRENCY`
+3. `SANDBOX_STRESS_POLL_INTERVAL_MS`
+4. `SANDBOX_STRESS_POLL_TIMEOUT_MS`
 
 ## Related
 

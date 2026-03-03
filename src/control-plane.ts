@@ -1815,6 +1815,14 @@ export async function getTenantOperabilityDiagnostics(
       })()
     : tenantScopeConditionForColumn(contextArgs, tenantId, defaultTenantId, "c.scope");
 
+  const sandboxArgs: unknown[] = [tenantId];
+  let scopeFilterSandbox = scope
+    ? (() => {
+        sandboxArgs.push(tenantScopeKey(scope, tenantId, defaultTenantId));
+        return { sql: `s.scope = $${sandboxArgs.length}`, args: sandboxArgs };
+      })()
+    : tenantScopeConditionForColumn(sandboxArgs, tenantId, defaultTenantId, "s.scope");
+
   const out: Record<string, unknown> = {
     tenant_id: tenantId,
     default_tenant_id: defaultTenantId,
@@ -1886,6 +1894,11 @@ export async function getTenantOperabilityDiagnostics(
       let contextEndpointRowsRaw: any[] = [];
       let contextLayerRowsRaw: any[] = [];
       let contextTelemetryWarning: string | null = null;
+      let sandboxSummaryRow: any = null;
+      let sandboxStatusRowsRaw: any[] = [];
+      let sandboxModeRowsRaw: any[] = [];
+      let sandboxTopErrorsRaw: any[] = [];
+      let sandboxTelemetryWarning: string | null = null;
 
       try {
         const layeredOutputColumn = await client.query(
@@ -1983,6 +1996,87 @@ export async function getTenantOperabilityDiagnostics(
         }
       }
 
+      try {
+        const sandboxSummary = await client.query(
+          `
+          SELECT
+            COUNT(*)::bigint AS total,
+            COUNT(*) FILTER (WHERE s.status = 'succeeded')::bigint AS succeeded,
+            COUNT(*) FILTER (WHERE s.status = 'failed')::bigint AS failed,
+            COUNT(*) FILTER (WHERE s.status = 'canceled')::bigint AS canceled,
+            COUNT(*) FILTER (WHERE s.status = 'timeout')::bigint AS timeout,
+            COUNT(*) FILTER (WHERE s.output_truncated)::bigint AS output_truncated,
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY s.queue_wait_ms) AS queue_wait_p50_ms,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY s.queue_wait_ms) AS queue_wait_p95_ms,
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY s.runtime_ms) AS runtime_p50_ms,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY s.runtime_ms) AS runtime_p95_ms,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY s.total_latency_ms) AS total_latency_p95_ms
+          FROM memory_sandbox_run_telemetry s
+          WHERE s.tenant_id = $1
+            AND ${scopeFilterSandbox.sql}
+            AND s.created_at >= now() - (($${scopeFilterSandbox.args.length + 1}::text || ' minutes')::interval)
+          `,
+          [...scopeFilterSandbox.args, windowMinutes],
+        );
+        sandboxSummaryRow = sandboxSummary.rows[0] ?? null;
+
+        const sandboxByStatus = await client.query(
+          `
+          SELECT
+            s.status,
+            COUNT(*)::bigint AS total
+          FROM memory_sandbox_run_telemetry s
+          WHERE s.tenant_id = $1
+            AND ${scopeFilterSandbox.sql}
+            AND s.created_at >= now() - (($${scopeFilterSandbox.args.length + 1}::text || ' minutes')::interval)
+          GROUP BY s.status
+          ORDER BY s.status ASC
+          `,
+          [...scopeFilterSandbox.args, windowMinutes],
+        );
+        sandboxStatusRowsRaw = sandboxByStatus.rows;
+
+        const sandboxByMode = await client.query(
+          `
+          SELECT
+            s.mode,
+            COUNT(*)::bigint AS total
+          FROM memory_sandbox_run_telemetry s
+          WHERE s.tenant_id = $1
+            AND ${scopeFilterSandbox.sql}
+            AND s.created_at >= now() - (($${scopeFilterSandbox.args.length + 1}::text || ' minutes')::interval)
+          GROUP BY s.mode
+          ORDER BY s.mode ASC
+          `,
+          [...scopeFilterSandbox.args, windowMinutes],
+        );
+        sandboxModeRowsRaw = sandboxByMode.rows;
+
+        const sandboxTopErrors = await client.query(
+          `
+          SELECT
+            s.error_code,
+            COUNT(*)::bigint AS total
+          FROM memory_sandbox_run_telemetry s
+          WHERE s.tenant_id = $1
+            AND ${scopeFilterSandbox.sql}
+            AND s.created_at >= now() - (($${scopeFilterSandbox.args.length + 1}::text || ' minutes')::interval)
+            AND s.error_code IS NOT NULL
+          GROUP BY s.error_code
+          ORDER BY total DESC, s.error_code ASC
+          LIMIT 10
+          `,
+          [...scopeFilterSandbox.args, windowMinutes],
+        );
+        sandboxTopErrorsRaw = sandboxTopErrors.rows;
+      } catch (sandboxErr: any) {
+        if (String(sandboxErr?.code ?? "") === "42P01") {
+          sandboxTelemetryWarning = "sandbox_telemetry_table_missing";
+        } else {
+          throw sandboxErr;
+        }
+      }
+
       const endpointRows = requestTelemetry.rows.map((r: any) => {
         const total = Number(r.total ?? 0);
         const errors = Number(r.errors ?? 0);
@@ -2073,6 +2167,24 @@ export async function getTenantOperabilityDiagnostics(
           drop_ratio: row.drop_ratio,
           severity: row.total >= 20 && row.drop_ratio >= 0.2 ? "warning" : "ok",
         }));
+      const sandboxTotal = Number(sandboxSummaryRow?.total ?? 0);
+      const sandboxSucceeded = Number(sandboxSummaryRow?.succeeded ?? 0);
+      const sandboxFailed = Number(sandboxSummaryRow?.failed ?? 0);
+      const sandboxCanceled = Number(sandboxSummaryRow?.canceled ?? 0);
+      const sandboxTimeout = Number(sandboxSummaryRow?.timeout ?? 0);
+      const sandboxOutputTruncated = Number(sandboxSummaryRow?.output_truncated ?? 0);
+      const sandboxStatusRows = sandboxStatusRowsRaw.map((r: any) => ({
+        status: String(r.status ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const sandboxModeRows = sandboxModeRowsRaw.map((r: any) => ({
+        mode: String(r.mode ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const sandboxTopErrors = sandboxTopErrorsRaw.map((r: any) => ({
+        error_code: String(r.error_code ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
 
       out.request_telemetry = {
         endpoints: endpointRows,
@@ -2111,6 +2223,26 @@ export async function getTenantOperabilityDiagnostics(
           critical_layers: criticalLayerAlerts,
         },
         warning: contextTelemetryWarning ?? undefined,
+      };
+      out.sandbox = {
+        total: sandboxTotal,
+        succeeded: sandboxSucceeded,
+        failed: sandboxFailed,
+        canceled: sandboxCanceled,
+        timeout: sandboxTimeout,
+        timeout_rate: sandboxTotal > 0 ? round(sandboxTimeout / sandboxTotal) : 0,
+        cancel_rate: sandboxTotal > 0 ? round(sandboxCanceled / sandboxTotal) : 0,
+        output_truncated: sandboxOutputTruncated,
+        output_truncated_rate: sandboxTotal > 0 ? round(sandboxOutputTruncated / sandboxTotal) : 0,
+        queue_wait_p50_ms: round(Number(sandboxSummaryRow?.queue_wait_p50_ms ?? 0)),
+        queue_wait_p95_ms: round(Number(sandboxSummaryRow?.queue_wait_p95_ms ?? 0)),
+        runtime_p50_ms: round(Number(sandboxSummaryRow?.runtime_p50_ms ?? 0)),
+        runtime_p95_ms: round(Number(sandboxSummaryRow?.runtime_p95_ms ?? 0)),
+        total_latency_p95_ms: round(Number(sandboxSummaryRow?.total_latency_p95_ms ?? 0)),
+        by_status: sandboxStatusRows,
+        by_mode: sandboxModeRows,
+        top_errors: sandboxTopErrors,
+        warning: sandboxTelemetryWarning ?? undefined,
       };
     });
   } catch (err: any) {

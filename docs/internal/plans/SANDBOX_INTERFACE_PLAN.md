@@ -116,12 +116,20 @@ Delivered:
 
 ### Phase 2: Operability and Governance Hardening
 
+Status: `in_progress` (2026-03-03)
+
+Delivered in this batch:
+
+1. sandbox run telemetry table + writer path (`memory_sandbox_run_telemetry`)
+2. tenant diagnostics sandbox rollup (`/v1/admin/control/diagnostics/tenant/:tenant_id`)
+3. CI contract probe (`scripts/ci/sandbox-api-probes.mjs` + tests)
+4. benchmark-style stress script (`scripts/bench/sandbox-stress.mjs`)
+5. split sandbox rate-limit buckets (`sandbox_write` / `sandbox_read`)
+
 Planned:
 
-1. run metrics telemetry (`queue wait`, `runtime`, `timeout rate`, `cancel rate`)
-2. failure classification and weekly governance report section
-3. rate-limit bucket split for sandbox endpoints
-4. replay/evidence artifacts for sandbox runs
+1. failure classification and weekly governance report section
+2. replay/evidence artifacts for sandbox runs
 
 ### Phase 3: Isolation-Grade Runtime
 

@@ -107,6 +107,7 @@
     "bench:longmemeval:gate": "bash scripts/bench/longmemeval_ci_gate.sh",
     "bench:locomo": "python3 scripts/bench/locomo_aionis_gemini.py",
     "bench:aionis:v01": "python3 aionis-bench/run_v01.py",
+    "bench:sandbox:stress": "node scripts/bench/sandbox-stress.mjs",
     "evidence:weekly": "bash scripts/evidence/weekly-evidence-pack.sh",
     "gate:core:prod": "bash scripts/core-production-gate.sh",
     "gate:memory-store-p2:local": "bash scripts/ci/memory-store-p2-exit-local.sh",

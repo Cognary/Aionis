@@ -16,6 +16,11 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
 2. `SANDBOX_EXECUTOR_MODE=mock|local_process`
 3. `SANDBOX_ALLOWED_COMMANDS_JSON=["echo","python3", ...]`
 
+可选流量控制：
+
+1. `SANDBOX_WRITE_RATE_LIMIT_RPS` / `SANDBOX_WRITE_RATE_LIMIT_BURST`
+2. `SANDBOX_READ_RATE_LIMIT_RPS` / `SANDBOX_READ_RATE_LIMIT_BURST`
+
 生产环境建议：
 
 1. 保持 `SANDBOX_ADMIN_ONLY=true`。
@@ -66,6 +71,32 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
 1. Sandbox API 不能替代宿主机/容器隔离策略。
 2. `local_process` 仅适用于受控环境与验证阶段。
 3. 不要在 `argv` 放入敏感凭据；仅持久化必要元数据。
+
+## 可观测信号
+
+Sandbox 运行数据会汇总到租户诊断接口 `GET /v1/admin/control/diagnostics/tenant/:tenant_id` 的 `diagnostics.sandbox` 字段。
+
+当前聚合包含：
+
+1. 吞吐与状态分布（`total`、`by_status`、`by_mode`）
+2. 延迟分布（`queue_wait_p50/p95`、`runtime_p50/p95`、`total_latency_p95`）
+3. 稳定性指标（`timeout_rate`、`cancel_rate`、`output_truncated_rate`）
+4. 高发错误分类（`top_errors`）
+
+## 压测命令（快速）
+
+可直接运行队列/超时压测脚本：
+
+```bash
+npm run -s bench:sandbox:stress
+```
+
+可用环境变量：
+
+1. `SANDBOX_STRESS_RUNS`
+2. `SANDBOX_STRESS_CONCURRENCY`
+3. `SANDBOX_STRESS_POLL_INTERVAL_MS`
+4. `SANDBOX_STRESS_POLL_TIMEOUT_MS`
 
 ## 相关页面
 

@@ -407,6 +407,172 @@ test("capability probe forces shadow soft-degrade when include flag is true", as
   }
 });
 
+test("sandbox probe skips when sandbox interface is disabled", async () => {
+  const mock = await createMockServer(async (req) => {
+    if (req.path === "/v1/memory/sandbox/sessions") {
+      return {
+        status: 400,
+        body: {
+          error: "sandbox_disabled",
+          message: "sandbox interface is disabled",
+        },
+      };
+    }
+    return { status: 404, body: { error: "not_found" } };
+  });
+
+  try {
+    const out = await runNodeScript("scripts/ci/sandbox-api-probes.mjs", {
+      AIONIS_BASE_URL: mock.baseUrl,
+    });
+    assert.equal(out.code, 0, out.stderr || out.stdout);
+    const parsed = JSON.parse(out.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.skipped, true);
+    assert.equal(parsed.reason, "sandbox_disabled");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("sandbox probe validates sandbox API contract when enabled", async () => {
+  const runId = "44444444-4444-4444-8444-444444444444";
+  const sessionId = "55555555-5555-4555-8555-555555555555";
+  const decisionId = "66666666-6666-4666-8666-666666666666";
+  const now = new Date().toISOString();
+
+  const mock = await createMockServer(async (req) => {
+    if (req.path === "/v1/memory/sandbox/sessions") {
+      return {
+        status: 200,
+        body: {
+          tenant_id: String(req.body?.tenant_id ?? "default"),
+          scope: String(req.body?.scope ?? "default"),
+          session: {
+            session_id: sessionId,
+            profile: "restricted",
+            metadata: {},
+            expires_at: null,
+            created_at: now,
+            updated_at: now,
+          },
+        },
+      };
+    }
+    if (req.path === "/v1/memory/sandbox/execute") {
+      return {
+        status: 200,
+        body: {
+          tenant_id: String(req.body?.tenant_id ?? "default"),
+          scope: String(req.body?.scope ?? "default"),
+          accepted: false,
+          run: {
+            run_id: runId,
+            session_id: sessionId,
+            planner_run_id: "sandbox_probe_run",
+            decision_id: decisionId,
+            action: {
+              kind: "command",
+              argv: ["echo", "sandbox probe"],
+            },
+            mode: "sync",
+            status: "succeeded",
+            timeout_ms: 15000,
+            output: { stdout: "sandbox probe\n", stderr: "", truncated: false },
+            exit_code: 0,
+            error: null,
+            cancel_requested: false,
+            cancel_reason: null,
+            result: { executor: "mock" },
+            started_at: now,
+            finished_at: now,
+            created_at: now,
+            updated_at: now,
+          },
+        },
+      };
+    }
+    if (req.path === "/v1/memory/sandbox/runs/get") {
+      return {
+        status: 200,
+        body: {
+          tenant_id: String(req.body?.tenant_id ?? "default"),
+          scope: String(req.body?.scope ?? "default"),
+          run: {
+            run_id: runId,
+            session_id: sessionId,
+            planner_run_id: "sandbox_probe_run",
+            decision_id: decisionId,
+            action: {
+              kind: "command",
+              argv: ["echo", "sandbox probe"],
+            },
+            mode: "sync",
+            status: "succeeded",
+            timeout_ms: 15000,
+            output: { stdout: "sandbox probe\n", stderr: "", truncated: false },
+            exit_code: 0,
+            error: null,
+            cancel_requested: false,
+            cancel_reason: null,
+            result: { executor: "mock" },
+            started_at: now,
+            finished_at: now,
+            created_at: now,
+            updated_at: now,
+          },
+        },
+      };
+    }
+    if (req.path === "/v1/memory/sandbox/runs/logs") {
+      return {
+        status: 200,
+        body: {
+          tenant_id: String(req.body?.tenant_id ?? "default"),
+          scope: String(req.body?.scope ?? "default"),
+          run_id: runId,
+          status: "succeeded",
+          logs: {
+            tail_bytes: 2048,
+            stdout: "sandbox probe\n",
+            stderr: "",
+            truncated: false,
+          },
+        },
+      };
+    }
+    if (req.path === "/v1/memory/sandbox/runs/cancel") {
+      return {
+        status: 200,
+        body: {
+          tenant_id: String(req.body?.tenant_id ?? "default"),
+          scope: String(req.body?.scope ?? "default"),
+          run_id: runId,
+          status: "succeeded",
+          cancel_requested: true,
+          cancel_reason: "probe_cleanup",
+        },
+      };
+    }
+    return { status: 404, body: { error: "not_found" } };
+  });
+
+  try {
+    const out = await runNodeScript("scripts/ci/sandbox-api-probes.mjs", {
+      AIONIS_BASE_URL: mock.baseUrl,
+    });
+    assert.equal(out.code, 0, out.stderr || out.stdout);
+    const parsed = JSON.parse(out.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.skipped, false);
+    assert.equal(parsed.run_status, "succeeded");
+    assert.equal(parsed.run_terminal, true);
+    assert.equal(parsed.cancel_status, "succeeded");
+  } finally {
+    await mock.close();
+  }
+});
+
 test("policy-planner probe marks planning as skipped on no_embedding_provider", async () => {
   let selectedRunId = "";
   let selectedTool = "tool_a";

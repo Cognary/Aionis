@@ -114,6 +114,10 @@ const EnvSchema = z.object({
   DEBUG_EMBED_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(2),
   WRITE_RATE_LIMIT_RPS: z.coerce.number().positive().default(5),
   WRITE_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(10),
+  SANDBOX_WRITE_RATE_LIMIT_RPS: z.coerce.number().positive().default(5),
+  SANDBOX_WRITE_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(10),
+  SANDBOX_READ_RATE_LIMIT_RPS: z.coerce.number().positive().default(20),
+  SANDBOX_READ_RATE_LIMIT_BURST: z.coerce.number().int().positive().default(40),
   // Optional write-side smoothing: when a write is just over the limit, wait briefly then retry once.
   WRITE_RATE_LIMIT_MAX_WAIT_MS: z.coerce.number().int().min(0).max(5000).default(200),
   TENANT_QUOTA_ENABLED: z
