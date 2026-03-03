@@ -406,9 +406,9 @@ Auth:
   - `version: "aionis_pack_v1"`
   - `tenant_id: string`
   - `scope: string`
-  - `nodes: [...]`
-  - `edges: [...]`
-  - `commits: [...]`
+  - `nodes: [...]` (URI-first: each row includes `uri`; when `include_meta=true`, also `commit_uri`)
+  - `edges: [...]` (URI-first: each row includes `uri`, `src_uri`, `dst_uri`; when `include_meta=true`, also `commit_uri`)
+  - `commits: [...]` (URI-first: each row includes `uri`, `parent_uri`)
 
 ### `POST /v1/memory/packs/import`
 
@@ -524,6 +524,13 @@ Profiles:
 - `rules?: { scope, considered, matched, skipped_invalid_then, invalid_then_sample, applied }` (only when `rules_context` is provided)
 - `debug?: { neighborhood_counts: { nodes:number, edges:number }, embeddings?: DebugEmbeddingDTO[], context_compaction?: { profile, token_budget, char_budget, applied, before_chars, after_chars, before_est_tokens, after_est_tokens, dropped_lines, dropped_by_section } }` (only when `return_debug=true`)
 - `trajectory?: { strategy, layers, budgets, pruned_reasons }` (stage-level explain block for L0/L1/L2 flow)
+  - `trajectory.uri_links?:`
+    - `nodes: string[]` (sample node URIs from seeds/ranked/subgraph/context)
+    - `edges: string[]` (sample edge URIs from subgraph)
+    - `commits: string[]` (sample commit URIs from citations/edges/tools)
+    - `decisions: string[]` (sample decision URIs from tool decision surfaces when present)
+    - `counts: { nodes, edges, commits, decisions }` (unique totals before sampling cap)
+    - `chain?: { decision_uri, commit_uri?, node_uri?, edge_uri? }` (best-effort replay anchor)
   - `observability?: { stage_timings_ms, inflight_wait_ms, adaptive, stage1, neighborhood_counts }`
     - `stage_timings_ms` includes per-stage timing slices (`stage1_candidates_ann_ms`, `stage2_edges_ms`, `stage3_context_ms`, etc.)
     - `adaptive.profile` / `adaptive.hard_cap` expose queue-pressure downgrade decisions

@@ -809,6 +809,24 @@ function buildRecallTrajectory(args: {
     exact_fallback_enabled?: boolean;
     exact_fallback_attempted?: boolean;
   } | null;
+  uri_links?: {
+    nodes: string[];
+    edges: string[];
+    commits: string[];
+    decisions: string[];
+    counts: {
+      nodes: number;
+      edges: number;
+      commits: number;
+      decisions: number;
+    };
+    chain?: {
+      decision_uri: string;
+      commit_uri?: string;
+      node_uri?: string;
+      edge_uri?: string;
+    };
+  } | null;
 }) {
   const stage1Ms = (args.timings["stage1_candidates_ann"] ?? 0) + (args.timings["stage1_candidates_exact_fallback"] ?? 0);
   const stage2Ms = (args.timings["stage2_edges"] ?? 0) + (args.timings["stage2_nodes"] ?? 0) + (args.timings["stage2_spread"] ?? 0);
@@ -886,6 +904,102 @@ function buildRecallTrajectory(args: {
       min_edge_confidence: args.min_edge_confidence,
     },
     pruned_reasons,
+    ...(args.uri_links ? { uri_links: args.uri_links } : {}),
+  };
+}
+
+function normalizeAionisUri(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  if (!s.startsWith("aionis://")) return null;
+  return s;
+}
+
+function collectRecallTrajectoryUriLinks(args: { recall: any; tools?: any; max_per_type?: number }) {
+  const cap = Math.max(1, Math.min(200, Number(args.max_per_type ?? 32)));
+  const out = {
+    nodes: [] as string[],
+    edges: [] as string[],
+    commits: [] as string[],
+    decisions: [] as string[],
+  };
+  const seen = {
+    nodes: new Set<string>(),
+    edges: new Set<string>(),
+    commits: new Set<string>(),
+    decisions: new Set<string>(),
+  };
+  const totals = {
+    nodes: new Set<string>(),
+    edges: new Set<string>(),
+    commits: new Set<string>(),
+    decisions: new Set<string>(),
+  };
+
+  const add = (kind: keyof typeof out, raw: unknown) => {
+    const uri = normalizeAionisUri(raw);
+    if (!uri) return;
+    totals[kind].add(uri);
+    if (out[kind].length >= cap) return;
+    if (seen[kind].has(uri)) return;
+    seen[kind].add(uri);
+    out[kind].push(uri);
+  };
+
+  const recall = args.recall ?? {};
+  const seeds = Array.isArray(recall?.seeds) ? recall.seeds : [];
+  for (const s of seeds) add("nodes", (s as any)?.uri);
+
+  const ranked = Array.isArray(recall?.ranked) ? recall.ranked : [];
+  for (const r of ranked) add("nodes", (r as any)?.uri);
+
+  const subgraphNodes = Array.isArray(recall?.subgraph?.nodes) ? recall.subgraph.nodes : [];
+  for (const n of subgraphNodes) add("nodes", (n as any)?.uri);
+
+  const subgraphEdges = Array.isArray(recall?.subgraph?.edges) ? recall.subgraph.edges : [];
+  for (const e of subgraphEdges) {
+    add("edges", (e as any)?.uri);
+    add("commits", (e as any)?.commit_uri);
+  }
+
+  const contextItems = Array.isArray(recall?.context?.items) ? recall.context.items : [];
+  for (const i of contextItems) add("nodes", (i as any)?.uri);
+
+  const citations = Array.isArray(recall?.context?.citations) ? recall.context.citations : [];
+  for (const c of citations) {
+    add("nodes", (c as any)?.uri);
+    add("commits", (c as any)?.commit_uri);
+  }
+
+  const tools = args.tools ?? {};
+  add("decisions", tools?.decision?.decision_uri);
+  add("decisions", tools?.decision_uri);
+  add("commits", tools?.decision?.commit_uri);
+  add("commits", tools?.commit_uri);
+
+  const chainDecision = out.decisions[0];
+  const chainCommit = out.commits[0];
+  const chainNode = out.nodes[0];
+  const chainEdge = out.edges[0];
+
+  return {
+    ...out,
+    counts: {
+      nodes: totals.nodes.size,
+      edges: totals.edges.size,
+      commits: totals.commits.size,
+      decisions: totals.decisions.size,
+    },
+    ...(chainDecision
+      ? {
+          chain: {
+            decision_uri: chainDecision,
+            ...(chainCommit ? { commit_uri: chainCommit } : {}),
+            ...(chainNode ? { node_uri: chainNode } : {}),
+            ...(chainEdge ? { edge_uri: chainEdge } : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -2183,6 +2297,7 @@ app.post("/v1/memory/recall", async (req, reply) => {
     timings,
     neighborhood_counts: (out as any)?.debug?.neighborhood_counts ?? null,
     stage1: (out as any)?.debug?.stage1 ?? null,
+    uri_links: collectRecallTrajectoryUriLinks({ recall: out }),
   });
   const observability = buildRecallObservability({
     timings,
@@ -2455,6 +2570,7 @@ app.post("/v1/memory/recall_text", async (req, reply) => {
     timings,
     neighborhood_counts: (out as any)?.debug?.neighborhood_counts ?? null,
     stage1: (out as any)?.debug?.stage1 ?? null,
+    uri_links: collectRecallTrajectoryUriLinks({ recall: out }),
   });
   const observability = buildRecallObservability({
     timings,
@@ -2695,6 +2811,7 @@ app.post("/v1/memory/planning/context", async (req, reply) => {
     timings,
     neighborhood_counts: recallOut?.debug?.neighborhood_counts ?? null,
     stage1: recallOut?.debug?.stage1 ?? null,
+    uri_links: collectRecallTrajectoryUriLinks({ recall: recallOut, tools: out.tools }),
   });
   const observability = buildRecallObservability({
     timings,
@@ -3007,6 +3124,7 @@ app.post("/v1/memory/context/assemble", async (req, reply) => {
     timings,
     neighborhood_counts: recallOut?.debug?.neighborhood_counts ?? null,
     stage1: recallOut?.debug?.stage1 ?? null,
+    uri_links: collectRecallTrajectoryUriLinks({ recall: recallOut, tools: out.tools }),
   });
   const observability = buildRecallObservability({
     timings,

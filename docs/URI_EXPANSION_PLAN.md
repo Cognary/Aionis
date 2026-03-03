@@ -16,6 +16,9 @@ Started implementation and completed first production slice:
 4. Tool APIs accept `decision_uri` as a first-class input path (`tools/decision`, `tools/feedback`).
 5. API contract and SDK typing were updated accordingly.
 6. Added `POST /v1/memory/resolve` as a unified URI resolver for `node|edge|commit|decision` objects (with tenant/scope checks and lane visibility guard for nodes).
+7. Added trajectory `uri_links` (nodes/edges/commits/decisions + replay chain anchor) to recall-family responses.
+8. Upgraded `packs/export` to URI-first artifacts (`nodes/edges/commits` now include canonical URI fields).
+9. Added contract-smoke coverage for `memory/resolve` typed payload resolution and filter conflict handling.
 
 ## Goal
 

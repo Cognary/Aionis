@@ -229,6 +229,8 @@ class MemoryRecallResponse(TypedDict, total=False):
     debug: Dict[str, Any]
     rules: Dict[str, Any]
     query: Dict[str, Any]
+    trajectory: Dict[str, Any]
+    observability: Dict[str, Any]
 
 
 class ContextAssembleResponse(TypedDict, total=False):

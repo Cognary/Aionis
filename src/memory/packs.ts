@@ -8,6 +8,7 @@ import { createPostgresWriteStoreAccess } from "../store/write-access.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import { MemoryPackExportRequest, MemoryPackImportRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
+import { buildAionisUri } from "./uri.js";
 
 type PackOptions = {
   defaultScope: string;
@@ -49,6 +50,8 @@ type ExportEdgeRow = {
   type: string;
   src_id: string;
   dst_id: string;
+  src_type: string | null;
+  dst_type: string | null;
   src_client_id: string | null;
   dst_client_id: string | null;
   weight: number;
@@ -122,6 +125,8 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
       type: e.type,
       src_id: e.src_id,
       dst_id: e.dst_id,
+      src_type: null,
+      dst_type: null,
       src_client_id: e.src_client_id,
       dst_client_id: e.dst_client_id,
       weight: e.weight,
@@ -185,6 +190,8 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
         e.type::text AS type,
         e.src_id::text AS src_id,
         e.dst_id::text AS dst_id,
+        s.type::text AS src_type,
+        d.type::text AS dst_type,
         s.client_id AS src_client_id,
         d.client_id AS dst_client_id,
         e.weight,
@@ -228,13 +235,158 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
     commits = commitsHasMore ? rr.rows.slice(0, maxRows) : rr.rows;
   }
 
+  const nodeUriById = new Map<string, string>();
+  for (const n of nodes) {
+    nodeUriById.set(
+      n.id,
+      buildAionisUri({
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        type: n.type,
+        id: n.id,
+      }),
+    );
+  }
+
   const pack = {
     version: "aionis_pack_v1" as const,
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
-    nodes: parsed.include_meta ? nodes : nodes.map((n) => ({ id: n.id, client_id: n.client_id, type: n.type, title: n.title, text_summary: n.text_summary, slots: n.slots })),
-    edges: parsed.include_meta ? edges : edges.map((e) => ({ id: e.id, type: e.type, src_id: e.src_id, dst_id: e.dst_id, src_client_id: e.src_client_id, dst_client_id: e.dst_client_id, weight: e.weight, confidence: e.confidence })),
-    commits: parsed.include_meta ? commits : commits.map((c) => ({ id: c.id, parent_id: c.parent_id, commit_hash: c.commit_hash })),
+    nodes: parsed.include_meta
+      ? nodes.map((n) => ({
+          ...n,
+          uri: buildAionisUri({
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            type: n.type,
+            id: n.id,
+          }),
+          commit_uri: n.commit_id
+            ? buildAionisUri({
+                tenant_id: tenancy.tenant_id,
+                scope: tenancy.scope,
+                type: "commit",
+                id: n.commit_id,
+              })
+            : null,
+        }))
+      : nodes.map((n) => ({
+          id: n.id,
+          uri: buildAionisUri({
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            type: n.type,
+            id: n.id,
+          }),
+          client_id: n.client_id,
+          type: n.type,
+          title: n.title,
+          text_summary: n.text_summary,
+          slots: n.slots,
+        })),
+    edges: parsed.include_meta
+      ? edges.map((e) => ({
+          ...e,
+          uri: buildAionisUri({
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            type: "edge",
+            id: e.id,
+          }),
+          src_uri: e.src_type
+            ? buildAionisUri({
+                tenant_id: tenancy.tenant_id,
+                scope: tenancy.scope,
+                type: e.src_type,
+                id: e.src_id,
+              })
+            : (nodeUriById.get(e.src_id) ?? null),
+          dst_uri: e.dst_type
+            ? buildAionisUri({
+                tenant_id: tenancy.tenant_id,
+                scope: tenancy.scope,
+                type: e.dst_type,
+                id: e.dst_id,
+              })
+            : (nodeUriById.get(e.dst_id) ?? null),
+          commit_uri: e.commit_id
+            ? buildAionisUri({
+                tenant_id: tenancy.tenant_id,
+                scope: tenancy.scope,
+                type: "commit",
+                id: e.commit_id,
+              })
+            : null,
+        }))
+      : edges.map((e) => ({
+          id: e.id,
+          uri: buildAionisUri({
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            type: "edge",
+            id: e.id,
+          }),
+          type: e.type,
+          src_id: e.src_id,
+          dst_id: e.dst_id,
+          src_uri: e.src_type
+            ? buildAionisUri({
+                tenant_id: tenancy.tenant_id,
+                scope: tenancy.scope,
+                type: e.src_type,
+                id: e.src_id,
+              })
+            : (nodeUriById.get(e.src_id) ?? null),
+          dst_uri: e.dst_type
+            ? buildAionisUri({
+                tenant_id: tenancy.tenant_id,
+                scope: tenancy.scope,
+                type: e.dst_type,
+                id: e.dst_id,
+              })
+            : (nodeUriById.get(e.dst_id) ?? null),
+          src_client_id: e.src_client_id,
+          dst_client_id: e.dst_client_id,
+          weight: e.weight,
+          confidence: e.confidence,
+        })),
+    commits: parsed.include_meta
+      ? commits.map((c) => ({
+          ...c,
+          uri: buildAionisUri({
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            type: "commit",
+            id: c.id,
+          }),
+          parent_uri: c.parent_id
+            ? buildAionisUri({
+                tenant_id: tenancy.tenant_id,
+                scope: tenancy.scope,
+                type: "commit",
+                id: c.parent_id,
+              })
+            : null,
+        }))
+      : commits.map((c) => ({
+          id: c.id,
+          uri: buildAionisUri({
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            type: "commit",
+            id: c.id,
+          }),
+          parent_id: c.parent_id,
+          parent_uri: c.parent_id
+            ? buildAionisUri({
+                tenant_id: tenancy.tenant_id,
+                scope: tenancy.scope,
+                type: "commit",
+                id: c.parent_id,
+              })
+            : null,
+          commit_hash: c.commit_hash,
+        })),
   };
   const packHash = computePackHash(pack);
 

@@ -29,6 +29,7 @@ import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
 import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
+import { memoryResolve } from "../memory/resolve.js";
 import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 import { applyMemoryWrite } from "../memory/write.js";
 import {
@@ -183,6 +184,110 @@ class SessionWriteGuardPgClient {
       };
     }
     throw new Error(`SessionWriteGuardPgClient: unexpected query after guard: ${s.slice(0, 200)}...`);
+  }
+}
+
+class ResolveFixturePgClient {
+  async query<T>(sql: string, _params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+
+    if (s.includes("FROM memory_edges e") && s.includes("JOIN memory_nodes src") && s.includes("JOIN memory_nodes dst")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-00000000e101",
+            type: "part_of",
+            src_id: "00000000-0000-0000-0000-000000001101",
+            src_type: "event",
+            dst_id: "00000000-0000-0000-0000-000000001102",
+            dst_type: "topic",
+            weight: 0.9,
+            confidence: 0.8,
+            decay_rate: 0.01,
+            last_activated: null,
+            created_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-00000000c101",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("FROM memory_commits") && s.includes("commit_hash")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-00000000c101",
+            parent_id: "00000000-0000-0000-0000-00000000c100",
+            input_sha256: "a".repeat(64),
+            diff_json: { nodes: 1 },
+            actor: "contract_smoke",
+            model_version: "test",
+            prompt_version: "test",
+            commit_hash: "b".repeat(64),
+            created_at: new Date().toISOString(),
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("FROM memory_execution_decisions")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-00000000d101",
+            decision_kind: "tools_select",
+            run_id: "run_contract",
+            selected_tool: "psql",
+            candidates_json: ["psql", "curl"],
+            context_sha256: "c".repeat(64),
+            policy_sha256: "d".repeat(64),
+            source_rule_ids: ["00000000-0000-0000-0000-000000001201"],
+            metadata_json: { strict: true },
+            created_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-00000000c101",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("FROM memory_nodes n") && s.includes("n.type::text = $3")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000001101",
+            type: "event",
+            client_id: "event:resolve",
+            title: "Resolve Event",
+            text_summary: "resolve fixture",
+            slots: { k: "v" },
+            tier: "hot",
+            memory_lane: "shared",
+            producer_agent_id: null,
+            owner_agent_id: null,
+            owner_team_id: null,
+            embedding_status: "ready",
+            embedding_model: "test",
+            raw_ref: null,
+            evidence_ref: null,
+            salience: 0.5,
+            importance: 0.5,
+            confidence: 0.9,
+            last_activated: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-00000000c101",
+            topic_state: null,
+            member_count: null,
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    throw new Error(`ResolveFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
   }
 }
 
@@ -2112,6 +2217,65 @@ async function run() {
         },
       ),
     (err: any) => err instanceof HttpError && err.statusCode === 403 && err.code === "session_owner_mismatch",
+  );
+
+  // Unified URI resolver: node/edge/commit/decision should all resolve with typed payloads.
+  const resolveClient = new ResolveFixturePgClient();
+  const nodeUri = "aionis://default/default/event/00000000-0000-0000-0000-000000001101";
+  const edgeUri = "aionis://default/default/edge/00000000-0000-0000-0000-00000000e101";
+  const commitUri = "aionis://default/default/commit/00000000-0000-0000-0000-00000000c101";
+  const decisionUri = "aionis://default/default/decision/00000000-0000-0000-0000-00000000d101";
+
+  const resolvedNode = await memoryResolve(
+    resolveClient as any,
+    { tenant_id: "default", scope: "default", uri: nodeUri, include_meta: true, include_slots_preview: true },
+    "default",
+    "default",
+  );
+  assert.equal((resolvedNode as any).type, "event");
+  assert.equal((resolvedNode as any).node?.uri, nodeUri);
+  assert.equal((resolvedNode as any).node?.commit_uri, commitUri);
+
+  const resolvedEdge = await memoryResolve(
+    resolveClient as any,
+    { tenant_id: "default", scope: "default", uri: edgeUri },
+    "default",
+    "default",
+  );
+  assert.equal((resolvedEdge as any).type, "edge");
+  assert.equal((resolvedEdge as any).edge?.uri, edgeUri);
+  assert.equal((resolvedEdge as any).edge?.src_uri, nodeUri);
+  assert.equal((resolvedEdge as any).edge?.commit_uri, commitUri);
+
+  const resolvedCommit = await memoryResolve(
+    resolveClient as any,
+    { tenant_id: "default", scope: "default", uri: commitUri },
+    "default",
+    "default",
+  );
+  assert.equal((resolvedCommit as any).type, "commit");
+  assert.equal((resolvedCommit as any).commit?.uri, commitUri);
+  assert.equal((resolvedCommit as any).commit?.parent_uri, "aionis://default/default/commit/00000000-0000-0000-0000-00000000c100");
+
+  const resolvedDecision = await memoryResolve(
+    resolveClient as any,
+    { tenant_id: "default", scope: "default", uri: decisionUri },
+    "default",
+    "default",
+  );
+  assert.equal((resolvedDecision as any).type, "decision");
+  assert.equal((resolvedDecision as any).decision?.decision_uri, decisionUri);
+  assert.equal((resolvedDecision as any).decision?.commit_uri, commitUri);
+
+  await assert.rejects(
+    () =>
+      memoryResolve(
+        resolveClient as any,
+        { tenant_id: "other_tenant", scope: "default", uri: nodeUri },
+        "default",
+        "default",
+      ),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "conflicting_filters",
   );
 
   // API key principal resolver cache must stay bounded and evict old entries.

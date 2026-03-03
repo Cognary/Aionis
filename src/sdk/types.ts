@@ -478,6 +478,32 @@ export type MemoryRecallResponse = {
   debug?: Record<string, unknown>;
   rules?: Record<string, unknown>;
   query?: Record<string, unknown>;
+  trajectory?: {
+    strategy?: string;
+    layers?: Array<Record<string, unknown>>;
+    budgets?: Record<string, unknown>;
+    pruned_reasons?: string[];
+    uri_links?: {
+      nodes: string[];
+      edges: string[];
+      commits: string[];
+      decisions: string[];
+      counts: {
+        nodes: number;
+        edges: number;
+        commits: number;
+        decisions: number;
+      };
+      chain?: {
+        decision_uri: string;
+        commit_uri?: string;
+        node_uri?: string;
+        edge_uri?: string;
+      };
+    };
+    [k: string]: unknown;
+  };
+  observability?: Record<string, unknown>;
   [k: string]: unknown;
 };
 
