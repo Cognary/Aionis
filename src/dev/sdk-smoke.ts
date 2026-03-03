@@ -100,6 +100,7 @@ async function main() {
         include_nodes: false,
         include_edges: false,
         include_commits: false,
+        include_decisions: false,
         include_meta: false,
         max_rows: 1,
       });
@@ -128,6 +129,7 @@ async function main() {
       include_nodes: false,
       include_edges: false,
       include_commits: false,
+      include_decisions: false,
       include_meta: false,
       max_rows: 1,
     });
@@ -271,6 +273,7 @@ async function main() {
           nodes: [],
           edges: [],
           commits: [],
+          decisions: [],
         },
       });
       throw new Error("packImport must fail when packs_import capability is disabled");
@@ -307,6 +310,7 @@ async function main() {
           nodes: [],
           edges: [],
           commits: [],
+          decisions: [],
         },
     };
     const imported = await client.packImport(payload as any);

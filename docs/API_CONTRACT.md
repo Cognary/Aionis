@@ -388,6 +388,7 @@ Auth:
 - `include_nodes?: boolean` (default true)
 - `include_edges?: boolean` (default true)
 - `include_commits?: boolean` (default true)
+- `include_decisions?: boolean` (default false)
 - `include_meta?: boolean` (default true)
 - `max_rows?: number` (default 5000, max 50000; applied per section)
 
@@ -399,8 +400,8 @@ Auth:
   - `pack_version: "aionis_pack_v1"`
   - `sha256: string` (hash over `pack` payload)
   - `generated_at: string`
-  - `counts: { nodes, edges, commits }`
-  - `truncated: { nodes, edges, commits }`
+  - `counts: { nodes, edges, commits, decisions }`
+  - `truncated: { nodes, edges, commits, decisions }`
   - `max_rows: number`
 - `pack:`
   - `version: "aionis_pack_v1"`
@@ -409,6 +410,7 @@ Auth:
   - `nodes: [...]` (URI-first: each row includes `uri`; when `include_meta=true`, also `commit_uri`)
   - `edges: [...]` (URI-first: each row includes `uri`, `src_uri`, `dst_uri`; when `include_meta=true`, also `commit_uri`)
   - `commits: [...]` (URI-first: each row includes `uri`, `parent_uri`)
+  - `decisions: [...]` (only when `include_decisions=true`; URI-first with `decision_uri`, and `commit_uri` when linked)
 
 ### `POST /v1/memory/packs/import`
 
@@ -431,6 +433,7 @@ Auth:
   - `nodes: NodePackDTO[]`
   - `edges: EdgePackDTO[]`
   - `commits: CommitPackDTO[]` (optional for import execution; retained for audit context)
+  - `decisions?: DecisionPackDTO[]` (optional; ignored for write replay but preserved for provenance transport)
 
 **Response (`verify_only=true`)**
 - `ok: true`
@@ -440,6 +443,7 @@ Auth:
 - `scope: string`
 - `pack_sha256: string`
 - `planned: { nodes, edges, commits_in_pack }`
+  - plus `decisions_in_pack` when present in the pack payload
 
 **Response (`verify_only=false`)**
 - `ok: true`

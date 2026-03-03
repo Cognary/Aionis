@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import {
   ContextAssembleRequest,
+  MemoryPackExportRequest,
+  MemoryPackImportRequest,
   MemoryRecallRequest,
   MemorySessionEventsListRequest,
   PlanningContextRequest,
@@ -1616,6 +1618,27 @@ async function run() {
       }),
     /Invalid enum value/i,
   );
+  const packExportDefaults = MemoryPackExportRequest.parse({});
+  assert.equal(packExportDefaults.include_decisions, false);
+  const packImportWithDecisions = MemoryPackImportRequest.parse({
+    pack: {
+      version: "aionis_pack_v1",
+      tenant_id: "default",
+      scope: "default",
+      nodes: [],
+      edges: [],
+      commits: [],
+      decisions: [
+        {
+          decision_id: "00000000-0000-0000-0000-00000000d201",
+          decision_uri: "aionis://default/default/decision/00000000-0000-0000-0000-00000000d201",
+          decision_kind: "tools_select",
+          commit_id: "00000000-0000-0000-0000-00000000c201",
+        },
+      ],
+    },
+  });
+  assert.equal(packImportWithDecisions.pack.decisions.length, 1);
   assert.throws(
     () =>
       ToolsFeedbackRequest.parse({

@@ -648,11 +648,13 @@ export type MemoryPackExportResponse = {
       nodes: number;
       edges: number;
       commits: number;
+      decisions?: number;
     };
     truncated: {
       nodes: boolean;
       edges: boolean;
       commits: boolean;
+      decisions?: boolean;
     };
     max_rows: number;
   };
@@ -663,6 +665,7 @@ export type MemoryPackExportResponse = {
     nodes: Array<Record<string, unknown>>;
     edges: Array<Record<string, unknown>>;
     commits: Array<Record<string, unknown>>;
+    decisions?: Array<Record<string, unknown>>;
   };
   [k: string]: unknown;
 };
@@ -679,7 +682,7 @@ export type MemoryPackImportResponse = {
   nodes?: number;
   edges?: number;
   embedding_backfill?: { enqueued: true; pending_nodes: number } | null;
-  planned?: { nodes: number; edges: number; commits_in_pack: number };
+  planned?: { nodes: number; edges: number; commits_in_pack: number; decisions_in_pack?: number };
   [k: string]: unknown;
 };
 

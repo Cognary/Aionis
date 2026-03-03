@@ -19,6 +19,7 @@ Started implementation and completed first production slice:
 7. Added trajectory `uri_links` (nodes/edges/commits/decisions + replay chain anchor) to recall-family responses.
 8. Upgraded `packs/export` to URI-first artifacts (`nodes/edges/commits` now include canonical URI fields).
 9. Added contract-smoke coverage for `memory/resolve` typed payload resolution and filter conflict handling.
+10. Added optional decision export (`include_decisions`) so replay bundles can include URI-linked `decision -> commit` provenance objects.
 
 ## Goal
 

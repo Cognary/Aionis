@@ -356,6 +356,7 @@ export const MemoryPackExportRequest = z.object({
   include_nodes: z.boolean().default(true),
   include_edges: z.boolean().default(true),
   include_commits: z.boolean().default(true),
+  include_decisions: z.boolean().default(false),
   include_meta: z.boolean().default(true),
   max_rows: z.number().int().positive().max(50000).default(5000),
 });
@@ -422,6 +423,29 @@ export const MemoryPackImportRequest = z.object({
           created_at: z.string().optional(),
           commit_hash: z.string().optional(),
         }).passthrough(),
+      )
+      .default([]),
+    decisions: z
+      .array(
+        z
+          .object({
+            id: UUID.optional(),
+            decision_id: UUID.optional(),
+            decision_uri: z.string().min(1).optional(),
+            decision_kind: z.string().min(1).optional(),
+            run_id: z.string().nullish(),
+            selected_tool: z.string().nullish(),
+            candidates_json: z.array(z.any()).optional(),
+            context_sha256: z.string().optional(),
+            policy_sha256: z.string().optional(),
+            source_rule_ids: z.array(UUID).optional(),
+            metadata_json: z.record(z.any()).optional(),
+            metadata: z.record(z.any()).optional(),
+            created_at: z.string().optional(),
+            commit_id: UUID.nullish(),
+            commit_uri: z.string().nullish(),
+          })
+          .passthrough(),
       )
       .default([]),
   }).passthrough(),

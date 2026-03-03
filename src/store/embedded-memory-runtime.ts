@@ -295,14 +295,30 @@ export type EmbeddedPackCommitView = {
   commit_hash: string;
 };
 
+export type EmbeddedPackDecisionView = {
+  id: string;
+  decision_kind: string;
+  run_id: string | null;
+  selected_tool: string | null;
+  candidates_json: any[];
+  context_sha256: string;
+  policy_sha256: string;
+  source_rule_ids: string[];
+  metadata_json: Record<string, unknown>;
+  created_at: string;
+  commit_id: string | null;
+};
+
 export type EmbeddedPackSnapshotView = {
   nodes: EmbeddedPackNodeView[];
   edges: EmbeddedPackEdgeView[];
   commits: EmbeddedPackCommitView[];
+  decisions: EmbeddedPackDecisionView[];
   truncated: {
     nodes: boolean;
     edges: boolean;
     commits: boolean;
+    decisions: boolean;
   };
 };
 
@@ -720,14 +736,17 @@ export class EmbeddedMemoryRuntime {
     includeNodes: boolean;
     includeEdges: boolean;
     includeCommits: boolean;
+    includeDecisions: boolean;
     maxRows: number;
   }): EmbeddedPackSnapshotView {
     let nodes: EmbeddedPackNodeView[] = [];
     let edges: EmbeddedPackEdgeView[] = [];
     let commits: EmbeddedPackCommitView[] = [];
+    let decisions: EmbeddedPackDecisionView[] = [];
     let nodesHasMore = false;
     let edgesHasMore = false;
     let commitsHasMore = false;
+    let decisionsHasMore = false;
 
     if (params.includeNodes) {
       const all = Array.from(this.nodes.values())
@@ -814,14 +833,40 @@ export class EmbeddedMemoryRuntime {
       }));
     }
 
+    if (params.includeDecisions) {
+      const all = Array.from(this.executionDecisionsById.values())
+        .filter((d) => d.scope === params.scope)
+        .sort((a, b) => compareCreatedAtAsc(a.created_at, b.created_at) || a.id.localeCompare(b.id));
+      decisionsHasMore = all.length > params.maxRows;
+      const chosen = decisionsHasMore ? all.slice(0, params.maxRows) : all;
+      decisions = chosen.map((d) => ({
+        id: d.id,
+        decision_kind: d.decision_kind,
+        run_id: d.run_id ?? null,
+        selected_tool: d.selected_tool ?? null,
+        candidates_json: Array.isArray(d.candidates_json) ? d.candidates_json : [],
+        context_sha256: d.context_sha256,
+        policy_sha256: d.policy_sha256,
+        source_rule_ids: Array.isArray(d.source_rule_ids) ? d.source_rule_ids : [],
+        metadata_json:
+          d.metadata_json && typeof d.metadata_json === "object" && !Array.isArray(d.metadata_json)
+            ? (d.metadata_json as Record<string, unknown>)
+            : {},
+        created_at: d.created_at,
+        commit_id: d.commit_id ?? null,
+      }));
+    }
+
     return {
       nodes,
       edges,
       commits,
+      decisions,
       truncated: {
         nodes: nodesHasMore,
         edges: edgesHasMore,
         commits: commitsHasMore,
+        decisions: decisionsHasMore,
       },
     };
   }

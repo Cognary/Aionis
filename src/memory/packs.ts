@@ -72,6 +72,20 @@ type ExportCommitRow = {
   commit_hash: string;
 };
 
+type ExportDecisionRow = {
+  id: string;
+  decision_kind: string;
+  run_id: string | null;
+  selected_tool: string | null;
+  candidates_json: any;
+  context_sha256: string;
+  policy_sha256: string;
+  source_rule_ids: string[];
+  metadata_json: any;
+  created_at: string;
+  commit_id: string | null;
+};
+
 function computePackHash(payload: unknown): string {
   return sha256Hex(stableStringify(payload));
 }
@@ -87,9 +101,11 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
   let nodes: ExportNodeRow[] = [];
   let edges: ExportEdgeRow[] = [];
   let commits: ExportCommitRow[] = [];
+  let decisions: ExportDecisionRow[] = [];
   let nodesHasMore = false;
   let edgesHasMore = false;
   let commitsHasMore = false;
+  let decisionsHasMore = false;
 
   if (opts.embeddedRuntime) {
     const snapshot = opts.embeddedRuntime.exportPackSnapshot({
@@ -97,6 +113,7 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
       includeNodes: parsed.include_nodes,
       includeEdges: parsed.include_edges,
       includeCommits: parsed.include_commits,
+      includeDecisions: parsed.include_decisions,
       maxRows,
     });
     nodes = snapshot.nodes.map((n) => ({
@@ -145,9 +162,23 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
       created_at: c.created_at,
       commit_hash: c.commit_hash,
     }));
+    decisions = snapshot.decisions.map((d) => ({
+      id: d.id,
+      decision_kind: d.decision_kind,
+      run_id: d.run_id,
+      selected_tool: d.selected_tool,
+      candidates_json: d.candidates_json,
+      context_sha256: d.context_sha256,
+      policy_sha256: d.policy_sha256,
+      source_rule_ids: d.source_rule_ids,
+      metadata_json: d.metadata_json,
+      created_at: d.created_at,
+      commit_id: d.commit_id,
+    }));
     nodesHasMore = snapshot.truncated.nodes;
     edgesHasMore = snapshot.truncated.edges;
     commitsHasMore = snapshot.truncated.commits;
+    decisionsHasMore = snapshot.truncated.decisions;
   } else if (parsed.include_nodes) {
     const rr = await client.query<ExportNodeRow>(
       `
@@ -233,6 +264,32 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
     );
     commitsHasMore = rr.rows.length > maxRows;
     commits = commitsHasMore ? rr.rows.slice(0, maxRows) : rr.rows;
+  }
+
+  if (!opts.embeddedRuntime && parsed.include_decisions) {
+    const rr = await client.query<ExportDecisionRow>(
+      `
+      SELECT
+        d.id::text AS id,
+        d.decision_kind,
+        d.run_id,
+        d.selected_tool,
+        d.candidates_json,
+        d.context_sha256,
+        d.policy_sha256,
+        d.source_rule_ids::text[] AS source_rule_ids,
+        d.metadata_json,
+        d.created_at::text AS created_at,
+        d.commit_id::text AS commit_id
+      FROM memory_execution_decisions d
+      WHERE d.scope = $1
+      ORDER BY d.created_at ASC, d.id ASC
+      LIMIT $2
+      `,
+      [tenancy.scope_key, maxRows + 1],
+    );
+    decisionsHasMore = rr.rows.length > maxRows;
+    decisions = decisionsHasMore ? rr.rows.slice(0, maxRows) : rr.rows;
   }
 
   const nodeUriById = new Map<string, string>();
@@ -387,6 +444,46 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
             : null,
           commit_hash: c.commit_hash,
         })),
+    decisions: parsed.include_meta
+      ? decisions.map((d) => ({
+          ...d,
+          decision_uri: buildAionisUri({
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            type: "decision",
+            id: d.id,
+          }),
+          commit_uri: d.commit_id
+            ? buildAionisUri({
+                tenant_id: tenancy.tenant_id,
+                scope: tenancy.scope,
+                type: "commit",
+                id: d.commit_id,
+              })
+            : null,
+        }))
+      : decisions.map((d) => ({
+          decision_id: d.id,
+          decision_uri: buildAionisUri({
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            type: "decision",
+            id: d.id,
+          }),
+          decision_kind: d.decision_kind,
+          run_id: d.run_id,
+          selected_tool: d.selected_tool,
+          commit_id: d.commit_id,
+          commit_uri: d.commit_id
+            ? buildAionisUri({
+                tenant_id: tenancy.tenant_id,
+                scope: tenancy.scope,
+                type: "commit",
+                id: d.commit_id,
+              })
+            : null,
+          created_at: d.created_at,
+        })),
   };
   const packHash = computePackHash(pack);
 
@@ -402,11 +499,13 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
         nodes: pack.nodes.length,
         edges: pack.edges.length,
         commits: pack.commits.length,
+        decisions: pack.decisions.length,
       },
       truncated: {
         nodes: nodesHasMore,
         edges: edgesHasMore,
         commits: commitsHasMore,
+        decisions: decisionsHasMore,
       },
       max_rows: maxRows,
     },
@@ -490,6 +589,7 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
         nodes: nodes.length,
         edges: edges.length,
         commits_in_pack: pack.commits.length,
+        decisions_in_pack: Array.isArray((pack as any).decisions) ? (pack as any).decisions.length : 0,
       },
     };
   }

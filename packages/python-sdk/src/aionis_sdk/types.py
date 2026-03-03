@@ -330,6 +330,7 @@ class MemoryPackExportInput(TypedDict, total=False):
     include_nodes: bool
     include_edges: bool
     include_commits: bool
+    include_decisions: bool
     include_meta: bool
     max_rows: int
 
@@ -341,6 +342,7 @@ class MemoryPackV1(TypedDict, total=False):
     nodes: List[Dict[str, Any]]
     edges: List[Dict[str, Any]]
     commits: List[Dict[str, Any]]
+    decisions: List[Dict[str, Any]]
 
 
 class MemoryPackImportInput(TypedDict, total=False):
