@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="aionisGradient" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1d4ed8"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="#0f172a"/>
+  <path d="M20 46L31.5 18H34.5L46 46H40.4L37.8 39.4H28.2L25.6 46H20ZM29.9 34.9H36.1L33 26.9L29.9 34.9Z" fill="url(#aionisGradient)"/>
+</svg>

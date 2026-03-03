@@ -8,6 +8,7 @@
   --vp-c-brand-3: #38bdf8;
   --vp-home-hero-name-color: transparent;
   --vp-home-hero-name-background: linear-gradient(120deg, #0f172a 10%, #1d4ed8 60%, #38bdf8 100%);
+  --aionis-surface-card: linear-gradient(165deg, rgba(255, 255, 255, 0.95) 0%, rgba(241, 245, 249, 0.96) 100%);
 }
 
 .dark {
@@ -20,6 +21,10 @@
   background:
     radial-gradient(90rem 40rem at 90% -10%, rgba(56, 189, 248, 0.14), transparent 65%),
     radial-gradient(70rem 30rem at -10% -20%, rgba(29, 78, 216, 0.16), transparent 55%);
+}
+
+.VPNavBar {
+  backdrop-filter: saturate(140%) blur(6px);
 }
 
 .VPHomeHero .name,
@@ -160,8 +165,7 @@
   text-decoration: none;
   border-radius: 16px;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  background:
-    linear-gradient(165deg, rgba(255, 255, 255, 0.95) 0%, rgba(241, 245, 249, 0.96) 100%);
+  background: var(--aionis-surface-card);
   padding: 1rem;
   color: inherit;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
@@ -238,6 +242,70 @@
   background: rgba(15, 23, 42, 0.62);
 }
 
+.aionis-kpi-grid {
+  margin: 0.75rem 0 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.aionis-kpi-grid article {
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 0.75rem 0.8rem;
+  background: var(--aionis-surface-card);
+}
+
+.aionis-kpi-grid span {
+  display: block;
+  font-size: 0.78rem;
+  opacity: 0.72;
+}
+
+.aionis-kpi-grid strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+}
+
+.dark .aionis-kpi-grid article {
+  border-color: rgba(148, 163, 184, 0.3);
+  background: linear-gradient(165deg, rgba(15, 23, 42, 0.7) 0%, rgba(2, 6, 23, 0.72) 100%);
+}
+
+.aionis-signal-grid {
+  margin: 0.8rem 0 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.aionis-signal-card {
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: var(--aionis-surface-card);
+  padding: 1rem;
+}
+
+.aionis-signal-card h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.aionis-signal-card p {
+  margin: 0.5rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.52;
+  opacity: 0.84;
+}
+
+.dark .aionis-signal-card {
+  border-color: rgba(148, 163, 184, 0.3);
+  background: linear-gradient(165deg, rgba(15, 23, 42, 0.7) 0%, rgba(2, 6, 23, 0.72) 100%);
+}
+
 @media (max-width: 768px) {
   .aionis-home-grid {
     grid-template-columns: 1fr;
@@ -245,6 +313,14 @@
 
   .aionis-benchmark-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .aionis-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .aionis-signal-grid {
+    grid-template-columns: 1fr;
   }
 
   .aionis-lab-grid {

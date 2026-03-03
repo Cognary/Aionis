@@ -33,22 +33,50 @@ export default defineConfig({
     ["meta", { name: "theme-color", content: "#0f172a" }],
     ["meta", { property: "og:title", content: "Aionis Docs" }],
     ["meta", { property: "og:description", content: "Verifiable / Operable Memory Kernel documentation." }],
+    ["link", { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
   ],
   themeConfig: {
     logo: "/logo.svg",
     nav: [
-      { text: "Docs Home", link: "/index" },
-      { text: "Overview", link: "/public/en/overview/01-overview" },
-      { text: "Get Started", link: "/public/en/getting-started/01-get-started" },
-      { text: "Core Concepts", link: "/public/en/core-concepts/00-core-concepts" },
-      { text: "Architecture", link: "/public/en/architecture/01-architecture" },
-      { text: "Context", link: "/public/en/context-orchestration/00-context-orchestration" },
-      { text: "Policy Loop", link: "/public/en/policy-execution/00-policy-execution-loop" },
-      { text: "Operate", link: "/public/en/operate-production/00-operate-production" },
-      { text: "Integrations", link: "/public/en/integrations/00-overview" },
-      { text: "API", link: "/public/en/api-reference/00-api-reference" },
-      { text: "Benchmarks", link: "/public/en/benchmarks/01-benchmarks" },
-      { text: "Roadmap", link: "/public/en/roadmap/00-roadmap" },
+      { text: "Home", link: "/index" },
+      {
+        text: "Product",
+        items: [
+          { text: "Overview", link: "/public/en/overview/01-overview" },
+          { text: "Core Concepts", link: "/public/en/core-concepts/00-core-concepts" },
+          { text: "Architecture", link: "/public/en/architecture/01-architecture" },
+          { text: "Context Orchestration", link: "/public/en/context-orchestration/00-context-orchestration" },
+          { text: "Policy & Execution Loop", link: "/public/en/policy-execution/00-policy-execution-loop" },
+        ],
+      },
+      {
+        text: "Build",
+        items: [
+          { text: "Get Started", link: "/public/en/getting-started/01-get-started" },
+          { text: "5-Minute Onboarding", link: "/public/en/getting-started/02-onboarding-5min" },
+          { text: "Build Memory", link: "/public/en/guides/01-build-memory" },
+          { text: "Playground", link: "/public/en/guides/02-playground" },
+          { text: "SDK Guide", link: "/public/en/reference/05-sdk" },
+        ],
+      },
+      {
+        text: "Operate",
+        items: [
+          { text: "Operate & Production", link: "/public/en/operate-production/00-operate-production" },
+          { text: "Ops Console", link: "/public/en/operations/01-ops-console" },
+          { text: "Production Core Gate", link: "/public/en/operations/03-production-core-gate" },
+          { text: "Benchmarks", link: "/public/en/benchmarks/01-benchmarks" },
+        ],
+      },
+      {
+        text: "Reference",
+        items: [
+          { text: "API Reference", link: "/public/en/api-reference/00-api-reference" },
+          { text: "API Contract", link: "/public/en/api/01-api-contract" },
+          { text: "Integrations", link: "/public/en/integrations/00-overview" },
+          { text: "Roadmap", link: "/public/en/roadmap/00-roadmap" },
+        ],
+      },
       { text: "GitHub", link: "https://github.com/Cognary/Aionis" },
     ],
     sidebar: [
