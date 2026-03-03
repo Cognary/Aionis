@@ -21,6 +21,19 @@ Phase 1 pilot executed:
 4. Updated VitePress nav/sidebar to point to new pilot paths.
 5. Excluded `docs/internal/**` from public site build.
 
+Phase 2 (core public migration) started:
+
+1. Migrated additional public core pages:
+   - `public/en/getting-started/02-onboarding-5min.md`
+   - `public/en/getting-started/03-embedding-setup.md`
+   - `public/en/operations/00-operate.md`
+   - `public/en/integrations/00-overview.md`
+   - `public/en/integrations/01-mcp.md`
+   - `public/en/reference/01-reference.md`
+2. Kept compatibility stubs on legacy root paths.
+3. Updated VitePress nav/sidebar and docs indexes to new public paths.
+4. Added `public/zh` mirrored placeholders for core onboarding/build/api/ops/integration/reference pages.
+
 ## 1. Objective
 
 Refactor Aionis docs to an OpenViking-style information architecture:

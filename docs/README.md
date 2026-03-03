@@ -11,8 +11,8 @@ This is the complete Aionis documentation catalog, organized by user journey.
 1. [Documentation Home](./index.md)
 2. [Get Started](./public/en/getting-started/01-get-started.md)
 3. [Core Differentiators](./CORE_DIFFERENTIATORS.md)
-4. [5-Minute Onboarding](./ONBOARDING_5MIN.md)
-5. [Embedding Setup](./EMBEDDING_SETUP.md)
+4. [5-Minute Onboarding](./public/en/getting-started/02-onboarding-5min.md)
+5. [Embedding Setup](./public/en/getting-started/03-embedding-setup.md)
 
 ## 2) Build Memory
 
@@ -34,7 +34,7 @@ This is the complete Aionis documentation catalog, organized by user journey.
 
 ## 4) Operate
 
-1. [Operate](./OPERATE.md)
+1. [Operate](./public/en/operations/00-operate.md)
 2. [Operator Runbook](./OPERATOR_RUNBOOK.md)
 3. [Ops Console](./public/en/operations/01-ops-console.md)
 4. [Production Core Gate](./PRODUCTION_CORE_GATE.md)
@@ -46,14 +46,14 @@ This is the complete Aionis documentation catalog, organized by user journey.
 
 ## 5) Integrations
 
-1. [Integrations Overview](./INTEGRATIONS.md)
-2. [MCP Integration](./MCP_INTEGRATION.md)
+1. [Integrations Overview](./public/en/integrations/00-overview.md)
+2. [MCP Integration](./public/en/integrations/01-mcp.md)
 3. [OpenWork (OpenCode Desktop)](./OPENWORK_INTEGRATION.md)
 4. [LangGraph](./LANGGRAPH_INTEGRATION.md)
 
 ## 6) Reference
 
-1. [Reference](./REFERENCE.md)
+1. [Reference](./public/en/reference/01-reference.md)
 2. [API Contract](./public/en/api/01-api-contract.md)
 3. [SDK Guide](./SDK.md)
 4. [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)

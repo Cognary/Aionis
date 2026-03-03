@@ -38,9 +38,9 @@ Use the docs in this order:
 1. [Get Started](./public/en/getting-started/01-get-started.md)
 2. [Build Memory](./public/en/guides/01-build-memory.md)
 3. [Control & Policy](./CONTROL_POLICY.md)
-4. [Operate](./OPERATE.md)
-5. [Integrations](./INTEGRATIONS.md)
-6. [Reference](./REFERENCE.md)
+4. [Operate](./public/en/operations/00-operate.md)
+5. [Integrations](./public/en/integrations/00-overview.md)
+6. [Reference](./public/en/reference/01-reference.md)
 7. [Benchmarks](./BENCHMARKS.md)
 
 ## Build Memory: 4 Core Tasks
@@ -59,8 +59,8 @@ Use the docs in this order:
 
 ## Quick Entry Points
 
-1. [5-Minute Onboarding](./ONBOARDING_5MIN.md)
-2. [Embedding Setup](./EMBEDDING_SETUP.md)
+1. [5-Minute Onboarding](./public/en/getting-started/02-onboarding-5min.md)
+2. [Embedding Setup](./public/en/getting-started/03-embedding-setup.md)
 3. [Playground](./public/en/guides/02-playground.md)
 4. [API Contract](./public/en/api/01-api-contract.md)
 5. [URI Expansion Plan](./URI_EXPANSION_PLAN.md)

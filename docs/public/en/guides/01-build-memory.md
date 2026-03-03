@@ -16,7 +16,7 @@ Purpose: write new memory signals into Aionis.
 
 Read:
 
-1. [5-Minute Onboarding](/ONBOARDING_5MIN)
+1. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
 2. [API Contract](/public/en/api/01-api-contract)
 
 ## Assembling Context

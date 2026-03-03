@@ -8,8 +8,8 @@ Start here if you are integrating Aionis for the first time.
 
 ## 1) First Run Path
 
-1. [5-Minute Onboarding](/ONBOARDING_5MIN)
-2. [Embedding Setup](/EMBEDDING_SETUP)
+1. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
+2. [Embedding Setup](/public/en/getting-started/03-embedding-setup)
 3. [Playground](/public/en/guides/02-playground)
 
 ## 2) Core Concepts (Minimal)

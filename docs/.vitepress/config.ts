@@ -41,10 +41,11 @@ export default defineConfig({
       { text: "Get Started", link: "/public/en/getting-started/01-get-started" },
       { text: "Build Memory", link: "/public/en/guides/01-build-memory" },
       { text: "Control & Policy", link: "/CONTROL_POLICY" },
-      { text: "Operate", link: "/OPERATE" },
-      { text: "Integrations", link: "/INTEGRATIONS" },
-      { text: "Reference", link: "/REFERENCE" },
+      { text: "Operate", link: "/public/en/operations/00-operate" },
+      { text: "Integrations", link: "/public/en/integrations/00-overview" },
+      { text: "Reference", link: "/public/en/reference/01-reference" },
       { text: "Benchmarks", link: "/BENCHMARKS" },
+      { text: "中文", link: "/public/zh/README" },
       { text: "GitHub", link: "https://github.com/Cognary/Aionis" },
     ],
     sidebar: [
@@ -53,6 +54,8 @@ export default defineConfig({
         items: [
           { text: "Docs Home", link: "/index" },
           { text: "Get Started", link: "/public/en/getting-started/01-get-started" },
+          { text: "5-Minute Onboarding", link: "/public/en/getting-started/02-onboarding-5min" },
+          { text: "Embedding Setup", link: "/public/en/getting-started/03-embedding-setup" },
           { text: "Core Differentiators", link: "/CORE_DIFFERENTIATORS" },
         ],
       },
@@ -62,8 +65,6 @@ export default defineConfig({
           { text: "Build Memory", link: "/public/en/guides/01-build-memory" },
           { text: "Context Orchestration", link: "/CONTEXT_ORCHESTRATION" },
           { text: "Context Orchestrator Plan", link: "/CONTEXT_ORCHESTRATOR_PLAN" },
-          { text: "5-Minute Onboarding", link: "/ONBOARDING_5MIN" },
-          { text: "Embedding Setup", link: "/EMBEDDING_SETUP" },
           { text: "Playground", link: "/public/en/guides/02-playground" },
         ],
       },
@@ -79,7 +80,7 @@ export default defineConfig({
       {
         text: "Operations",
         items: [
-          { text: "Operate", link: "/OPERATE" },
+          { text: "Operate", link: "/public/en/operations/00-operate" },
           { text: "Operator Runbook", link: "/OPERATOR_RUNBOOK" },
           { text: "Playground", link: "/public/en/guides/02-playground" },
           { text: "Ops Console", link: "/public/en/operations/01-ops-console" },
@@ -95,8 +96,8 @@ export default defineConfig({
       {
         text: "Integrations",
         items: [
-          { text: "Integrations", link: "/INTEGRATIONS" },
-          { text: "MCP Integration", link: "/MCP_INTEGRATION" },
+          { text: "Integrations", link: "/public/en/integrations/00-overview" },
+          { text: "MCP Integration", link: "/public/en/integrations/01-mcp" },
           { text: "OpenWork", link: "/OPENWORK_INTEGRATION" },
           { text: "LangGraph", link: "/LANGGRAPH_INTEGRATION" },
         ],
@@ -104,7 +105,7 @@ export default defineConfig({
       {
         text: "Reference",
         items: [
-          { text: "Reference", link: "/REFERENCE" },
+          { text: "Reference", link: "/public/en/reference/01-reference" },
           { text: "API Contract", link: "/public/en/api/01-api-contract" },
           { text: "SDK Guide", link: "/SDK" },
           { text: "SDK Compatibility", link: "/SDK_COMPATIBILITY_MATRIX" },
