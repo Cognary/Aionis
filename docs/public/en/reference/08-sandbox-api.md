@@ -13,8 +13,15 @@ Current status: experimental, disabled by default.
 Required environment toggles:
 
 1. `SANDBOX_ENABLED=true`
-2. `SANDBOX_EXECUTOR_MODE=mock|local_process`
+2. `SANDBOX_EXECUTOR_MODE=mock|local_process|http_remote`
 3. `SANDBOX_ALLOWED_COMMANDS_JSON=["echo","python3", ...]`
+
+Remote executor (when `SANDBOX_EXECUTOR_MODE=http_remote`):
+
+1. `SANDBOX_REMOTE_EXECUTOR_URL`
+2. `SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER`
+3. `SANDBOX_REMOTE_EXECUTOR_AUTH_TOKEN`
+4. `SANDBOX_REMOTE_EXECUTOR_TIMEOUT_MS`
 
 Optional traffic shaping:
 
@@ -63,8 +70,20 @@ Execution payload shape:
 Constraints:
 
 1. `action.kind` currently supports `command` only.
-2. `argv[0]` must be in `SANDBOX_ALLOWED_COMMANDS_JSON` when using `local_process`.
+2. `argv[0]` must be in `SANDBOX_ALLOWED_COMMANDS_JSON` when using `local_process` or `http_remote`.
 3. `timeout_ms` is bounded server-side.
+
+## Budget and Retention
+
+Optional tenant budget gates for `sandbox/execute`:
+
+1. `SANDBOX_TENANT_BUDGET_WINDOW_HOURS`
+2. `SANDBOX_TENANT_BUDGET_POLICY_JSON` (for example `{"*":{"daily_run_cap":1000,"daily_timeout_cap":100}}`)
+
+Retention cleanup job:
+
+1. `npm run job:sandbox-retention` (dry run)
+2. `npm run job:sandbox-retention -- --apply --retention-days 30`
 
 ## Security Boundaries
 

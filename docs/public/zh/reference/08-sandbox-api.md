@@ -13,8 +13,15 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
 必要环境变量：
 
 1. `SANDBOX_ENABLED=true`
-2. `SANDBOX_EXECUTOR_MODE=mock|local_process`
+2. `SANDBOX_EXECUTOR_MODE=mock|local_process|http_remote`
 3. `SANDBOX_ALLOWED_COMMANDS_JSON=["echo","python3", ...]`
+
+当 `SANDBOX_EXECUTOR_MODE=http_remote` 时还需配置：
+
+1. `SANDBOX_REMOTE_EXECUTOR_URL`
+2. `SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER`
+3. `SANDBOX_REMOTE_EXECUTOR_AUTH_TOKEN`
+4. `SANDBOX_REMOTE_EXECUTOR_TIMEOUT_MS`
 
 可选流量控制：
 
@@ -63,8 +70,20 @@ Sandbox 提供受控执行面，可与策略闭环追踪字段关联（`planner_
 约束：
 
 1. 当前仅支持 `action.kind=command`。
-2. 使用 `local_process` 时，`argv[0]` 必须在 `SANDBOX_ALLOWED_COMMANDS_JSON` 内。
+2. 使用 `local_process` 或 `http_remote` 时，`argv[0]` 必须在 `SANDBOX_ALLOWED_COMMANDS_JSON` 内。
 3. `timeout_ms` 会被服务端上限约束。
+
+## 预算与保留策略
+
+可选租户预算门禁（作用于 `sandbox/execute`）：
+
+1. `SANDBOX_TENANT_BUDGET_WINDOW_HOURS`
+2. `SANDBOX_TENANT_BUDGET_POLICY_JSON`（例如 `{"*":{"daily_run_cap":1000,"daily_timeout_cap":100}}`）
+
+清理保留作业：
+
+1. `npm run job:sandbox-retention`（默认 dry-run）
+2. `npm run job:sandbox-retention -- --apply --retention-days 30`
 
 ## 安全边界
 

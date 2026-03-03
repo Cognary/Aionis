@@ -130,12 +130,19 @@ Delivered in this batch:
 
 ### Phase 3: Isolation-Grade Runtime
 
-Planned:
+Status: `in_progress` (2026-03-03)
 
-1. remote sandbox executor adapter (container/VM pool)
-2. network policy controls (egress allowlist)
-3. file I/O isolation and artifact contract
-4. admission controls by tenant/project policy
+Delivered in current batch:
+
+1. `http_remote` executor mode with remote adapter contract and `/health` surface.
+2. sandbox retention cleanup job (`npm run job:sandbox-retention`) with dry-run/apply mode.
+3. per-tenant sandbox budget policy gates (`SANDBOX_TENANT_BUDGET_POLICY_JSON` + execute-time enforcement).
+
+Remaining:
+
+1. network policy controls (egress allowlist)
+2. file I/O isolation and artifact contract
+3. admission controls by tenant/project policy
 
 ## 8. Acceptance Criteria
 
@@ -167,6 +174,6 @@ Planned:
 
 ## 10. Next Implementation Batch
 
-1. Add remote executor adapter contract + health surface.
-2. Add sandbox run retention policy and archival export flow.
-3. Add per-tenant sandbox budget policy (daily run cap / timeout budget).
+1. Add remote executor heartbeat/lease protocol and dead-worker recovery semantics.
+2. Introduce sandbox artifact export contract for stdout/stderr/file bundles.
+3. Extend tenant budget policy to project-level overrides and admin control-plane API.

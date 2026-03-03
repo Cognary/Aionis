@@ -61,12 +61,18 @@ type SandboxSessionRow = {
 
 export type SandboxExecutorConfig = {
   enabled: boolean;
-  mode: "mock" | "local_process";
+  mode: "mock" | "local_process" | "http_remote";
   maxConcurrency: number;
   defaultTimeoutMs: number;
   stdioMaxBytes: number;
   workdir: string;
   allowedCommands: Set<string>;
+  remote: {
+    url: string | null;
+    authHeader: string;
+    authToken: string;
+    timeoutMs: number;
+  };
 };
 
 type SandboxStore = {
@@ -74,11 +80,19 @@ type SandboxStore = {
   withClient<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T>;
 };
 
-type ActiveRunState = {
-  child: ChildProcessWithoutNullStreams;
-  timedOut: boolean;
-  canceled: boolean;
-};
+type ActiveRunState =
+  | {
+      kind: "local_process";
+      child: ChildProcessWithoutNullStreams;
+      timedOut: boolean;
+      canceled: boolean;
+    }
+  | {
+      kind: "http_remote";
+      abort: AbortController;
+      timedOut: boolean;
+      canceled: boolean;
+    };
 
 function trimOrNull(v: unknown): string | null {
   if (typeof v !== "string") return null;
@@ -112,6 +126,22 @@ function clampOutputAppend(current: string, chunk: Buffer, maxBytes: number): { 
   const take = chunk.length <= remaining ? chunk : chunk.subarray(0, remaining);
   const merged = Buffer.concat([cur, take], Math.min(maxBytes, cur.length + take.length));
   return { next: merged.toString("utf8"), truncated: chunk.length > remaining };
+}
+
+const TERMINAL_SANDBOX_STATUSES = new Set<SandboxRunStatus>(["succeeded", "failed", "canceled", "timeout"]);
+
+function normalizeSandboxStatus(input: unknown): SandboxRunStatus | null {
+  const raw = trimOrNull(input);
+  if (!raw) return null;
+  if (raw === "queued" || raw === "running" || raw === "succeeded" || raw === "failed" || raw === "canceled" || raw === "timeout") {
+    return raw;
+  }
+  return null;
+}
+
+function asFiniteIntOrNull(input: unknown): number | null {
+  if (!Number.isFinite(Number(input))) return null;
+  return Math.trunc(Number(input));
 }
 
 function toRunPayload(row: SandboxRunRow) {
@@ -170,7 +200,7 @@ function telemetryExecutor(row: SandboxRunRow): string | null {
 }
 
 function isTerminalStatus(status: SandboxRunStatus): boolean {
-  return status === "succeeded" || status === "failed" || status === "canceled" || status === "timeout";
+  return TERMINAL_SANDBOX_STATUSES.has(status);
 }
 
 async function recordSandboxRunTelemetryRow(client: pg.PoolClient, row: SandboxRunRow): Promise<void> {
@@ -616,15 +646,35 @@ export class SandboxExecutor {
     await this.processRun(String(runId ?? "").trim());
   }
 
+  healthSnapshot() {
+    return {
+      enabled: this.config.enabled,
+      mode: this.config.mode,
+      queue_depth: this.queue.length,
+      active_runs: this.active.size,
+      max_concurrency: this.config.maxConcurrency,
+      remote_executor_configured: this.config.mode === "http_remote" ? !!this.config.remote.url : false,
+      remote_executor_timeout_ms: this.config.mode === "http_remote" ? this.config.remote.timeoutMs : null,
+    };
+  }
+
   requestCancel(runId: string): boolean {
     const id = String(runId ?? "").trim();
     const state = this.active.get(id);
     if (!state) return false;
     state.canceled = true;
-    try {
-      state.child.kill("SIGKILL");
-    } catch {
-      // ignore best-effort cancel kill errors
+    if (state.kind === "local_process") {
+      try {
+        state.child.kill("SIGKILL");
+      } catch {
+        // ignore best-effort cancel kill errors
+      }
+    } else {
+      try {
+        state.abort.abort();
+      } catch {
+        // ignore best-effort remote cancel errors
+      }
     }
     return true;
   }
@@ -632,11 +682,19 @@ export class SandboxExecutor {
   shutdown(): void {
     this.shuttingDown = true;
     for (const state of this.active.values()) {
-      try {
-        state.canceled = true;
-        state.child.kill("SIGKILL");
-      } catch {
-        // ignore best-effort shutdown kill errors
+      state.canceled = true;
+      if (state.kind === "local_process") {
+        try {
+          state.child.kill("SIGKILL");
+        } catch {
+          // ignore best-effort shutdown kill errors
+        }
+      } else {
+        try {
+          state.abort.abort();
+        } catch {
+          // ignore best-effort remote shutdown errors
+        }
       }
     }
     this.active.clear();
@@ -687,7 +745,11 @@ export class SandboxExecutor {
       await this.executeMock(run);
       return;
     }
-    await this.executeLocalProcess(run);
+    if (this.config.mode === "local_process") {
+      await this.executeLocalProcess(run);
+      return;
+    }
+    await this.executeRemote(run);
   }
 
   private async executeMock(run: SandboxRunRow): Promise<void> {
@@ -704,7 +766,10 @@ export class SandboxExecutor {
     });
   }
 
-  private async executeLocalProcess(run: SandboxRunRow): Promise<void> {
+  private async parseCommandArgv(
+    run: SandboxRunRow,
+    executor: "local_process" | "http_remote",
+  ): Promise<{ argv: string[]; file: string } | null> {
     const argvRaw = Array.isArray(run.action_json?.argv) ? run.action_json.argv : null;
     if (!argvRaw || argvRaw.length === 0) {
       await this.finalize(run.id, {
@@ -714,9 +779,9 @@ export class SandboxExecutor {
         truncated: false,
         exitCode: null,
         error: "invalid_command_argv",
-        result: { executor: "local_process" },
+        result: { executor },
       });
-      return;
+      return null;
     }
     const argv = argvRaw.map((v: any) => String(v));
     const file = String(argv[0] ?? "").trim();
@@ -728,9 +793,9 @@ export class SandboxExecutor {
         truncated: false,
         exitCode: null,
         error: "invalid_command_name",
-        result: { executor: "local_process" },
+        result: { executor },
       });
-      return;
+      return null;
     }
     if (!this.config.allowedCommands.has(file)) {
       await this.finalize(run.id, {
@@ -740,10 +805,17 @@ export class SandboxExecutor {
         truncated: false,
         exitCode: null,
         error: "sandbox_command_not_allowed",
-        result: { executor: "local_process", command: file },
+        result: { executor, command: file },
       });
-      return;
+      return null;
     }
+    return { argv, file };
+  }
+
+  private async executeLocalProcess(run: SandboxRunRow): Promise<void> {
+    const command = await this.parseCommandArgv(run, "local_process");
+    if (!command) return;
+    const { argv, file } = command;
 
     await mkdir(this.config.workdir, { recursive: true });
     const args = argv.slice(1);
@@ -761,7 +833,7 @@ export class SandboxExecutor {
       stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin.end();
-    const state: ActiveRunState = { child, timedOut: false, canceled: false };
+    const state: ActiveRunState = { kind: "local_process", child, timedOut: false, canceled: false };
     this.active.set(run.id, state);
 
     const timeoutMs = normalizeTimeoutMs(run.timeout_ms, this.config.defaultTimeoutMs);
@@ -833,6 +905,172 @@ export class SandboxExecutor {
         timed_out: state.timedOut,
         canceled: state.canceled,
       },
+    });
+  }
+
+  private async executeRemote(run: SandboxRunRow): Promise<void> {
+    const command = await this.parseCommandArgv(run, "http_remote");
+    if (!command) return;
+    const remoteUrl = trimOrNull(this.config.remote.url);
+    if (!remoteUrl) {
+      await this.finalize(run.id, {
+        status: "failed",
+        stdout: "",
+        stderr: "",
+        truncated: false,
+        exitCode: null,
+        error: "remote_executor_not_configured",
+        result: { executor: "http_remote" },
+      });
+      return;
+    }
+
+    const timeoutMs = normalizeTimeoutMs(
+      Math.min(run.timeout_ms, this.config.remote.timeoutMs),
+      Math.min(this.config.defaultTimeoutMs, this.config.remote.timeoutMs),
+    );
+    const startedAt = Date.now();
+    const abort = new AbortController();
+    const state: ActiveRunState = { kind: "http_remote", abort, timedOut: false, canceled: false };
+    this.active.set(run.id, state);
+    const timer = setTimeout(() => {
+      state.timedOut = true;
+      try {
+        abort.abort();
+      } catch {
+        // ignore best-effort timeout abort errors
+      }
+    }, timeoutMs);
+
+    let stdout = "";
+    let stderr = "";
+    let truncated = false;
+    let exitCode: number | null = null;
+    let status: SandboxRunStatus = "failed";
+    let error: string | null = null;
+    let result: Record<string, unknown> = {
+      executor: "http_remote",
+      command: command.file,
+      argv: command.argv,
+    };
+
+    try {
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+      };
+      const authHeader = trimOrNull(this.config.remote.authHeader);
+      const authToken = trimOrNull(this.config.remote.authToken);
+      if (authHeader && authToken) headers[authHeader.toLowerCase()] = authToken;
+
+      const response = await fetch(remoteUrl, {
+        method: "POST",
+        headers,
+        signal: abort.signal,
+        body: JSON.stringify({
+          run_id: run.id,
+          tenant_id: run.tenant_id,
+          scope: run.scope,
+          session_id: run.session_id,
+          planner_run_id: run.planner_run_id,
+          decision_id: run.decision_id,
+          mode: run.mode,
+          timeout_ms: timeoutMs,
+          action: {
+            kind: "command",
+            argv: command.argv,
+          },
+          metadata: jsonObject(run.metadata),
+        }),
+      });
+      const rawBodyText = await response.text();
+      const body = rawBodyText.length > 0 ? (() => {
+        try {
+          return JSON.parse(rawBodyText);
+        } catch {
+          return null;
+        }
+      })() : null;
+      const outputObj = body && typeof body === "object" ? (body as any).output : null;
+      const rawStdout = body && typeof body === "object" ? (body as any).stdout : null;
+      const rawStderr = body && typeof body === "object" ? (body as any).stderr : null;
+      stdout = tailText(
+        typeof rawStdout === "string"
+          ? rawStdout
+          : outputObj && typeof outputObj.stdout === "string"
+            ? outputObj.stdout
+            : "",
+        this.config.stdioMaxBytes,
+      );
+      stderr = tailText(
+        typeof rawStderr === "string"
+          ? rawStderr
+          : outputObj && typeof outputObj.stderr === "string"
+            ? outputObj.stderr
+            : "",
+        this.config.stdioMaxBytes,
+      );
+      truncated = !!(
+        (outputObj && typeof outputObj === "object" && (outputObj as any).truncated)
+        || (body && typeof body === "object" && (body as any).output_truncated)
+      );
+      exitCode = asFiniteIntOrNull(body && typeof body === "object" ? (body as any).exit_code : null);
+      if (!response.ok) {
+        status = "failed";
+        error = `remote_executor_http_${response.status}`;
+      } else {
+        status = normalizeSandboxStatus(body && typeof body === "object" ? (body as any).status : null) ?? (exitCode === 0 ? "succeeded" : "failed");
+        if (!TERMINAL_SANDBOX_STATUSES.has(status)) {
+          status = "failed";
+          error = "remote_executor_non_terminal_status";
+        }
+        if (!error) {
+          error = trimOrNull(body && typeof body === "object" ? (body as any).error : null);
+          if (!error && status !== "succeeded") error = "remote_executor_failed";
+        }
+      }
+      const resultPayload = body && typeof body === "object" && body.result && typeof body.result === "object" ? body.result : {};
+      result = {
+        ...result,
+        remote_http_status: response.status,
+        remote_request_ms: Math.max(0, Date.now() - startedAt),
+        result: resultPayload,
+      };
+    } catch (err: any) {
+      if (state.canceled || run.cancel_requested) {
+        status = "canceled";
+        error = "canceled_by_request";
+      } else if (state.timedOut) {
+        status = "timeout";
+        error = "execution_timeout";
+      } else {
+        status = "failed";
+        error = `remote_executor_error:${String(err?.message ?? err)}`;
+      }
+      result = {
+        ...result,
+        remote_request_ms: Math.max(0, Date.now() - startedAt),
+      };
+    } finally {
+      clearTimeout(timer);
+      this.active.delete(run.id);
+    }
+
+    if (state.canceled || run.cancel_requested) {
+      status = "canceled";
+      error = "canceled_by_request";
+    } else if (state.timedOut) {
+      status = "timeout";
+      error = "execution_timeout";
+    }
+
+    await this.finalize(run.id, {
+      status,
+      stdout,
+      stderr,
+      truncated,
+      exitCode,
+      error,
+      result,
     });
   }
 

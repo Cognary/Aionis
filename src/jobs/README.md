@@ -257,6 +257,28 @@ Exit codes:
 - `2`: gate failed (consistency/quality thresholds)
 - `1`: runtime or usage error
 
+## Sandbox Retention (Offline)
+
+Retention cleanup for historical sandbox runs/telemetry.
+
+Dry run (default):
+
+```bash
+npm run job:sandbox-retention
+```
+
+Apply cleanup:
+
+```bash
+npm run job:sandbox-retention -- --apply --retention-days 30 --batch-size 10000
+```
+
+Optional tenancy filters:
+
+```bash
+npm run job:sandbox-retention -- --apply --tenant-id default --scope default
+```
+
 ## Rule Promotion Governance (Offline)
 
 Deterministic preflight checks for lifecycle promotions:

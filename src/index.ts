@@ -92,6 +92,47 @@ import { createAuthResolver, type AuthPrincipal } from "./util/auth.js";
 import { EmbedQueryBatcher, EmbedQueryBatcherError } from "./util/embed_query_batcher.js";
 import { InflightGate, InflightGateError, type InflightGateToken } from "./util/inflight_gate.js";
 
+type SandboxTenantBudgetPolicy = {
+  daily_run_cap: number | null;
+  daily_timeout_cap: number | null;
+  daily_failure_cap: number | null;
+};
+
+function sanitizeBudgetCap(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.trunc(n);
+}
+
+function parseSandboxTenantBudgetPolicy(raw: string): Map<string, SandboxTenantBudgetPolicy> {
+  let parsed: unknown = {};
+  try {
+    const normalized = raw.trim();
+    parsed = normalized.length === 0 ? {} : JSON.parse(normalized);
+  } catch {
+    throw new Error("SANDBOX_TENANT_BUDGET_POLICY_JSON must be valid JSON object");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("SANDBOX_TENANT_BUDGET_POLICY_JSON must be a JSON object");
+  }
+  const out = new Map<string, SandboxTenantBudgetPolicy>();
+  for (const [tenantId, limitsRaw] of Object.entries(parsed as Record<string, unknown>)) {
+    const key = tenantId.trim();
+    if (!key) continue;
+    if (!limitsRaw || typeof limitsRaw !== "object" || Array.isArray(limitsRaw)) continue;
+    const limits = limitsRaw as Record<string, unknown>;
+    const normalized: SandboxTenantBudgetPolicy = {
+      daily_run_cap: sanitizeBudgetCap(limits.daily_run_cap),
+      daily_timeout_cap: sanitizeBudgetCap(limits.daily_timeout_cap),
+      daily_failure_cap: sanitizeBudgetCap(limits.daily_failure_cap),
+    };
+    if (!normalized.daily_run_cap && !normalized.daily_timeout_cap && !normalized.daily_failure_cap) continue;
+    out.set(key, normalized);
+  }
+  return out;
+}
+
 const env = loadEnv();
 const store = createMemoryStore({
   backend: env.MEMORY_STORE_BACKEND,
@@ -125,6 +166,12 @@ const sandboxExecutor = new SandboxExecutor(store, {
   stdioMaxBytes: env.SANDBOX_STDIO_MAX_BYTES,
   workdir: env.SANDBOX_EXECUTOR_WORKDIR,
   allowedCommands: parseAllowedSandboxCommands(env.SANDBOX_ALLOWED_COMMANDS_JSON),
+  remote: {
+    url: env.SANDBOX_REMOTE_EXECUTOR_URL.trim() || null,
+    authHeader: env.SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER.trim(),
+    authToken: env.SANDBOX_REMOTE_EXECUTOR_AUTH_TOKEN,
+    timeoutMs: env.SANDBOX_REMOTE_EXECUTOR_TIMEOUT_MS,
+  },
 });
 const authResolver = createAuthResolver({
   mode: env.MEMORY_AUTH_MODE,
@@ -265,6 +312,7 @@ const tenantQuotaResolver = createTenantQuotaResolver(db, {
     recall_text_embed_max_wait_ms: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS,
   },
 });
+const sandboxTenantBudgetPolicy = parseSandboxTenantBudgetPolicy(env.SANDBOX_TENANT_BUDGET_POLICY_JSON);
 
 const recallTextEmbedCache =
   embedder && env.RECALL_TEXT_EMBED_CACHE_ENABLED
@@ -1159,6 +1207,13 @@ app.log.info(
     cors_memory_allow_origins: CORS_MEMORY_ALLOW_ORIGINS,
     cors_admin_allow_origins: CORS_ADMIN_ALLOW_ORIGINS,
     auth_mode: env.MEMORY_AUTH_MODE,
+    sandbox_enabled: env.SANDBOX_ENABLED,
+    sandbox_admin_only: env.SANDBOX_ADMIN_ONLY,
+    sandbox_executor_mode: env.SANDBOX_EXECUTOR_MODE,
+    sandbox_executor_max_concurrency: env.SANDBOX_EXECUTOR_MAX_CONCURRENCY,
+    sandbox_remote_executor_configured: env.SANDBOX_EXECUTOR_MODE === "http_remote" ? !!env.SANDBOX_REMOTE_EXECUTOR_URL.trim() : false,
+    sandbox_tenant_budget_window_hours: env.SANDBOX_TENANT_BUDGET_WINDOW_HOURS,
+    sandbox_tenant_budget_tenant_count: sandboxTenantBudgetPolicy.size,
     tenant_quota_enabled: env.TENANT_QUOTA_ENABLED,
     control_tenant_quota_cache_ttl_ms: env.CONTROL_TENANT_QUOTA_CACHE_TTL_MS,
     control_telemetry_retention_hours: env.CONTROL_TELEMETRY_RETENTION_HOURS,
@@ -1290,6 +1345,9 @@ app.get("/health", async () => ({
   memory_store_capability_contract: CAPABILITY_CONTRACT,
   recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+  sandbox: sandboxExecutor.healthSnapshot(),
+  sandbox_tenant_budget_window_hours: env.SANDBOX_TENANT_BUDGET_WINDOW_HOURS,
+  sandbox_tenant_budget_tenant_count: sandboxTenantBudgetPolicy.size,
 }));
 
 const ControlTenantSchema = z.object({
@@ -3397,9 +3455,11 @@ app.post("/v1/memory/sandbox/sessions", async (req, reply) => {
 app.post("/v1/memory/sandbox/execute", async (req, reply) => {
   const principal = await requireMemoryPrincipal(req);
   const body = withIdentityFromRequest(req, req.body, principal, "sandbox_execute");
+  const tenantId = tenantFromBody(body);
   assertSandboxEnabled(req);
   await enforceRateLimit(req, reply, "sandbox_write");
-  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  await enforceTenantQuota(req, reply, "write", tenantId);
+  await enforceSandboxTenantBudget(reply, tenantId);
   const queued = await store.withTx((client) =>
     enqueueSandboxRun(client, body, {
       defaultScope: env.MEMORY_SCOPE,
@@ -3852,6 +3912,71 @@ async function enforceTenantQuota(req: any, reply: any, kind: "recall" | "debug_
     `tenant quota exceeded (${kind}); retry later`,
     { tenant_id: tenantId, retry_after_ms: res.retry_after_ms, waited_ms: waitedMs },
   );
+}
+
+function resolveSandboxTenantBudget(tenantIdRaw: string): SandboxTenantBudgetPolicy | null {
+  if (sandboxTenantBudgetPolicy.size === 0) return null;
+  const tenantId = String(tenantIdRaw ?? "").trim() || env.MEMORY_TENANT_ID;
+  return sandboxTenantBudgetPolicy.get(tenantId) ?? sandboxTenantBudgetPolicy.get("*") ?? null;
+}
+
+async function enforceSandboxTenantBudget(reply: any, tenantIdRaw: string): Promise<void> {
+  const policy = resolveSandboxTenantBudget(tenantIdRaw);
+  if (!policy) return;
+  const tenantId = String(tenantIdRaw ?? "").trim() || env.MEMORY_TENANT_ID;
+  const windowHours = env.SANDBOX_TENANT_BUDGET_WINDOW_HOURS;
+  let usage: { total_runs: number; timeout_runs: number; failed_runs: number };
+  try {
+    const out = await db.pool.query<{
+      total_runs: string;
+      timeout_runs: string;
+      failed_runs: string;
+    }>(
+      `
+      SELECT
+        count(*)::text AS total_runs,
+        count(*) FILTER (WHERE status = 'timeout')::text AS timeout_runs,
+        count(*) FILTER (WHERE status IN ('failed', 'timeout'))::text AS failed_runs
+      FROM memory_sandbox_runs
+      WHERE tenant_id = $1
+        AND created_at >= now() - make_interval(hours => $2::int)
+      `,
+      [tenantId, windowHours],
+    );
+    usage = {
+      total_runs: Number(out.rows[0]?.total_runs ?? "0"),
+      timeout_runs: Number(out.rows[0]?.timeout_runs ?? "0"),
+      failed_runs: Number(out.rows[0]?.failed_runs ?? "0"),
+    };
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") {
+      throw new HttpError(503, "sandbox_budget_unavailable", "sandbox budget table is unavailable", {
+        tenant_id: tenantId,
+        table: "memory_sandbox_runs",
+      });
+    }
+    throw err;
+  }
+
+  const raise = (code: string, metric: "total_runs" | "timeout_runs" | "failed_runs", cap: number) => {
+    reply.header("retry-after", "60");
+    throw new HttpError(429, code, "sandbox tenant budget exceeded; retry later", {
+      tenant_id: tenantId,
+      metric,
+      used: usage[metric],
+      cap,
+      window_hours: windowHours,
+    });
+  };
+  if (policy.daily_run_cap && usage.total_runs >= policy.daily_run_cap) {
+    raise("sandbox_tenant_budget_run_cap_exceeded", "total_runs", policy.daily_run_cap);
+  }
+  if (policy.daily_timeout_cap && usage.timeout_runs >= policy.daily_timeout_cap) {
+    raise("sandbox_tenant_budget_timeout_cap_exceeded", "timeout_runs", policy.daily_timeout_cap);
+  }
+  if (policy.daily_failure_cap && usage.failed_runs >= policy.daily_failure_cap) {
+    raise("sandbox_tenant_budget_failure_cap_exceeded", "failed_runs", policy.daily_failure_cap);
+  }
 }
 
 async function embedRecallTextQuery(

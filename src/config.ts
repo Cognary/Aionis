@@ -228,18 +228,26 @@ const EnvSchema = z.object({
     .transform((v) => (v ?? "true").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
-  SANDBOX_EXECUTOR_MODE: z.enum(["mock", "local_process"]).default("mock"),
+  SANDBOX_EXECUTOR_MODE: z.enum(["mock", "local_process", "http_remote"]).default("mock"),
   SANDBOX_EXECUTOR_MAX_CONCURRENCY: z.coerce.number().int().positive().max(16).default(2),
   SANDBOX_EXECUTOR_TIMEOUT_MS: z.coerce.number().int().positive().max(600000).default(15000),
   SANDBOX_STDIO_MAX_BYTES: z.coerce.number().int().positive().max(1024 * 1024).default(65536),
   SANDBOX_ALLOWED_COMMANDS_JSON: z.string().default("[\"echo\"]"),
   SANDBOX_EXECUTOR_WORKDIR: z.string().default(".tmp/sandbox"),
+  SANDBOX_REMOTE_EXECUTOR_URL: z.string().default(""),
+  SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER: z.string().default("authorization"),
+  SANDBOX_REMOTE_EXECUTOR_AUTH_TOKEN: z.string().default(""),
+  SANDBOX_REMOTE_EXECUTOR_TIMEOUT_MS: z.coerce.number().int().positive().max(600000).default(20000),
   SANDBOX_LOCAL_PROCESS_ALLOW_IN_PROD: z
     .string()
     .optional()
     .transform((v) => (v ?? "false").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  SANDBOX_RETENTION_DAYS: z.coerce.number().int().positive().max(3650).default(30),
+  SANDBOX_RETENTION_BATCH_SIZE: z.coerce.number().int().positive().max(200000).default(10000),
+  SANDBOX_TENANT_BUDGET_WINDOW_HOURS: z.coerce.number().int().positive().max(168).default(24),
+  SANDBOX_TENANT_BUDGET_POLICY_JSON: z.string().default("{}"),
 
   // Abstraction policy profile: coarse operating mode for topic clustering + compression rollup defaults.
   MEMORY_ABSTRACTION_POLICY_PROFILE: AbstractionPolicyProfileSchema.default("balanced"),
@@ -531,8 +539,62 @@ export function loadEnv(): Env {
     const normalized = allowedCommandsRaw
       .map((v) => (typeof v === "string" ? v.trim() : ""))
       .filter((v) => v.length > 0);
-    if (parsed.data.SANDBOX_ENABLED && parsed.data.SANDBOX_EXECUTOR_MODE === "local_process" && normalized.length === 0) {
-      throw new Error("SANDBOX_ALLOWED_COMMANDS_JSON must include at least one command when local_process sandbox is enabled");
+    if (
+      parsed.data.SANDBOX_ENABLED
+      && (parsed.data.SANDBOX_EXECUTOR_MODE === "local_process" || parsed.data.SANDBOX_EXECUTOR_MODE === "http_remote")
+      && normalized.length === 0
+    ) {
+      throw new Error("SANDBOX_ALLOWED_COMMANDS_JSON must include at least one command when local_process/http_remote sandbox is enabled");
+    }
+  }
+  {
+    const mode = parsed.data.SANDBOX_EXECUTOR_MODE;
+    const remoteUrl = parsed.data.SANDBOX_REMOTE_EXECUTOR_URL.trim();
+    if (parsed.data.SANDBOX_ENABLED && mode === "http_remote" && remoteUrl.length === 0) {
+      throw new Error("SANDBOX_REMOTE_EXECUTOR_URL is required when SANDBOX_EXECUTOR_MODE=http_remote and SANDBOX_ENABLED=true");
+    }
+    if (remoteUrl.length > 0) {
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(remoteUrl);
+      } catch {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_URL must be a valid URL");
+      }
+      if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_URL must use http or https scheme");
+      }
+    }
+    if (parsed.data.SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER.trim().length === 0) {
+      throw new Error("SANDBOX_REMOTE_EXECUTOR_AUTH_HEADER must be non-empty");
+    }
+  }
+  {
+    let policyRaw: unknown;
+    try {
+      const raw = parsed.data.SANDBOX_TENANT_BUDGET_POLICY_JSON.trim();
+      policyRaw = raw.length === 0 ? {} : JSON.parse(raw);
+    } catch {
+      throw new Error("SANDBOX_TENANT_BUDGET_POLICY_JSON must be valid JSON object");
+    }
+    if (!policyRaw || typeof policyRaw !== "object" || Array.isArray(policyRaw)) {
+      throw new Error("SANDBOX_TENANT_BUDGET_POLICY_JSON must be a JSON object");
+    }
+    for (const [tenantId, limitsRaw] of Object.entries(policyRaw as Record<string, unknown>)) {
+      if (tenantId.trim().length === 0) {
+        throw new Error("SANDBOX_TENANT_BUDGET_POLICY_JSON contains empty tenant key");
+      }
+      if (!limitsRaw || typeof limitsRaw !== "object" || Array.isArray(limitsRaw)) {
+        throw new Error(`SANDBOX_TENANT_BUDGET_POLICY_JSON.${tenantId} must be an object`);
+      }
+      const limits = limitsRaw as Record<string, unknown>;
+      for (const key of ["daily_run_cap", "daily_timeout_cap", "daily_failure_cap"]) {
+        const value = limits[key];
+        if (value === undefined || value === null) continue;
+        const n = Number(value);
+        if (!Number.isFinite(n) || n < 0 || Math.trunc(n) !== n) {
+          throw new Error(`SANDBOX_TENANT_BUDGET_POLICY_JSON.${tenantId}.${key} must be a non-negative integer`);
+        }
+      }
     }
   }
   if (parsed.data.APP_ENV === "prod") {
@@ -562,6 +624,21 @@ export function loadEnv(): Env {
     }
     if (parsed.data.SANDBOX_ENABLED && parsed.data.SANDBOX_EXECUTOR_MODE === "local_process" && !parsed.data.SANDBOX_LOCAL_PROCESS_ALLOW_IN_PROD) {
       throw new Error("SANDBOX local_process executor is blocked in APP_ENV=prod unless SANDBOX_LOCAL_PROCESS_ALLOW_IN_PROD=true");
+    }
+    if (parsed.data.SANDBOX_ENABLED && parsed.data.SANDBOX_EXECUTOR_MODE === "http_remote") {
+      const remoteUrl = parsed.data.SANDBOX_REMOTE_EXECUTOR_URL.trim();
+      if (remoteUrl.length === 0) {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_URL is required when SANDBOX_EXECUTOR_MODE=http_remote and APP_ENV=prod");
+      }
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(remoteUrl);
+      } catch {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_URL must be a valid URL");
+      }
+      if (parsedUrl.protocol !== "https:") {
+        throw new Error("SANDBOX_REMOTE_EXECUTOR_URL must use https in APP_ENV=prod");
+      }
     }
   }
   return parsed.data;
