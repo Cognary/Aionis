@@ -4,58 +4,120 @@ title: "Build Memory"
 
 # Build Memory
 
-This section maps user tasks to the memory APIs.
+This guide maps real product tasks to Aionis memory and policy APIs.
 
-## Adding Context
+## Build Workflow
 
-Purpose: write new memory signals into Aionis.
+```mermaid
+flowchart LR
+  A["Add Context"] --> B["Assemble Context"]
+  B --> C["Apply Policy"]
+  C --> D["Execute and Record Decision"]
+  D --> E["Write Feedback"]
+  E --> A
+```
+
+## 1) Add Context
+
+Goal: persist new memory signals with verifiable lineage.
+
+Primary endpoints:
 
 1. `POST /v1/memory/write`
-2. Session-first ingestion: `create session / write event / list session events`
-3. Source of truth: commits + node/edge lineage
+2. `POST /v1/memory/sessions`
+3. `POST /v1/memory/events`
 
-Read:
+Recommended write payload pattern:
 
-1. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
-2. [API Contract](/public/en/api/01-api-contract)
+1. include `tenant_id` and `scope`
+2. include clear `input_text`
+3. include structured node metadata when available
 
-## Assembling Context
+Success criteria:
 
-Purpose: retrieve LLM-ready context for reasoning and generation.
+1. response includes `commit_id` and `commit_uri`
+2. written memory can be found by recall or find
+
+## 2) Assemble Context
+
+Goal: produce LLM-ready context for planning and generation.
+
+Primary endpoints:
 
 1. `POST /v1/memory/recall`
 2. `POST /v1/memory/recall_text`
-3. `POST /v1/memory/planning/context` (combined recall + policy path)
+3. `POST /v1/memory/context/assemble`
+4. `POST /v1/memory/planning/context`
 
-Read:
+When to use what:
 
-1. [API Contract](/public/en/api/01-api-contract)
-2. [Planner Context](/public/en/reference/02-planner-context)
+1. `recall_text`: fastest path for prompt-ready context.
+2. `context/assemble`: layered and budget-controlled context.
+3. `planning/context`: one-call recall + policy context surface.
 
-## Customizing Context
+## 3) Customize Context
 
-Purpose: control recall behavior for quality, latency, and token budget.
+Goal: tune quality, latency, and cost.
 
-1. Recall strategy and profile knobs
-2. Context compaction (`context_token_budget`, `context_char_budget`, profile)
-3. Rule-aware recall context (`rules_context`, `rules_limit`, shadow visibility)
+Main knobs:
 
-Read:
+1. `context_layers.enabled`
+2. `char_budget_total`
+3. `char_budget_by_layer`
+4. `max_items_by_layer`
+5. `include_merge_trace`
 
-1. [API Contract](/public/en/api/01-api-contract)
+Practical tuning sequence:
+
+1. start with `Balanced` preset
+2. measure latency and answer quality
+3. tighten budgets for high-traffic paths
+4. keep policy-relevant layers visible for tool routing
+
+## 4) Work with Graph Objects
+
+Goal: inspect and reuse memory graph objects directly.
+
+Primary endpoints:
+
+1. `POST /v1/memory/find`
+2. `POST /v1/memory/resolve`
+
+Use cases:
+
+1. inspect object lineage by URI
+2. validate write results in operator workflows
+3. replay incident chains from decision/commit anchors
+
+## 5) Connect Memory to Execution
+
+Goal: make memory affect behavior in a controlled way.
+
+Policy endpoints:
+
+1. `POST /v1/memory/rules/evaluate`
+2. `POST /v1/memory/tools/select`
+3. `POST /v1/memory/tools/decision`
+4. `POST /v1/memory/tools/feedback`
+
+Recommended integration:
+
+1. call recall/context first
+2. evaluate rules before tool selection
+3. persist decisions and feedback per run
+
+## Implementation Checklist
+
+1. Scope strategy defined (`tenant_id`, `scope`).
+2. Core write/recall path passing in staging.
+3. Context assembly preset selected and measured.
+4. Policy loop wired for at least one critical workflow.
+5. Required IDs persisted in telemetry (`request_id/run_id/decision_id/commit_uri`).
+
+## Related
+
+1. [Get Started](/public/en/getting-started/01-get-started)
 2. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
-3. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)
-4. [Roadmap](/public/en/roadmap/00-roadmap)
-
-## Working with Graphs
-
-Purpose: operate directly on graph-level objects and relationships.
-
-1. `find` via URI/id/client_id
-2. Nodes + edges + commits model
-3. Scope/tenant-aware graph access
-
-Read:
-
-1. [API Contract](/public/en/api/01-api-contract)
-2. [Aionis Onepage](/public/en/about/02-aionis-onepage)
+3. [API Contract](/public/en/api/01-api-contract)
+4. [API Reference](/public/en/api-reference/00-api-reference)
+5. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
