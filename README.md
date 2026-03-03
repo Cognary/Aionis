@@ -25,7 +25,7 @@ Most memory stacks stop at retrieval. In production, teams still face:
 
 Aionis is built to solve these as a long-running system core.
 
-## Five Core Differentiators
+## Six Core Differentiators
 
 1. **Verifiable Write Chain**
    Every mutation is anchored by `commit_id` and `commit_uri` for audit and replay.
@@ -45,6 +45,12 @@ Aionis is built to solve these as a long-running system core.
 6. **Sandbox Interface (Experimental)**
    A controlled execution API surface (`sandbox/sessions`, `sandbox/execute`, `sandbox/runs/*`) can be linked to policy-loop provenance.
 
+Sandbox now includes:
+
+1. remote executor hardening (`http_remote`) with host allowlist, DNS/IP egress controls, and optional mTLS
+2. project-level budget overrides (`sandbox-project-budgets`) on top of tenant budgets
+3. artifact bundle contract (`sandbox_run_artifact_v2`) with manifest/hash/object-store pointers
+
 ## Architecture Snapshot
 
 Aionis uses a verifiable memory graph as the system-of-record, with write durability separated from derived async processing.
@@ -59,7 +65,8 @@ Aionis uses a verifiable memory graph as the system-of-record, with write durabi
 1. Tenant isolation is explicit via `tenant_id + scope`.
 2. Memory auth supports API key and bearer token modes.
 3. Admin surfaces are separated and require admin token.
-4. Public API contracts are documented and stable across SDKs.
+4. Sandbox remote execution supports explicit egress controls and optional mTLS for production isolation.
+5. Public API contracts are documented and stable across SDKs.
 
 ## 3-Minute Quickstart
 
