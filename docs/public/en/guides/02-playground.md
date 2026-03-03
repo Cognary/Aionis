@@ -37,7 +37,7 @@ Connection fields:
 2. `tenant_id`
 3. `scope`
 4. one auth credential for memory routes:
-   - `x-api-key`, or
+   - `X-Api-Key`, or
    - `bearer token`
 
 Admin routes require `x-admin-token`.

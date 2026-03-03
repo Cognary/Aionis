@@ -65,6 +65,6 @@ After production changes:
 ## Related
 
 1. [Production Core Gate](/public/en/operations/03-production-core-gate)
-2. [Prod Go-Live Gate](/public/en/operations/04-prod-go-live-gate)
+2. [Production Go-Live Gate](/public/en/operations/04-prod-go-live-gate)
 3. [HA Failure Drill Template](/public/en/operations/07-ha-failure-drill-template)
 4. [Operate and Production](/public/en/operate-production/00-operate-production)

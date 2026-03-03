@@ -60,7 +60,7 @@ export default defineConfig({
           { text: "Docs Navigation Map", link: "/public/en/overview/02-docs-navigation" },
           { text: "Role-Based Reading Paths", link: "/public/en/overview/03-role-based-paths" },
           { text: "Core Differentiators", link: "/public/en/about/01-core-differentiators" },
-          { text: "Aionis Onepage", link: "/public/en/about/02-aionis-onepage" },
+          { text: "Aionis One-Page", link: "/public/en/about/02-aionis-onepage" },
         ],
       },
       {
@@ -115,7 +115,7 @@ export default defineConfig({
         items: [
           { text: "Operate and Production", link: "/public/en/operate-production/00-operate-production" },
           { text: "Production Core Gate", link: "/public/en/operations/03-production-core-gate" },
-          { text: "Prod Go-Live Gate", link: "/public/en/operations/04-prod-go-live-gate" },
+          { text: "Production Go-Live Gate", link: "/public/en/operations/04-prod-go-live-gate" },
           { text: "Operate Overview", link: "/public/en/operations/00-operate" },
           { text: "Operator Runbook", link: "/public/en/operations/02-operator-runbook" },
           { text: "Ops Console", link: "/public/en/operations/01-ops-console" },

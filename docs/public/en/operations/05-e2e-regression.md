@@ -26,7 +26,7 @@ export API_KEY="your_api_key"
 ```bash
 curl -sS "$BASE_URL/v1/memory/write" \
   -H 'content-type: application/json' \
-  -H "x-api-key: $API_KEY" \
+  -H "X-Api-Key: $API_KEY" \
   -d '{"tenant_id":"default","scope":"default","input_text":"regression sample"}' | jq
 ```
 
@@ -35,7 +35,7 @@ curl -sS "$BASE_URL/v1/memory/write" \
 ```bash
 curl -sS "$BASE_URL/v1/memory/recall_text" \
   -H 'content-type: application/json' \
-  -H "x-api-key: $API_KEY" \
+  -H "X-Api-Key: $API_KEY" \
   -d '{"tenant_id":"default","scope":"default","query_text":"regression sample","limit":5}' | jq
 ```
 
@@ -44,7 +44,7 @@ curl -sS "$BASE_URL/v1/memory/recall_text" \
 ```bash
 curl -sS "$BASE_URL/v1/memory/context/assemble" \
   -H 'content-type: application/json' \
-  -H "x-api-key: $API_KEY" \
+  -H "X-Api-Key: $API_KEY" \
   -d '{"tenant_id":"default","scope":"default","query_text":"support case","char_budget_total":1200}' | jq
 ```
 
@@ -53,7 +53,7 @@ curl -sS "$BASE_URL/v1/memory/context/assemble" \
 ```bash
 curl -sS "$BASE_URL/v1/memory/rules/evaluate" \
   -H 'content-type: application/json' \
-  -H "x-api-key: $API_KEY" \
+  -H "X-Api-Key: $API_KEY" \
   -d '{"tenant_id":"default","scope":"default","run_id":"regression-run-1","context":{"intent":"support_triage"}}' | jq
 ```
 

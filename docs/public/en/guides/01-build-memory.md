@@ -82,17 +82,17 @@ export API_KEY="your_api_key"
 
 curl -sS "$BASE_URL/v1/memory/write" \
   -H 'content-type: application/json' \
-  -H "x-api-key: $API_KEY" \
+  -H "X-Api-Key: $API_KEY" \
   -d '{"tenant_id":"default","scope":"default","input_text":"Customer prefers email"}' | jq
 
 curl -sS "$BASE_URL/v1/memory/recall_text" \
   -H 'content-type: application/json' \
-  -H "x-api-key: $API_KEY" \
+  -H "X-Api-Key: $API_KEY" \
   -d '{"tenant_id":"default","scope":"default","query_text":"preferred follow-up","limit":5}' | jq
 
 curl -sS "$BASE_URL/v1/memory/rules/evaluate" \
   -H 'content-type: application/json' \
-  -H "x-api-key: $API_KEY" \
+  -H "X-Api-Key: $API_KEY" \
   -d '{"tenant_id":"default","scope":"default","run_id":"run-demo-1","context":{"user_intent":"follow-up"}}' | jq
 ```
 

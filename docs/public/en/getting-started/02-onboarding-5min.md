@@ -34,7 +34,7 @@ Write one memory item:
 ```bash
 curl -sS "$BASE_URL/v1/memory/write" \
   -H 'content-type: application/json' \
-  -H "x-api-key: $API_KEY" \
+  -H "X-Api-Key: $API_KEY" \
   -d '{
     "tenant_id":"default",
     "scope":"default",
@@ -47,7 +47,7 @@ Recall text context:
 ```bash
 curl -sS "$BASE_URL/v1/memory/recall_text" \
   -H 'content-type: application/json' \
-  -H "x-api-key: $API_KEY" \
+  -H "X-Api-Key: $API_KEY" \
   -d '{
     "tenant_id":"default",
     "scope":"default",
@@ -56,7 +56,7 @@ curl -sS "$BASE_URL/v1/memory/recall_text" \
   }' | jq
 ```
 
-If your deployment uses JWT auth instead of API key, replace `x-api-key` with:
+If your deployment uses JWT auth instead of API key, replace `X-Api-Key` with:
 
 ```bash
 -H "authorization: Bearer $BEARER_TOKEN"

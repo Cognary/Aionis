@@ -6,7 +6,7 @@ title: "Core Differentiators"
 
 This page summarizes the main external differentiators of Aionis.
 
-## 1) Memory -> Policy -> Action
+## 1) Memory -> Policy -> Action -> Replay
 
 Aionis connects memory retrieval with execution control through:
 
@@ -47,4 +47,4 @@ Aionis includes first-class runbooks, release gates, and operations workflows fo
 ## Primary and Supplement Pages
 
 1. Primary category page: [Overview](/public/en/overview/01-overview)
-2. Executive brief: [Aionis Onepage](/public/en/about/02-aionis-onepage)
+2. Executive brief: [Aionis One-Page](/public/en/about/02-aionis-onepage)

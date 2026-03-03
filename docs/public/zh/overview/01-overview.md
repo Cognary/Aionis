@@ -23,7 +23,7 @@ Aionis 把产品链路统一为：
 3. 可回放：请求、运行、决策、提交可重建。
 4. 生产就绪：门禁与运维手册是产品内建能力。
 
-## Memory -> Policy -> Action
+## Memory -> Policy -> Action -> Replay
 
 ```mermaid
 flowchart LR

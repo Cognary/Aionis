@@ -23,7 +23,7 @@ Aionis connects a single product loop:
 3. **Replayability**: requests, runs, decisions, and commits can be reconstructed.
 4. **Production readiness**: operation gates and runbooks are first-class surfaces.
 
-## Memory -> Policy -> Action
+## Memory -> Policy -> Action -> Replay
 
 ```mermaid
 flowchart LR

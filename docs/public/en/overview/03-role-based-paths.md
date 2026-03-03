@@ -10,7 +10,7 @@ Use these paths to reach the right depth quickly.
 
 1. [Overview](/public/en/overview/01-overview)
 2. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
-3. [Aionis Onepage](/public/en/about/02-aionis-onepage)
+3. [Aionis One-Page](/public/en/about/02-aionis-onepage)
 
 Outcome:
 

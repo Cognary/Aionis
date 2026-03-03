@@ -1,8 +1,8 @@
 ---
-title: "Aionis Onepage"
+title: "Aionis One-Page"
 ---
 
-# Aionis Onepage
+# Aionis One-Page
 
 Last updated: `2026-03-03`
 

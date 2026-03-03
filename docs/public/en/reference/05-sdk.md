@@ -29,10 +29,15 @@ pip install aionis-sdk
 
 Configure once per environment:
 
-1. `base_url`
+1. base URL
 2. `tenant_id`
 3. `scope`
 4. auth (`api_key` or bearer token)
+
+SDK field mapping:
+
+1. TypeScript: `baseUrl`
+2. Python: `base_url`
 
 ## Quick Start (TypeScript)
 

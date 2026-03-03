@@ -98,7 +98,7 @@ Provider check:
 ```bash
 curl -sS -X POST "$BASE_URL/v1/memory/recall_text" \
   -H 'content-type: application/json' \
-  -H "x-api-key: $API_KEY" \
+  -H "X-Api-Key: $API_KEY" \
   -d '{"tenant_id":"default","scope":"default","query_text":"embedding check","limit":3}' \
   | jq '.query.embedding_provider'
 ```
