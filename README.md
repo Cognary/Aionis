@@ -8,24 +8,55 @@
 [![GHCR](https://img.shields.io/badge/ghcr-ghcr.io%2Fcognary%2Faionis-2496ed?logo=docker&logoColor=white)](https://ghcr.io/cognary/aionis)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-**Aionis is a Memory Kernel for AI systems.**
+**Aionis is Memory Infrastructure for Production Agents.**
 
-Aionis combines durable memory, policy-aware execution, and replayable operations in one production-ready runtime.
+Aionis is a memory kernel focused on **verifiable writes**, **operable pipelines**, and **policy-aware recall**, turning memory from retrieval-only context into an executable loop:
+
+`Memory -> Policy -> Action -> Replay`
+
+## What Problem Aionis Solves
+
+Most memory stacks stop at retrieval. In production, teams still face:
+
+1. Memory that can be fetched but cannot be audited or replayed reliably.
+2. Write paths coupled to embedding availability.
+3. No controlled policy loop that changes runtime behavior.
+4. Weak operations surface for long-running systems.
+
+Aionis is built to solve these as a long-running system core.
 
 ## Five Core Differentiators
 
-1. **Verifiable write chain**: every mutation is anchored by `commit_id` and `commit_uri` for audit and replay.
-2. **URI-first object model**: nodes, edges, commits, and decisions are consistently referenceable across API, SDK, and ops tools.
-3. **Layered context orchestration**: context is assembled with explicit layers (`facts/episodes/rules/decisions/tools/citations`) and budget controls.
-4. **Memory -> Policy -> Action -> Replay loop**: memory can directly influence runtime decisions via governed policy routes.
-5. **Production-grade evidence and gates**: release readiness is validated by reproducible checks, runbooks, and benchmark artifacts.
+1. **Verifiable Write Chain**
+   Every mutation is anchored by `commit_id` and `commit_uri` for audit and replay.
 
-## What You Can Build
+2. **URI-First Object Model**
+   Nodes, edges, commits, and decisions are referenceable with stable URIs across API, SDK, and ops tools.
 
-1. Persistent AI assistants with long-lived user memory.
-2. Policy-controlled copilots with traceable tool decisions.
-3. Multi-tenant agent platforms with strict scope isolation.
-4. MCP / OpenWork / LangGraph memory integrations.
+3. **Layered Context Orchestration**
+   Context is assembled with explicit layers (`facts/episodes/rules/decisions/tools/citations`) and budget controls.
+
+4. **Memory -> Policy -> Action -> Replay**
+   Memory can influence tool routing and decisions via `rules/evaluate`, `tools/select`, `tools/decision`, and `tools/feedback`.
+
+5. **Production-Grade Evidence and Gates**
+   Release readiness is validated with reproducible checks, runbooks, and benchmark artifacts.
+
+## Architecture Snapshot
+
+Aionis uses a verifiable memory graph as the system-of-record, with write durability separated from derived async processing.
+
+1. SoR model: graph objects + commit lineage.
+2. Derived async: embeddings/topics/compression run asynchronously and do not block core writes.
+3. Recall path: candidate retrieval -> bounded context assembly.
+4. Policy path: evaluate -> select -> decision -> feedback.
+
+## Security and Hard Contracts
+
+1. Tenant isolation is explicit via `tenant_id + scope`.
+2. Memory auth supports API key and bearer token modes.
+3. Admin surfaces are separated and require admin token.
+4. Public API contracts are documented and stable across SDKs.
 
 ## 3-Minute Quickstart
 
@@ -51,88 +82,72 @@ curl -sS "$BASE_URL/v1/memory/recall_text" \
   -d '{"tenant_id":"default","scope":"default","query_text":"preferred follow-up channel","limit":5}'
 ```
 
-## SDKs
+## SDKs and Distribution
 
-1. TypeScript: [`@aionis/sdk`](https://www.npmjs.com/package/@aionis/sdk)
-2. Python: [`aionis-sdk`](https://pypi.org/project/aionis-sdk/)
+1. TypeScript SDK: [`@aionis/sdk`](https://www.npmjs.com/package/@aionis/sdk)
+2. Python SDK: [`aionis-sdk`](https://pypi.org/project/aionis-sdk/)
+3. Docker image: `ghcr.io/cognary/aionis:latest`
+4. Standalone image: `ghcr.io/cognary/aionis:standalone-latest`
 
-TypeScript:
+TypeScript SDK example:
 
 ```ts
 import { AionisClient } from "@aionis/sdk";
 
 const client = new AionisClient({
-  baseUrl: "https://api.your-domain.com",
-  tenantId: "default",
-  scope: "default",
-  apiKey: process.env.AIONIS_API_KEY,
+  base_url: "https://api.your-domain.com",
+  api_key: process.env.AIONIS_API_KEY,
 });
 
-await client.write({ input_text: "Customer prefers email follow-up" });
-const out = await client.recallText({ query_text: "preferred follow-up channel", limit: 5 });
+await client.write({ input_text: "Customer prefers email follow-up", scope: "default" });
+const out = await client.recallText({ query_text: "preferred follow-up channel", limit: 5, scope: "default" });
 console.log(out.request_id);
 ```
 
-Python:
+Python SDK example:
 
 ```python
 from aionis_sdk import AionisClient
 
 client = AionisClient(
     base_url="https://api.your-domain.com",
-    tenant_id="default",
-    scope="default",
     api_key="<your-api-key>",
 )
 
-client.write(input_text="Customer prefers email follow-up")
-out = client.recall_text(query_text="preferred follow-up channel", limit=5)
+client.write({"scope": "default", "input_text": "Customer prefers email follow-up"})
+out = client.recall_text({"scope": "default", "query_text": "preferred follow-up channel", "limit": 5})
 print(out.get("request_id"))
 ```
 
-## Core API Surface
+## Trust Signals You Can Reproduce
 
-1. `POST /v1/memory/write`
-2. `POST /v1/memory/recall`
-3. `POST /v1/memory/recall_text`
-4. `POST /v1/memory/context/assemble`
-5. `POST /v1/memory/rules/evaluate`
-6. `POST /v1/memory/tools/select`
-7. `POST /v1/memory/tools/decision`
-8. `POST /v1/memory/tools/feedback`
-9. `POST /v1/memory/resolve`
-
-## Evidence and Reliability
-
-Reproduce weekly strict evidence pack:
+Run weekly strict evidence:
 
 ```bash
 npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
 ```
 
-Run production gate:
+Run production core gate:
 
 ```bash
 npm run -s gate:core:prod -- --base-url "http://localhost:3001" --scope default
 ```
 
-## Documentation
+Public benchmark snapshot and reproduction commands:
 
-1. Docs Home: [doc.aionisos.com](https://doc.aionisos.com)
-2. Overview: [Overview](https://doc.aionisos.com/public/en/overview/01-overview)
-3. Get Started: [5-Minute Onboarding](https://doc.aionisos.com/public/en/getting-started/02-onboarding-5min)
-4. Architecture: [Architecture](https://doc.aionisos.com/public/en/architecture/01-architecture)
-5. Context: [Context Orchestration](https://doc.aionisos.com/public/en/context-orchestration/00-context-orchestration)
-6. Policy Loop: [Policy and Execution Loop](https://doc.aionisos.com/public/en/policy-execution/00-policy-execution-loop)
-7. Operate: [Operate and Production](https://doc.aionisos.com/public/en/operate-production/00-operate-production)
-8. API: [API Reference](https://doc.aionisos.com/public/en/api-reference/00-api-reference)
+1. [Benchmark Snapshot (Public)](https://doc.aionisos.com/public/en/benchmarks/02-benchmark-snapshot-public)
+2. [Differentiation Evidence](https://doc.aionisos.com/public/en/benchmarks/03-differentiation-evidence)
+3. [Performance Baseline](https://doc.aionisos.com/public/en/benchmarks/05-performance-baseline)
 
-## Distribution
+## Recommended Reading Path
 
-1. Docker: `ghcr.io/cognary/aionis:latest`
-2. Standalone Docker: `ghcr.io/cognary/aionis:standalone-latest`
-3. npm SDK: `@aionis/sdk`
-4. PyPI SDK: `aionis-sdk`
+1. [Get Started](https://doc.aionisos.com/public/en/getting-started/01-get-started)
+2. [Build Memory Workflows](https://doc.aionisos.com/public/en/guides/01-build-memory)
+3. [Control and Policy](https://doc.aionisos.com/public/en/control/01-control-policy)
+4. [Operate and Production](https://doc.aionisos.com/public/en/operate-production/00-operate-production)
+5. [Integrations](https://doc.aionisos.com/public/en/integrations/00-overview)
+6. [Reference](https://doc.aionisos.com/public/en/reference/01-reference)
+7. [Benchmarks](https://doc.aionisos.com/public/en/benchmarks/01-benchmarks)
 
 ## License
 
