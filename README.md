@@ -1,349 +1,138 @@
 # Aionis
 
-**Aionis is a Verifiable / Operable Memory Kernel for agents.**
+[![Docs](https://img.shields.io/badge/docs-doc.aionisos.com-0f172a?logo=readthedocs&logoColor=white)](https://doc.aionisos.com)
+[![Core Production Gate](https://github.com/Cognary/Aionis/actions/workflows/core-production-gate.yml/badge.svg)](https://github.com/Cognary/Aionis/actions/workflows/core-production-gate.yml)
+[![Docs Pages](https://github.com/Cognary/Aionis/actions/workflows/docs-pages.yml/badge.svg)](https://github.com/Cognary/Aionis/actions/workflows/docs-pages.yml)
+[![npm](https://img.shields.io/npm/v/%40aionis%2Fsdk?logo=npm)](https://www.npmjs.com/package/@aionis/sdk)
+[![PyPI](https://img.shields.io/pypi/v/aionis-sdk?logo=pypi)](https://pypi.org/project/aionis-sdk/)
+[![GHCR](https://img.shields.io/badge/ghcr-ghcr.io%2Fcognary%2Faionis-2496ed?logo=docker&logoColor=white)](https://ghcr.io/cognary/aionis)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-Aionis gives your agents durable memory with real APIs, operational guardrails, and fast integration paths.
+**Aionis is a Memory Kernel for AI systems.**
 
-## Key Features
+Aionis combines durable memory, policy-aware execution, and replayable operations in one production-ready runtime.
 
-1. Durable memory graph (`nodes + edges + commits`) with auditable commit lineage
-2. LLM-ready retrieval API (`/v1/memory/recall_text`)
-3. Async embedding pipeline (write path remains available under embedding pressure)
-4. Feedback-driven policy loop (`rules/evaluate`, `tools/select`, `tools/feedback`)
-5. Multi-tenant scope isolation (`tenant_id + scope`)
-6. TypeScript/Python SDKs + Docker runtime
-7. Production guardrails (preflight, consistency checks, regression/perf gates)
+## Why Teams Trust Aionis
 
-## Why Aionis
+1. **Verifiable memory lineage**: writes return `commit_id` / `commit_uri`, and graph objects are URI-resolvable.
+2. **Governed execution loop**: memory can influence tool routing through `rules/evaluate -> tools/select -> tools/decision -> tools/feedback`.
+3. **Production guardrails**: release gates, runbooks, and E2E checks are first-class operating surfaces.
+4. **Reproducible evidence**: benchmark and governance outputs can be regenerated with documented commands.
 
-Most agent memory offerings stop at retrieval. Aionis is built for production workloads:
+## What You Can Build
 
-1. `Verifiable`: source-of-record write path + commit chain for audit/replay
-2. `Operable`: explicit production preflight/gate workflow instead of best-effort scripts
-3. `Memory -> Policy`: memory affects planner/tool behavior with traceable feedback loops
+1. Persistent AI assistants with long-lived user memory.
+2. Policy-controlled copilots with traceable tool decisions.
+3. Multi-tenant agent platforms with strict scope isolation.
+4. MCP / OpenWork / LangGraph memory integrations.
 
-## Adaptive Policy Loop (What "Self-Learning" Means In Aionis)
-
-Aionis does not claim unconstrained autonomous learning. It implements bounded, auditable adaptation:
-
-1. Execution feedback is captured with `run_id` and `decision_id` linkage (`/v1/memory/tools/feedback`)
-2. Active rules influence runtime tool decisions (`/v1/memory/tools/select`) with explainable source-rule traces
-3. Rule lifecycle is controlled (`draft` / `shadow` / `active`), so policy changes are reviewable and governable
-4. Weekly evidence gates verify signal quality, replayability, and governance posture before release
-
-Primary references:
-
-- [Differentiation Evidence](docs/DIFFERENTIATION_EVIDENCE.md)
-- [Execution Loop Gate](docs/EXECUTION_LOOP_GATE.md)
-- [Governance Weekly Report](docs/GOVERNANCE_WEEKLY_REPORT.md)
-- [Policy Adaptation Gate](docs/POLICY_ADAPTATION_GATE.md)
-- [Rule Lifecycle](docs/RULE_LIFECYCLE.md)
-
-## Policy-Loop Benchmark Snapshot (XMB-006, 2026-03-01)
-
-From weekly strict evidence pack (`artifacts/evidence/weekly/2026-W09_local_verify_04`):
-
-| Metric | Retrieval-only baseline | Policy loop | Delta |
-| --- | --- | --- | --- |
-| Success rate | 0.50 | 1.00 | +0.50 |
-| Selection switches | 19 | 0 | -19 |
-| Feedback link coverage | n/a | 1.00 | +1.00 |
-| Source rule coverage | n/a | 1.00 | +1.00 |
-
-Reproduce in one command:
+## 3-Minute Quickstart
 
 ```bash
-npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
-```
-
-## Benchmark Snapshot (2026-03-01)
-
-Latest production sign-off run (100k scale):
-
-| Scale | Recall p95 | Recall p99 | Write p95 | Write p99 | Recall fail% | Write fail% | SLO |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 100000 events | 51.42 ms | 61.16 ms | 182.5 ms | 240.2 ms | 0% | 0% | pass |
-
-SLO baseline:
-
-1. Recall p95 < `300ms`
-2. Write p95 < `500ms`
-3. Error rate <= `0%`
-
-Reproduce:
-
-```bash
-npm run -s preflight:prod
-PERF_PROFILE=perf_gate SCALES=100000 npm run perf:phase-d-matrix
-```
-
-Related docs:
-
-- [Benchmark Snapshot (Public)](docs/BENCHMARK_SNAPSHOT_PUBLIC.md)
-- [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
-- [Production Core Gate](docs/PRODUCTION_CORE_GATE.md)
-
-## What You Can Ship
-
-1. Personal AI assistant with persistent memory
-2. Agent copilots with policy-aware tool selection
-3. Team workflows with tenant/agent/team scoped memory
-4. Memory-backed MCP / OpenWork / LangGraph integrations
-
-## Token Compression (Evidence Layer)
-
-Compression is included as an efficiency layer, not as the primary category claim.
-
-Required KPI set:
-
-1. `compression_ratio`
-2. `items_retain_ratio`
-3. `citations_retain_ratio`
-
-References:
-
-- [Adaptive Compression Plan](docs/ADAPTIVE_COMPRESSION_PLAN.md)
-- [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
-- [Production Core Gate](docs/PRODUCTION_CORE_GATE.md)
-
-## 3-Minute Demo
-
-```bash
-git clone https://github.com/Cognary/Aionis
+git clone https://github.com/Cognary/Aionis.git
 cd Aionis
-make quickstart
-```
-
-This brings up DB + API + worker and runs a deterministic value demo in an isolated scope.
-
-Optional:
-
-```bash
-make value-dashboard
-```
-
-Legacy JSON snapshot (script output):
-
-```bash
-make value-dashboard-json
-```
-
-## Fast Start Paths
-
-### A) Hosted API (fastest for builders)
-
-1. Get `BASE_URL`
-2. Get auth credential (`X-Api-Key` or JWT)
-3. Install SDK and call `write -> recall_text`
-
-Onboarding guide:
-
-- [5-Minute Developer Onboarding](docs/ONBOARDING_5MIN.md)
-
-### B) Self-host in minutes
-
-```bash
 cp .env.example .env
 make stack-up
 curl -fsS http://localhost:3001/health
 ```
 
-### C) Standalone (single container, local-first)
-
-`standalone` runs Postgres + migrations + API + worker in one container.
-It is ideal for local agent use, demos, and CI smoke; do not treat it as production HA.
+Minimal write + recall:
 
 ```bash
-npm run -s docker:build:standalone
-npm run -s docker:run:standalone
+export BASE_URL="http://localhost:3001"
+
+curl -sS "$BASE_URL/v1/memory/write" \
+  -H 'content-type: application/json' \
+  -d '{"tenant_id":"default","scope":"default","input_text":"Customer prefers email follow-up"}'
+
+curl -sS "$BASE_URL/v1/memory/recall_text" \
+  -H 'content-type: application/json' \
+  -d '{"tenant_id":"default","scope":"default","query_text":"preferred follow-up channel","limit":5}'
 ```
 
-Optional local-lite mode (lower resource usage + tighter recall budgets):
+## SDKs
+
+1. TypeScript: [`@aionis/sdk`](https://www.npmjs.com/package/@aionis/sdk)
+2. Python: [`aionis-sdk`](https://pypi.org/project/aionis-sdk/)
+
+TypeScript:
+
+```ts
+import { AionisClient } from "@aionis/sdk";
+
+const client = new AionisClient({
+  baseUrl: "https://api.your-domain.com",
+  tenantId: "default",
+  scope: "default",
+  apiKey: process.env.AIONIS_API_KEY,
+});
+
+await client.write({ input_text: "Customer prefers email follow-up" });
+const out = await client.recallText({ query_text: "preferred follow-up channel", limit: 5 });
+console.log(out.request_id);
+```
+
+Python:
+
+```python
+from aionis_sdk import AionisClient
+
+client = AionisClient(
+    base_url="https://api.your-domain.com",
+    tenant_id="default",
+    scope="default",
+    api_key="<your-api-key>",
+)
+
+client.write(input_text="Customer prefers email follow-up")
+out = client.recall_text(query_text="preferred follow-up channel", limit=5)
+print(out.get("request_id"))
+```
+
+## Core API Surface
+
+1. `POST /v1/memory/write`
+2. `POST /v1/memory/recall`
+3. `POST /v1/memory/recall_text`
+4. `POST /v1/memory/context/assemble`
+5. `POST /v1/memory/rules/evaluate`
+6. `POST /v1/memory/tools/select`
+7. `POST /v1/memory/tools/decision`
+8. `POST /v1/memory/tools/feedback`
+9. `POST /v1/memory/resolve`
+
+## Evidence and Reliability
+
+Reproduce weekly strict evidence pack:
 
 ```bash
-cp .env.example .env
-npm run -s env:throughput:lite
-docker run --rm -it \
-  -p 3001:3001 \
-  --env-file .env \
-  -v aionis-standalone-data:/var/lib/postgresql/data \
-  aionis-standalone:local
+npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
 ```
 
-Quick smoke:
+Run production gate:
 
 ```bash
-npm run -s e2e:standalone-lite-smoke
+npm run -s gate:core:prod -- --base-url "http://localhost:3001" --scope default
 ```
 
-Or run directly:
+## Documentation
 
-```bash
-docker run --rm -it \
-  -p 3001:3001 \
-  -v aionis-standalone-data:/var/lib/postgresql/data \
-  aionis-standalone:local
-```
+1. Docs Home: [doc.aionisos.com](https://doc.aionisos.com)
+2. Overview: [Overview](https://doc.aionisos.com/public/en/overview/01-overview)
+3. Get Started: [5-Minute Onboarding](https://doc.aionisos.com/public/en/getting-started/02-onboarding-5min)
+4. Architecture: [Architecture](https://doc.aionisos.com/public/en/architecture/01-architecture)
+5. Context: [Context Orchestration](https://doc.aionisos.com/public/en/context-orchestration/00-context-orchestration)
+6. Policy Loop: [Policy and Execution Loop](https://doc.aionisos.com/public/en/policy-execution/00-policy-execution-loop)
+7. Operate: [Operate and Production](https://doc.aionisos.com/public/en/operate-production/00-operate-production)
+8. API: [API Reference](https://doc.aionisos.com/public/en/api-reference/00-api-reference)
 
-Or use published standalone image:
+## Distribution
 
-```bash
-docker run --rm -it \
-  -p 3001:3001 \
-  -v aionis-standalone-data:/var/lib/postgresql/data \
-  ghcr.io/cognary/aionis:standalone-latest
-```
+1. Docker: `ghcr.io/cognary/aionis:latest`
+2. Standalone Docker: `ghcr.io/cognary/aionis:standalone-latest`
+3. npm SDK: `@aionis/sdk`
+4. PyPI SDK: `aionis-sdk`
 
-## Core API
+## License
 
-1. `GET /health`
-2. `POST /v1/memory/write`
-3. `POST /v1/memory/sessions`
-4. `POST /v1/memory/events`
-5. `GET /v1/memory/sessions/:session_id/events`
-6. `POST /v1/memory/packs/export`
-7. `POST /v1/memory/packs/import`
-8. `POST /v1/memory/find`
-9. `POST /v1/memory/recall_text`
-10. `POST /v1/memory/tools/decision`
-
-Note: `POST /v1/memory/packs/export` and `POST /v1/memory/packs/import` are operator/admin endpoints and require `X-Admin-Token`.
-
-Full contract:
-
-- [API Contract](docs/API_CONTRACT.md)
-
-## SDK & Runtime Distribution
-
-1. TypeScript SDK: [`@aionis/sdk`](https://www.npmjs.com/package/@aionis/sdk)
-2. Python SDK: [`aionis-sdk`](https://pypi.org/project/aionis-sdk/)
-3. Docker image: `ghcr.io/cognary/aionis:latest`
-4. Docker standalone image: `ghcr.io/cognary/aionis:standalone-latest`
-
-## Current Release Baseline
-
-1. Core (GitHub release tag): `v0.2.3` (latest tagged release)
-2. TypeScript SDK (npm): `0.2.3`
-3. Python SDK (PyPI): `0.2.3`
-4. Docker main image tag line: `v0.2.3`
-5. Docker standalone image tag line: `standalone-v0.2.3`
-6. Docs site: `https://doc.aionisos.com/`
-
-Release docs:
-
-- [SDK Guide](docs/SDK.md)
-- [SDK Release Runbook](docs/SDK_RELEASE.md)
-- [Docker Release Runbook](docs/DOCKER_RELEASE.md)
-
-## Integrations
-
-1. OpenWork desktop flow
-2. LangGraph adapter flow
-3. MCP server mode
-
-Docs:
-
-- [MCP Integration](docs/MCP_INTEGRATION.md)
-- [OpenWork Integration](docs/OPENWORK_INTEGRATION.md)
-- [LangGraph Integration](docs/LANGGRAPH_INTEGRATION.md)
-
-## Production Readiness
-
-Use these before public traffic:
-
-1. set `AIONIS_MODE=service` (or `AIONIS_MODE=cloud`)
-2. configure auth credentials (`MEMORY_API_KEYS_JSON` and/or JWT secret depending on mode)
-   - in `api_key_or_jwt` mode, either a valid API key or a valid JWT is accepted
-3. real embedding provider (`minimax` or `openai`)
-4. set recall policy (`MEMORY_RECALL_PROFILE=strict_edges`) and optionally layer by tenant/endpoint via `MEMORY_RECALL_PROFILE_POLICY_JSON`
-5. enable adaptive queue-pressure downgrade if needed (`MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED=true`)
-6. set route-scoped CORS allowlists (`CORS_ALLOW_ORIGINS` for memory POST routes, `CORS_ADMIN_ALLOW_ORIGINS` for admin routes if needed)
-7. use split-service topology for production; standalone image is local/demo only (see `Standalone to HA Runbook`)
-
-Operator docs:
-
-- [Operator Runbook](docs/OPERATOR_RUNBOOK.md)
-- [Standalone to HA Runbook](docs/STANDALONE_TO_HA_RUNBOOK.md)
-- [HA Failure Drill Template](docs/HA_FAILURE_DRILL_TEMPLATE.md)
-- [HA Failure Drill Sample](docs/HA_FAILURE_DRILL_SAMPLE.md)
-- [Prod Go-Live Gate](docs/PROD_GO_LIVE_GATE.md)
-- [Production Core Gate](docs/PRODUCTION_CORE_GATE.md)
-- [E2E Regression](docs/E2E_REGRESSION.md)
-- [Performance Baseline](docs/PERFORMANCE_BASELINE.md)
-- [LongMemEval Gate](docs/LONGMEMEVAL_GATE.md)
-
-## Documentation Hub
-
-- [Aionis Onepage](docs/AIONIS_ONEPAGE.md)
-- [Docs Index](docs/README.md)
-
-## Ops Console (Next.js, internal)
-
-`apps/ops` is an internal control/monitoring console over existing `admin/control` APIs, including an explicit write-actions page at `/actions`.
-
-Docs:
-
-- [Ops Console](docs/OPS_CONSOLE.md)
-
-```bash
-npm run -s ops:dev
-npm run -s ops:build
-npm run -s ops:start
-```
-
-Required env:
-
-```bash
-AIONIS_BASE_URL=http://127.0.0.1:3001
-AIONIS_ADMIN_TOKEN=your-admin-token
-```
-
-Optional Ops access gate (Basic Auth):
-
-```bash
-OPS_BASIC_AUTH_ENABLED=true
-OPS_BASIC_AUTH_USER=ops
-OPS_BASIC_AUTH_PASS=change-me
-```
-
-Optional Ops IP allowlist gate:
-
-```bash
-OPS_IP_ALLOWLIST=127.0.0.1,::1,10.0.0.0/8
-# Required in production when OPS_IP_ALLOWLIST is set (fail-closed):
-OPS_TRUSTED_PROXY_CIDRS=10.0.0.0/8,192.168.0.0/16
-```
-
-Optional dangerous-write gate (default safe):
-
-```bash
-OPS_DANGEROUS_ACTIONS_ENABLED=false
-```
-
-## Playground (Next.js, interactive)
-
-`apps/playground` provides a full request lab for core memory and policy-loop APIs:
-
-1. `write`, `recall`, `recall_text`
-2. `rules/evaluate`
-3. `tools/select`, `tools/feedback`, `tools/decision`
-4. Request chain timeline with `request_id`, status, and latency
-5. Session JSON export for replay/debug sharing
-
-Run:
-
-```bash
-npm run -s playground:dev
-npm run -s playground:build
-npm run -s playground:start
-```
-
-Docs:
-
-- [Playground](docs/PLAYGROUND.md)
-
-## Technical Reference (Previous README)
-
-The previous long-form technical README is preserved here:
-
-- [README_TECHNICAL.md](README_TECHNICAL.md)
+Licensed under the Apache License 2.0. See [LICENSE](./LICENSE).
