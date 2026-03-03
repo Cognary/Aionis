@@ -85,14 +85,14 @@ export default defineConfig({
         text: "Architecture",
         items: [
           { text: "Architecture", link: "/public/en/architecture/01-architecture" },
-          { text: "Detailed Architecture Notes", link: "/public/en/concepts/02-architecture" },
+          { text: "Architecture Deep Dive (Supplement)", link: "/public/en/concepts/02-architecture" },
         ],
       },
       {
         text: "Context Orchestration",
         items: [
           { text: "Context Orchestration", link: "/public/en/context-orchestration/00-context-orchestration" },
-          { text: "Context Orchestration Deep Dive", link: "/public/en/concepts/01-context-orchestration" },
+          { text: "Context Orchestration Deep Dive (Supplement)", link: "/public/en/concepts/01-context-orchestration" },
           { text: "Planner Context", link: "/public/en/reference/02-planner-context" },
           { text: "Build Memory", link: "/public/en/guides/01-build-memory" },
           { text: "Playground", link: "/public/en/guides/02-playground" },
