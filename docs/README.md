@@ -9,16 +9,16 @@ This is the complete Aionis documentation catalog, organized by user journey.
 ## 1) Start
 
 1. [Documentation Home](./index.md)
-2. [Get Started](./GET_STARTED.md)
+2. [Get Started](./public/en/getting-started/01-get-started.md)
 3. [Core Differentiators](./CORE_DIFFERENTIATORS.md)
 4. [5-Minute Onboarding](./ONBOARDING_5MIN.md)
 5. [Embedding Setup](./EMBEDDING_SETUP.md)
 
 ## 2) Build Memory
 
-1. [Build Memory](./BUILD_MEMORY.md)
+1. [Build Memory](./public/en/guides/01-build-memory.md)
 2. [Context Orchestration](./CONTEXT_ORCHESTRATION.md)
-3. [Playground](./PLAYGROUND.md)
+3. [Playground](./public/en/guides/02-playground.md)
 4. [Planner Context](./PLANNER_CONTEXT.md)
 5. [Architecture](./ARCHITECTURE.md)
 6. [Context Orchestrator Plan](./CONTEXT_ORCHESTRATOR_PLAN.md)
@@ -36,7 +36,7 @@ This is the complete Aionis documentation catalog, organized by user journey.
 
 1. [Operate](./OPERATE.md)
 2. [Operator Runbook](./OPERATOR_RUNBOOK.md)
-3. [Ops Console](./OPS_CONSOLE.md)
+3. [Ops Console](./public/en/operations/01-ops-console.md)
 4. [Production Core Gate](./PRODUCTION_CORE_GATE.md)
 5. [Prod Go-Live Gate](./PROD_GO_LIVE_GATE.md)
 6. [E2E Regression Checklist](./E2E_REGRESSION.md)
@@ -54,7 +54,7 @@ This is the complete Aionis documentation catalog, organized by user journey.
 ## 6) Reference
 
 1. [Reference](./REFERENCE.md)
-2. [API Contract](./API_CONTRACT.md)
+2. [API Contract](./public/en/api/01-api-contract.md)
 3. [SDK Guide](./SDK.md)
 4. [SDK Compatibility Matrix](./SDK_COMPATIBILITY_MATRIX.md)
 5. [URI Expansion Plan](./URI_EXPANSION_PLAN.md)

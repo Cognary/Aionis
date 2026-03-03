@@ -4,58 +4,8 @@ title: "Build Memory"
 
 # Build Memory
 
-This section maps user tasks to the memory APIs.
+This page moved to:
 
-## Adding Context
+1. [Build Memory (new IA path)](./public/en/guides/01-build-memory.md)
 
-Purpose: write new memory signals into Aionis.
-
-1. `POST /v1/memory/write`
-2. Session-first ingestion: `create session / write event / list session events`
-3. Source of truth: commits + node/edge lineage
-
-Read:
-
-1. [5-Minute Onboarding](./ONBOARDING_5MIN.md)
-2. [API Contract](./API_CONTRACT.md)
-
-## Assembling Context
-
-Purpose: retrieve LLM-ready context for reasoning and generation.
-
-1. `POST /v1/memory/recall`
-2. `POST /v1/memory/recall_text`
-3. `POST /v1/memory/planning/context` (combined recall + policy path)
-
-Read:
-
-1. [API Contract](./API_CONTRACT.md)
-2. [Planner Context](./PLANNER_CONTEXT.md)
-
-## Customizing Context
-
-Purpose: control recall behavior for quality, latency, and token budget.
-
-1. Recall strategy and profile knobs
-2. Context compaction (`context_token_budget`, `context_char_budget`, profile)
-3. Rule-aware recall context (`rules_context`, `rules_limit`, shadow visibility)
-
-Read:
-
-1. [API Contract](./API_CONTRACT.md)
-2. [Recall Tail Latency Plan](./RECALL_TAIL_LATENCY_PLAN.md)
-3. [Adaptive Compression Plan](./ADAPTIVE_COMPRESSION_PLAN.md)
-4. [Context Orchestrator Plan](./CONTEXT_ORCHESTRATOR_PLAN.md)
-
-## Working with Graphs
-
-Purpose: operate directly on graph-level objects and relationships.
-
-1. `find` via URI/id/client_id
-2. Nodes + edges + commits model
-3. Scope/tenant-aware graph access
-
-Read:
-
-1. [API Contract](./API_CONTRACT.md)
-2. [Aionis Onepage](./AIONIS_ONEPAGE.md)
+Legacy root path is kept as a compatibility stub.

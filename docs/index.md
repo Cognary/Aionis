@@ -35,8 +35,8 @@ features:
 
 Use the docs in this order:
 
-1. [Get Started](./GET_STARTED.md)
-2. [Build Memory](./BUILD_MEMORY.md)
+1. [Get Started](./public/en/getting-started/01-get-started.md)
+2. [Build Memory](./public/en/guides/01-build-memory.md)
 3. [Control & Policy](./CONTROL_POLICY.md)
 4. [Operate](./OPERATE.md)
 5. [Integrations](./INTEGRATIONS.md)
@@ -45,10 +45,10 @@ Use the docs in this order:
 
 ## Build Memory: 4 Core Tasks
 
-1. [Adding Context](./BUILD_MEMORY.md#adding-context)
-2. [Assembling Context](./BUILD_MEMORY.md#assembling-context)
-3. [Customizing Context](./BUILD_MEMORY.md#customizing-context)
-4. [Working with Graphs](./BUILD_MEMORY.md#working-with-graphs)
+1. [Adding Context](./public/en/guides/01-build-memory.md#adding-context)
+2. [Assembling Context](./public/en/guides/01-build-memory.md#assembling-context)
+3. [Customizing Context](./public/en/guides/01-build-memory.md#customizing-context)
+4. [Working with Graphs](./public/en/guides/01-build-memory.md#working-with-graphs)
 
 ## Core Differentiation
 
@@ -61,7 +61,7 @@ Use the docs in this order:
 
 1. [5-Minute Onboarding](./ONBOARDING_5MIN.md)
 2. [Embedding Setup](./EMBEDDING_SETUP.md)
-3. [Playground](./PLAYGROUND.md)
-4. [API Contract](./API_CONTRACT.md)
+3. [Playground](./public/en/guides/02-playground.md)
+4. [API Contract](./public/en/api/01-api-contract.md)
 5. [URI Expansion Plan](./URI_EXPANSION_PLAN.md)
 6. [Docs Index](./README.md)

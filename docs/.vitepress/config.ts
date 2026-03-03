@@ -20,6 +20,7 @@ export default defineConfig({
     "**/THREE_GAPS_PRIORITY_PLAN.md",
     "**/ULTRA_SCALE_ROUTING_MATRIX.md",
     "**/WEBSITE_NEXTJS_HEROUI_SKELETON.md",
+    "**/internal/**",
     "**/_site/**",
     "**/_layouts/**",
     "_config.yml",
@@ -37,8 +38,8 @@ export default defineConfig({
     logo: "/logo.svg",
     nav: [
       { text: "Why Aionis", link: "/CORE_DIFFERENTIATORS" },
-      { text: "Get Started", link: "/GET_STARTED" },
-      { text: "Build Memory", link: "/BUILD_MEMORY" },
+      { text: "Get Started", link: "/public/en/getting-started/01-get-started" },
+      { text: "Build Memory", link: "/public/en/guides/01-build-memory" },
       { text: "Control & Policy", link: "/CONTROL_POLICY" },
       { text: "Operate", link: "/OPERATE" },
       { text: "Integrations", link: "/INTEGRATIONS" },
@@ -51,19 +52,19 @@ export default defineConfig({
         text: "Start",
         items: [
           { text: "Docs Home", link: "/index" },
-          { text: "Get Started", link: "/GET_STARTED" },
+          { text: "Get Started", link: "/public/en/getting-started/01-get-started" },
           { text: "Core Differentiators", link: "/CORE_DIFFERENTIATORS" },
         ],
       },
       {
         text: "Build",
         items: [
-          { text: "Build Memory", link: "/BUILD_MEMORY" },
+          { text: "Build Memory", link: "/public/en/guides/01-build-memory" },
           { text: "Context Orchestration", link: "/CONTEXT_ORCHESTRATION" },
           { text: "Context Orchestrator Plan", link: "/CONTEXT_ORCHESTRATOR_PLAN" },
           { text: "5-Minute Onboarding", link: "/ONBOARDING_5MIN" },
           { text: "Embedding Setup", link: "/EMBEDDING_SETUP" },
-          { text: "Playground", link: "/PLAYGROUND" },
+          { text: "Playground", link: "/public/en/guides/02-playground" },
         ],
       },
       {
@@ -80,8 +81,8 @@ export default defineConfig({
         items: [
           { text: "Operate", link: "/OPERATE" },
           { text: "Operator Runbook", link: "/OPERATOR_RUNBOOK" },
-          { text: "Playground", link: "/PLAYGROUND" },
-          { text: "Ops Console", link: "/OPS_CONSOLE" },
+          { text: "Playground", link: "/public/en/guides/02-playground" },
+          { text: "Ops Console", link: "/public/en/operations/01-ops-console" },
           { text: "Prod Go-Live Gate", link: "/PROD_GO_LIVE_GATE" },
           { text: "Production Core Gate", link: "/PRODUCTION_CORE_GATE" },
           { text: "E2E Regression", link: "/E2E_REGRESSION" },
@@ -104,7 +105,7 @@ export default defineConfig({
         text: "Reference",
         items: [
           { text: "Reference", link: "/REFERENCE" },
-          { text: "API Contract", link: "/API_CONTRACT" },
+          { text: "API Contract", link: "/public/en/api/01-api-contract" },
           { text: "SDK Guide", link: "/SDK" },
           { text: "SDK Compatibility", link: "/SDK_COMPATIBILITY_MATRIX" },
           { text: "Planner Context", link: "/PLANNER_CONTEXT" },
