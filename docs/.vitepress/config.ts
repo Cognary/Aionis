@@ -37,11 +37,11 @@ export default defineConfig({
   themeConfig: {
     logo: "/logo.svg",
     nav: [
-      { text: "Why Aionis", link: "/public/en/about/01-core-differentiators" },
+      { text: "Docs Home", link: "/index" },
       { text: "Get Started", link: "/public/en/getting-started/01-get-started" },
-      { text: "Build Memory", link: "/public/en/guides/01-build-memory" },
-      { text: "Control & Policy", link: "/public/en/control/01-control-policy" },
-      { text: "Operate", link: "/public/en/operations/00-operate" },
+      { text: "Guides", link: "/public/en/guides/01-build-memory" },
+      { text: "Control", link: "/public/en/control/01-control-policy" },
+      { text: "Ops", link: "/public/en/operations/00-operate" },
       { text: "Integrations", link: "/public/en/integrations/00-overview" },
       { text: "Reference", link: "/public/en/reference/01-reference" },
       { text: "Benchmarks", link: "/public/en/benchmarks/01-benchmarks" },
@@ -50,47 +50,57 @@ export default defineConfig({
     ],
     sidebar: [
       {
-        text: "Start",
+        text: "Get Started",
         items: [
           { text: "Docs Home", link: "/index" },
           { text: "Get Started", link: "/public/en/getting-started/01-get-started" },
           { text: "5-Minute Onboarding", link: "/public/en/getting-started/02-onboarding-5min" },
           { text: "Embedding Setup", link: "/public/en/getting-started/03-embedding-setup" },
-          { text: "Core Differentiators", link: "/public/en/about/01-core-differentiators" },
         ],
       },
       {
-        text: "Build",
+        text: "Why Aionis",
+        items: [
+          { text: "Core Differentiators", link: "/public/en/about/01-core-differentiators" },
+          { text: "Aionis Onepage", link: "/public/en/about/02-aionis-onepage" },
+          { text: "Differentiation Evidence", link: "/public/en/benchmarks/03-differentiation-evidence" },
+        ],
+      },
+      {
+        text: "Guides",
         items: [
           { text: "Build Memory", link: "/public/en/guides/01-build-memory" },
-          { text: "Context Orchestration", link: "/public/en/concepts/01-context-orchestration" },
-          { text: "Context Orchestrator Plan", link: "/CONTEXT_ORCHESTRATOR_PLAN" },
           { text: "Playground", link: "/public/en/guides/02-playground" },
+          { text: "Context Orchestration", link: "/public/en/concepts/01-context-orchestration" },
+          { text: "Architecture", link: "/public/en/concepts/02-architecture" },
+          { text: "Context Orchestrator Plan", link: "/CONTEXT_ORCHESTRATOR_PLAN" },
         ],
       },
       {
-        text: "Control",
+        text: "Control & Policy",
         items: [
           { text: "Control & Policy", link: "/public/en/control/01-control-policy" },
           { text: "Rule Lifecycle", link: "/public/en/control/02-rule-lifecycle" },
           { text: "Execution Loop Gate", link: "/public/en/control/03-execution-loop-gate" },
           { text: "Policy Adaptation Gate", link: "/public/en/control/04-policy-adaptation-gate" },
+          { text: "Rule Promotion Governance", link: "/public/en/reference/03-rule-promotion-governance" },
+          { text: "Rule Conflict Report", link: "/public/en/reference/04-rule-conflict-report" },
         ],
       },
       {
         text: "Operations",
         items: [
           { text: "Operate", link: "/public/en/operations/00-operate" },
-          { text: "Operator Runbook", link: "/public/en/operations/02-operator-runbook" },
-          { text: "Playground", link: "/public/en/guides/02-playground" },
           { text: "Ops Console", link: "/public/en/operations/01-ops-console" },
-          { text: "Prod Go-Live Gate", link: "/public/en/operations/04-prod-go-live-gate" },
+          { text: "Operator Runbook", link: "/public/en/operations/02-operator-runbook" },
           { text: "Production Core Gate", link: "/public/en/operations/03-production-core-gate" },
+          { text: "Prod Go-Live Gate", link: "/public/en/operations/04-prod-go-live-gate" },
           { text: "E2E Regression", link: "/public/en/operations/05-e2e-regression" },
+          { text: "Standalone to HA Runbook", link: "/public/en/operations/06-standalone-to-ha-runbook" },
           { text: "HA Failure Drill Template", link: "/public/en/operations/07-ha-failure-drill-template" },
           { text: "HA Failure Drill Sample", link: "/public/en/operations/08-ha-failure-drill-sample" },
-          { text: "Standalone to HA Runbook", link: "/public/en/operations/06-standalone-to-ha-runbook" },
-          { text: "Benchmark Snapshot", link: "/public/en/benchmarks/02-benchmark-snapshot-public" },
+          { text: "Abstraction Policy Runbook", link: "/public/en/operations/09-abstraction-policy-runbook" },
+          { text: "Consolidation Replay Runbook", link: "/public/en/operations/10-consolidation-replay-runbook" },
         ],
       },
       {
@@ -107,18 +117,15 @@ export default defineConfig({
         items: [
           { text: "Reference", link: "/public/en/reference/01-reference" },
           { text: "API Contract", link: "/public/en/api/01-api-contract" },
+          { text: "Planner Context", link: "/public/en/reference/02-planner-context" },
           { text: "SDK Guide", link: "/public/en/reference/05-sdk" },
           { text: "SDK Compatibility", link: "/public/en/reference/06-sdk-compatibility-matrix" },
-          { text: "Planner Context", link: "/public/en/reference/02-planner-context" },
-          { text: "Rule Promotion Governance", link: "/public/en/reference/03-rule-promotion-governance" },
-          { text: "Rule Conflict Report", link: "/public/en/reference/04-rule-conflict-report" },
           { text: "URI Expansion Plan", link: "/public/en/reference/07-uri-expansion-plan" },
-          { text: "Architecture", link: "/public/en/concepts/02-architecture" },
           { text: "Docs Index", link: "/README" },
         ],
       },
       {
-        text: "Benchmarks",
+        text: "Benchmarks & Evidence",
         items: [
           { text: "Benchmarks", link: "/public/en/benchmarks/01-benchmarks" },
           { text: "Benchmark Snapshot", link: "/public/en/benchmarks/02-benchmark-snapshot-public" },
@@ -127,6 +134,10 @@ export default defineConfig({
           { text: "Differentiation Evidence", link: "/public/en/benchmarks/03-differentiation-evidence" },
           { text: "Governance Weekly Report", link: "/public/en/benchmarks/04-governance-weekly-report" },
         ],
+      },
+      {
+        text: "中文文档",
+        items: [{ text: "中文目录", link: "/public/zh/README" }],
       },
     ],
     editLink: {
