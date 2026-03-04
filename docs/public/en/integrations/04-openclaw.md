@@ -10,26 +10,32 @@ Aionis integrates with OpenClaw as a memory and policy backend through the OpenC
 
 Use the published plugin:
 
-1. `openclaw-aionis-memory` (npm package)
+1. `@aionis/openclaw` (npm package)
 2. Install command:
 
 ```bash
-openclaw plugins install openclaw-aionis-memory
+openclaw plugins install @aionis/openclaw
 ```
 
-3. Configure plugin with:
-   `baseUrl`, `apiKey`, `tenantId`, `scopeMode`, `scopePrefix`, `autoRecall`, `autoCapture`
+3. Bootstrap local setup:
+
+```bash
+openclaw aionis-memory bootstrap
+```
+
+4. Configure plugin with:
+   `baseUrl`, `apiKey`, `tenantId`, `scopeMode`, `scopePrefix`, `preset`, `autoRecall`, `autoCapture`, `autoPolicyFeedback`
 
 ## Behavior
 
 1. Auto-recall before each turn (`context/assemble`).
 2. Auto-capture after successful turns (`write`).
-3. Optional policy loop via `tools/select` and `tools/feedback`.
+3. Auto policy feedback after successful turns (`tools/feedback`), with loop signals in logs.
 
 ## Scope and Isolation Recommendation
 
 1. Use fixed tenant for single-user setups (`tenant_id=default`).
-2. Use one scope per project: `scope=clawbot:<project>`.
+2. Use `scopeMode=project` (recommended) to isolate memory per workspace/repo.
 3. Persist `run_id` and returned `decision_id` between select and feedback.
 
 ## Health Check
