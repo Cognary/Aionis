@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-03-05
+
+### Changed
+
+1. Added replay automation method coverage (`replay_run_start`, `replay_step_before`, `replay_step_after`, `replay_run_end`, `replay_run_get`, and playbook compile/get/promote/repair/run/review methods).
+2. Added missing memory-control methods (`planning_context`, `archive_rehydrate`, `nodes_activate`, `feedback`, `rules_state`) and exported aligned `TypedDict` request/response surfaces.
+3. Synced Python SDK docs to current API contract and corrected session/events endpoint references.
+
 ## [0.2.5] - 2026-03-03
 
 ### Changed

@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-03-05
+
+### Changed
+
+1. Added replay automation client coverage (`replayRunStart`, `replayStepBefore`, `replayStepAfter`, `replayRunEnd`, `replayRunGet`, and playbook compile/get/promote/repair/run/review methods).
+2. Added missing memory-control methods (`planningContext`, `archiveRehydrate`, `nodesActivate`, `feedback`, `rulesState`) and exported corresponding request/response types.
+3. Synced SDK method inventory docs to current API contract and fixed session/events endpoint shape drift.
+
 ## [0.2.5] - 2026-03-03
 
 ### Changed

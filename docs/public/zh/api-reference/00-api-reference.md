@@ -46,7 +46,7 @@ Memory 路由使用以下任一方式：
 
 1. `POST /v1/memory/sessions`
 2. `POST /v1/memory/events`
-3. `POST /v1/memory/sessions/events/list`
+3. `GET /v1/memory/sessions/:session_id/events`
 
 ### Sandbox（实验）
 
@@ -54,7 +54,8 @@ Memory 路由使用以下任一方式：
 2. `POST /v1/memory/sandbox/execute`
 3. `POST /v1/memory/sandbox/runs/get`
 4. `POST /v1/memory/sandbox/runs/logs`
-5. `POST /v1/memory/sandbox/runs/cancel`
+5. `POST /v1/memory/sandbox/runs/artifact`
+6. `POST /v1/memory/sandbox/runs/cancel`
 
 ### Replay Automation（实验）
 

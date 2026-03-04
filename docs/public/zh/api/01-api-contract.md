@@ -68,7 +68,8 @@ title: "API 合约（硬约束）"
 10. `POST /v1/memory/sandbox/execute`：提交 Sandbox 执行。
 11. `POST /v1/memory/sandbox/runs/get`：查询执行状态。
 12. `POST /v1/memory/sandbox/runs/logs`：查看执行日志。
-13. `POST /v1/memory/sandbox/runs/cancel`：取消排队/运行中的任务。
+13. `POST /v1/memory/sandbox/runs/artifact`：获取执行产物与可选 bundle 指针。
+14. `POST /v1/memory/sandbox/runs/cancel`：取消排队/运行中的任务。
 
 ## 上线前最小检查
 

@@ -60,11 +60,17 @@ import type {
   CapabilityContractSpec,
   ContextAssembleInput,
   ContextAssembleResponse,
+  PlanningContextInput,
+  PlanningContextResponse,
   HealthResponse,
+  MemoryArchiveRehydrateInput,
+  MemoryArchiveRehydrateResponse,
   MemoryEventWriteInput,
   MemoryEventWriteResponse,
   MemoryFindInput,
   MemoryFindResponse,
+  MemoryNodesActivateInput,
+  MemoryNodesActivateResponse,
   MemoryResolveInput,
   MemoryResolveResponse,
   MemoryPackExportInput,
@@ -81,6 +87,32 @@ import type {
   MemoryWriteInput,
   MemoryWriteResponse,
   RequestOptions,
+  ReplayPlaybookCompileInput,
+  ReplayPlaybookCompileResponse,
+  ReplayPlaybookGetInput,
+  ReplayPlaybookGetResponse,
+  ReplayPlaybookPromoteInput,
+  ReplayPlaybookPromoteResponse,
+  ReplayPlaybookRepairInput,
+  ReplayPlaybookRepairResponse,
+  ReplayPlaybookRepairReviewInput,
+  ReplayPlaybookRepairReviewResponse,
+  ReplayPlaybookRunInput,
+  ReplayPlaybookRunResponse,
+  ReplayRunEndInput,
+  ReplayRunEndResponse,
+  ReplayRunGetInput,
+  ReplayRunGetResponse,
+  ReplayRunStartInput,
+  ReplayRunStartResponse,
+  ReplayStepAfterInput,
+  ReplayStepAfterResponse,
+  ReplayStepBeforeInput,
+  ReplayStepBeforeResponse,
+  RuleFeedbackInput,
+  RuleFeedbackResponse,
+  RuleStateUpdateInput,
+  RuleStateUpdateResponse,
   RetryPolicy,
   RulesEvaluateInput,
   RulesEvaluateResponse,
@@ -243,6 +275,10 @@ export class AionisClient {
     return this.requestPost<ContextAssembleInput, ContextAssembleResponse>("/v1/memory/context/assemble", input, opts);
   }
 
+  async planningContext(input: PlanningContextInput, opts?: RequestOptions): Promise<AionisResponse<PlanningContextResponse>> {
+    return this.requestPost<PlanningContextInput, PlanningContextResponse>("/v1/memory/planning/context", input, opts);
+  }
+
   async find(input: MemoryFindInput, opts?: RequestOptions): Promise<AionisResponse<MemoryFindResponse>> {
     return this.requestPost<MemoryFindInput, MemoryFindResponse>("/v1/memory/find", input, opts);
   }
@@ -276,6 +312,20 @@ export class AionisClient {
 
   async packImport(input: MemoryPackImportInput, opts?: RequestOptions): Promise<AionisResponse<MemoryPackImportResponse>> {
     return this.requestPost<MemoryPackImportInput, MemoryPackImportResponse>("/v1/memory/packs/import", input, opts);
+  }
+
+  async archiveRehydrate(
+    input: MemoryArchiveRehydrateInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<MemoryArchiveRehydrateResponse>> {
+    return this.requestPost<MemoryArchiveRehydrateInput, MemoryArchiveRehydrateResponse>("/v1/memory/archive/rehydrate", input, opts);
+  }
+
+  async nodesActivate(
+    input: MemoryNodesActivateInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<MemoryNodesActivateResponse>> {
+    return this.requestPost<MemoryNodesActivateInput, MemoryNodesActivateResponse>("/v1/memory/nodes/activate", input, opts);
   }
 
   async sandboxCreateSession(
@@ -332,6 +382,88 @@ export class AionisClient {
 
   async toolsFeedback(input: ToolsFeedbackInput, opts?: RequestOptions): Promise<AionisResponse<ToolsFeedbackResponse>> {
     return this.requestPost<ToolsFeedbackInput, ToolsFeedbackResponse>("/v1/memory/tools/feedback", input, opts);
+  }
+
+  async feedback(input: RuleFeedbackInput, opts?: RequestOptions): Promise<AionisResponse<RuleFeedbackResponse>> {
+    return this.requestPost<RuleFeedbackInput, RuleFeedbackResponse>("/v1/memory/feedback", input, opts);
+  }
+
+  async rulesState(input: RuleStateUpdateInput, opts?: RequestOptions): Promise<AionisResponse<RuleStateUpdateResponse>> {
+    return this.requestPost<RuleStateUpdateInput, RuleStateUpdateResponse>("/v1/memory/rules/state", input, opts);
+  }
+
+  async replayRunStart(input: ReplayRunStartInput, opts?: RequestOptions): Promise<AionisResponse<ReplayRunStartResponse>> {
+    return this.requestPost<ReplayRunStartInput, ReplayRunStartResponse>("/v1/memory/replay/run/start", input, opts);
+  }
+
+  async replayStepBefore(
+    input: ReplayStepBeforeInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayStepBeforeResponse>> {
+    return this.requestPost<ReplayStepBeforeInput, ReplayStepBeforeResponse>("/v1/memory/replay/step/before", input, opts);
+  }
+
+  async replayStepAfter(input: ReplayStepAfterInput, opts?: RequestOptions): Promise<AionisResponse<ReplayStepAfterResponse>> {
+    return this.requestPost<ReplayStepAfterInput, ReplayStepAfterResponse>("/v1/memory/replay/step/after", input, opts);
+  }
+
+  async replayRunEnd(input: ReplayRunEndInput, opts?: RequestOptions): Promise<AionisResponse<ReplayRunEndResponse>> {
+    return this.requestPost<ReplayRunEndInput, ReplayRunEndResponse>("/v1/memory/replay/run/end", input, opts);
+  }
+
+  async replayRunGet(input: ReplayRunGetInput, opts?: RequestOptions): Promise<AionisResponse<ReplayRunGetResponse>> {
+    return this.requestPost<ReplayRunGetInput, ReplayRunGetResponse>("/v1/memory/replay/runs/get", input, opts);
+  }
+
+  async replayPlaybookCompileFromRun(
+    input: ReplayPlaybookCompileInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookCompileResponse>> {
+    return this.requestPost<ReplayPlaybookCompileInput, ReplayPlaybookCompileResponse>(
+      "/v1/memory/replay/playbooks/compile_from_run",
+      input,
+      opts,
+    );
+  }
+
+  async replayPlaybookGet(
+    input: ReplayPlaybookGetInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookGetResponse>> {
+    return this.requestPost<ReplayPlaybookGetInput, ReplayPlaybookGetResponse>("/v1/memory/replay/playbooks/get", input, opts);
+  }
+
+  async replayPlaybookPromote(
+    input: ReplayPlaybookPromoteInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookPromoteResponse>> {
+    return this.requestPost<ReplayPlaybookPromoteInput, ReplayPlaybookPromoteResponse>(
+      "/v1/memory/replay/playbooks/promote",
+      input,
+      opts,
+    );
+  }
+
+  async replayPlaybookRepair(
+    input: ReplayPlaybookRepairInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookRepairResponse>> {
+    return this.requestPost<ReplayPlaybookRepairInput, ReplayPlaybookRepairResponse>("/v1/memory/replay/playbooks/repair", input, opts);
+  }
+
+  async replayPlaybookRepairReview(
+    input: ReplayPlaybookRepairReviewInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookRepairReviewResponse>> {
+    return this.requestPost<ReplayPlaybookRepairReviewInput, ReplayPlaybookRepairReviewResponse>(
+      "/v1/memory/replay/playbooks/repair/review",
+      input,
+      opts,
+    );
+  }
+
+  async replayPlaybookRun(input: ReplayPlaybookRunInput, opts?: RequestOptions): Promise<AionisResponse<ReplayPlaybookRunResponse>> {
+    return this.requestPost<ReplayPlaybookRunInput, ReplayPlaybookRunResponse>("/v1/memory/replay/playbooks/run", input, opts);
   }
 
   async health(opts?: RequestOptions): Promise<AionisResponse<HealthResponse>> {

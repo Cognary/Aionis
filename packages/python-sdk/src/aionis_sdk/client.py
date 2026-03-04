@@ -40,8 +40,11 @@ if TYPE_CHECKING:
         ControlTenantTimeseriesQuery,
         BackendCapabilityErrorDetails,
         ContextAssembleInput,
+        PlanningContextInput,
+        MemoryArchiveRehydrateInput,
         MemoryEventWriteInput,
         MemoryFindInput,
+        MemoryNodesActivateInput,
         MemoryResolveInput,
         MemoryPackExportInput,
         MemoryPackImportInput,
@@ -50,6 +53,19 @@ if TYPE_CHECKING:
         MemorySessionCreateInput,
         MemorySessionEventsListInput,
         MemoryWriteInput,
+        ReplayPlaybookCompileInput,
+        ReplayPlaybookGetInput,
+        ReplayPlaybookPromoteInput,
+        ReplayPlaybookRepairInput,
+        ReplayPlaybookRepairReviewInput,
+        ReplayPlaybookRunInput,
+        ReplayRunEndInput,
+        ReplayRunGetInput,
+        ReplayRunStartInput,
+        ReplayStepAfterInput,
+        ReplayStepBeforeInput,
+        RuleFeedbackInput,
+        RuleStateUpdateInput,
         RulesEvaluateInput,
         SandboxExecuteInput,
         SandboxRunCancelInput,
@@ -263,6 +279,9 @@ class AionisClient:
     def context_assemble(self, payload: "ContextAssembleInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/context/assemble", payload, request_options)
 
+    def planning_context(self, payload: "PlanningContextInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/planning/context", payload, request_options)
+
     def find(self, payload: "MemoryFindInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/find", payload, request_options)
 
@@ -292,6 +311,12 @@ class AionisClient:
 
     def pack_import(self, payload: "MemoryPackImportInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/packs/import", payload, request_options)
+
+    def archive_rehydrate(self, payload: "MemoryArchiveRehydrateInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/archive/rehydrate", payload, request_options)
+
+    def nodes_activate(self, payload: "MemoryNodesActivateInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/nodes/activate", payload, request_options)
 
     def sandbox_create_session(self, payload: "SandboxSessionCreateInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/sandbox/sessions", payload, request_options)
@@ -325,6 +350,53 @@ class AionisClient:
 
     def tools_feedback(self, payload: "ToolsFeedbackInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/tools/feedback", payload, request_options)
+
+    def feedback(self, payload: "RuleFeedbackInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/feedback", payload, request_options)
+
+    def rules_state(self, payload: "RuleStateUpdateInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/rules/state", payload, request_options)
+
+    def replay_run_start(self, payload: "ReplayRunStartInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/run/start", payload, request_options)
+
+    def replay_step_before(self, payload: "ReplayStepBeforeInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/step/before", payload, request_options)
+
+    def replay_step_after(self, payload: "ReplayStepAfterInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/step/after", payload, request_options)
+
+    def replay_run_end(self, payload: "ReplayRunEndInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/run/end", payload, request_options)
+
+    def replay_run_get(self, payload: "ReplayRunGetInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/runs/get", payload, request_options)
+
+    def replay_playbook_compile_from_run(
+        self,
+        payload: "ReplayPlaybookCompileInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/playbooks/compile_from_run", payload, request_options)
+
+    def replay_playbook_get(self, payload: "ReplayPlaybookGetInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/playbooks/get", payload, request_options)
+
+    def replay_playbook_promote(self, payload: "ReplayPlaybookPromoteInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/playbooks/promote", payload, request_options)
+
+    def replay_playbook_repair(self, payload: "ReplayPlaybookRepairInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/playbooks/repair", payload, request_options)
+
+    def replay_playbook_repair_review(
+        self,
+        payload: "ReplayPlaybookRepairReviewInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/playbooks/repair/review", payload, request_options)
+
+    def replay_playbook_run(self, payload: "ReplayPlaybookRunInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/playbooks/run", payload, request_options)
 
     def health(self, **request_options: Any) -> Dict[str, Any]:
         return self._request("/health", {}, request_options, method="GET")

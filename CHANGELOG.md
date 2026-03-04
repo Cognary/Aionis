@@ -4,6 +4,14 @@ All notable changes to Aionis core are documented in this file.
 
 The format is based on Keep a Changelog and this project follows SemVer for tagged core releases.
 
+## [0.2.6] - 2026-03-05
+
+### Changed
+
+1. Re-aligned public API documentation with runtime routes, including `GET /v1/memory/sessions/:session_id/events` and sandbox artifact endpoint visibility.
+2. Closed SDK parity gaps by exposing replay automation routes and additional memory-control endpoints across TypeScript and Python SDKs.
+3. Updated SDK docs and exported type surfaces so published clients match current server contracts without replay/policy coverage drift.
+
 ## [0.2.4] - 2026-03-03
 
 ### Changed

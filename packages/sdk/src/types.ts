@@ -250,6 +250,7 @@ export type ContextLayerConfigInput = {
 };
 
 export type ContextAssembleInput = Omit<MemoryRecallTextInput, "rules_context" | "rules_include_shadow"> & {
+  recall_strategy?: "local" | "balanced" | "global";
   context?: unknown;
   include_rules?: boolean;
   include_shadow?: boolean;
@@ -259,6 +260,8 @@ export type ContextAssembleInput = Omit<MemoryRecallTextInput, "rules_context" |
   return_layered_context?: boolean;
   context_layers?: ContextLayerConfigInput;
 };
+
+export type PlanningContextInput = ContextAssembleInput;
 
 export type MemoryFindInput = {
   tenant_id?: string;
@@ -370,6 +373,54 @@ export type MemoryPackImportInput = {
   };
 };
 
+export type MemoryArchiveRehydrateInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  node_ids?: string[];
+  client_ids?: string[];
+  target_tier?: "warm" | "hot";
+  reason?: string;
+  input_text?: string;
+  input_sha256?: string;
+};
+
+export type MemoryNodesActivateInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  node_ids?: string[];
+  client_ids?: string[];
+  run_id?: string;
+  outcome?: "positive" | "negative" | "neutral";
+  activate?: boolean;
+  reason?: string;
+  input_text?: string;
+  input_sha256?: string;
+};
+
+export type RuleFeedbackInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  rule_node_id: string;
+  run_id?: string;
+  outcome: "positive" | "negative" | "neutral";
+  note?: string;
+  input_text?: string;
+  input_sha256?: string;
+};
+
+export type RuleStateUpdateInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  rule_node_id: string;
+  state: "draft" | "shadow" | "active" | "disabled";
+  input_text?: string;
+  input_sha256?: string;
+};
+
 export type RulesEvaluateInput = {
   tenant_id?: string;
   scope?: string;
@@ -423,6 +474,161 @@ export type ToolsFeedbackInput = {
   note?: string;
   input_text?: string;
   input_sha256?: string;
+};
+
+export type ReplaySafetyLevel = "auto_ok" | "needs_confirm" | "manual_only";
+
+export type ReplayRunStatus = "success" | "failed" | "partial";
+
+export type ReplayPlaybookStatus = "draft" | "shadow" | "active" | "disabled";
+
+export type ReplayRunMode = "strict" | "guided" | "simulate";
+
+export type ReplayRunStartInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id?: string;
+  goal: string;
+  context_snapshot_ref?: string;
+  context_snapshot_hash?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReplayStepBeforeInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  step_id?: string;
+  decision_id?: string;
+  step_index: number;
+  tool_name: string;
+  tool_input: unknown;
+  expected_output_signature?: unknown;
+  preconditions?: Array<Record<string, unknown>>;
+  retry_policy?: Record<string, unknown>;
+  safety_level?: ReplaySafetyLevel;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReplayStepAfterInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  step_id?: string;
+  step_index?: number;
+  status: "success" | "failed" | "skipped" | "partial";
+  output_signature?: unknown;
+  postconditions?: Array<Record<string, unknown>>;
+  artifact_refs?: string[];
+  repair_applied?: boolean;
+  repair_note?: string;
+  error?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReplayRunEndInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  status: ReplayRunStatus;
+  summary?: string;
+  success_criteria?: Record<string, unknown>;
+  metrics?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReplayRunGetInput = {
+  tenant_id?: string;
+  scope?: string;
+  run_id: string;
+  include_steps?: boolean;
+  include_artifacts?: boolean;
+};
+
+export type ReplayPlaybookCompileInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  playbook_id?: string;
+  name?: string;
+  version?: number;
+  matchers?: Record<string, unknown>;
+  success_criteria?: Record<string, unknown>;
+  risk_profile?: "low" | "medium" | "high";
+  allow_partial?: boolean;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReplayPlaybookGetInput = {
+  tenant_id?: string;
+  scope?: string;
+  playbook_id: string;
+};
+
+export type ReplayPlaybookPromoteInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  playbook_id: string;
+  from_version?: number;
+  target_status: ReplayPlaybookStatus;
+  note?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReplayPlaybookRunInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  playbook_id: string;
+  mode?: ReplayRunMode;
+  version?: number;
+  params?: Record<string, unknown>;
+  max_steps?: number;
+};
+
+export type ReplayPlaybookRepairInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  playbook_id: string;
+  from_version?: number;
+  patch: Record<string, unknown>;
+  note?: string;
+  review_required?: boolean;
+  target_status?: ReplayPlaybookStatus;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReplayPlaybookRepairReviewInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  playbook_id: string;
+  version?: number;
+  action: "approve" | "reject";
+  note?: string;
+  auto_shadow_validate?: boolean;
+  shadow_validation_mode?: "readiness" | "execute" | "execute_sandbox";
+  shadow_validation_max_steps?: number;
+  shadow_validation_params?: Record<string, unknown>;
+  target_status_on_approve?: ReplayPlaybookStatus;
+  auto_promote_on_pass?: boolean;
+  auto_promote_target_status?: ReplayPlaybookStatus;
+  auto_promote_gate?: {
+    require_shadow_pass?: boolean;
+    min_total_steps?: number;
+    max_failed_steps?: number;
+    max_blocked_steps?: number;
+    max_unknown_steps?: number;
+    min_success_ratio?: number;
+  };
+  metadata?: Record<string, unknown>;
 };
 
 export type SandboxSessionCreateInput = {
@@ -877,6 +1083,8 @@ export type ContextAssembleResponse = {
   [k: string]: unknown;
 };
 
+export type PlanningContextResponse = ContextAssembleResponse;
+
 export type MemoryFindResponse = {
   tenant_id: string;
   scope: string;
@@ -1131,6 +1339,66 @@ export type ToolsFeedbackResponse = {
   decision_uri?: string;
   decision_link_mode?: "provided" | "inferred" | "created_from_feedback";
   decision_policy_sha256?: string;
+  [k: string]: unknown;
+};
+
+export type MemoryArchiveRehydrateResponse = {
+  [k: string]: unknown;
+};
+
+export type MemoryNodesActivateResponse = {
+  [k: string]: unknown;
+};
+
+export type RuleFeedbackResponse = {
+  [k: string]: unknown;
+};
+
+export type RuleStateUpdateResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayRunStartResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayStepBeforeResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayStepAfterResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayRunEndResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayRunGetResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookCompileResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookGetResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookPromoteResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookRunResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookRepairResponse = {
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookRepairReviewResponse = {
   [k: string]: unknown;
 };
 

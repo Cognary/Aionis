@@ -150,6 +150,7 @@ class ContextLayerConfigInput(TypedDict, total=False):
 
 
 class ContextAssembleInput(MemoryRecallTextInput, total=False):
+    recall_strategy: Literal["local", "balanced", "global"]
     context: Dict[str, Any]
     include_rules: bool
     include_shadow: bool
@@ -158,6 +159,10 @@ class ContextAssembleInput(MemoryRecallTextInput, total=False):
     tool_strict: bool
     return_layered_context: bool
     context_layers: ContextLayerConfigInput
+
+
+class PlanningContextInput(ContextAssembleInput, total=False):
+    pass
 
 
 class RecallSeed(TypedDict, total=False):
@@ -241,6 +246,10 @@ class ContextAssembleResponse(TypedDict, total=False):
     rules: Dict[str, Any]
     tools: Dict[str, Any]
     layered_context: Dict[str, Any]
+
+
+class PlanningContextResponse(ContextAssembleResponse, total=False):
+    pass
 
 
 class MemoryFindInput(TypedDict, total=False):
@@ -355,6 +364,54 @@ class MemoryPackImportInput(TypedDict, total=False):
     pack: MemoryPackV1
 
 
+class MemoryArchiveRehydrateInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    node_ids: List[str]
+    client_ids: List[str]
+    target_tier: Literal["warm", "hot"]
+    reason: str
+    input_text: str
+    input_sha256: str
+
+
+class MemoryNodesActivateInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    node_ids: List[str]
+    client_ids: List[str]
+    run_id: str
+    outcome: FeedbackOutcome
+    activate: bool
+    reason: str
+    input_text: str
+    input_sha256: str
+
+
+class RuleFeedbackInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    rule_node_id: str
+    run_id: str
+    outcome: FeedbackOutcome
+    note: str
+    input_text: str
+    input_sha256: str
+
+
+class RuleStateUpdateInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    rule_node_id: str
+    state: Literal["draft", "shadow", "active", "disabled"]
+    input_text: str
+    input_sha256: str
+
+
 class RulesEvaluateInput(TypedDict, total=False):
     tenant_id: str
     scope: str
@@ -410,6 +467,152 @@ class ToolsFeedbackInput(TypedDict, total=False):
     input_sha256: str
 
 
+ReplaySafetyLevel = Literal["auto_ok", "needs_confirm", "manual_only"]
+ReplayRunStatus = Literal["success", "failed", "partial"]
+ReplayPlaybookStatus = Literal["draft", "shadow", "active", "disabled"]
+ReplayRunMode = Literal["strict", "guided", "simulate"]
+
+
+class ReplayRunStartInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    goal: str
+    context_snapshot_ref: str
+    context_snapshot_hash: str
+    metadata: Dict[str, Any]
+
+
+class ReplayStepBeforeInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    step_id: str
+    decision_id: str
+    step_index: int
+    tool_name: str
+    tool_input: Dict[str, Any]
+    expected_output_signature: Dict[str, Any]
+    preconditions: List[Dict[str, Any]]
+    retry_policy: Dict[str, Any]
+    safety_level: ReplaySafetyLevel
+    metadata: Dict[str, Any]
+
+
+class ReplayStepAfterInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    step_id: str
+    step_index: int
+    status: Literal["success", "failed", "skipped", "partial"]
+    output_signature: Dict[str, Any]
+    postconditions: List[Dict[str, Any]]
+    artifact_refs: List[str]
+    repair_applied: bool
+    repair_note: str
+    error: str
+    metadata: Dict[str, Any]
+
+
+class ReplayRunEndInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    status: ReplayRunStatus
+    summary: str
+    success_criteria: Dict[str, Any]
+    metrics: Dict[str, Any]
+    metadata: Dict[str, Any]
+
+
+class ReplayRunGetInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run_id: str
+    include_steps: bool
+    include_artifacts: bool
+
+
+class ReplayPlaybookCompileInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    playbook_id: str
+    name: str
+    version: int
+    matchers: Dict[str, Any]
+    success_criteria: Dict[str, Any]
+    risk_profile: Literal["low", "medium", "high"]
+    allow_partial: bool
+    metadata: Dict[str, Any]
+
+
+class ReplayPlaybookGetInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    playbook_id: str
+
+
+class ReplayPlaybookPromoteInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    playbook_id: str
+    from_version: int
+    target_status: ReplayPlaybookStatus
+    note: str
+    metadata: Dict[str, Any]
+
+
+class ReplayPlaybookRunInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    playbook_id: str
+    mode: ReplayRunMode
+    version: int
+    params: Dict[str, Any]
+    max_steps: int
+
+
+class ReplayPlaybookRepairInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    playbook_id: str
+    from_version: int
+    patch: Dict[str, Any]
+    note: str
+    review_required: bool
+    target_status: ReplayPlaybookStatus
+    metadata: Dict[str, Any]
+
+
+class ReplayPlaybookRepairReviewInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    playbook_id: str
+    version: int
+    action: Literal["approve", "reject"]
+    note: str
+    auto_shadow_validate: bool
+    shadow_validation_mode: Literal["readiness", "execute", "execute_sandbox"]
+    shadow_validation_max_steps: int
+    shadow_validation_params: Dict[str, Any]
+    target_status_on_approve: ReplayPlaybookStatus
+    auto_promote_on_pass: bool
+    auto_promote_target_status: ReplayPlaybookStatus
+    auto_promote_gate: Dict[str, Any]
+    metadata: Dict[str, Any]
+
+
 class ToolsSelectDeniedItem(TypedDict, total=False):
     name: str
     reason: str
@@ -455,6 +658,66 @@ class ToolsFeedbackResponse(TypedDict, total=False):
     decision_uri: str
     decision_link_mode: DecisionLinkMode
     decision_policy_sha256: str
+
+
+class MemoryArchiveRehydrateResponse(TypedDict, total=False):
+    pass
+
+
+class MemoryNodesActivateResponse(TypedDict, total=False):
+    pass
+
+
+class RuleFeedbackResponse(TypedDict, total=False):
+    pass
+
+
+class RuleStateUpdateResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayRunStartResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayStepBeforeResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayStepAfterResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayRunEndResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayRunGetResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayPlaybookCompileResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayPlaybookGetResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayPlaybookPromoteResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayPlaybookRunResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayPlaybookRepairResponse(TypedDict, total=False):
+    pass
+
+
+class ReplayPlaybookRepairReviewResponse(TypedDict, total=False):
+    pass
 
 
 class ToolsDecisionPayload(TypedDict, total=False):
@@ -853,13 +1116,19 @@ __all__ = [
     "ContextAssembleResponse",
     "ContextLayerConfigInput",
     "ContextLayerName",
+    "PlanningContextInput",
+    "PlanningContextResponse",
     "DecisionLinkMode",
     "FeedbackOutcome",
+    "MemoryArchiveRehydrateInput",
+    "MemoryArchiveRehydrateResponse",
     "MemoryEdgeInput",
     "MemoryEventWriteInput",
     "MemoryFindInput",
     "MemoryLane",
     "MemoryNodeInput",
+    "MemoryNodesActivateInput",
+    "MemoryNodesActivateResponse",
     "MemoryPackExportInput",
     "MemoryPackImportInput",
     "MemoryPackV1",
@@ -868,6 +1137,36 @@ __all__ = [
     "MemorySessionCreateInput",
     "MemorySessionEventsListInput",
     "MemoryWriteInput",
+    "ReplayPlaybookCompileInput",
+    "ReplayPlaybookCompileResponse",
+    "ReplayPlaybookGetInput",
+    "ReplayPlaybookGetResponse",
+    "ReplayPlaybookPromoteInput",
+    "ReplayPlaybookPromoteResponse",
+    "ReplayPlaybookRepairInput",
+    "ReplayPlaybookRepairResponse",
+    "ReplayPlaybookRepairReviewInput",
+    "ReplayPlaybookRepairReviewResponse",
+    "ReplayPlaybookRunInput",
+    "ReplayPlaybookRunResponse",
+    "ReplayPlaybookStatus",
+    "ReplayRunEndInput",
+    "ReplayRunEndResponse",
+    "ReplayRunGetInput",
+    "ReplayRunGetResponse",
+    "ReplayRunMode",
+    "ReplayRunStartInput",
+    "ReplayRunStartResponse",
+    "ReplayRunStatus",
+    "ReplaySafetyLevel",
+    "ReplayStepAfterInput",
+    "ReplayStepAfterResponse",
+    "ReplayStepBeforeInput",
+    "ReplayStepBeforeResponse",
+    "RuleFeedbackInput",
+    "RuleFeedbackResponse",
+    "RuleStateUpdateInput",
+    "RuleStateUpdateResponse",
     "RulesEvaluateInput",
     "SandboxExecuteInput",
     "SandboxExecuteResponse",
