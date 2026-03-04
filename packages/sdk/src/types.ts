@@ -584,6 +584,7 @@ export type ReplayPlaybookPromoteInput = {
 export type ReplayPlaybookRunInput = {
   tenant_id?: string;
   scope?: string;
+  project_id?: string;
   actor?: string;
   playbook_id: string;
   mode?: ReplayRunMode;

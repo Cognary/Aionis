@@ -4,6 +4,15 @@ All notable changes to Aionis core are documented in this file.
 
 The format is based on Keep a Changelog and this project follows SemVer for tagged core releases.
 
+## [0.2.7] - 2026-03-05
+
+### Changed
+
+1. Extended replay execution with sandbox-native backends in `playbooks/run` (`local_process`, `sandbox_sync`, `sandbox_async`) plus project-scoped execution input.
+2. Added replay safety controls for sensitive command execution (`sensitive_review_mode`, explicit override gating) and surfaced decision evidence in replay step reports.
+3. Hardened replay review shadow validation with deeper sandbox policy controls (`profile=fast|balanced|thorough`, `execution_mode=sync|async_queue`) and pending-state reporting.
+4. Synced replay API references and rollout plan status to reflect Phase 3-6 progress and current operational contracts.
+
 ## [0.2.6] - 2026-03-05
 
 ### Changed

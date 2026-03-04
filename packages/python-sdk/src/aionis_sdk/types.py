@@ -573,6 +573,7 @@ class ReplayPlaybookPromoteInput(TypedDict, total=False):
 class ReplayPlaybookRunInput(TypedDict, total=False):
     tenant_id: str
     scope: str
+    project_id: str
     actor: str
     playbook_id: str
     mode: ReplayRunMode

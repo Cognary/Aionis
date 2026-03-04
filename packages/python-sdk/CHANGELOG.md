@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-03-05
+
+### Changed
+
+1. Added replay run typing support for top-level `project_id` in `ReplayPlaybookRunInput`.
+2. Aligned Python SDK release baseline with core `0.2.7` replay execution and sandbox policy expansion.
+
 ## [0.2.6] - 2026-03-05
 
 ### Changed
