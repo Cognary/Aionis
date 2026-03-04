@@ -4,31 +4,27 @@ title: "OpenClaw Integration"
 
 # OpenClaw Integration
 
-Aionis can serve as the memory and policy layer for OpenClaw/Clawbot-style tool agents.
+Aionis integrates with OpenClaw as a memory and policy backend through the OpenClaw plugin model.
 
-## Integration Shape
+## Recommended Integration
 
-Use four actions in your skill runtime:
+Use the published plugin:
 
-1. `memory.write`
-2. `memory.context`
-3. `memory.policy`
-4. `memory.feedback` (recommended for closed-loop adaptation)
+1. `openclaw-aionis-memory` (npm package)
+2. Install command:
 
-A reference implementation is included at:
+```bash
+openclaw plugins install openclaw-aionis-memory
+```
 
-1. `src/integrations/openclaw-skill.ts`
+3. Configure plugin with:
+   `baseUrl`, `apiKey`, `tenantId`, `scopeMode`, `scopePrefix`, `autoRecall`, `autoCapture`
 
-## Action Contract
+## Behavior
 
-1. `memory.write`
-   Write user intent, tool results, and key decisions into project-scoped memory.
-2. `memory.context`
-   Assemble layered context (`facts/episodes/rules/decisions/tools/citations`) with budget presets.
-3. `memory.policy`
-   Apply `tools/select` (or `rules/evaluate`) before routing tool execution.
-4. `memory.feedback`
-   Write execution outcome back to policy loop (`run_id`, `decision_id`) for governed adaptation.
+1. Auto-recall before each turn (`context/assemble`).
+2. Auto-capture after successful turns (`write`).
+3. Optional policy loop via `tools/select` and `tools/feedback`.
 
 ## Scope and Isolation Recommendation
 
@@ -36,56 +32,10 @@ A reference implementation is included at:
 2. Use one scope per project: `scope=clawbot:<project>`.
 3. Persist `run_id` and returned `decision_id` between select and feedback.
 
-## Smoke Test
+## Health Check
 
 ```bash
-set -a; source .env; set +a
-bash examples/openclaw_skill_smoke.sh
-```
-
-This smoke runs: write -> context -> policy -> feedback.
-If your target server does not expose `context/assemble` yet, the smoke marks context as `context_assemble_unavailable` and continues with policy + feedback checks.
-
-## Minimal Runtime Example
-
-```ts
-import { createOpenClawSkillFromEnv } from "../src/integrations/openclaw-skill.js";
-
-const skill = createOpenClawSkillFromEnv(process.env);
-
-await skill.invoke("memory.write", {
-  project: "sales-assistant",
-  run_id: "run_20260304_001",
-  kind: "event",
-  text: "Customer prefers email follow-up",
-});
-
-const ctx = await skill.invoke("memory.context", {
-  project: "sales-assistant",
-  run_id: "run_20260304_001",
-  query_text: "How should I follow up?",
-  budget: "normal",
-  context: { intent: "follow_up" },
-});
-
-const policy = await skill.invoke("memory.policy", {
-  project: "sales-assistant",
-  run_id: "run_20260304_001",
-  mode: "tools_select",
-  context: { intent: "follow_up" },
-  candidate_tools: ["send_email", "call_crm", "search_docs"],
-  strict: false,
-});
-
-await skill.invoke("memory.feedback", {
-  project: "sales-assistant",
-  run_id: "run_20260304_001",
-  decision_id: policy.decision_id ?? undefined,
-  outcome: "positive",
-  context: { intent: "follow_up" },
-  candidate_tools: ["send_email", "call_crm", "search_docs"],
-  selected_tool: policy.selected_tool ?? "send_email",
-});
+openclaw aionis-memory selfcheck --scope clawbot:selfcheck
 ```
 
 ## Related
