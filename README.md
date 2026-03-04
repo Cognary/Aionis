@@ -36,8 +36,8 @@ Aionis is built to solve these as a long-running system core.
 3. **Layered Context Orchestration**
    Context is assembled with explicit layers (`facts/episodes/rules/decisions/tools/citations`) and budget controls.
 
-4. **Memory -> Policy -> Action -> Replay**
-   Memory can influence tool routing and decisions via `rules/evaluate`, `tools/select`, `tools/decision`, `tools/run`, and `tools/feedback`.
+4. **Policy Loop + Replay Execution**
+   Memory influences runtime decisions via `rules/evaluate`, `tools/select`, `tools/decision`, `tools/run`, and `tools/feedback`; replay execution is supported through `replay/run/*` and `replay/playbooks/*` for record, run, repair, and replayable automation.
 
 5. **Production-Grade Evidence and Gates**
    Release readiness is validated with reproducible checks, runbooks, and benchmark artifacts.
