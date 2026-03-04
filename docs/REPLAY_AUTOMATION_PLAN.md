@@ -156,7 +156,7 @@ Status:
 7. [x] Repair review supports `shadow_validation_mode=execute_sandbox` (strict sandbox sync execution validation).
 8. [x] Repair review supports gate-based auto-promotion (`auto_promote_on_pass` + threshold policy).
 9. [x] Built-in LLM-assisted repair generation (OpenAI-compatible) with deterministic/heuristic fallback.
-10. [ ] Deeper sandbox-policy shadow validation workflow.
+10. [x] Deeper sandbox-policy shadow validation workflow (`profile=fast|balanced|thorough` + `execution_mode=sync|async_queue`).
 
 ### v0.4 Sandbox-Native Replay
 
@@ -164,25 +164,37 @@ Status:
 2. Replay artifact v2 coverage in ops diagnostics.
 3. Project budget policy enforcement on replay runs.
 
+Status:
+
+1. [x] `playbooks/run` supports sandbox-native execution backends (`sandbox_sync` / `sandbox_async`).
+2. [ ] Expand replay artifact-v2 diagnostics rollups beyond current sandbox run inspection.
+3. [x] Replay sandbox execution path enforces tenant/project sandbox budget policy.
+
 ### v1.0 Production Replay
 
 1. Stable replay SLOs and gate integration.
 2. Diff-based execution review for sensitive steps.
 3. Full policy-governed adaptive replay lifecycle.
 
+Status:
+
+1. [ ] Finalize replay SLO thresholds and gate wiring.
+2. [x] Sensitive-command execution review controls (`sensitive_review_mode`, explicit override gate).
+3. [ ] Continue adaptive replay lifecycle hardening.
+
 ## 11. Known Gaps (Current)
 
 1. Embedded backend currently supports replay write path, but replay read/compile APIs require postgres in this phase.
-2. `playbooks/run` strict/guided currently execute local command tools only (`command|shell|exec|bash`) under allowlist.
+2. `playbooks/run` strict/guided is command-tool scoped (`command|shell|exec|bash`) with allowlist; non-command tools still require expansion.
 3. Built-in LLM repair synthesis is OpenAI-compatible (`builtin_llm`); provider-specific adaptive templates are not implemented yet.
-4. Sandbox shadow validation policy currently supports timeout/stop defaults; remote/scheduled validation policy is not yet configurable.
+4. Sandbox shadow validation supports profile + async queue controls; remote executor policy classes remain to be expanded.
 5. Global policy defaults, named profile presets, and tenant/route scoped policy maps are supported for review auto-promotion.
 
 ## 12. Next Implementation Steps
 
-1. Extend strict/guided executor beyond local command tools to sandbox-native actions.
+1. Extend strict/guided executor beyond command-tool class to richer action kinds.
 2. Add LLM-assisted repair synthesis (`repair_reason`, `patch`, `shadow_result`).
-3. Extend sandbox shadow validation policy beyond timeout/stop defaults (profile classes + async queue mode).
+3. [x] Extend sandbox shadow validation policy beyond timeout/stop defaults (profile classes + async queue mode).
 4. [x] Add replay metrics in tenant diagnostics and governance weekly report.
 5. [x] Add global auto-promote policy defaults (request-level fields still override).
 6. [x] Add named global auto-promote policy profiles (`strict|staged|aggressive` + `custom`).

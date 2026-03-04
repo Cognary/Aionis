@@ -733,6 +733,7 @@ export type ReplayPlaybookPromoteInput = z.infer<typeof ReplayPlaybookPromoteReq
 export const ReplayPlaybookRunRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
+  project_id: z.string().min(1).max(128).optional(),
   actor: z.string().min(1).optional(),
   playbook_id: UUID,
   mode: ReplayRunMode.default("simulate"),

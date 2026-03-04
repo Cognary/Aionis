@@ -95,18 +95,26 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
 
 1. `playbooks/run` supports `simulate`, `strict`, and `guided`.
 2. `strict` and `guided` require explicit `params.allow_local_exec=true`.
-3. Local execution is allowlist-gated and currently supports command-style tools (`command|shell|exec|bash`).
-4. `guided` supports repair synthesis strategies:
+3. Execution backends:
+   - `params.execution_backend=local_process` (default)
+   - `params.execution_backend=sandbox_sync` (sandbox run sync, with command result validation)
+   - `params.execution_backend=sandbox_async` (sandbox queue mode, pending execution evidence)
+4. Command execution is allowlist-gated and currently supports command-style tools (`command|shell|exec|bash`).
+5. Optional replay run execution params:
+   - `project_id` (top-level) or `params.project_id` for sandbox budget scoping
+   - `params.sensitive_review_mode=block|warn`
+   - `params.allow_sensitive_exec=true` (required when `block` mode hits a sensitive command)
+6. `guided` supports repair synthesis strategies:
    - `deterministic_skip` (default): remove-step patch fallback.
    - `heuristic_patch`: command-replacement/retry patch when possible, else remove-step fallback.
    - `http_synth`: external repair synthesizer (`REPLAY_GUIDED_REPAIR_HTTP_ENDPOINT`) with heuristic fallback.
    - `builtin_llm`: built-in OpenAI-compatible repair synthesis with heuristic fallback.
-5. Optional guided replay params:
+6. Optional guided replay params:
    - `params.guided_repair_strategy` (`deterministic_skip|heuristic_patch|http_synth|builtin_llm`)
    - `params.command_alias_map` (for command substitution in heuristic/http fallback paths)
    - `params.guided_repair_max_error_chars`
    - Security default: request-side switch to `builtin_llm` is blocked unless explicitly enabled by server policy.
-6. Guided repair server defaults:
+7. Guided repair server defaults:
    - `REPLAY_GUIDED_REPAIR_STRATEGY`
    - `REPLAY_GUIDED_REPAIR_ALLOW_REQUEST_BUILTIN_LLM`
    - `REPLAY_GUIDED_REPAIR_MAX_ERROR_CHARS`
@@ -119,25 +127,29 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
    - `REPLAY_GUIDED_REPAIR_LLM_TIMEOUT_MS`
    - `REPLAY_GUIDED_REPAIR_LLM_MAX_TOKENS`
    - `REPLAY_GUIDED_REPAIR_LLM_TEMPERATURE`
-7. Recommended repair workflow: `playbooks/repair` (pending review) -> `playbooks/repair/review` (approve/reject + auto shadow validation).
-8. `playbooks/repair/review` supports `shadow_validation_mode=readiness|execute|execute_sandbox`:
+8. Recommended repair workflow: `playbooks/repair` (pending review) -> `playbooks/repair/review` (approve/reject + auto shadow validation).
+9. `playbooks/repair/review` supports `shadow_validation_mode=readiness|execute|execute_sandbox`:
    - `readiness`: precondition + allowlist gate checks only.
    - `execute`: strict local execution validation (`record_run=false`, no replay graph writes).
    - `execute_sandbox`: strict sandbox sync execution validation via sandbox session/run APIs.
-9. Shadow-validation execution defaults can be controlled by env:
+10. `shadow_validation_mode=execute_sandbox` supports deeper policy controls via `shadow_validation_params`:
+   - `profile=fast|balanced|thorough`
+   - `execution_mode=sync|async_queue`
+   - `timeout_ms`, `stop_on_failure`
+11. Shadow-validation execution defaults can be controlled by env:
    - `REPLAY_SHADOW_VALIDATE_EXECUTE_TIMEOUT_MS`
    - `REPLAY_SHADOW_VALIDATE_EXECUTE_STOP_ON_FAILURE`
    - `REPLAY_SHADOW_VALIDATE_SANDBOX_TIMEOUT_MS`
    - `REPLAY_SHADOW_VALIDATE_SANDBOX_STOP_ON_FAILURE`
-10. `playbooks/repair/review` can auto-promote when validation passes:
+12. `playbooks/repair/review` can auto-promote when validation passes:
    - `auto_promote_on_pass=true`
    - `auto_promote_target_status` (for example `active`)
    - `auto_promote_gate` thresholds (`max_failed_steps`, `max_blocked_steps`, `max_unknown_steps`, `min_success_ratio`, etc.)
-11. `playbooks/compile_from_run` annotates compile quality metadata:
+13. `playbooks/compile_from_run` annotates compile quality metadata:
    - duplicate-step removal summary (`steps_dedup_removed`, `dedup_removed_step_indexes`)
    - template variable extraction (`parameterization.variables`, `template_variables` per step)
    - per-step quality score (`quality_score`, `quality_flags`) and aggregate recommendations
-12. Server-side default policy can prefill review auto-promotion fields when callers omit them:
+14. Server-side default policy can prefill review auto-promotion fields when callers omit them:
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_PROFILE` (`custom|strict|staged|aggressive`)
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_DEFAULT`
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_TARGET_STATUS`
@@ -150,8 +162,8 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
    - `REPLAY_REPAIR_REVIEW_POLICY_JSON` (`endpoint` / `tenant_default` / `tenant_endpoint` / `tenant_scope_default` / `tenant_scope_endpoint` override maps)
    - When profile is not `custom`, profile defaults are applied first and request fields still take precedence.
    - Resolution order: global defaults -> endpoint -> tenant_default -> tenant_endpoint -> tenant_scope_default -> tenant_scope_endpoint -> request payload fields.
-13. `playbooks/repair/review` response includes `auto_promote_policy_resolution` (resolved tenant/scope, base source, applied policy layers, request overrides, and final effective defaults).
-14. `GET /v1/admin/control/diagnostics/tenant/:tenant_id` includes `diagnostics.replay_policy` rollups for replay review policy coverage and layer hit distribution.
+15. `playbooks/repair/review` response includes `auto_promote_policy_resolution` (resolved tenant/scope, base source, applied policy layers, request overrides, and final effective defaults).
+16. `GET /v1/admin/control/diagnostics/tenant/:tenant_id` includes `diagnostics.replay_policy` rollups for replay review policy coverage and layer hit distribution.
 
 Example (trimmed):
 

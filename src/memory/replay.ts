@@ -91,6 +91,28 @@ type ReplayPlaybookRunOptions = ReplayReadOptions & {
   writeOptions?: ReplayWriteOptions;
   localExecutor?: ReplayLocalExecutorOptions;
   guidedRepair?: ReplayGuidedRepairOptions;
+  sandboxExecutor?: (input: {
+    tenant_id: string;
+    scope: string;
+    project_id: string | null;
+    argv: string[];
+    timeout_ms: number;
+    mode: "sync" | "async";
+    metadata?: Record<string, unknown>;
+  }) => Promise<{
+    ok: boolean;
+    status: string;
+    stdout: string;
+    stderr: string;
+    exit_code: number | null;
+    error: string | null;
+    run_id?: string | null;
+  }>;
+  sandboxBudgetGuard?: (input: {
+    tenant_id: string;
+    scope: string;
+    project_id: string | null;
+  }) => Promise<void>;
 };
 
 type ReplayPlaybookReviewOptions = ReplayWriteOptions & {
@@ -101,6 +123,7 @@ type ReplayPlaybookReviewOptions = ReplayWriteOptions & {
     scope: string;
     argv: string[];
     timeout_ms: number;
+    mode?: "sync" | "async";
     metadata?: Record<string, unknown>;
   }) => Promise<{
     ok: boolean;
@@ -415,6 +438,80 @@ type SignatureCheck = {
 };
 
 const UUID_V4_OR_VX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+type ReplayExecutionBackend = "local_process" | "sandbox_sync" | "sandbox_async";
+type ReplaySensitiveReviewMode = "block" | "warn";
+
+const SENSITIVE_COMMANDS = new Set<string>([
+  "rm",
+  "mv",
+  "cp",
+  "chmod",
+  "chown",
+  "chgrp",
+  "dd",
+  "mkfs",
+  "fdisk",
+  "parted",
+  "truncate",
+  "reboot",
+  "shutdown",
+  "kill",
+  "killall",
+  "pkill",
+  "useradd",
+  "userdel",
+  "usermod",
+  "groupadd",
+  "groupdel",
+  "ln",
+  "mount",
+  "umount",
+  "sed",
+  "perl",
+]);
+
+function normalizeReplayExecutionBackend(raw: string | null): ReplayExecutionBackend {
+  if (raw === "sandbox_sync" || raw === "sandbox_async" || raw === "local_process") return raw;
+  return "local_process";
+}
+
+function normalizeReplaySensitiveReviewMode(raw: string | null): ReplaySensitiveReviewMode {
+  if (raw === "warn") return "warn";
+  return "block";
+}
+
+function detectSensitiveCommand(command: string, argv: string[]): {
+  sensitive: boolean;
+  reason: string | null;
+  risk_level: "low" | "medium" | "high";
+} {
+  const cmd = command.trim();
+  if (!cmd) return { sensitive: false, reason: null, risk_level: "low" };
+  const lower = cmd.toLowerCase();
+  if (!SENSITIVE_COMMANDS.has(lower)) return { sensitive: false, reason: null, risk_level: "low" };
+
+  if (lower === "rm") {
+    const joined = argv.join(" ");
+    if (/\s-rf(\s|$)/.test(joined) || /\s-fr(\s|$)/.test(joined)) {
+      return { sensitive: true, reason: "destructive_delete_recursive", risk_level: "high" };
+    }
+    return { sensitive: true, reason: "delete_operation", risk_level: "high" };
+  }
+  if (lower === "dd" || lower === "mkfs" || lower === "fdisk" || lower === "parted") {
+    return { sensitive: true, reason: "disk_mutation_operation", risk_level: "high" };
+  }
+  if (lower === "chmod" || lower === "chown" || lower === "chgrp" || lower === "usermod" || lower === "useradd" || lower === "userdel") {
+    return { sensitive: true, reason: "permission_or_identity_mutation", risk_level: "high" };
+  }
+  if (lower === "sed" || lower === "perl") {
+    const joined = argv.join(" ");
+    if (/\s-i(\s|$)/.test(joined) || /\s-i[^ ]+/.test(joined)) {
+      return { sensitive: true, reason: "in_place_file_mutation", risk_level: "medium" };
+    }
+    return { sensitive: true, reason: "shell_mutation_tool", risk_level: "medium" };
+  }
+  return { sensitive: true, reason: "mutation_operation", risk_level: "medium" };
+}
 
 async function isPortFree(host: string, port: number): Promise<boolean> {
   return await new Promise((resolve) => {
@@ -863,6 +960,106 @@ function sandboxResultToOutcome(
     duration_ms: Math.max(0, Math.trunc(durationMs)),
     timed_out: status === "timeout",
     error: input.error ? String(input.error) : null,
+  };
+}
+
+type ReplayCommandExecutionResult = {
+  outcome: LocalCommandOutcome | null;
+  pending: boolean;
+  backend: ReplayExecutionBackend;
+  sandbox_run_id: string | null;
+  raw_status: string | null;
+  raw_error: string | null;
+};
+
+async function executeReplayCommand(args: {
+  backend: ReplayExecutionBackend;
+  tenant_id: string;
+  scope: string;
+  project_id: string | null;
+  argv: string[];
+  timeout_ms: number;
+  local: {
+    cwd: string;
+    stdioMaxBytes: number;
+  };
+  sandboxExecutor?: ReplayPlaybookRunOptions["sandboxExecutor"];
+}): Promise<ReplayCommandExecutionResult> {
+  if (args.backend === "local_process") {
+    const localOut = runLocalCommand(args.argv, {
+      cwd: args.local.cwd,
+      timeoutMs: args.timeout_ms,
+      stdioMaxBytes: args.local.stdioMaxBytes,
+    });
+    return {
+      outcome: localOut,
+      pending: false,
+      backend: args.backend,
+      sandbox_run_id: null,
+      raw_status: localOut.status,
+      raw_error: localOut.error,
+    };
+  }
+
+  if (!args.sandboxExecutor) {
+    throw new HttpError(
+      400,
+      "replay_sandbox_executor_not_enabled",
+      "sandbox execution backend is requested but sandbox executor is not configured",
+      { backend: args.backend },
+    );
+  }
+
+  const startedAt = Date.now();
+  const sandboxMode: "sync" | "async" = args.backend === "sandbox_sync" ? "sync" : "async";
+  const sandboxOut = await args.sandboxExecutor({
+    tenant_id: args.tenant_id,
+    scope: args.scope,
+    project_id: args.project_id,
+    argv: args.argv,
+    timeout_ms: args.timeout_ms,
+    mode: sandboxMode,
+    metadata: {
+      source: "replay_playbook_run",
+      backend: args.backend,
+    },
+  });
+
+  const rawStatus = toStringOrNull(sandboxOut.status) ?? "unknown";
+  const pending =
+    sandboxMode === "async"
+    || rawStatus === "queued"
+    || rawStatus === "running";
+  if (pending) {
+    return {
+      outcome: null,
+      pending: true,
+      backend: args.backend,
+      sandbox_run_id: toStringOrNull(sandboxOut.run_id) ?? null,
+      raw_status: rawStatus,
+      raw_error: toStringOrNull(sandboxOut.error),
+    };
+  }
+
+  const outcome = sandboxResultToOutcome(
+    {
+      ok: sandboxOut.ok,
+      status: rawStatus,
+      stdout: String(sandboxOut.stdout ?? ""),
+      stderr: String(sandboxOut.stderr ?? ""),
+      exit_code: Number.isFinite(sandboxOut.exit_code ?? NaN) ? Number(sandboxOut.exit_code) : null,
+      error: sandboxOut.error ? String(sandboxOut.error) : null,
+    },
+    args.argv,
+    Date.now() - startedAt,
+  );
+  return {
+    outcome,
+    pending: false,
+    backend: args.backend,
+    sandbox_run_id: toStringOrNull(sandboxOut.run_id) ?? null,
+    raw_status: rawStatus,
+    raw_error: toStringOrNull(sandboxOut.error),
   };
 }
 
@@ -3130,14 +3327,25 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
         }
       } else if (validationMode === "execute_sandbox") {
         const paramsObj = asObject(parsed.shadow_validation_params) ?? {};
+        const profileRaw = toStringOrNull(paramsObj.profile) ?? "balanced";
+        const profile: "fast" | "balanced" | "thorough" =
+          profileRaw === "fast" || profileRaw === "thorough" || profileRaw === "balanced" ? profileRaw : "balanced";
+        const profileDefaults =
+          profile === "fast"
+            ? { timeoutMs: Math.min(shadowValidationPolicy.sandboxTimeoutMs, 6000), stopOnFailure: true }
+            : profile === "thorough"
+              ? { timeoutMs: Math.max(shadowValidationPolicy.sandboxTimeoutMs, 20000), stopOnFailure: false }
+              : { timeoutMs: shadowValidationPolicy.sandboxTimeoutMs, stopOnFailure: shadowValidationPolicy.sandboxStopOnFailure };
+        const executionModeRaw = toStringOrNull(paramsObj.execution_mode) ?? "sync";
+        const sandboxExecMode: "sync" | "async" = executionModeRaw === "async_queue" ? "async" : "sync";
         const timeoutMs = clampInt(
-          Number(paramsObj.timeout_ms ?? shadowValidationPolicy.sandboxTimeoutMs),
+          Number(paramsObj.timeout_ms ?? profileDefaults.timeoutMs),
           100,
           600000,
         );
         const stopOnFailure =
           paramsObj.stop_on_failure === undefined
-            ? shadowValidationPolicy.sandboxStopOnFailure
+            ? profileDefaults.stopOnFailure
             : paramsObj.stop_on_failure !== false;
         if (!opts.sandboxValidationExecutor) {
           shadowPass = false;
@@ -3154,6 +3362,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
           let failedSteps = 0;
           let blockedSteps = 0;
           let unknownSteps = 0;
+          let pendingSteps = 0;
           const stepsEval = stepsRaw.slice(0, parsed.shadow_validation_max_steps);
           for (const step of stepsEval) {
             const stepObj = asObject(step) ?? {};
@@ -3224,6 +3433,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
                 scope: tenancy.scope,
                 argv,
                 timeout_ms: timeoutMs,
+                mode: sandboxExecMode,
                 metadata: {
                   source: "replay_shadow_validation",
                   playbook_id: parsed.playbook_id,
@@ -3242,6 +3452,20 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
                 error: String(err?.message ?? err),
                 run_id: null,
               };
+            }
+            if (sandboxExecMode === "async" || sandboxExec.status === "queued" || sandboxExec.status === "running") {
+              pendingSteps += 1;
+              checks.push({
+                step_index: stepIndex,
+                tool_name: toolName,
+                status: "pending",
+                command,
+                argv,
+                sandbox_run_id: sandboxExec.run_id ?? null,
+                sandbox_status: sandboxExec.status ?? "queued",
+              });
+              if (stopOnFailure) break;
+              continue;
             }
             const outcome = sandboxResultToOutcome(sandboxExec, argv, Date.now() - startedAt);
             const signature = evaluateExpectedSignature(expectedSignature, outcome);
@@ -3269,21 +3493,32 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
             if (!pass && stopOnFailure) break;
           }
 
-          shadowPass = failedSteps === 0 && blockedSteps === 0 && unknownSteps === 0;
+          shadowPass =
+            sandboxExecMode === "sync"
+            && pendingSteps === 0
+            && failedSteps === 0
+            && blockedSteps === 0
+            && unknownSteps === 0;
           shadowValidation = {
             mode: "execute_sandbox",
             pass: shadowPass,
             validated_at: new Date().toISOString(),
             validator: "repair_review_auto_execute_sandbox",
+            profile,
+            execution_mode: sandboxExecMode === "sync" ? "sync" : "async_queue",
             max_steps: parsed.shadow_validation_max_steps,
             timeout_ms: timeoutMs,
+            stop_on_failure: stopOnFailure,
             summary: {
               total_steps: Math.min(stepsRaw.length, parsed.shadow_validation_max_steps),
               succeeded_steps: succeededSteps,
               failed_steps: failedSteps,
               blocked_steps: blockedSteps,
               unknown_steps: unknownSteps,
+              pending_steps: pendingSteps,
             },
+            pending: pendingSteps > 0,
+            pending_reason: pendingSteps > 0 ? "async_queue_pending" : null,
             steps_preview: checks.slice(0, 20),
           };
         }
@@ -3578,6 +3813,9 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       const stepObj = asObject(step) ?? {};
       const stepIndex = Number(stepObj.step_index ?? 0) || null;
       const toolName = toStringOrNull(stepObj.tool_name);
+      const argv = isReplayCommandTool(toolName) ? parseStepArgv(stepObj, toolName) : [];
+      const command = String(argv[0] ?? "").trim();
+      const sensitive = command ? detectSensitiveCommand(command, argv) : { sensitive: false, reason: null, risk_level: "low" as const };
       const preconditions = Array.isArray(stepObj.preconditions) ? stepObj.preconditions : [];
       const checks: PreconditionResult[] = [];
       for (const cond of preconditions) {
@@ -3601,6 +3839,16 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         tool_name: toolName,
         safety_level: toStringOrNull(stepObj.safety_level) ?? "needs_confirm",
         readiness,
+        command: command || null,
+        argv,
+        sensitive_review: sensitive.sensitive
+          ? {
+              required_override: true,
+              reason: sensitive.reason,
+              risk_level: sensitive.risk_level,
+              default_mode: "block",
+            }
+          : null,
         precondition_total: checks.length,
         checks,
         notes:
@@ -3627,6 +3875,10 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         }),
       },
       mode: "simulate",
+      execution_policy: {
+        execution_backend: normalizeReplayExecutionBackend(toStringOrNull(paramsObj.execution_backend)),
+        sensitive_review_mode: normalizeReplaySensitiveReviewMode(toStringOrNull(paramsObj.sensitive_review_mode)),
+      },
       summary: {
         total_steps: stepsRaw.length,
         ready_steps: readySteps,
@@ -3638,7 +3890,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             ? "Fix blocked preconditions before strict replay or use guided repair."
             : unknownSteps > 0
               ? "Define unsupported precondition kinds or run guided mode with repair."
-              : "Safe to run strict replay when local executor is enabled.",
+              : "Safe to run strict replay when execution backend policy is satisfied.",
       },
       steps: stepReports,
       params_echo: parsed.params ?? {},
@@ -3646,11 +3898,34 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
   }
 
   const localExecutor = opts.localExecutor;
-  if (!localExecutor?.enabled || localExecutor.mode !== "local_process") {
+  const executionBackend = normalizeReplayExecutionBackend(toStringOrNull(paramsObj.execution_backend));
+  const sandboxProjectId = toStringOrNull(parsed.project_id) ?? toStringOrNull(paramsObj.project_id);
+  const sensitiveReviewMode = normalizeReplaySensitiveReviewMode(toStringOrNull(paramsObj.sensitive_review_mode));
+  const allowSensitiveExec = paramsObj.allow_sensitive_exec === true;
+
+  if (executionBackend === "sandbox_async" && mode === "strict") {
     throw new HttpError(
       400,
-      "replay_executor_not_enabled",
-      "strict/guided replay requires local executor enabled (SANDBOX_ENABLED=true and SANDBOX_EXECUTOR_MODE=local_process).",
+      "replay_strict_async_not_supported",
+      "strict replay does not support async sandbox execution; use sandbox_sync or local_process.",
+      { execution_backend: executionBackend },
+    );
+  }
+  if (executionBackend === "local_process") {
+    if (!localExecutor?.enabled || localExecutor.mode !== "local_process") {
+      throw new HttpError(
+        400,
+        "replay_executor_not_enabled",
+        "strict/guided replay with local_process requires SANDBOX_ENABLED=true and SANDBOX_EXECUTOR_MODE=local_process.",
+        { execution_backend: executionBackend },
+      );
+    }
+  } else if (!opts.sandboxExecutor) {
+    throw new HttpError(
+      400,
+      "replay_sandbox_executor_not_enabled",
+      "sandbox replay backend is not configured on this deployment",
+      { execution_backend: executionBackend },
     );
   }
   if (!opts.writeOptions) {
@@ -3661,13 +3936,14 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       400,
       "replay_local_exec_consent_required",
       "strict/guided replay requires params.allow_local_exec=true as explicit execution consent.",
+      { execution_backend: executionBackend },
     );
   }
 
   const requestedCommands = asStringArray(paramsObj.allowed_commands);
   const requestedSet = requestedCommands.length > 0 ? new Set(requestedCommands) : null;
   const allowedCommands = new Set<string>();
-  for (const cmd of localExecutor.allowedCommands.values()) {
+  for (const cmd of (localExecutor?.allowedCommands ?? new Set<string>()).values()) {
     if (requestedSet && !requestedSet.has(cmd)) continue;
     allowedCommands.add(cmd);
   }
@@ -3713,22 +3989,22 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
   );
   const commandAliasMap = asStringRecord(paramsObj.command_alias_map);
 
-  const timeoutMs = clampInt(
-    Number(paramsObj.timeout_ms ?? localExecutor.timeoutMs),
-    100,
-    600000,
-  );
-  const stdioMaxBytes = clampInt(
-    Number(paramsObj.stdio_max_bytes ?? localExecutor.stdioMaxBytes),
-    1024,
-    1024 * 1024,
-  );
-  const workdir = toStringOrNull(paramsObj.workdir) ?? localExecutor.workdir;
+  const timeoutMs = clampInt(Number(paramsObj.timeout_ms ?? localExecutor?.timeoutMs ?? 15000), 100, 600000);
+  const stdioMaxBytes = clampInt(Number(paramsObj.stdio_max_bytes ?? localExecutor?.stdioMaxBytes ?? 65536), 1024, 1024 * 1024);
+  const workdir = toStringOrNull(paramsObj.workdir) ?? localExecutor?.workdir ?? process.cwd();
   const autoConfirm = paramsObj.auto_confirm === true;
   const stopOnFailure = paramsObj.stop_on_failure !== false;
   const recordRun = paramsObj.record_run !== false;
   const requestedRunIdRaw = toStringOrNull(paramsObj.run_id);
   const replayRunId = requestedRunIdRaw && UUID_V4_OR_VX.test(requestedRunIdRaw) ? requestedRunIdRaw : randomUUID();
+
+  if (executionBackend !== "local_process" && opts.sandboxBudgetGuard) {
+    await opts.sandboxBudgetGuard({
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      project_id: sandboxProjectId,
+    });
+  }
 
   let runStartOut: Record<string, unknown> | null = null;
   if (recordRun) {
@@ -3747,6 +4023,9 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         }),
         metadata: {
           replay_mode: mode,
+          execution_backend: executionBackend,
+          replay_project_id: sandboxProjectId,
+          sensitive_review_mode: sensitiveReviewMode,
           source_playbook_id: parsed.playbook_id,
           source_playbook_version: row.version_num,
           guided_repair_strategy: mode === "guided" ? guidedRepairStrategy : null,
@@ -3762,6 +4041,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
   let repairedSteps = 0;
   let blockedSteps = 0;
   let skippedSteps = 0;
+  let pendingSteps = 0;
 
   for (const step of stepsRaw) {
     const stepObj = asObject(step) ?? {};
@@ -3988,7 +4268,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
     }
 
     if (!isReplayCommandTool(toolName)) {
-      const reason = "unsupported_tool_for_local_executor";
+      const reason = "unsupported_tool_for_command_executor";
       if (mode === "strict") {
         failedSteps += 1;
         stepReports.push({
@@ -4027,7 +4307,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         stepIndex,
         toolName,
         reason,
-        detail: "tool is not mapped to local command executor",
+        detail: "tool is not mapped to command-style replay executor",
         stepObj,
         allowedCommands,
         commandAliasMap,
@@ -4166,12 +4446,174 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       continue;
     }
 
+    const sensitive = detectSensitiveCommand(command, argv);
+    const sensitiveReviewInfo = sensitive.sensitive
+      ? {
+          command,
+          argv,
+          reason: sensitive.reason,
+          risk_level: sensitive.risk_level,
+          mode: sensitiveReviewMode,
+          override_used: allowSensitiveExec,
+        }
+      : null;
+    if (sensitive.sensitive && sensitiveReviewMode === "block" && !allowSensitiveExec) {
+      const reason = "sensitive_command_requires_override";
+      const sensitiveReview = {
+        command,
+        argv,
+        reason: sensitive.reason,
+        risk_level: sensitive.risk_level,
+        required_param: "params.allow_sensitive_exec=true",
+      };
+      if (mode === "strict") {
+        failedSteps += 1;
+        blockedSteps += 1;
+        stepReports.push({
+          step_index: stepIndex,
+          tool_name: toolName,
+          status: "failed",
+          readiness: "blocked",
+          error: reason,
+          sensitive_review: sensitiveReview,
+        });
+        if (recordRun) {
+          await replayStepAfter(
+            client,
+            {
+              tenant_id: tenancy.tenant_id,
+              scope: tenancy.scope,
+              run_id: replayRunId,
+              step_id: persistedStepId ?? undefined,
+              step_index: stepIndex ?? undefined,
+              status: "failed",
+              output_signature: { reason, sensitive_review: sensitiveReview },
+              postconditions: [],
+              artifact_refs: [],
+              repair_applied: false,
+              error: reason,
+            },
+            opts.writeOptions,
+          );
+        }
+        if (stopOnFailure) break;
+        continue;
+      }
+      repairedSteps += 1;
+      skippedSteps += 1;
+      const repair = await makeGuidedRepairPatch({
+        strategy: guidedRepairStrategy,
+        stepIndex,
+        toolName,
+        reason,
+        detail: `blocked sensitive command '${command}' (${sensitive.reason ?? "risk"})`,
+        stepObj,
+        command,
+        argv,
+        allowedCommands,
+        commandAliasMap,
+        maxErrorChars: guidedRepairMaxErrorChars,
+        httpEndpoint: opts.guidedRepair?.httpEndpoint,
+        httpTimeoutMs: opts.guidedRepair?.httpTimeoutMs,
+        httpAuthToken: opts.guidedRepair?.httpAuthToken,
+        llmBaseUrl: opts.guidedRepair?.llmBaseUrl,
+        llmApiKey: opts.guidedRepair?.llmApiKey,
+        llmModel: opts.guidedRepair?.llmModel,
+        llmTimeoutMs: opts.guidedRepair?.llmTimeoutMs,
+        llmMaxTokens: opts.guidedRepair?.llmMaxTokens,
+        llmTemperature: opts.guidedRepair?.llmTemperature,
+        mode: "guided",
+      });
+      stepReports.push({
+        step_index: stepIndex,
+        tool_name: toolName,
+        status: "partial",
+        readiness: "blocked",
+        command,
+        argv,
+        sensitive_review: sensitiveReview,
+        repair_applied: true,
+        repair,
+      });
+      if (recordRun) {
+        await replayStepAfter(
+          client,
+          {
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            run_id: replayRunId,
+            step_id: persistedStepId ?? undefined,
+            step_index: stepIndex ?? undefined,
+            status: "partial",
+            output_signature: { reason, sensitive_review: sensitiveReview, repair },
+            postconditions: [],
+            artifact_refs: [],
+            repair_applied: true,
+            repair_note: reason,
+          },
+          opts.writeOptions,
+        );
+      }
+      continue;
+    }
+
     executedSteps += 1;
-    const execOutcome = runLocalCommand(argv, {
-      cwd: workdir,
-      timeoutMs,
-      stdioMaxBytes,
+    const exec = await executeReplayCommand({
+      backend: executionBackend,
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      project_id: sandboxProjectId,
+      argv,
+      timeout_ms: timeoutMs,
+      local: { cwd: workdir, stdioMaxBytes },
+      sandboxExecutor: opts.sandboxExecutor,
     });
+    if (exec.pending || !exec.outcome) {
+      pendingSteps += 1;
+      repairedSteps += mode === "guided" ? 1 : 0;
+      const reason = "sandbox_async_execution_pending";
+      stepReports.push({
+        step_index: stepIndex,
+        tool_name: toolName,
+        status: mode === "guided" ? "partial" : "failed",
+        readiness: "pending",
+        command,
+        argv,
+        execution_backend: executionBackend,
+        sandbox_run_id: exec.sandbox_run_id,
+        pending: true,
+        error: reason,
+      });
+      if (recordRun) {
+        await replayStepAfter(
+          client,
+          {
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            run_id: replayRunId,
+            step_id: persistedStepId ?? undefined,
+            step_index: stepIndex ?? undefined,
+            status: mode === "guided" ? "partial" : "failed",
+            output_signature: {
+              reason,
+              execution_backend: executionBackend,
+              sandbox_run_id: exec.sandbox_run_id,
+              sandbox_status: exec.raw_status,
+            },
+            postconditions: [],
+            artifact_refs: [],
+            repair_applied: mode === "guided",
+            repair_note: mode === "guided" ? reason : undefined,
+            error: mode === "strict" ? reason : undefined,
+          },
+          opts.writeOptions,
+        );
+      }
+      if (mode === "strict" && stopOnFailure) break;
+      if (mode === "strict") failedSteps += 1;
+      continue;
+    }
+    const execOutcome = exec.outcome;
     const signature = evaluateExpectedSignature(expectedSignature, execOutcome);
     const postChecks: PreconditionResult[] = [];
     for (const cond of postconditions) postChecks.push(await evaluatePostcondition(cond, execOutcome));
@@ -4188,6 +4630,9 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         readiness: "ready",
         command,
         argv,
+        execution_backend: executionBackend,
+        sandbox_run_id: exec.sandbox_run_id,
+        sensitive_review: sensitiveReviewInfo,
         execution: execOutcome,
         signature,
         postconditions: postChecks,
@@ -4205,6 +4650,9 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             output_signature: {
               command,
               argv,
+              execution_backend: executionBackend,
+              sandbox_run_id: exec.sandbox_run_id,
+              sensitive_review: sensitiveReviewInfo,
               exit_code: execOutcome.exit_code,
               duration_ms: execOutcome.duration_ms,
               signature,
@@ -4229,6 +4677,9 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         readiness: "blocked",
         command,
         argv,
+        execution_backend: executionBackend,
+        sandbox_run_id: exec.sandbox_run_id,
+        sensitive_review: sensitiveReviewInfo,
         execution: execOutcome,
         signature,
         postconditions: postChecks,
@@ -4247,6 +4698,9 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             output_signature: {
               command,
               argv,
+              execution_backend: executionBackend,
+              sandbox_run_id: exec.sandbox_run_id,
+              sensitive_review: sensitiveReviewInfo,
               exit_code: execOutcome.exit_code,
               duration_ms: execOutcome.duration_ms,
               signature,
@@ -4296,6 +4750,9 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       readiness: "partial",
       command,
       argv,
+      execution_backend: executionBackend,
+      sandbox_run_id: exec.sandbox_run_id,
+      sensitive_review: sensitiveReviewInfo,
       execution: execOutcome,
       signature,
       postconditions: postChecks,
@@ -4315,6 +4772,9 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           output_signature: {
             command,
             argv,
+            execution_backend: executionBackend,
+            sandbox_run_id: exec.sandbox_run_id,
+            sensitive_review: sensitiveReviewInfo,
             exit_code: execOutcome.exit_code,
             duration_ms: execOutcome.duration_ms,
             signature,
@@ -4346,12 +4806,14 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         scope: tenancy.scope,
         run_id: replayRunId,
         status: runStatus,
-        summary: `Replay ${mode} run completed: success=${succeededSteps}, failed=${failedSteps}, repaired=${repairedSteps}`,
+        summary: `Replay ${mode} run completed: success=${succeededSteps}, failed=${failedSteps}, repaired=${repairedSteps}, pending=${pendingSteps}`,
         success_criteria: {
           mode,
+          execution_backend: executionBackend,
           failed_steps: failedSteps,
           repaired_steps: repairedSteps,
           skipped_steps: skippedSteps,
+          pending_steps: pendingSteps,
         },
         metrics: {
           total_steps: stepsRaw.length,
@@ -4361,6 +4823,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           repaired_steps: repairedSteps,
           blocked_steps: blockedSteps,
           skipped_steps: skippedSteps,
+          pending_steps: pendingSteps,
         },
       },
       opts.writeOptions,
@@ -4399,18 +4862,24 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       repaired_steps: repairedSteps,
       blocked_steps: blockedSteps,
       skipped_steps: skippedSteps,
+      pending_steps: pendingSteps,
       replay_readiness:
-        failedSteps > 0 ? "failed" : repairedSteps > 0 || skippedSteps > 0 ? "partial" : "success",
+        failedSteps > 0 ? "failed" : pendingSteps > 0 || repairedSteps > 0 || skippedSteps > 0 ? "partial" : "success",
       next_action:
         failedSteps > 0
           ? "Inspect failed step outputs and fix playbook/tool constraints."
-          : repairedSteps > 0 || skippedSteps > 0
+          : pendingSteps > 0
+            ? "Wait for queued sandbox runs and then replay run_get for completion evidence."
+            : repairedSteps > 0 || skippedSteps > 0
             ? "Review guided repair patches and promote a new playbook version if accepted."
             : "Replay run passed with no repair.",
     },
     steps: stepReports,
     execution: {
-      local_executor_enabled: localExecutor.enabled,
+      execution_backend: executionBackend,
+      local_executor_enabled: localExecutor?.enabled === true,
+      sandbox_executor_available: typeof opts.sandboxExecutor === "function",
+      sandbox_project_id: sandboxProjectId,
       workdir,
       timeout_ms: timeoutMs,
       stdio_max_bytes: stdioMaxBytes,
@@ -4418,6 +4887,8 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       auto_confirm: autoConfirm,
       stop_on_failure: stopOnFailure,
       record_run: recordRun,
+      sensitive_review_mode: sensitiveReviewMode,
+      allow_sensitive_exec: allowSensitiveExec,
       guided_repair_strategy: guidedRepairStrategy,
       guided_repair_max_error_chars: guidedRepairMaxErrorChars,
       guided_repair_http_configured: Boolean(opts.guidedRepair?.httpEndpoint),

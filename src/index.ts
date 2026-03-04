@@ -4480,6 +4480,7 @@ app.post("/v1/memory/replay/playbooks/repair/review", async (req, reply) => {
               run_id: null,
             };
           }
+          const sandboxMode = input.mode === "async" ? "async" : "sync";
           const sessionOut = await store.withTx((client) =>
             createSandboxSession(
               client,
@@ -4508,7 +4509,7 @@ app.post("/v1/memory/replay/playbooks/repair/review", async (req, reply) => {
                 scope: input.scope,
                 actor: "replay_shadow_validation",
                 session_id: sessionOut.session.session_id,
-                mode: "sync",
+                mode: sandboxMode,
                 timeout_ms: input.timeout_ms,
                 action: {
                   kind: "command",
@@ -4526,6 +4527,19 @@ app.post("/v1/memory/replay/playbooks/repair/review", async (req, reply) => {
               },
             ),
           );
+          if (sandboxMode === "async") {
+            sandboxExecutor.enqueue(queued.run.run_id);
+            return {
+              ok: false,
+              status: queued.run.status ?? "queued",
+              stdout: "",
+              stderr: "",
+              exit_code: null,
+              error: null,
+              run_id: queued.run.run_id,
+            };
+          }
+
           await sandboxExecutor.executeSync(queued.run.run_id);
           const final = await store.withClient((client) =>
             getSandboxRun(
@@ -4612,6 +4626,107 @@ app.post("/v1/memory/replay/playbooks/run", async (req, reply) => {
           llmTimeoutMs: env.REPLAY_GUIDED_REPAIR_LLM_TIMEOUT_MS,
           llmMaxTokens: env.REPLAY_GUIDED_REPAIR_LLM_MAX_TOKENS,
           llmTemperature: env.REPLAY_GUIDED_REPAIR_LLM_TEMPERATURE,
+        },
+        sandboxBudgetGuard: async (input) => {
+          await enforceSandboxTenantBudget(reply, input.tenant_id, input.scope, input.project_id);
+        },
+        sandboxExecutor: async (input) => {
+          if (!env.SANDBOX_ENABLED) {
+            return {
+              ok: false,
+              status: "failed",
+              stdout: "",
+              stderr: "",
+              exit_code: null,
+              error: "sandbox_disabled",
+              run_id: null,
+            };
+          }
+          const sandboxMode = input.mode === "async" ? "async" : "sync";
+          const sessionOut = await store.withTx((client) =>
+            createSandboxSession(
+              client,
+              {
+                tenant_id: input.tenant_id,
+                scope: input.scope,
+                actor: "replay_playbook_run",
+                profile: "restricted",
+                ttl_seconds: 900,
+                metadata: {
+                  source: "replay_playbook_run",
+                  ...(input.metadata ?? {}),
+                },
+              },
+              {
+                defaultScope: env.MEMORY_SCOPE,
+                defaultTenantId: env.MEMORY_TENANT_ID,
+              },
+            ),
+          );
+          const queued = await store.withTx((client) =>
+            enqueueSandboxRun(
+              client,
+              {
+                tenant_id: input.tenant_id,
+                scope: input.scope,
+                project_id: input.project_id ?? undefined,
+                actor: "replay_playbook_run",
+                session_id: sessionOut.session.session_id,
+                mode: sandboxMode,
+                timeout_ms: input.timeout_ms,
+                action: {
+                  kind: "command",
+                  argv: input.argv,
+                },
+                metadata: {
+                  source: "replay_playbook_run",
+                  ...(input.metadata ?? {}),
+                },
+              },
+              {
+                defaultScope: env.MEMORY_SCOPE,
+                defaultTenantId: env.MEMORY_TENANT_ID,
+                defaultTimeoutMs: env.SANDBOX_EXECUTOR_TIMEOUT_MS,
+              },
+            ),
+          );
+          if (sandboxMode === "async") {
+            sandboxExecutor.enqueue(queued.run.run_id);
+            return {
+              ok: false,
+              status: queued.run.status ?? "queued",
+              stdout: "",
+              stderr: "",
+              exit_code: null,
+              error: null,
+              run_id: queued.run.run_id,
+            };
+          }
+
+          await sandboxExecutor.executeSync(queued.run.run_id);
+          const final = await store.withClient((client) =>
+            getSandboxRun(
+              client,
+              {
+                tenant_id: input.tenant_id,
+                scope: input.scope,
+                run_id: queued.run.run_id,
+              },
+              {
+                defaultScope: env.MEMORY_SCOPE,
+                defaultTenantId: env.MEMORY_TENANT_ID,
+              },
+            ),
+          );
+          return {
+            ok: final.run.status === "succeeded",
+            status: final.run.status,
+            stdout: final.run.output?.stdout ?? "",
+            stderr: final.run.output?.stderr ?? "",
+            exit_code: Number.isFinite(final.run.exit_code ?? NaN) ? Number(final.run.exit_code) : null,
+            error: final.run.error ? String(final.run.error) : null,
+            run_id: final.run.run_id,
+          };
         },
       }),
     );
