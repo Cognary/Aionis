@@ -175,6 +175,10 @@ function buildMarkdown(args: {
   } else {
     lines.push("6. Sandbox telemetry: `unavailable`");
   }
+  lines.push(`10. Replay policy reviews: \`${scopeSnapshot.replay_policy.total_reviews}\``);
+  lines.push(`11. Replay shadow-blocked rate: \`${pct(scopeSnapshot.replay_policy.shadow_blocked_rate)}%\``);
+  lines.push(`12. Replay policy resolution coverage: \`${pct(scopeSnapshot.replay_policy.policy_resolution_coverage)}%\``);
+  lines.push(`13. Replay policy overrides-applied rate: \`${pct(scopeSnapshot.replay_policy.policy_overrides_applied_rate)}%\``);
   lines.push("");
   lines.push("## Sandbox Failure Classification");
   lines.push("");
@@ -188,6 +192,16 @@ function buildMarkdown(args: {
     }
   } else {
     lines.push("1. Sandbox telemetry table is missing; apply sandbox telemetry migration.");
+  }
+  lines.push("");
+  lines.push("## Replay Policy Resolution");
+  lines.push("");
+  if (Array.isArray(scopeSnapshot.replay_policy.top_policy_layers) && scopeSnapshot.replay_policy.top_policy_layers.length > 0) {
+    for (const layer of scopeSnapshot.replay_policy.top_policy_layers) {
+      lines.push(`1. ${layer.layer}: \`${layer.total}\``);
+    }
+  } else {
+    lines.push("1. No replay policy layer overrides in the current window.");
   }
   lines.push("");
   lines.push("## Cross-Tenant Drift");
@@ -242,6 +256,9 @@ async function main() {
   const maxSandboxFailureRate = clampNum(Number(argValue("--max-sandbox-failure-rate") ?? "0.2"), 0, 1);
   const maxSandboxTimeoutRate = clampNum(Number(argValue("--max-sandbox-timeout-rate") ?? "0.1"), 0, 1);
   const maxSandboxOutputTruncatedRate = clampNum(Number(argValue("--max-sandbox-output-truncated-rate") ?? "0.2"), 0, 1);
+  const minReplayReviewsForGate = clampInt(Number(argValue("--min-replay-reviews-for-gate") ?? "10"), 0, 1_000_000);
+  const maxReplayShadowBlockedRate = clampNum(Number(argValue("--max-replay-shadow-blocked-rate") ?? "0.2"), 0, 1);
+  const minReplayPolicyResolutionCoverage = clampNum(Number(argValue("--min-replay-policy-resolution-coverage") ?? "0.9"), 0, 1);
 
   const strict = hasFlag("--strict");
   const strictWarnings = hasFlag("--strict-warnings");
@@ -423,6 +440,96 @@ async function main() {
           )
         : { rows: [] as Array<{ error_code: string; total: string }> };
 
+    const scopeReplayRes = await client.query<{
+      total_reviews: string;
+      approved: string;
+      rejected: string;
+      approved_shadow_blocked: string;
+      auto_promote_requested: string;
+      policy_resolution_present: string;
+      policy_overrides_applied: string;
+      promoted_nodes: string;
+    }>(
+      `
+      SELECT
+        count(*) FILTER (
+          WHERE type = 'procedure'
+            AND slots->>'replay_kind' = 'playbook'
+            AND slots ? 'repair_review'
+        )::text AS total_reviews,
+        count(*) FILTER (
+          WHERE type = 'procedure'
+            AND slots->>'replay_kind' = 'playbook'
+            AND slots #>> '{repair_review,state}' = 'approved'
+        )::text AS approved,
+        count(*) FILTER (
+          WHERE type = 'procedure'
+            AND slots->>'replay_kind' = 'playbook'
+            AND slots #>> '{repair_review,state}' = 'rejected'
+        )::text AS rejected,
+        count(*) FILTER (
+          WHERE type = 'procedure'
+            AND slots->>'replay_kind' = 'playbook'
+            AND slots #>> '{repair_review,state}' = 'approved_shadow_blocked'
+        )::text AS approved_shadow_blocked,
+        count(*) FILTER (
+          WHERE type = 'procedure'
+            AND slots->>'replay_kind' = 'playbook'
+            AND slots #>> '{repair_review,auto_promote_on_pass}' = 'true'
+        )::text AS auto_promote_requested,
+        count(*) FILTER (
+          WHERE type = 'procedure'
+            AND slots->>'replay_kind' = 'playbook'
+            AND slots ? 'repair_review'
+            AND slots #> '{repair_review,review_metadata,auto_promote_policy_resolution}' IS NOT NULL
+        )::text AS policy_resolution_present,
+        count(*) FILTER (
+          WHERE type = 'procedure'
+            AND slots->>'replay_kind' = 'playbook'
+            AND slots ? 'repair_review'
+            AND jsonb_typeof(slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}') = 'array'
+            AND jsonb_array_length(slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}') > 0
+        )::text AS policy_overrides_applied,
+        count(*) FILTER (
+          WHERE type = 'procedure'
+            AND slots->>'replay_kind' = 'playbook'
+            AND slots #>> '{auto_promotion,triggered}' = 'true'
+        )::text AS promoted_nodes
+      FROM memory_nodes
+      WHERE scope = $1
+        AND created_at >= now() - (($2::text || ' hours')::interval)
+      `,
+      [scope, windowHours],
+    );
+
+    const scopeReplayLayerRes = await client.query<{
+      layer: string;
+      total: string;
+    }>(
+      `
+      SELECT
+        COALESCE(src.item->>'layer', 'unknown') AS layer,
+        count(*)::text AS total
+      FROM memory_nodes n
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(n.slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}') = 'array'
+            THEN n.slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}'
+          ELSE '[]'::jsonb
+        END
+      ) AS src(item)
+      WHERE n.scope = $1
+        AND n.created_at >= now() - (($2::text || ' hours')::interval)
+        AND n.type = 'procedure'
+        AND n.slots->>'replay_kind' = 'playbook'
+        AND n.slots ? 'repair_review'
+      GROUP BY 1
+      ORDER BY count(*) DESC, 1 ASC
+      LIMIT 10
+      `,
+      [scope, windowHours],
+    );
+
     const tenantRuleRes = await client.query<{
       tenant_id: string;
       active_rules: string;
@@ -569,6 +676,17 @@ async function main() {
         total_latency_p95_ms: "0",
       },
       scopeSandboxTopErrors: scopeSandboxErrorRes.rows,
+      scopeReplay: scopeReplayRes.rows[0] ?? {
+        total_reviews: "0",
+        approved: "0",
+        rejected: "0",
+        approved_shadow_blocked: "0",
+        auto_promote_requested: "0",
+        policy_resolution_present: "0",
+        policy_overrides_applied: "0",
+        promoted_nodes: "0",
+      },
+      scopeReplayTopLayers: scopeReplayLayerRes.rows,
       tenantRules: tenantRuleRes.rows,
       tenantFeedback: tenantFeedbackRes.rows,
       tenantRecall: tenantRecallRes.rows,
@@ -601,6 +719,18 @@ async function main() {
   const scopeSandboxOutputTruncated = Number(out.scopeSandbox.output_truncated ?? "0");
   const scopeSandboxTopErrors = (Array.isArray(out.scopeSandboxTopErrors) ? out.scopeSandboxTopErrors : []).map((r) => ({
     error_code: String(r.error_code ?? "unknown"),
+    total: Number(r.total ?? "0"),
+  }));
+  const scopeReplayTotal = Number(out.scopeReplay.total_reviews ?? "0");
+  const scopeReplayApproved = Number(out.scopeReplay.approved ?? "0");
+  const scopeReplayRejected = Number(out.scopeReplay.rejected ?? "0");
+  const scopeReplayShadowBlocked = Number(out.scopeReplay.approved_shadow_blocked ?? "0");
+  const scopeReplayAutoPromoteRequested = Number(out.scopeReplay.auto_promote_requested ?? "0");
+  const scopeReplayPolicyResolutionPresent = Number(out.scopeReplay.policy_resolution_present ?? "0");
+  const scopeReplayPolicyOverridesApplied = Number(out.scopeReplay.policy_overrides_applied ?? "0");
+  const scopeReplayPromotedNodes = Number(out.scopeReplay.promoted_nodes ?? "0");
+  const scopeReplayTopLayers = (Array.isArray(out.scopeReplayTopLayers) ? out.scopeReplayTopLayers : []).map((r) => ({
+    layer: String(r.layer ?? "unknown"),
     total: Number(r.total ?? "0"),
   }));
 
@@ -653,6 +783,23 @@ async function main() {
       total_latency_p95_ms: Number(out.scopeSandbox.total_latency_p95_ms ?? "0"),
       top_errors: scopeSandboxTopErrors,
       available: out.support.hasSandboxTelemetry,
+    },
+    replay_policy: {
+      total_reviews: scopeReplayTotal,
+      approved: scopeReplayApproved,
+      rejected: scopeReplayRejected,
+      approved_shadow_blocked: scopeReplayShadowBlocked,
+      auto_promote_requested: scopeReplayAutoPromoteRequested,
+      auto_promote_requested_rate: scopeReplayTotal > 0 ? scopeReplayAutoPromoteRequested / scopeReplayTotal : 0,
+      policy_resolution_present: scopeReplayPolicyResolutionPresent,
+      policy_resolution_coverage: scopeReplayTotal > 0 ? scopeReplayPolicyResolutionPresent / scopeReplayTotal : 0,
+      policy_overrides_applied: scopeReplayPolicyOverridesApplied,
+      policy_overrides_applied_rate: scopeReplayTotal > 0 ? scopeReplayPolicyOverridesApplied / scopeReplayTotal : 0,
+      promoted_nodes: scopeReplayPromotedNodes,
+      promotion_rate: scopeReplayTotal > 0 ? scopeReplayPromotedNodes / scopeReplayTotal : 0,
+      shadow_blocked_rate: scopeReplayTotal > 0 ? scopeReplayShadowBlocked / scopeReplayTotal : 0,
+      top_policy_layers: scopeReplayTopLayers,
+      available: true,
     },
   };
 
@@ -823,6 +970,33 @@ async function main() {
     });
   }
 
+  checks.push({
+    name: "scope_replay_shadow_blocked_rate_max",
+    severity: "warning",
+    pass:
+      scopeSnapshot.replay_policy.total_reviews < minReplayReviewsForGate
+      || scopeSnapshot.replay_policy.shadow_blocked_rate <= maxReplayShadowBlockedRate,
+    value: round(scopeSnapshot.replay_policy.shadow_blocked_rate),
+    threshold: { op: "<=", value: maxReplayShadowBlockedRate },
+    note:
+      scopeSnapshot.replay_policy.total_reviews < minReplayReviewsForGate
+        ? `Insufficient replay review sample size (< ${minReplayReviewsForGate}); skip shadow-blocked gate.`
+        : "Replay review shadow-blocked ratio should remain bounded.",
+  });
+  checks.push({
+    name: "scope_replay_policy_resolution_coverage_min",
+    severity: "warning",
+    pass:
+      scopeSnapshot.replay_policy.total_reviews < minReplayReviewsForGate
+      || scopeSnapshot.replay_policy.policy_resolution_coverage >= minReplayPolicyResolutionCoverage,
+    value: round(scopeSnapshot.replay_policy.policy_resolution_coverage),
+    threshold: { op: ">=", value: minReplayPolicyResolutionCoverage },
+    note:
+      scopeSnapshot.replay_policy.total_reviews < minReplayReviewsForGate
+        ? `Insufficient replay review sample size (< ${minReplayReviewsForGate}); skip policy-resolution coverage gate.`
+        : "Replay review should persist auto_promote_policy_resolution for traceability.",
+  });
+
   if (!scopeSnapshot.decision.available) {
     checks.push({
       name: "decision_schema_available",
@@ -896,6 +1070,12 @@ async function main() {
   if (failedWarnings.includes("sandbox_telemetry_schema_available")) {
     recommendations.push("Apply migration 0032_memory_sandbox_telemetry.sql to enable sandbox governance signals.");
   }
+  if (failedWarnings.includes("scope_replay_shadow_blocked_rate_max")) {
+    recommendations.push("Inspect replay repair review failures and tighten patch validation before promotion.");
+  }
+  if (failedWarnings.includes("scope_replay_policy_resolution_coverage_min")) {
+    recommendations.push("Ensure replay review requests preserve auto_promote_policy_resolution for auditable policy trace.");
+  }
 
   const generatedAt = new Date().toISOString();
   const summary = {
@@ -918,6 +1098,9 @@ async function main() {
       max_sandbox_failure_rate: maxSandboxFailureRate,
       max_sandbox_timeout_rate: maxSandboxTimeoutRate,
       max_sandbox_output_truncated_rate: maxSandboxOutputTruncatedRate,
+      min_replay_reviews_for_gate: minReplayReviewsForGate,
+      max_replay_shadow_blocked_rate: maxReplayShadowBlockedRate,
+      min_replay_policy_resolution_coverage: minReplayPolicyResolutionCoverage,
     },
     scope_snapshot: {
       feedback: {
@@ -948,6 +1131,18 @@ async function main() {
         top_errors: scopeSnapshot.sandbox.top_errors.map((e: any) => ({
           error_code: String(e.error_code ?? "unknown"),
           total: Number(e.total ?? 0),
+        })),
+      },
+      replay_policy: {
+        ...scopeSnapshot.replay_policy,
+        auto_promote_requested_rate: round(scopeSnapshot.replay_policy.auto_promote_requested_rate),
+        policy_resolution_coverage: round(scopeSnapshot.replay_policy.policy_resolution_coverage),
+        policy_overrides_applied_rate: round(scopeSnapshot.replay_policy.policy_overrides_applied_rate),
+        promotion_rate: round(scopeSnapshot.replay_policy.promotion_rate),
+        shadow_blocked_rate: round(scopeSnapshot.replay_policy.shadow_blocked_rate),
+        top_policy_layers: scopeSnapshot.replay_policy.top_policy_layers.map((l: any) => ({
+          layer: String(l.layer ?? "unknown"),
+          total: Number(l.total ?? 0),
         })),
       },
     },

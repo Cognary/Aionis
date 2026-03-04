@@ -43,6 +43,8 @@ Default location:
 5. cross-tenant negative-ratio drift
 6. sandbox failure classification (`scope_snapshot.sandbox.top_errors`)
 7. sandbox timeout/failure/truncation rates
+8. replay review shadow-blocked rate
+9. replay policy-resolution coverage and override layers
 
 ## Sandbox Governance Signals
 
@@ -64,7 +66,10 @@ npm run -s job:governance-weekly-report -- \
   --min-sandbox-runs-for-gate 10 \
   --max-sandbox-failure-rate 0.2 \
   --max-sandbox-timeout-rate 0.1 \
-  --max-sandbox-output-truncated-rate 0.2
+  --max-sandbox-output-truncated-rate 0.2 \
+  --min-replay-reviews-for-gate 10 \
+  --max-replay-shadow-blocked-rate 0.2 \
+  --min-replay-policy-resolution-coverage 0.9
 ```
 
 ## Related

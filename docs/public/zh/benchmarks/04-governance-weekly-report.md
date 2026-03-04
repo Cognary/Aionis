@@ -43,6 +43,8 @@ npm run -s job:governance-weekly-report -- --scope default --window-hours 168 --
 5. 跨租户 negative ratio 漂移
 6. sandbox 失败分类（`scope_snapshot.sandbox.top_errors`）
 7. sandbox 超时/失败/截断率
+8. replay review shadow-blocked 比率
+9. replay policy resolution 覆盖率与策略层命中
 
 ## Sandbox 治理信号
 
@@ -64,7 +66,10 @@ npm run -s job:governance-weekly-report -- \
   --min-sandbox-runs-for-gate 10 \
   --max-sandbox-failure-rate 0.2 \
   --max-sandbox-timeout-rate 0.1 \
-  --max-sandbox-output-truncated-rate 0.2
+  --max-sandbox-output-truncated-rate 0.2 \
+  --min-replay-reviews-for-gate 10 \
+  --max-replay-shadow-blocked-rate 0.2 \
+  --min-replay-policy-resolution-coverage 0.9
 ```
 
 ## 相关页面

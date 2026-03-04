@@ -63,6 +63,12 @@ RUN_REPLAY_DETERMINISM_REPORT="${RUN_REPLAY_DETERMINISM_REPORT:-true}"
 REPLAY_DETERMINISM_GATE_MODE="${REPLAY_DETERMINISM_GATE_MODE:-non_blocking}"
 REPLAY_DETERMINISM_RUNS="${REPLAY_DETERMINISM_RUNS:-3}"
 REPLAY_DETERMINISM_MAX_FINGERPRINT_VARIANTS="${REPLAY_DETERMINISM_MAX_FINGERPRINT_VARIANTS:-1}"
+RUN_REPLAY_POLICY_GOVERNANCE="${RUN_REPLAY_POLICY_GOVERNANCE:-true}"
+REPLAY_POLICY_GATE_MODE="${REPLAY_POLICY_GATE_MODE:-non_blocking}"
+REPLAY_POLICY_WINDOW_HOURS="${REPLAY_POLICY_WINDOW_HOURS:-168}"
+REPLAY_POLICY_MIN_REVIEWS_FOR_GATE="${REPLAY_POLICY_MIN_REVIEWS_FOR_GATE:-10}"
+REPLAY_POLICY_MAX_SHADOW_BLOCKED_RATE="${REPLAY_POLICY_MAX_SHADOW_BLOCKED_RATE:-0.2}"
+REPLAY_POLICY_MIN_RESOLUTION_COVERAGE="${REPLAY_POLICY_MIN_RESOLUTION_COVERAGE:-0.9}"
 
 PERF_WARMUP="${PERF_WARMUP:-10}"
 PERF_RECALL_REQUESTS="${PERF_RECALL_REQUESTS:-80}"
@@ -114,6 +120,12 @@ while [[ $# -gt 0 ]]; do
     --replay-determinism-gate-mode) REPLAY_DETERMINISM_GATE_MODE="${2:-}"; shift 2 ;;
     --replay-determinism-runs) REPLAY_DETERMINISM_RUNS="${2:-}"; shift 2 ;;
     --replay-determinism-max-fingerprint-variants) REPLAY_DETERMINISM_MAX_FINGERPRINT_VARIANTS="${2:-}"; shift 2 ;;
+    --run-replay-policy-governance) RUN_REPLAY_POLICY_GOVERNANCE="${2:-}"; shift 2 ;;
+    --replay-policy-gate-mode) REPLAY_POLICY_GATE_MODE="${2:-}"; shift 2 ;;
+    --replay-policy-window-hours) REPLAY_POLICY_WINDOW_HOURS="${2:-}"; shift 2 ;;
+    --replay-policy-min-reviews-for-gate) REPLAY_POLICY_MIN_REVIEWS_FOR_GATE="${2:-}"; shift 2 ;;
+    --replay-policy-max-shadow-blocked-rate) REPLAY_POLICY_MAX_SHADOW_BLOCKED_RATE="${2:-}"; shift 2 ;;
+    --replay-policy-min-resolution-coverage) REPLAY_POLICY_MIN_RESOLUTION_COVERAGE="${2:-}"; shift 2 ;;
     --perf-warmup) PERF_WARMUP="${2:-}"; shift 2 ;;
     --perf-recall-requests) PERF_RECALL_REQUESTS="${2:-}"; shift 2 ;;
     --perf-recall-concurrency) PERF_RECALL_CONCURRENCY="${2:-}"; shift 2 ;;
@@ -182,6 +194,12 @@ Options:
   --replay-determinism-gate-mode <mode>   Replay determinism mode: non_blocking|blocking (default: non_blocking)
   --replay-determinism-runs <n>           Determinism sampling runs (default: 3)
   --replay-determinism-max-fingerprint-variants <n>  Max accepted fingerprint variants (default: 1)
+  --run-replay-policy-governance <bool>   Run replay policy governance weekly snapshot (default: true)
+  --replay-policy-gate-mode <mode>        Replay policy governance mode: non_blocking|blocking (default: non_blocking)
+  --replay-policy-window-hours <n>        Replay governance window hours (default: 168)
+  --replay-policy-min-reviews-for-gate <n> Min replay review samples before gating (default: 10)
+  --replay-policy-max-shadow-blocked-rate <0..1>  Max shadow-blocked rate (default: 0.2)
+  --replay-policy-min-resolution-coverage <0..1>  Min policy-resolution coverage (default: 0.9)
   --perf-warmup <n>                  Warmup requests (default: 10)
   --perf-recall-requests <n>         Recall requests (default: 80)
   --perf-recall-concurrency <n>      Recall concurrency (default: 6)
@@ -262,6 +280,15 @@ case "${REPLAY_DETERMINISM_GATE_MODE}" in
     ;;
 esac
 
+case "${REPLAY_POLICY_GATE_MODE}" in
+  blocking|non_blocking)
+    ;;
+  *)
+    echo "invalid --replay-policy-gate-mode: ${REPLAY_POLICY_GATE_MODE} (expected non_blocking|blocking)" >&2
+    exit 1
+    ;;
+esac
+
 case "${RUN_CONTROL_ADMIN_VALIDATION}" in
   true|false)
     ;;
@@ -294,6 +321,15 @@ case "${RUN_REPLAY_DETERMINISM_REPORT}" in
     ;;
   *)
     echo "invalid --run-replay-determinism-report: ${RUN_REPLAY_DETERMINISM_REPORT} (expected true|false)" >&2
+    exit 1
+    ;;
+esac
+
+case "${RUN_REPLAY_POLICY_GOVERNANCE}" in
+  true|false)
+    ;;
+  *)
+    echo "invalid --run-replay-policy-governance: ${RUN_REPLAY_POLICY_GOVERNANCE} (expected true|false)" >&2
     exit 1
     ;;
 esac
@@ -504,6 +540,7 @@ echo "[core-gate] compression_gate_mode=${COMPRESSION_GATE_MODE} perf_compressio
 echo "[core-gate] rule_conflict_gate_mode=${RULE_CONFLICT_GATE_MODE} run_rule_conflict_report=${RUN_RULE_CONFLICT_REPORT}"
 echo "[core-gate] consolidation_health_gate_mode=${CONSOLIDATION_HEALTH_GATE_MODE} run_consolidation_health_slo=${RUN_CONSOLIDATION_HEALTH_SLO}"
 echo "[core-gate] replay_determinism_gate_mode=${REPLAY_DETERMINISM_GATE_MODE} run_replay_determinism_report=${RUN_REPLAY_DETERMINISM_REPORT}"
+echo "[core-gate] replay_policy_gate_mode=${REPLAY_POLICY_GATE_MODE} run_replay_policy_governance=${RUN_REPLAY_POLICY_GOVERNANCE}"
 echo "[core-gate] error_rate_429_mode=${ERROR_RATE_429_MODE}"
 probe_api_target
 probe_database_connectivity
@@ -637,6 +674,54 @@ if [[ "${RUN_REPLAY_DETERMINISM_REPORT}" == "true" ]]; then
       fail_reasons="$(echo "${fail_reasons}" | jq '. + ["replay_determinism_output_invalid"]')"
     else
       warn_reasons="$(echo "${warn_reasons}" | jq '. + ["replay_determinism_output_invalid"]')"
+    fi
+  fi
+fi
+
+replay_policy_report_path=""
+replay_policy_enabled=false
+replay_policy_pass=true
+replay_policy_total_reviews="0"
+replay_policy_shadow_blocked_rate="0"
+replay_policy_resolution_coverage="0"
+if [[ "${RUN_REPLAY_POLICY_GOVERNANCE}" == "true" ]]; then
+  replay_policy_enabled=true
+  replay_policy_report_path="${OUT_DIR}/07g_replay_policy_governance_summary.json"
+  replay_policy_run_id="${RUN_ID}_core_gate"
+  replay_policy_report_week="$(date -u +%G-W%V)"
+  replay_policy_report_root="${OUT_DIR}/replay_policy_governance"
+  run_step "replay_policy_governance" "${replay_policy_report_path}.log" \
+    run_db_command npm run -s job:governance-weekly-report -- \
+      --scope "${SCOPE}" \
+      --window-hours "${REPLAY_POLICY_WINDOW_HOURS}" \
+      --run-id "${replay_policy_run_id}" \
+      --report-week "${replay_policy_report_week}" \
+      --out-dir "${replay_policy_report_root}" \
+      --min-replay-reviews-for-gate "${REPLAY_POLICY_MIN_REVIEWS_FOR_GATE}" \
+      --max-replay-shadow-blocked-rate "${REPLAY_POLICY_MAX_SHADOW_BLOCKED_RATE}" \
+      --min-replay-policy-resolution-coverage "${REPLAY_POLICY_MIN_RESOLUTION_COVERAGE}"
+
+  replay_policy_report_path="${replay_policy_report_root}/${replay_policy_report_week}_${replay_policy_run_id}/summary.json"
+  if [[ -f "${replay_policy_report_path}" ]] && jq -e . >/dev/null 2>&1 < "${replay_policy_report_path}"; then
+    replay_policy_shadow_check_pass="$(jq -r '[.checks[]? | select(.name=="scope_replay_shadow_blocked_rate_max")][-1].pass // true' "${replay_policy_report_path}")"
+    replay_policy_resolution_check_pass="$(jq -r '[.checks[]? | select(.name=="scope_replay_policy_resolution_coverage_min")][-1].pass // true' "${replay_policy_report_path}")"
+    replay_policy_total_reviews="$(to_number_or_zero "$(jq -r '.scope_snapshot.replay_policy.total_reviews // 0' "${replay_policy_report_path}")")"
+    replay_policy_shadow_blocked_rate="$(to_number_or_zero "$(jq -r '.scope_snapshot.replay_policy.shadow_blocked_rate // 0' "${replay_policy_report_path}")")"
+    replay_policy_resolution_coverage="$(to_number_or_zero "$(jq -r '.scope_snapshot.replay_policy.policy_resolution_coverage // 0' "${replay_policy_report_path}")")"
+    if [[ "${replay_policy_shadow_check_pass}" != "true" || "${replay_policy_resolution_check_pass}" != "true" ]]; then
+      replay_policy_pass=false
+      if [[ "${REPLAY_POLICY_GATE_MODE}" == "blocking" ]]; then
+        fail_reasons="$(echo "${fail_reasons}" | jq '. + ["replay_policy_governance_failed"]')"
+      else
+        warn_reasons="$(echo "${warn_reasons}" | jq '. + ["replay_policy_governance_failed"]')"
+      fi
+    fi
+  else
+    replay_policy_pass=false
+    if [[ "${REPLAY_POLICY_GATE_MODE}" == "blocking" ]]; then
+      fail_reasons="$(echo "${fail_reasons}" | jq '. + ["replay_policy_governance_output_invalid"]')"
+    else
+      warn_reasons="$(echo "${warn_reasons}" | jq '. + ["replay_policy_governance_output_invalid"]')"
     fi
   fi
 fi
@@ -913,6 +998,17 @@ jq -n \
   --argjson replay_determinism_enabled "$([[ "${replay_determinism_enabled}" == "true" ]] && echo true || echo false)" \
   --argjson replay_determinism_pass "$([[ "${replay_determinism_pass}" == "true" ]] && echo true || echo false)" \
   --argjson replay_determinism_fingerprint_variants "${replay_determinism_fingerprint_variants}" \
+  --arg replay_policy_gate_mode "${REPLAY_POLICY_GATE_MODE}" \
+  --argjson replay_policy_window_hours "${REPLAY_POLICY_WINDOW_HOURS}" \
+  --argjson replay_policy_min_reviews_for_gate "${REPLAY_POLICY_MIN_REVIEWS_FOR_GATE}" \
+  --argjson replay_policy_max_shadow_blocked_rate "${REPLAY_POLICY_MAX_SHADOW_BLOCKED_RATE}" \
+  --argjson replay_policy_min_resolution_coverage "${REPLAY_POLICY_MIN_RESOLUTION_COVERAGE}" \
+  --arg replay_policy_report_path "${replay_policy_report_path}" \
+  --argjson replay_policy_enabled "$([[ "${replay_policy_enabled}" == "true" ]] && echo true || echo false)" \
+  --argjson replay_policy_pass "$([[ "${replay_policy_pass}" == "true" ]] && echo true || echo false)" \
+  --argjson replay_policy_total_reviews "${replay_policy_total_reviews}" \
+  --argjson replay_policy_shadow_blocked_rate "${replay_policy_shadow_blocked_rate}" \
+  --argjson replay_policy_resolution_coverage "${replay_policy_resolution_coverage}" \
   --arg abstraction_profile "${abstraction_profile}" \
   --arg abstraction_metrics_source_path "${abstraction_metrics_source_path}" \
   --argjson abstraction_metrics_present "$([[ "${abstraction_metrics_present}" == "true" ]] && echo true || echo false)" \
@@ -1062,6 +1158,23 @@ jq -n \
           fingerprint_sha256: (if ($replay_determinism_fingerprint|length)>0 then $replay_determinism_fingerprint else null end)
         },
         pass: $replay_determinism_pass
+      },
+      replay_policy_governance: {
+        mode: $replay_policy_gate_mode,
+        enabled: $replay_policy_enabled,
+        summary_json: (if ($replay_policy_report_path|length)>0 then $replay_policy_report_path else null end),
+        thresholds: {
+          window_hours: $replay_policy_window_hours,
+          min_reviews_for_gate: $replay_policy_min_reviews_for_gate,
+          max_shadow_blocked_rate: $replay_policy_max_shadow_blocked_rate,
+          min_policy_resolution_coverage: $replay_policy_min_resolution_coverage
+        },
+        observed: {
+          total_reviews: $replay_policy_total_reviews,
+          shadow_blocked_rate: $replay_policy_shadow_blocked_rate,
+          policy_resolution_coverage: $replay_policy_resolution_coverage
+        },
+        pass: $replay_policy_pass
       },
       abstraction_quality_counters: {
         profile: $abstraction_profile,

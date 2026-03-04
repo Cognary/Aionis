@@ -1899,6 +1899,10 @@ export async function getTenantOperabilityDiagnostics(
       let sandboxModeRowsRaw: any[] = [];
       let sandboxTopErrorsRaw: any[] = [];
       let sandboxTelemetryWarning: string | null = null;
+      let replayPolicySummaryRow: any = null;
+      let replayPolicyBaseRowsRaw: any[] = [];
+      let replayPolicyLayerRowsRaw: any[] = [];
+      let replayPolicyWarning: string | null = null;
 
       try {
         const layeredOutputColumn = await client.query(
@@ -2077,6 +2081,81 @@ export async function getTenantOperabilityDiagnostics(
         }
       }
 
+      try {
+        const replaySummary = await client.query(
+          `
+          SELECT
+            COUNT(*)::bigint AS total,
+            COUNT(*) FILTER (WHERE n.slots #>> '{repair_review,state}' = 'approved')::bigint AS approved,
+            COUNT(*) FILTER (WHERE n.slots #>> '{repair_review,state}' = 'rejected')::bigint AS rejected,
+            COUNT(*) FILTER (WHERE n.slots #>> '{repair_review,state}' = 'approved_shadow_blocked')::bigint AS approved_shadow_blocked,
+            COUNT(*) FILTER (WHERE n.slots #>> '{repair_review,auto_promote_on_pass}' = 'true')::bigint AS auto_promote_requested,
+            COUNT(*) FILTER (
+              WHERE jsonb_typeof(n.slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}') = 'array'
+                AND jsonb_array_length(n.slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}') > 0
+            )::bigint AS policy_overrides_applied
+          FROM memory_nodes n
+          WHERE n.type = 'procedure'
+            AND n.slots->>'replay_kind' = 'playbook'
+            AND n.slots ? 'repair_review'
+            AND ${scopeFilterMemory.sql.replace(/scope/g, "n.scope")}
+            AND n.created_at >= now() - (($${scopeFilterMemory.args.length + 1}::text || ' minutes')::interval)
+          `,
+          [...scopeFilterMemory.args, windowMinutes],
+        );
+        replayPolicySummaryRow = replaySummary.rows[0] ?? null;
+
+        const replayByBase = await client.query(
+          `
+          SELECT
+            COALESCE(n.slots #>> '{repair_review,review_metadata,auto_promote_policy_resolution,base_source}', 'unknown') AS base_source,
+            COUNT(*)::bigint AS total
+          FROM memory_nodes n
+          WHERE n.type = 'procedure'
+            AND n.slots->>'replay_kind' = 'playbook'
+            AND n.slots ? 'repair_review'
+            AND ${scopeFilterMemory.sql.replace(/scope/g, "n.scope")}
+            AND n.created_at >= now() - (($${scopeFilterMemory.args.length + 1}::text || ' minutes')::interval)
+          GROUP BY base_source
+          ORDER BY total DESC, base_source ASC
+          `,
+          [...scopeFilterMemory.args, windowMinutes],
+        );
+        replayPolicyBaseRowsRaw = replayByBase.rows;
+
+        const replayByLayer = await client.query(
+          `
+          SELECT
+            COALESCE(src.item->>'layer', 'unknown') AS layer,
+            COUNT(*)::bigint AS total
+          FROM memory_nodes n
+          CROSS JOIN LATERAL jsonb_array_elements(
+            CASE
+              WHEN jsonb_typeof(n.slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}') = 'array'
+                THEN n.slots #> '{repair_review,review_metadata,auto_promote_policy_resolution,sources_applied}'
+              ELSE '[]'::jsonb
+            END
+          ) AS src(item)
+          WHERE n.type = 'procedure'
+            AND n.slots->>'replay_kind' = 'playbook'
+            AND n.slots ? 'repair_review'
+            AND ${scopeFilterMemory.sql.replace(/scope/g, "n.scope")}
+            AND n.created_at >= now() - (($${scopeFilterMemory.args.length + 1}::text || ' minutes')::interval)
+          GROUP BY layer
+          ORDER BY total DESC, layer ASC
+          LIMIT 10
+          `,
+          [...scopeFilterMemory.args, windowMinutes],
+        );
+        replayPolicyLayerRowsRaw = replayByLayer.rows;
+      } catch (replayErr: any) {
+        if (String(replayErr?.code ?? "") === "42P01") {
+          replayPolicyWarning = "replay_policy_diagnostics_table_missing";
+        } else {
+          throw replayErr;
+        }
+      }
+
       const endpointRows = requestTelemetry.rows.map((r: any) => {
         const total = Number(r.total ?? 0);
         const errors = Number(r.errors ?? 0);
@@ -2185,6 +2264,20 @@ export async function getTenantOperabilityDiagnostics(
         error_code: String(r.error_code ?? "unknown"),
         total: Number(r.total ?? 0),
       }));
+      const replayPolicyTotal = Number(replayPolicySummaryRow?.total ?? 0);
+      const replayPolicyApproved = Number(replayPolicySummaryRow?.approved ?? 0);
+      const replayPolicyRejected = Number(replayPolicySummaryRow?.rejected ?? 0);
+      const replayPolicyShadowBlocked = Number(replayPolicySummaryRow?.approved_shadow_blocked ?? 0);
+      const replayPolicyAutoPromoteRequested = Number(replayPolicySummaryRow?.auto_promote_requested ?? 0);
+      const replayPolicyOverridesApplied = Number(replayPolicySummaryRow?.policy_overrides_applied ?? 0);
+      const replayPolicyByBase = replayPolicyBaseRowsRaw.map((r: any) => ({
+        base_source: String(r.base_source ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const replayPolicyByLayer = replayPolicyLayerRowsRaw.map((r: any) => ({
+        layer: String(r.layer ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
 
       out.request_telemetry = {
         endpoints: endpointRows,
@@ -2243,6 +2336,21 @@ export async function getTenantOperabilityDiagnostics(
         by_mode: sandboxModeRows,
         top_errors: sandboxTopErrors,
         warning: sandboxTelemetryWarning ?? undefined,
+      };
+      out.replay_policy = {
+        total_reviews: replayPolicyTotal,
+        states: {
+          approved: replayPolicyApproved,
+          rejected: replayPolicyRejected,
+          approved_shadow_blocked: replayPolicyShadowBlocked,
+        },
+        auto_promote_requested: replayPolicyAutoPromoteRequested,
+        auto_promote_requested_rate: replayPolicyTotal > 0 ? round(replayPolicyAutoPromoteRequested / replayPolicyTotal) : 0,
+        policy_overrides_applied: replayPolicyOverridesApplied,
+        policy_overrides_applied_rate: replayPolicyTotal > 0 ? round(replayPolicyOverridesApplied / replayPolicyTotal) : 0,
+        by_base_source: replayPolicyByBase,
+        top_policy_layers: replayPolicyByLayer,
+        warning: replayPolicyWarning ?? undefined,
       };
     });
   } catch (err: any) {

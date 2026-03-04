@@ -372,6 +372,63 @@ const EnvSchema = z.object({
   SANDBOX_RETENTION_BATCH_SIZE: z.coerce.number().int().positive().max(200000).default(10000),
   SANDBOX_TENANT_BUDGET_WINDOW_HOURS: z.coerce.number().int().positive().max(168).default(24),
   SANDBOX_TENANT_BUDGET_POLICY_JSON: z.string().default("{}"),
+  // Guided replay repair synthesis defaults (per-request params can still override).
+  REPLAY_GUIDED_REPAIR_STRATEGY: z
+    .enum(["deterministic_skip", "heuristic_patch", "http_synth", "builtin_llm"])
+    .default("deterministic_skip"),
+  REPLAY_GUIDED_REPAIR_ALLOW_REQUEST_BUILTIN_LLM: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  REPLAY_GUIDED_REPAIR_MAX_ERROR_CHARS: z.coerce.number().int().min(64).max(20000).default(1200),
+  REPLAY_GUIDED_REPAIR_HTTP_ENDPOINT: z.string().default(""),
+  REPLAY_GUIDED_REPAIR_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().max(60000).default(6000),
+  REPLAY_GUIDED_REPAIR_HTTP_AUTH_TOKEN: z.string().default(""),
+  REPLAY_GUIDED_REPAIR_LLM_BASE_URL: z.string().default("https://api.openai.com/v1"),
+  REPLAY_GUIDED_REPAIR_LLM_API_KEY: z.string().default(""),
+  REPLAY_GUIDED_REPAIR_LLM_MODEL: z.string().default("gpt-4.1-mini"),
+  REPLAY_GUIDED_REPAIR_LLM_TIMEOUT_MS: z.coerce.number().int().positive().max(60000).default(7000),
+  REPLAY_GUIDED_REPAIR_LLM_MAX_TOKENS: z.coerce.number().int().positive().max(4000).default(500),
+  REPLAY_GUIDED_REPAIR_LLM_TEMPERATURE: z.coerce.number().min(0).max(1).default(0.1),
+  // Shadow validation default controls for replay review automation.
+  REPLAY_SHADOW_VALIDATE_EXECUTE_TIMEOUT_MS: z.coerce.number().int().positive().max(600000).default(15000),
+  REPLAY_SHADOW_VALIDATE_EXECUTE_STOP_ON_FAILURE: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  REPLAY_SHADOW_VALIDATE_SANDBOX_TIMEOUT_MS: z.coerce.number().int().positive().max(600000).default(15000),
+  REPLAY_SHADOW_VALIDATE_SANDBOX_STOP_ON_FAILURE: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  // Replay repair review auto-promotion global defaults (request-level fields can override these).
+  REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_PROFILE: z.enum(["custom", "strict", "staged", "aggressive"]).default("custom"),
+  REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_DEFAULT: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_TARGET_STATUS: z.enum(["draft", "shadow", "active", "disabled"]).default("active"),
+  REPLAY_REPAIR_REVIEW_GATE_REQUIRE_SHADOW_PASS: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "true").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  REPLAY_REPAIR_REVIEW_GATE_MIN_TOTAL_STEPS: z.coerce.number().int().min(0).default(0),
+  REPLAY_REPAIR_REVIEW_GATE_MAX_FAILED_STEPS: z.coerce.number().int().min(0).default(0),
+  REPLAY_REPAIR_REVIEW_GATE_MAX_BLOCKED_STEPS: z.coerce.number().int().min(0).default(0),
+  REPLAY_REPAIR_REVIEW_GATE_MAX_UNKNOWN_STEPS: z.coerce.number().int().min(0).default(0),
+  REPLAY_REPAIR_REVIEW_GATE_MIN_SUCCESS_RATIO: z.coerce.number().min(0).max(1).default(1),
+  // Optional tenant/route/scope scoped replay auto-promotion policy map.
+  REPLAY_REPAIR_REVIEW_POLICY_JSON: z.string().default("{}"),
 
   // Abstraction policy profile: coarse operating mode for topic clustering + compression rollup defaults.
   MEMORY_ABSTRACTION_POLICY_PROFILE: AbstractionPolicyProfileSchema.default("balanced"),
@@ -647,6 +704,18 @@ export function loadEnv(): Env {
           validateProfile(profile, `MEMORY_RECALL_PROFILE_POLICY_JSON.tenant_endpoint.${tenant}.${endpoint}`);
         }
       }
+    }
+  }
+  {
+    let policy: unknown;
+    try {
+      const raw = parsed.data.REPLAY_REPAIR_REVIEW_POLICY_JSON.trim();
+      policy = raw.length === 0 ? {} : JSON.parse(raw);
+    } catch {
+      throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON must be valid JSON object");
+    }
+    if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
+      throw new Error("REPLAY_REPAIR_REVIEW_POLICY_JSON must be a JSON object");
     }
   }
   {

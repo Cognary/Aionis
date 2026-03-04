@@ -605,6 +605,189 @@ export const ToolsFeedbackRequest = z
 
 export type ToolsFeedbackInput = z.infer<typeof ToolsFeedbackRequest>;
 
+export const ReplaySafetyLevel = z.enum(["auto_ok", "needs_confirm", "manual_only"]);
+export type ReplaySafetyLevelInput = z.infer<typeof ReplaySafetyLevel>;
+
+export const ReplayRunStatus = z.enum(["success", "failed", "partial"]);
+export type ReplayRunStatusInput = z.infer<typeof ReplayRunStatus>;
+export const ReplayPlaybookStatus = z.enum(["draft", "shadow", "active", "disabled"]);
+export type ReplayPlaybookStatusInput = z.infer<typeof ReplayPlaybookStatus>;
+export const ReplayRunMode = z.enum(["strict", "guided", "simulate"]);
+export type ReplayRunModeInput = z.infer<typeof ReplayRunMode>;
+
+const ReplayCondition = z.record(z.any());
+
+export const ReplayRunStartRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID.optional(),
+  goal: z.string().min(1),
+  context_snapshot_ref: z.string().min(1).optional(),
+  context_snapshot_hash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type ReplayRunStartInput = z.infer<typeof ReplayRunStartRequest>;
+
+export const ReplayStepBeforeRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  step_id: UUID.optional(),
+  decision_id: UUID.optional(),
+  step_index: z.number().int().positive(),
+  tool_name: z.string().min(1),
+  tool_input: z.any(),
+  expected_output_signature: z.any().optional(),
+  preconditions: z.array(ReplayCondition).max(200).default([]),
+  retry_policy: z.record(z.any()).optional(),
+  safety_level: ReplaySafetyLevel.default("needs_confirm"),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type ReplayStepBeforeInput = z.infer<typeof ReplayStepBeforeRequest>;
+
+export const ReplayStepAfterRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  step_id: UUID.optional(),
+  step_index: z.number().int().positive().optional(),
+  status: z.enum(["success", "failed", "skipped", "partial"]),
+  output_signature: z.any().optional(),
+  postconditions: z.array(ReplayCondition).max(200).default([]),
+  artifact_refs: z.array(z.string().min(1)).max(200).default([]),
+  repair_applied: z.boolean().default(false),
+  repair_note: z.string().min(1).optional(),
+  error: z.string().min(1).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type ReplayStepAfterInput = z.infer<typeof ReplayStepAfterRequest>;
+
+export const ReplayRunEndRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  status: ReplayRunStatus,
+  summary: z.string().min(1).optional(),
+  success_criteria: z.record(z.any()).optional(),
+  metrics: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type ReplayRunEndInput = z.infer<typeof ReplayRunEndRequest>;
+
+export const ReplayRunGetRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  run_id: UUID,
+  include_steps: z.boolean().default(true),
+  include_artifacts: z.boolean().default(true),
+});
+
+export type ReplayRunGetInput = z.infer<typeof ReplayRunGetRequest>;
+
+export const ReplayPlaybookCompileRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  playbook_id: UUID.optional(),
+  name: z.string().min(1).optional(),
+  version: z.number().int().positive().default(1),
+  matchers: z.record(z.any()).optional(),
+  success_criteria: z.record(z.any()).optional(),
+  risk_profile: z.enum(["low", "medium", "high"]).default("medium"),
+  allow_partial: z.boolean().default(false),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type ReplayPlaybookCompileInput = z.infer<typeof ReplayPlaybookCompileRequest>;
+
+export const ReplayPlaybookGetRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  playbook_id: UUID,
+});
+
+export type ReplayPlaybookGetInput = z.infer<typeof ReplayPlaybookGetRequest>;
+
+export const ReplayPlaybookPromoteRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  playbook_id: UUID,
+  from_version: z.number().int().positive().optional(),
+  target_status: ReplayPlaybookStatus,
+  note: z.string().min(1).max(1000).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type ReplayPlaybookPromoteInput = z.infer<typeof ReplayPlaybookPromoteRequest>;
+
+export const ReplayPlaybookRunRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  playbook_id: UUID,
+  mode: ReplayRunMode.default("simulate"),
+  version: z.number().int().positive().optional(),
+  params: z.record(z.any()).optional(),
+  max_steps: z.number().int().positive().max(500).default(200),
+});
+
+export type ReplayPlaybookRunInput = z.infer<typeof ReplayPlaybookRunRequest>;
+
+export const ReplayPlaybookRepairRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  playbook_id: UUID,
+  from_version: z.number().int().positive().optional(),
+  patch: z.record(z.any()),
+  note: z.string().min(1).max(1000).optional(),
+  review_required: z.boolean().default(true),
+  target_status: ReplayPlaybookStatus.default("draft"),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type ReplayPlaybookRepairInput = z.infer<typeof ReplayPlaybookRepairRequest>;
+
+export const ReplayPlaybookRepairReviewRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  playbook_id: UUID,
+  version: z.number().int().positive().optional(),
+  action: z.enum(["approve", "reject"]),
+  note: z.string().min(1).max(1000).optional(),
+  auto_shadow_validate: z.boolean().default(true),
+  shadow_validation_mode: z.enum(["readiness", "execute", "execute_sandbox"]).default("readiness"),
+  shadow_validation_max_steps: z.number().int().positive().max(500).default(200),
+  shadow_validation_params: z.record(z.any()).optional(),
+  target_status_on_approve: ReplayPlaybookStatus.default("shadow"),
+  auto_promote_on_pass: z.boolean().default(false),
+  auto_promote_target_status: ReplayPlaybookStatus.default("active"),
+  auto_promote_gate: z
+    .object({
+      require_shadow_pass: z.boolean().default(true),
+      min_total_steps: z.number().int().min(0).max(500).default(0),
+      max_failed_steps: z.number().int().min(0).max(500).default(0),
+      max_blocked_steps: z.number().int().min(0).max(500).default(0),
+      max_unknown_steps: z.number().int().min(0).max(500).default(0),
+      min_success_ratio: z.number().min(0).max(1).default(1),
+    })
+    .default({}),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type ReplayPlaybookRepairReviewInput = z.infer<typeof ReplayPlaybookRepairReviewRequest>;
+
 export const SandboxSessionCreateRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),

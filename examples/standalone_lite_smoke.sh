@@ -13,7 +13,70 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 
-PORT="${PORT:-3001}"
+pick_free_port() {
+  local start="${1}"
+  local end="${2}"
+  node - "${start}" "${end}" <<'JS'
+const net = require("net");
+const start = Number(process.argv[2] || "3001");
+const end = Number(process.argv[3] || "3199");
+
+function canListen(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.once("error", () => resolve(false));
+    server.listen({ host: "127.0.0.1", port }, () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+(async () => {
+  for (let port = start; port <= end; port += 1) {
+    if (await canListen(port)) {
+      process.stdout.write(String(port));
+      return;
+    }
+  }
+  process.exit(1);
+})();
+JS
+}
+
+is_port_free() {
+  local port="${1}"
+  node - "${port}" <<'JS'
+const net = require("net");
+const port = Number(process.argv[2] || "0");
+const server = net.createServer();
+server.unref();
+server.once("error", () => process.exit(1));
+server.listen({ host: "127.0.0.1", port }, () => {
+  server.close(() => process.exit(0));
+});
+JS
+}
+
+PORT_EXPLICIT=false
+if [[ -n "${PORT:-}" ]]; then
+  PORT_EXPLICIT=true
+else
+  PORT="$(pick_free_port "${PORT_SCAN_START:-3001}" "${PORT_SCAN_END:-3199}")" || {
+    echo "failed to find free local port in range ${PORT_SCAN_START:-3001}-${PORT_SCAN_END:-3199}" >&2
+    exit 1
+  }
+fi
+
+if [[ "${PORT_EXPLICIT}" == "true" ]] && ! is_port_free "${PORT}"; then
+  cat >&2 <<EOF
+requested PORT=${PORT} is already in use.
+Use a different port, for example:
+  PORT=3101 npm run -s e2e:standalone-lite-smoke
+EOF
+  exit 1
+fi
+
 BASE_URL="${BASE_URL:-http://127.0.0.1:${PORT}}"
 IMAGE="${IMAGE:-aionis-standalone:local}"
 STANDALONE_BUILD="${STANDALONE_BUILD:-true}"
@@ -51,7 +114,7 @@ else
   echo "[1/5] skip build (STANDALONE_BUILD=${STANDALONE_BUILD})"
 fi
 
-echo "[2/5] start standalone container (${CTR})"
+echo "[2/5] start standalone container (${CTR}) on ${BASE_URL}"
 docker run -d \
   --name "${CTR}" \
   -p "${PORT}:${PORT}" \
