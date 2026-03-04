@@ -41,4 +41,5 @@ node /path/to/Aionis/dist/mcp/aionis-mcp.js
 ## Related
 
 1. [MCP Integration](/public/en/integrations/01-mcp)
-2. [API Reference](/public/en/api-reference/00-api-reference)
+2. [OpenClaw Integration](/public/en/integrations/04-openclaw)
+3. [API Reference](/public/en/api-reference/00-api-reference)

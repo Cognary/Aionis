@@ -98,6 +98,7 @@ curl -sS "$BASE_URL/v1/memory/recall_text" \
 2. Python SDK: [`aionis-sdk`](https://pypi.org/project/aionis-sdk/)
 3. Docker image: `ghcr.io/cognary/aionis:latest`
 4. Standalone image: `ghcr.io/cognary/aionis:standalone-latest`
+5. Integration guides: [MCP / OpenWork / LangGraph / OpenClaw](https://doc.aionisos.com/public/en/integrations/00-overview)
 
 TypeScript SDK example:
 

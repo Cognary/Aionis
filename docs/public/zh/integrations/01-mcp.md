@@ -67,4 +67,5 @@ bash examples/mcp_stdio_smoke.sh
 
 1. [OpenWork 集成](/public/zh/integrations/02-openwork)
 2. [LangGraph 集成](/public/zh/integrations/03-langgraph)
-3. [API 契约](/public/zh/api/01-api-contract)
+3. [OpenClaw 集成](/public/zh/integrations/04-openclaw)
+4. [API 契约](/public/zh/api/01-api-contract)

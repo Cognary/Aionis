@@ -11,6 +11,7 @@ Aionis integrates with agent runtimes and orchestration frameworks through stabl
 1. [MCP Integration](/public/en/integrations/01-mcp)
 2. [OpenWork Integration](/public/en/integrations/02-openwork)
 3. [LangGraph Integration](/public/en/integrations/03-langgraph)
+4. [OpenClaw Integration](/public/en/integrations/04-openclaw)
 
 ## Recommended Rollout Path
 
@@ -32,15 +33,16 @@ For production integrations, persist and propagate:
 
 ## Start Here
 
-1. Pick one integration runtime (MCP, OpenWork, or LangGraph).
+1. Pick one integration runtime (MCP, OpenWork, LangGraph, or OpenClaw).
 2. Validate write and recall with your production auth mode.
 3. Add policy loop endpoints after retrieval is stable.
 
 ## Next Steps
 
 1. [MCP Integration](/public/en/integrations/01-mcp)
-2. [API Reference](/public/en/api-reference/00-api-reference)
-3. [SDK Guide](/public/en/reference/05-sdk)
+2. [OpenClaw Integration](/public/en/integrations/04-openclaw)
+3. [API Reference](/public/en/api-reference/00-api-reference)
+4. [SDK Guide](/public/en/reference/05-sdk)
 
 ## Related
 

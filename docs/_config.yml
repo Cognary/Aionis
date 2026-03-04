@@ -73,6 +73,8 @@ docs_navigation:
         url: /OPENWORK_INTEGRATION/
       - label: LangGraph Integration
         url: /LANGGRAPH_INTEGRATION/
+      - label: OpenClaw Integration
+        url: /OPENCLAW_INTEGRATION/
   - title: Roadmaps
     items:
       - label: Stability Roadmap

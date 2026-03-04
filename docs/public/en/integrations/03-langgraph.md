@@ -36,4 +36,5 @@ bash examples/langgraph_adapter_smoke.sh
 
 1. [API Contract](/public/en/api/01-api-contract)
 2. [SDK Guide](/public/en/reference/05-sdk)
-3. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
+3. [OpenClaw Integration](/public/en/integrations/04-openclaw)
+4. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
