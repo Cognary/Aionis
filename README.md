@@ -144,6 +144,16 @@ Run production core gate:
 npm run -s gate:core:prod -- --base-url "http://localhost:3001" --scope default
 ```
 
+Replay-learning regression coverage:
+
+```bash
+# validate replay_learning_projection fatal vs retryable classification
+npm run -s e2e:replay-learning-fault-smoke
+
+# validate replay-learning episode archival by TTL and rule stabilization
+npm run -s e2e:replay-learning-retention-smoke
+```
+
 Public benchmark snapshot and reproduction commands:
 
 1. [Benchmark Snapshot (Public)](https://doc.aionisos.com/public/en/benchmarks/02-benchmark-snapshot-public)

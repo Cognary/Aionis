@@ -63,12 +63,41 @@ curl -sS "$BASE_URL/v1/memory/rules/evaluate" \
 npm run -s gate:core:prod -- --base-url "$BASE_URL" --scope default
 ```
 
+6. **Replay-learning fault classification smoke**:
+
+```bash
+npm run -s e2e:replay-learning-fault-smoke
+```
+
+Expected:
+
+1. Injected `fatal_error` path is marked failed/dead-letter (`failed_reason` set).
+2. Injected `retryable_error` path remains unpublished and retryable (`failed=false`, `published=false`, `last_error` set).
+
+7. **Replay-learning retention smoke**:
+
+```bash
+npm run -s e2e:replay-learning-retention-smoke
+```
+
+Expected:
+
+1. TTL candidate is archived with `archived_reason=ttl_expired`.
+2. Rule-stabilized candidate is archived with `archived_reason=rule_stabilized`.
+
+8. **One-click regression with replay-learning smokes enabled**:
+
+```bash
+RUN_REPLAY_LEARNING_SMOKES=true npm run -s regression:oneclick
+```
+
 ## Pass Criteria
 
 1. All required API calls return expected 2xx responses.
 2. IDs/URIs returned by write/policy routes are present and resolvable.
 3. No tenant/scope isolation regressions are observed.
 4. Core gate passes blocking checks.
+5. Replay-learning fault classification and retention smoke checks pass.
 
 ## Related
 
