@@ -142,6 +142,10 @@ Memory 路由使用以下任一方式：
    - 重复步骤去重摘要（`steps_dedup_removed`、`dedup_removed_step_indexes`）
    - 参数化候选提取（`parameterization.variables`，以及每步 `template_variables`）
    - 每步质量分（`quality_score`、`quality_flags`）与汇总建议
+   - compile 使用量遥测：
+     - 响应顶层 `usage`（`prompt_tokens`、`completion_tokens`、`total_tokens`）
+     - `compile_summary.usage_estimate` 同步返回同一组数值
+     - 当前来源为 `estimated_char_based_v1`（基于字符估算，不是模型计费账单值）
 14. 服务端可通过以下环境变量提供默认策略（请求显式参数优先）：
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_PROFILE`
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_DEFAULT`

@@ -699,7 +699,8 @@ class ReplayRunGetResponse(TypedDict, total=False):
 
 
 class ReplayPlaybookCompileResponse(TypedDict, total=False):
-    pass
+    usage: Dict[str, Any]
+    compile_summary: Dict[str, Any]
 
 
 class ReplayPlaybookGetResponse(TypedDict, total=False):

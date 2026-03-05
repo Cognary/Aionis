@@ -236,6 +236,17 @@ function toStringOrNull(v: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
+function estimateTokenCountFromUnknown(v: unknown): number {
+  let text = "";
+  try {
+    text = JSON.stringify(v ?? {});
+  } catch {
+    text = String(v ?? "");
+  }
+  if (!text) return 0;
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
 function replayKindOf(row: ReplayNodeRow): string {
   const slotsObj = asObject(row.slots);
   const kind = slotsObj ? toStringOrNull(slotsObj.replay_kind) : null;
@@ -2793,7 +2804,7 @@ export async function replayPlaybookCompileFromRun(client: pg.PoolClient, body: 
   const successCriteria =
     parsed.success_criteria
     ?? (asObject(runEndSlots?.success_criteria) ?? {});
-  const summary = {
+  const summaryBase = {
     source_run_id: parsed.run_id,
     source_run_status: runStatus ?? "in_progress",
     steps_total: stepsTemplate.length,
@@ -2812,6 +2823,38 @@ export async function replayPlaybookCompileFromRun(client: pg.PoolClient, body: 
       ]),
     ),
     generated_at: new Date().toISOString(),
+  };
+  const usage = {
+    prompt_tokens: estimateTokenCountFromUnknown({
+      run_id: parsed.run_id,
+      run_status: runStatus ?? "in_progress",
+      allow_partial: parsed.allow_partial,
+      source_steps_total: rawStepsTemplate.length,
+      source_steps: rawStepsTemplate,
+      matchers: parsed.matchers ?? {},
+      success_criteria: successCriteria,
+      risk_profile: parsed.risk_profile,
+      metadata: parsed.metadata ?? {},
+    }),
+    completion_tokens: estimateTokenCountFromUnknown({
+      playbook_id: playbookId,
+      playbook_name: playbookName,
+      version,
+      status: "draft",
+      steps_template: stepsTemplate,
+      compile_summary: summaryBase,
+    }),
+    source: "estimated_char_based_v1" as const,
+  };
+  const usageOut = {
+    prompt_tokens: usage.prompt_tokens,
+    completion_tokens: usage.completion_tokens,
+    total_tokens: usage.prompt_tokens + usage.completion_tokens,
+    source: usage.source,
+  };
+  const summary = {
+    ...summaryBase,
+    usage_estimate: usageOut,
   };
   const playbookCid = playbookClientId(playbookId, version);
 
@@ -2902,6 +2945,7 @@ export async function replayPlaybookCompileFromRun(client: pg.PoolClient, body: 
           })
         : null,
     compile_summary: summary,
+    usage: usageOut,
     commit_id: out.commit_id,
     commit_uri: out.commit_uri ?? buildCommitUri(tenancy.tenant_id, tenancy.scope, out.commit_id),
     commit_hash: out.commit_hash,

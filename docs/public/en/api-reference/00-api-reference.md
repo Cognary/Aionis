@@ -149,6 +149,10 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
    - duplicate-step removal summary (`steps_dedup_removed`, `dedup_removed_step_indexes`)
    - template variable extraction (`parameterization.variables`, `template_variables` per step)
    - per-step quality score (`quality_score`, `quality_flags`) and aggregate recommendations
+   - usage telemetry for compile payload size:
+     - top-level `usage` (`prompt_tokens`, `completion_tokens`, `total_tokens`)
+     - `compile_summary.usage_estimate` mirrors the same numbers
+     - current source is `estimated_char_based_v1` (char-based estimate, not provider-billed usage)
 14. Server-side default policy can prefill review auto-promotion fields when callers omit them:
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_PROFILE` (`custom|strict|staged|aggressive`)
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_DEFAULT`

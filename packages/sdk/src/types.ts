@@ -1388,6 +1388,23 @@ export type ReplayRunGetResponse = {
 };
 
 export type ReplayPlaybookCompileResponse = {
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    source?: string;
+    [k: string]: unknown;
+  };
+  compile_summary?: {
+    usage_estimate?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+      source?: string;
+      [k: string]: unknown;
+    };
+    [k: string]: unknown;
+  };
   [k: string]: unknown;
 };
 
