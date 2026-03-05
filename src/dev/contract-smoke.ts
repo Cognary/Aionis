@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { promises as fs } from "node:fs";
+import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -34,6 +35,7 @@ import { toolSelectionFeedback } from "../memory/tools-feedback.js";
 import { memoryResolve } from "../memory/resolve.js";
 import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 import { applyMemoryWrite } from "../memory/write.js";
+import { postJsonWithTls } from "../memory/sandbox.js";
 import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   assertRecallStoreAccessContract,
@@ -2031,6 +2033,70 @@ async function run() {
     (err: any) => err instanceof HttpError && err.statusCode === 401 && err.code === "unauthorized_admin",
   );
   assert.doesNotThrow(() => requireAdminTokenHeader({ "x-admin-token": "admin-secret" }, "admin-secret"));
+
+  // Remote sandbox transport hardening:
+  // 1) request can be pinned to an already-validated resolved IP (avoid DNS rebind window)
+  // 2) oversized response bodies are rejected before unbounded buffering
+  const remoteProbeServer = createServer((req, res) => {
+    if (req.url === "/ok") {
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (req.url === "/huge") {
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end("x".repeat(4096));
+      return;
+    }
+    res.statusCode = 404;
+    res.end("not found");
+  });
+  await new Promise<void>((resolve, reject) => {
+    remoteProbeServer.once("error", reject);
+    remoteProbeServer.listen(0, "127.0.0.1", () => {
+      remoteProbeServer.off("error", reject);
+      resolve();
+    });
+  });
+  try {
+    const address = remoteProbeServer.address();
+    assert.ok(address && typeof address === "object");
+    const port = address.port;
+    const tls = { certPem: "", keyPem: "", caPem: "", serverName: "" };
+    const pinnedHost = `sandbox-contract.invalid:${port}`;
+
+    const ok = await postJsonWithTls(
+      new URL(`http://${pinnedHost}/ok`),
+      JSON.stringify({ probe: true }),
+      { "content-type": "application/json" },
+      2_000,
+      new AbortController().signal,
+      tls,
+      { resolvedAddress: "127.0.0.1", maxBodyBytes: 1024 },
+    );
+    assert.equal(ok.status, 200);
+    assert.equal(ok.bodyText, "{\"ok\":true}");
+
+    await assert.rejects(
+      () =>
+        postJsonWithTls(
+          new URL(`http://${pinnedHost}/huge`),
+          JSON.stringify({ probe: true }),
+          { "content-type": "application/json" },
+          2_000,
+          new AbortController().signal,
+          tls,
+          { resolvedAddress: "127.0.0.1", maxBodyBytes: 128 },
+        ),
+      (err: any) => String(err?.message ?? err) === "response_too_large",
+    );
+  } finally {
+    await new Promise<void>((resolve) => {
+      remoteProbeServer.close(() => resolve());
+    });
+  }
 
   // Hybrid auth mode semantics: invalid API key must not block a valid JWT fallback.
   const nowSec = Math.floor(Date.now() / 1000);

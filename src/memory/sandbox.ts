@@ -348,7 +348,7 @@ function isPrivateOrLocalIp(ipRaw: string): boolean {
   return false;
 }
 
-async function postJsonWithTls(
+export async function postJsonWithTls(
   target: URL,
   payload: string,
   headers: Record<string, string>,
@@ -360,14 +360,38 @@ async function postJsonWithTls(
     caPem: string;
     serverName: string;
   },
+  opts?: {
+    resolvedAddress?: string | null;
+    maxBodyBytes?: number;
+  },
 ): Promise<{ status: number; bodyText: string }> {
   const isHttps = target.protocol === "https:";
   const defaultPort = isHttps ? 443 : 80;
   const path = `${target.pathname}${target.search}`;
+  const maxBodyBytes = Math.max(1024, Math.trunc(Number(opts?.maxBodyBytes ?? 512 * 1024)));
+  const forcedAddress = trimOrNull(opts?.resolvedAddress);
+  const forcedFamily = forcedAddress ? isIP(forcedAddress) : 0;
+  const forcedLookup =
+    forcedAddress && (forcedFamily === 4 || forcedFamily === 6)
+      ? (_hostname: string, optionsOrCallback: unknown, callbackMaybe?: unknown) => {
+          const options =
+            optionsOrCallback && typeof optionsOrCallback === "object" && !Array.isArray(optionsOrCallback)
+              ? (optionsOrCallback as Record<string, unknown>)
+              : null;
+          const callback = typeof optionsOrCallback === "function" ? optionsOrCallback : callbackMaybe;
+          if (typeof callback !== "function") return;
+          if (options?.all === true) {
+            callback(null, [{ address: forcedAddress, family: forcedFamily }]);
+            return;
+          }
+          callback(null, forcedAddress, forcedFamily);
+        }
+      : undefined;
 
   return await new Promise((resolve, reject) => {
     let settled = false;
     let abortHandler: (() => void) | null = null;
+    let req: any = null;
     const done = (fn: () => void) => {
       if (settled) return;
       settled = true;
@@ -382,15 +406,28 @@ async function postJsonWithTls(
 
     const onResponse = (res: any) => {
       const chunks: Buffer[] = [];
+      let totalBytes = 0;
       res.on("data", (chunk: Buffer | string) => {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+        const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+        totalBytes += part.length;
+        if (totalBytes > maxBodyBytes) {
+          try {
+            res.destroy(new Error("response_too_large"));
+          } catch {
+            // ignore best-effort stream abort errors
+          }
+          done(() => reject(new Error("response_too_large")));
+          return;
+        }
+        chunks.push(part);
       });
       res.on("end", () => {
         const bodyText = Buffer.concat(chunks).toString("utf8");
         done(() => resolve({ status: Number(res.statusCode ?? 0), bodyText }));
       });
+      res.on("error", (err: unknown) => done(() => reject(err)));
     };
-    const req = isHttps
+    req = isHttps
       ? httpsRequest(
           {
             protocol: target.protocol,
@@ -400,6 +437,7 @@ async function postJsonWithTls(
             path,
             headers,
             timeout: timeoutMs,
+            lookup: forcedLookup,
             cert: tls.certPem || undefined,
             key: tls.keyPem || undefined,
             ca: tls.caPem || undefined,
@@ -417,6 +455,7 @@ async function postJsonWithTls(
             path,
             headers,
             timeout: timeoutMs,
+            lookup: forcedLookup,
           },
           onResponse,
         );
@@ -436,7 +475,7 @@ async function postJsonWithTls(
         // ignore
       }
     });
-    req.on("error", (err) => done(() => reject(err)));
+    req.on("error", (err: unknown) => done(() => reject(err)));
     req.write(payload, "utf8");
     req.end();
   });
@@ -1641,6 +1680,8 @@ export class SandboxExecutor {
       Math.min(run.timeout_ms, this.config.remote.timeoutMs),
       Math.min(this.config.defaultTimeoutMs, this.config.remote.timeoutMs),
     );
+    const connectIp = resolvedIps[0] ?? null;
+    const maxRemoteResponseBytes = Math.max(this.config.stdioMaxBytes * 8, 256 * 1024);
     const startedAt = Date.now();
     const abort = new AbortController();
     const state: ActiveRunState = { kind: "http_remote", abort, timedOut: false, canceled: false };
@@ -1666,6 +1707,8 @@ export class SandboxExecutor {
       argv: command.argv,
       host: parsedRemoteUrl.hostname,
       resolved_ips: resolvedIps,
+      connect_ip: connectIp,
+      remote_response_max_bytes: maxRemoteResponseBytes,
     };
 
     try {
@@ -1703,6 +1746,10 @@ export class SandboxExecutor {
           keyPem: this.config.remote.mtlsKeyPem,
           caPem: this.config.remote.mtlsCaPem,
           serverName: this.config.remote.mtlsServerName,
+        },
+        {
+          resolvedAddress: connectIp,
+          maxBodyBytes: maxRemoteResponseBytes,
         },
       );
       const rawBodyText = remoteResponse.bodyText;
@@ -1765,6 +1812,9 @@ export class SandboxExecutor {
       } else if (state.timedOut) {
         status = "timeout";
         error = "execution_timeout";
+      } else if (String(err?.message ?? err) === "response_too_large") {
+        status = "failed";
+        error = "remote_executor_response_too_large";
       } else {
         status = "failed";
         error = `remote_executor_error:${String(err?.message ?? err)}`;

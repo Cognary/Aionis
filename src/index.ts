@@ -4741,7 +4741,7 @@ function assertSandboxEnabled(req: any) {
     throw new HttpError(400, "sandbox_disabled", "sandbox interface is disabled");
   }
   if (env.SANDBOX_ADMIN_ONLY) {
-    requireAdminTokenHeader(req, env.ADMIN_TOKEN);
+    requireAdminTokenHeader(req?.headers ?? {}, env.ADMIN_TOKEN);
   }
 }
 
