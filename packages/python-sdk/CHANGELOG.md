@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-03-05
+
+### Changed
+
+1. Added replay closed-loop learning projection typing coverage (`learning_projection`, `learning_projection_result`) for repair review flows.
+2. Added write guardrail response typing (`MemoryWriteWarning`, `MemoryWriteResponse.warnings`) for commit-only write detection (`write_no_nodes`).
+3. Aligned Python SDK release baseline from `0.2.8` to `0.2.9` for cross-channel synchronization.
+
 ## [0.2.8] - 2026-03-05
 
 ### Changed

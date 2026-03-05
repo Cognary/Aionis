@@ -15,7 +15,7 @@ This sample shows a concise, production-ready drill record format.
 3. Environment: `staging-ha`
 4. Owner: `platform-oncall`
 5. Participants: `backend-lead`, `sre-lead`
-6. Release/Tag: `v0.2.8`
+6. Release/Tag: `v0.2.9`
 
 ## Scenario A: Database Restore
 
