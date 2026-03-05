@@ -47,6 +47,7 @@ type WriteResult = {
         quality: { cohesion: number; coverage: number; orphan_rate_after: number; merge_rate_30d: number };
       }
     | { enqueued: true };
+  warnings?: Array<{ code: string; message: string; details?: Record<string, unknown> }>;
 };
 
 function resolveScope(reqScope: string | undefined, defaultScope: string): string {

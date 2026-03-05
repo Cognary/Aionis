@@ -905,6 +905,13 @@ export type ControlTenantKeyUsageQuery = {
   cursor?: string;
 };
 
+export type MemoryWriteWarning = {
+  code: "write_no_nodes" | string;
+  message: string;
+  details?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
 export type MemoryWriteResponse = {
   tenant_id?: string;
   scope?: string;
@@ -926,6 +933,7 @@ export type MemoryWriteResponse = {
     fallback_applied?: boolean;
     error?: string;
   };
+  warnings?: MemoryWriteWarning[];
   [k: string]: unknown;
 };
 

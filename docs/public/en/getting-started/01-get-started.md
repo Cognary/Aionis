@@ -54,9 +54,19 @@ Minimal write example:
 {
   "tenant_id": "default",
   "scope": "default",
-  "input_text": "Customer prefers email follow-up"
+  "input_text": "Customer prefers email follow-up",
+  "memory_lane": "shared",
+  "nodes": [
+    {
+      "type": "event",
+      "memory_lane": "shared",
+      "text_summary": "Customer prefers email follow-up"
+    }
+  ]
 }
 ```
+
+If `nodes` is empty, `/v1/memory/write` may return `warnings[].code=write_no_nodes` and recall will not include newly written content.
 
 Minimal recall example:
 

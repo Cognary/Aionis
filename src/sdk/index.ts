@@ -77,6 +77,7 @@ export {
   type MemoryPackImportInput,
   type MemoryPackImportResponse,
   type MemoryWriteInput,
+  type MemoryWriteWarning,
   type MemoryWriteResponse,
   type RequestOptions,
   type RetryPolicy,

@@ -38,7 +38,9 @@ curl -sS "$BASE_URL/v1/memory/write" \
   -d '{
     "tenant_id":"default",
     "scope":"default",
-    "input_text":"Customer prefers email follow-up"
+    "input_text":"Customer prefers email follow-up",
+    "memory_lane":"shared",
+    "nodes":[{"type":"event","memory_lane":"shared","text_summary":"Customer prefers email follow-up"}]
   }' | jq
 ```
 
@@ -88,7 +90,7 @@ Run write + recall:
 ```bash
 curl -sS http://localhost:3001/v1/memory/write \
   -H 'content-type: application/json' \
-  -d '{"tenant_id":"default","scope":"default","input_text":"hello from local onboarding"}' | jq
+  -d '{"tenant_id":"default","scope":"default","input_text":"hello from local onboarding","memory_lane":"shared","nodes":[{"type":"event","memory_lane":"shared","text_summary":"hello from local onboarding"}]}' | jq
 
 curl -sS http://localhost:3001/v1/memory/recall_text \
   -H 'content-type: application/json' \
@@ -114,6 +116,7 @@ Your onboarding is complete when:
 1. `401/403`: wrong or missing auth header.
 2. `400 invalid_request`: required fields missing or invalid JSON shape.
 3. Empty recall: newly written content may need brief indexing time.
+4. `warnings[0].code=write_no_nodes`: write committed with `nodes=0`, so no recallable node was added.
 
 ## Next Steps
 

@@ -91,6 +91,15 @@ Memory 路由使用以下任一方式：
 4. `commit_id` / `commit_uri`（写入类接口）
 5. `decision_id` / `decision_uri`（决策类接口）
 
+## 写入防误用规则
+
+1. `POST /v1/memory/write` 只会持久化 `nodes` / `edges` 图对象。
+2. 当写入请求最终 `nodes=0` 时，响应可能带有：
+   - `warnings: [{ code: "write_no_nodes", ... }]`
+3. 仅提供 `input_text` 不会自动生成可召回节点。
+4. 可选严格模式：
+   - 设置 `MEMORY_WRITE_REQUIRE_NODES=true` 后，`nodes` 为空会直接返回 `400 write_nodes_required`。
+
 ## Replay 执行说明（实验）
 
 1. `playbooks/run` 支持 `simulate`、`strict`、`guided`。

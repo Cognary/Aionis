@@ -107,6 +107,41 @@ class MemoryWriteInput(TypedDict, total=False):
     edges: List[MemoryEdgeInput]
 
 
+class MemoryWriteWarning(TypedDict, total=False):
+    code: str
+    message: str
+    details: Dict[str, Any]
+
+
+class MemoryWriteNodeRef(TypedDict, total=False):
+    id: str
+    uri: str
+    client_id: str
+    type: str
+
+
+class MemoryWriteEdgeRef(TypedDict, total=False):
+    id: str
+    uri: str
+    type: str
+    src_id: str
+    dst_id: str
+
+
+class MemoryWriteResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    commit_id: str
+    commit_uri: str
+    commit_hash: str
+    nodes: List[MemoryWriteNodeRef]
+    edges: List[MemoryWriteEdgeRef]
+    embedding_backfill: Dict[str, Any]
+    topic_cluster: Dict[str, Any]
+    shadow_dual_write: Dict[str, Any]
+    warnings: List[MemoryWriteWarning]
+
+
 class MemoryRecallInput(TypedDict, total=False):
     tenant_id: str
     scope: str

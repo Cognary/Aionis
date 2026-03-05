@@ -195,6 +195,14 @@ const EnvSchema = z.object({
   MEMORY_API_KEYS_JSON: z.string().default("{}"),
   MEMORY_JWT_HS256_SECRET: z.string().default(""),
   MEMORY_JWT_CLOCK_SKEW_SEC: z.coerce.number().int().min(0).default(30),
+  // Optional hard guard: reject /v1/memory/write when no nodes are provided.
+  // This prevents commit-only writes from being mistaken as recallable memory writes.
+  MEMORY_WRITE_REQUIRE_NODES: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
   EMBEDDING_DIM: z.coerce.number().int().positive().default(1536),
   ADMIN_TOKEN: z.string().optional(),
   RATE_LIMIT_ENABLED: z

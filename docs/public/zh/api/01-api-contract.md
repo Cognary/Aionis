@@ -71,6 +71,15 @@ title: "API 合约（硬约束）"
 13. `POST /v1/memory/sandbox/runs/artifact`：获取执行产物与可选 bundle 指针。
 14. `POST /v1/memory/sandbox/runs/cancel`：取消排队/运行中的任务。
 
+## 写入契约防误用
+
+1. `input_text` 本身不会自动创建记忆节点。
+2. 要让召回可见，写入请求必须包含 `nodes`（例如 `event` 节点）。
+3. 当 `/v1/memory/write` 最终 `nodes=0` 时，响应可能返回：
+   - `warnings: [{ code: "write_no_nodes", ... }]`
+4. 可选严格模式：
+   - `MEMORY_WRITE_REQUIRE_NODES=true` 时，空 `nodes` 会直接返回 `400 write_nodes_required`。
+
 ## 上线前最小检查
 
 1. 用真实 `tenant_id/scope` 跑通 `write -> recall_text -> resolve`。

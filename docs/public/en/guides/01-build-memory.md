@@ -28,7 +28,15 @@ Minimal payload:
 {
   "tenant_id": "default",
   "scope": "default",
-  "input_text": "Customer prefers email follow-up"
+  "input_text": "Customer prefers email follow-up",
+  "memory_lane": "shared",
+  "nodes": [
+    {
+      "type": "event",
+      "memory_lane": "shared",
+      "text_summary": "Customer prefers email follow-up"
+    }
+  ]
 }
 ```
 
@@ -84,7 +92,7 @@ export API_KEY="your_api_key"
 curl -sS "$BASE_URL/v1/memory/write" \
   -H 'content-type: application/json' \
   -H "X-Api-Key: $API_KEY" \
-  -d '{"tenant_id":"default","scope":"default","input_text":"Customer prefers email"}' | jq
+  -d '{"tenant_id":"default","scope":"default","input_text":"Customer prefers email","memory_lane":"shared","nodes":[{"type":"event","memory_lane":"shared","text_summary":"Customer prefers email"}]}' | jq
 
 curl -sS "$BASE_URL/v1/memory/recall_text" \
   -H 'content-type: application/json' \

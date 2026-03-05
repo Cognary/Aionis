@@ -125,6 +125,7 @@ export {
   type RuleStateUpdateInput,
   type RuleStateUpdateResponse,
   type MemoryWriteInput,
+  type MemoryWriteWarning,
   type MemoryWriteResponse,
   type RequestOptions,
   type RetryPolicy,

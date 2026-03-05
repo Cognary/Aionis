@@ -91,6 +91,15 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
 4. `commit_id` / `commit_uri` (write flows)
 5. `decision_id` / `decision_uri` (tool-decision flows)
 
+## Write Guardrails
+
+1. `POST /v1/memory/write` persists graph objects from `nodes` and `edges`.
+2. If a write request commits with `nodes=0`, response may include:
+   - `warnings: [{ code: "write_no_nodes", ... }]`
+3. `input_text` alone does not create recallable nodes.
+4. Optional strict mode:
+   - `MEMORY_WRITE_REQUIRE_NODES=true` makes `/v1/memory/write` fail with `400 write_nodes_required` when `nodes` is empty.
+
 ## Replay Execution Notes
 
 1. `playbooks/run` supports `simulate`, `strict`, and `guided`.

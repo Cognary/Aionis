@@ -85,7 +85,13 @@ export BASE_URL="http://localhost:3001"
 
 curl -sS "$BASE_URL/v1/memory/write" \
   -H 'content-type: application/json' \
-  -d '{"tenant_id":"default","scope":"default","input_text":"Customer prefers email follow-up"}'
+  -d '{
+    "tenant_id":"default",
+    "scope":"default",
+    "input_text":"Customer prefers email follow-up",
+    "memory_lane":"shared",
+    "nodes":[{"type":"event","memory_lane":"shared","text_summary":"Customer prefers email follow-up"}]
+  }'
 
 curl -sS "$BASE_URL/v1/memory/recall_text" \
   -H 'content-type: application/json' \
@@ -110,7 +116,12 @@ const client = new AionisClient({
   api_key: process.env.AIONIS_API_KEY,
 });
 
-await client.write({ input_text: "Customer prefers email follow-up", scope: "default" });
+await client.write({
+  scope: "default",
+  input_text: "Customer prefers email follow-up",
+  memory_lane: "shared",
+  nodes: [{ type: "event", memory_lane: "shared", text_summary: "Customer prefers email follow-up" }],
+});
 const out = await client.recallText({ query_text: "preferred follow-up channel", limit: 5, scope: "default" });
 console.log(out.request_id);
 ```
@@ -125,7 +136,12 @@ client = AionisClient(
     api_key="<your-api-key>",
 )
 
-client.write({"scope": "default", "input_text": "Customer prefers email follow-up"})
+client.write({
+    "scope": "default",
+    "input_text": "Customer prefers email follow-up",
+    "memory_lane": "shared",
+    "nodes": [{"type": "event", "memory_lane": "shared", "text_summary": "Customer prefers email follow-up"}],
+})
 out = client.recall_text({"scope": "default", "query_text": "preferred follow-up channel", "limit": 5})
 print(out.get("request_id"))
 ```

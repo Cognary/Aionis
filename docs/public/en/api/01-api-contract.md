@@ -68,6 +68,15 @@ Common fields you should persist in clients and logs:
 5. `decision_id` / `decision_uri` (when decision surfaces are involved)
 6. `commit_id` / `commit_uri` (for write lineage)
 
+## Write Contract Guardrails
+
+1. `input_text` does not create memory nodes by itself.
+2. Recallable writes must include `nodes` (for example, an `event` node).
+3. `/v1/memory/write` may return:
+   - `warnings: [{ code: "write_no_nodes", ... }]` when commit is created with `nodes=0`.
+4. Optional strict mode:
+   - `MEMORY_WRITE_REQUIRE_NODES=true` returns `400 write_nodes_required` for empty `nodes`.
+
 ## Error Model
 
 Typed error payload shape:
