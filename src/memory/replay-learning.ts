@@ -87,6 +87,7 @@ export type ReplayLearningProjectionPayload = {
   playbook_version: number;
   source_commit_id: string | null;
   config: ReplayLearningProjectionResolvedConfig;
+  fault_injection_mode?: "retryable_error" | "fatal_error";
 };
 
 type ExistingReplayLearningRule = {
@@ -236,6 +237,7 @@ export function classifyReplayLearningProjectionError(err: unknown): {
       "replay_learning_invalid_policy_patch",
       "replay_learning_playbook_not_found",
       "replay_learning_playbook_version_not_found",
+      "replay_learning_injected_fatal",
     ]);
     return {
       error_class: fatal.has(err.code) ? "fatal" : "retryable",
@@ -332,6 +334,18 @@ export async function applyReplayLearningProjectionFromPayload(
   payload: ReplayLearningProjectionPayload,
   writeOpts: ReplayLearningWriteOptions,
 ): Promise<ReplayLearningProjectionResult> {
+  if (process.env.REPLAY_LEARNING_FAULT_INJECTION_ENABLED === "true") {
+    if (payload.fault_injection_mode === "retryable_error") {
+      throw new Error("replay_learning_injected_retryable");
+    }
+    if (payload.fault_injection_mode === "fatal_error") {
+      throw new HttpError(
+        400,
+        "replay_learning_injected_fatal",
+        "replay learning injected fatal fault for smoke validation",
+      );
+    }
+  }
   const loaded = await loadReplayPlaybookNode(client, payload.scope_key, payload.playbook_id, payload.playbook_version);
   if (!loaded) {
     throw new HttpError(

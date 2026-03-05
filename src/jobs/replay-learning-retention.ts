@@ -121,7 +121,7 @@ async function archiveTtlBatch(scope: string | null, ttlDaysFallback: number, ba
     updated AS (
       UPDATE memory_nodes n
       SET
-        tier = 'archive'::memory_node_tier,
+        tier = 'archive',
         slots = coalesce(n.slots, '{}'::jsonb)
           || jsonb_build_object(
             'lifecycle_state', 'archived',
@@ -182,7 +182,7 @@ async function archiveRuleStableBatch(
     updated AS (
       UPDATE memory_nodes n
       SET
-        tier = 'archive'::memory_node_tier,
+        tier = 'archive',
         slots = coalesce(n.slots, '{}'::jsonb)
           || jsonb_build_object(
             'lifecycle_state', 'archived',
@@ -284,4 +284,3 @@ main()
   .finally(async () => {
     await closeDb(db);
   });
-

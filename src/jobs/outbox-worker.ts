@@ -304,6 +304,10 @@ async function processBatch(): Promise<{
                   max_tool_prefer: defaults.max_tool_prefer,
                   episode_ttl_days: defaults.episode_ttl_days,
                 },
+                fault_injection_mode:
+                  payload.fault_injection_mode === "retryable_error" || payload.fault_injection_mode === "fatal_error"
+                    ? payload.fault_injection_mode
+                    : undefined,
               },
               {
                 defaultScope: env.MEMORY_SCOPE,

@@ -65,6 +65,7 @@ GTM_PHASE3_GATE_RUN_PERF="${GTM_PHASE3_GATE_RUN_PERF:-false}"
 GTM_PHASE3_GATE_REQUIRE_SCALE="${GTM_PHASE3_GATE_REQUIRE_SCALE:-}"
 GTM_PHASE3_GATE_REQUIRE_WRITE_CASE="${GTM_PHASE3_GATE_REQUIRE_WRITE_CASE:-false}"
 RUN_CONTROL_ADMIN_VALIDATION="${RUN_CONTROL_ADMIN_VALIDATION:-}"
+RUN_REPLAY_LEARNING_SMOKES="${RUN_REPLAY_LEARNING_SMOKES:-}"
 
 if [[ -z "${RUN_CONTROL_ADMIN_VALIDATION}" ]]; then
   if [[ "${APP_ENV}" == "prod" ]]; then
@@ -77,6 +78,21 @@ case "${RUN_CONTROL_ADMIN_VALIDATION}" in
   true|false) ;;
   *)
     echo "RUN_CONTROL_ADMIN_VALIDATION must be true|false, got: ${RUN_CONTROL_ADMIN_VALIDATION}" >&2
+    exit 1
+    ;;
+esac
+
+if [[ -z "${RUN_REPLAY_LEARNING_SMOKES}" ]]; then
+  if [[ "${APP_ENV}" == "prod" ]]; then
+    RUN_REPLAY_LEARNING_SMOKES="false"
+  else
+    RUN_REPLAY_LEARNING_SMOKES="true"
+  fi
+fi
+case "${RUN_REPLAY_LEARNING_SMOKES}" in
+  true|false) ;;
+  *)
+    echo "RUN_REPLAY_LEARNING_SMOKES must be true|false, got: ${RUN_REPLAY_LEARNING_SMOKES}" >&2
     exit 1
     ;;
 esac
@@ -187,6 +203,7 @@ echo "[regression] gtm phase1 gate: ${GTM_PHASE1_GATE} (enforce=${GTM_PHASE1_GAT
 echo "[regression] gtm phase2 gate: ${GTM_PHASE2_GATE} (enforce=${GTM_PHASE2_GATE_ENFORCE})"
 echo "[regression] gtm phase3 gate: ${GTM_PHASE3_GATE} (enforce=${GTM_PHASE3_GATE_ENFORCE}, run_perf=${GTM_PHASE3_GATE_RUN_PERF})"
 echo "[regression] control admin validation smoke: ${RUN_CONTROL_ADMIN_VALIDATION}"
+echo "[regression] replay-learning smokes: ${RUN_REPLAY_LEARNING_SMOKES}"
 
 echo "[1/7] migrate + build + docs + contract"
 if [[ "${SKIP_MIGRATE}" != "true" ]]; then
@@ -280,6 +297,23 @@ if ! npm run -s job:private-lane-owner-backfill -- --scope "${MEMORY_SCOPE:-defa
   echo "[regression] private-lane owner backfill failed, log follows:" >&2
   sed -n '1,220p' "${OUT_DIR}/04_private_lane_owner_backfill.json" >&2 || true
   exit 1
+fi
+
+if [[ "${RUN_REPLAY_LEARNING_SMOKES}" == "true" ]]; then
+  echo "[4.8/7] replay-learning fault-injection smoke"
+  if ! API_KEY="${E2E_API_KEY}" AUTH_BEARER="${E2E_AUTH_BEARER}" npm run -s e2e:replay-learning-fault-smoke > "${OUT_DIR}/04_replay_learning_fault_smoke.log" 2>&1; then
+    echo "[regression] replay-learning fault-injection smoke failed, log follows:" >&2
+    sed -n '1,260p' "${OUT_DIR}/04_replay_learning_fault_smoke.log" >&2 || true
+    exit 1
+  fi
+  echo "[4.9/7] replay-learning retention smoke"
+  if ! API_KEY="${E2E_API_KEY}" AUTH_BEARER="${E2E_AUTH_BEARER}" npm run -s e2e:replay-learning-retention-smoke > "${OUT_DIR}/04_replay_learning_retention_smoke.log" 2>&1; then
+    echo "[regression] replay-learning retention smoke failed, log follows:" >&2
+    sed -n '1,260p' "${OUT_DIR}/04_replay_learning_retention_smoke.log" >&2 || true
+    exit 1
+  fi
+else
+  echo "[4.8/7] replay-learning smokes (skipped)"
 fi
 
 echo "[5/7] consistency + health gate"

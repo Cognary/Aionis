@@ -406,6 +406,12 @@ const EnvSchema = z.object({
   REPLAY_LEARNING_MIN_SUCCESS_RATIO: z.coerce.number().min(0).max(1).default(1),
   REPLAY_LEARNING_MAX_MATCHER_BYTES: z.coerce.number().int().positive().max(1024 * 1024).default(16384),
   REPLAY_LEARNING_MAX_TOOL_PREFER: z.coerce.number().int().positive().max(64).default(8),
+  REPLAY_LEARNING_FAULT_INJECTION_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
   EPISODE_GC_TTL_DAYS: z.coerce.number().int().positive().max(3650).default(30),
   EPISODE_GC_RULE_STABLE_POSITIVE_MIN: z.coerce.number().int().min(1).max(100000).default(10),
   EPISODE_GC_RULE_STABLE_NEGATIVE_WINDOW_DAYS: z.coerce.number().int().min(1).max(365).default(7),

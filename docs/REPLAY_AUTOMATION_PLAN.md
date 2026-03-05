@@ -200,6 +200,8 @@ Status:
 7. [x] Episode lifecycle metadata (`lifecycle_state`, `ttl_expires_at`, `archive_candidate`) is attached at projection time.
 8. [x] Stage-1 recall excludes archived replay-learning episodes by default.
 9. [x] Added `job:replay-learning-retention` for TTL and rule-stability archival.
+10. [x] Added fault-injection smoke (`e2e:replay-learning-fault-smoke`) to validate `retryable` vs `fatal` outbox handling.
+11. [x] Added retention smoke (`e2e:replay-learning-retention-smoke`) to validate TTL and `rule_stabilized` archival paths.
 
 ## 11. Known Gaps (Current)
 
