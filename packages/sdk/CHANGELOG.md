@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-03-05
+
+### Changed
+
+1. Published a new npm patch after prior registry visibility inconsistency on `0.2.11`.
+2. No TypeScript SDK API surface change in this patch release.
+
 ## [0.2.11] - 2026-03-05
 
 ### Changed
