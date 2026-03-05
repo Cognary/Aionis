@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-03-05
+
+### Changed
+
+1. Aligned Python SDK release baseline from `0.2.7` to `0.2.8` for strict cross-channel version synchronization (core/npm/PyPI/Docker).
+2. No Python SDK API surface change in this patch release.
+
 ## [0.2.7] - 2026-03-05
 
 ### Changed

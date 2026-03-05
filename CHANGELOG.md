@@ -4,6 +4,15 @@ All notable changes to Aionis core are documented in this file.
 
 The format is based on Keep a Changelog and this project follows SemVer for tagged core releases.
 
+## [0.2.8] - 2026-03-05
+
+### Fixed
+
+1. Fixed `SANDBOX_ADMIN_ONLY` enforcement to read `X-Admin-Token` from request headers correctly in sandbox routes.
+2. Hardened remote sandbox execution against DNS rebinding by pinning outbound HTTP(S) connections to validated resolved IP addresses.
+3. Added a bounded remote response-body guard for sandbox remote executor transport to prevent unbounded in-memory buffering.
+4. Added contract-smoke regression coverage for remote transport pinning and oversized response handling.
+
 ## [0.2.7] - 2026-03-05
 
 ### Changed
