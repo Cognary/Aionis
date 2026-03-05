@@ -507,6 +507,7 @@ export async function applyReplayLearningProjection(
   }
 
   if (shouldCreateEpisode) {
+    const knownSourceRuleNodeId = duplicateRule?.rule_node_id ?? null;
     nodes.push({
       client_id: episodeClientId,
       type: "event",
@@ -519,12 +520,14 @@ export async function applyReplayLearningProjection(
         lifecycle_state: "active",
         ttl_expires_at: ttlExpiresAt,
         archive_candidate: true,
+        ...(knownSourceRuleNodeId ? { source_rule_node_id: knownSourceRuleNodeId } : {}),
         replay_learning: {
           generated_by: "replay_learning_v1",
           source_playbook_id: source.playbook_id,
           source_playbook_version: source.playbook_version,
           source_playbook_node_id: source.playbook_node_id,
           source_commit_id: source.source_commit_id,
+          ...(knownSourceRuleNodeId ? { source_rule_node_id: knownSourceRuleNodeId } : {}),
           matcher_fingerprint: matcherFingerprint,
           policy_fingerprint: policyFingerprint,
           projected_at: new Date().toISOString(),
@@ -597,6 +600,28 @@ export async function applyReplayLearningProjection(
     finalRuleState = "shadow";
     commitId = stateOut.commit_id;
     commitUri = buildAionisUri({ tenant_id: source.tenant_id, scope: source.scope, type: "commit", id: stateOut.commit_id });
+  }
+
+  if (generatedRuleNodeId && generatedEpisodeNodeId) {
+    await client.query(
+      `
+      UPDATE memory_nodes n
+      SET slots =
+        jsonb_set(
+          jsonb_set(
+            coalesce(n.slots, '{}'::jsonb),
+            '{source_rule_node_id}',
+            to_jsonb($2::text),
+            true
+          ),
+          '{replay_learning,source_rule_node_id}',
+          to_jsonb($2::text),
+          true
+        )
+      WHERE n.id = $1::uuid
+      `,
+      [generatedEpisodeNodeId, generatedRuleNodeId],
+    );
   }
 
   const ruleUri =
