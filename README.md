@@ -36,8 +36,8 @@ Aionis is built to solve these as a long-running system core.
 3. **Layered Context Orchestration**
    Context is assembled with explicit layers (`facts/episodes/rules/decisions/tools/citations`) and budget controls.
 
-4. **Policy Loop + Replay Execution**
-   Memory influences runtime decisions via `rules/evaluate`, `tools/select`, `tools/decision`, `tools/run`, and `tools/feedback`; replay execution is supported through `replay/run/*` and `replay/playbooks/*` for record, run, repair, and replayable automation.
+4. **Closed-Loop Learning (Policy + Replay + Projection)**
+   Aionis supports `Replay -> Review -> Learning Projection -> Rule/Episode -> Next Execution` through `replay/playbooks/repair/review` with `learning_projection`. Edge-case safeguards are built in: overlapping rule warnings (`overlapping_rules_detected`), duplicate fingerprint skip (`duplicate_rule_fingerprint_skipped`), episode lifecycle policy (`episode_gc_policy_attached`), and outbox fatal/retryable isolation.
 
 5. **Production-Grade Evidence and Gates**
    Release readiness is validated with reproducible checks, runbooks, and benchmark artifacts.

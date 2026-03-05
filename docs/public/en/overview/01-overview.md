@@ -21,7 +21,8 @@ Aionis connects a single product loop:
 1. **Verifiable state**: write lineage (`commit_id`, `commit_uri`) is explicit.
 2. **Controlled execution**: policy can influence routing and tool behavior.
 3. **Replayability**: requests, runs, decisions, and commits can be reconstructed.
-4. **Production readiness**: operation gates and runbooks are first-class surfaces.
+4. **Closed-loop learning**: approved replay repairs can project into rules/episodes for future runs (`Replay -> Review -> Learning Projection -> Next Execution`).
+5. **Production readiness**: operation gates and runbooks are first-class surfaces.
 
 ## Memory -> Policy -> Action -> Replay
 

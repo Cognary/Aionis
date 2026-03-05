@@ -21,7 +21,8 @@ Aionis 把产品链路统一为：
 1. 可验证状态：写入链路 (`commit_id`, `commit_uri`) 明确。
 2. 可控执行：策略可直接影响工具路由与行为。
 3. 可回放：请求、运行、决策、提交可重建。
-4. 生产就绪：门禁与运维手册是产品内建能力。
+4. 闭环学习：批准的回放修复可投影为规则/情景记忆，并作用于后续运行（`Replay -> Review -> Learning Projection -> Next Execution`）。
+5. 生产就绪：门禁与运维手册是产品内建能力。
 
 ## Memory -> Policy -> Action -> Replay
 
