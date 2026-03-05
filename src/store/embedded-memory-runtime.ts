@@ -1546,6 +1546,11 @@ export class EmbeddedMemoryRuntime {
     for (const item of knn) {
       const n = item.n;
       if (!["event", "topic", "concept", "entity", "rule"].includes(n.type)) continue;
+      if ((n.type === "event" || n.type === "evidence")
+        && String(n.slots?.["replay_learning_episode"] ?? "false") === "true"
+        && String(n.slots?.["lifecycle_state"] ?? "active") === "archived") {
+        continue;
+      }
       if (n.type === "topic") {
         const topicState = typeof n.slots?.["topic_state"] === "string" ? String(n.slots["topic_state"]) : "active";
         if (topicState !== "active") continue;

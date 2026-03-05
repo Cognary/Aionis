@@ -78,6 +78,7 @@
     "job:partition-read-shadow-check": "tsx src/jobs/partition-read-shadow-check.ts",
     "job:scope-purge": "tsx src/jobs/scope-purge.ts",
     "job:sandbox-retention": "tsx src/jobs/sandbox-retention.ts",
+    "job:replay-learning-retention": "tsx src/jobs/replay-learning-retention.ts",
     "job:hosted-key-rotation-sla": "tsx src/jobs/hosted-key-rotation-sla.ts",
     "job:hosted-tenant-timeseries-export": "tsx src/jobs/hosted-tenant-timeseries-export.ts",
     "job:hosted-key-usage-anomaly": "tsx src/jobs/hosted-key-usage-anomaly.ts",

@@ -164,6 +164,23 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
    - Resolution order: global defaults -> endpoint -> tenant_default -> tenant_endpoint -> tenant_scope_default -> tenant_scope_endpoint -> request payload fields.
 15. `playbooks/repair/review` response includes `auto_promote_policy_resolution` (resolved tenant/scope, base source, applied policy layers, request overrides, and final effective defaults).
 16. `GET /v1/admin/control/diagnostics/tenant/:tenant_id` includes `diagnostics.replay_policy` rollups for replay review policy coverage and layer hit distribution.
+17. `playbooks/repair/review` supports optional closed-loop learning projection request:
+   - `learning_projection.enabled`
+   - `learning_projection.mode=rule_and_episode|episode_only`
+   - `learning_projection.delivery=async_outbox|sync_inline`
+   - `learning_projection.target_rule_state=draft|shadow`
+   - `learning_projection.min_total_steps`
+   - `learning_projection.min_success_ratio`
+18. `playbooks/repair/review` response may include `learning_projection_result`:
+   - `status=queued|applied|skipped|failed`
+   - generated URIs (`generated_rule_uri`, `generated_episode_uri`)
+   - warning codes:
+     - `overlapping_rules_detected`
+     - `duplicate_rule_fingerprint_skipped`
+     - `episode_gc_policy_attached`
+19. Learning episodes include lifecycle metadata and are archived by retention policy:
+   - archived episodes are excluded from stage-1 recall candidates by default
+   - `find/resolve` still returns archived objects for audit/replay workflows
 
 Example (trimmed):
 

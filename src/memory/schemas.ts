@@ -759,6 +759,17 @@ export const ReplayPlaybookRepairRequest = z.object({
 
 export type ReplayPlaybookRepairInput = z.infer<typeof ReplayPlaybookRepairRequest>;
 
+export const ReplayLearningProjectionRequest = z.object({
+  enabled: z.boolean().default(false),
+  mode: z.enum(["rule_and_episode", "episode_only"]).default("rule_and_episode"),
+  delivery: z.enum(["async_outbox", "sync_inline"]).default("async_outbox"),
+  target_rule_state: z.enum(["draft", "shadow"]).default("draft"),
+  min_total_steps: z.number().int().min(0).max(500).default(1),
+  min_success_ratio: z.number().min(0).max(1).default(1),
+});
+
+export type ReplayLearningProjectionInput = z.infer<typeof ReplayLearningProjectionRequest>;
+
 export const ReplayPlaybookRepairReviewRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
@@ -784,6 +795,7 @@ export const ReplayPlaybookRepairReviewRequest = z.object({
       min_success_ratio: z.number().min(0).max(1).default(1),
     })
     .default({}),
+  learning_projection: ReplayLearningProjectionRequest.optional(),
   metadata: z.record(z.any()).optional(),
 });
 

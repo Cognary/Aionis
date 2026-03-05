@@ -66,7 +66,7 @@ export type WriteEdgeUpsertArgs = {
 export type WriteOutboxInsertArgs = {
   scope: string;
   commitId: string;
-  eventType: "embed_nodes" | "topic_cluster";
+  eventType: "embed_nodes" | "topic_cluster" | "replay_learning_projection";
   jobKey: string;
   payloadSha256: string;
   payloadJson: string;

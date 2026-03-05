@@ -611,6 +611,7 @@ class ReplayPlaybookRepairReviewInput(TypedDict, total=False):
     auto_promote_on_pass: bool
     auto_promote_target_status: ReplayPlaybookStatus
     auto_promote_gate: Dict[str, Any]
+    learning_projection: Dict[str, Any]
     metadata: Dict[str, Any]
 
 
@@ -718,7 +719,7 @@ class ReplayPlaybookRepairResponse(TypedDict, total=False):
 
 
 class ReplayPlaybookRepairReviewResponse(TypedDict, total=False):
-    pass
+    learning_projection_result: Dict[str, Any]
 
 
 class ToolsDecisionPayload(TypedDict, total=False):

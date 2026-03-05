@@ -79,6 +79,7 @@ import {
   replayStepAfter,
   replayStepBefore,
 } from "./memory/replay.js";
+import { buildReplayLearningProjectionDefaults } from "./memory/replay-learning.js";
 import {
   SandboxExecutor,
   cancelSandboxRun,
@@ -4468,6 +4469,17 @@ app.post("/v1/memory/replay/playbooks/repair/review", async (req, reply) => {
           sandboxTimeoutMs: env.REPLAY_SHADOW_VALIDATE_SANDBOX_TIMEOUT_MS,
           sandboxStopOnFailure: env.REPLAY_SHADOW_VALIDATE_SANDBOX_STOP_ON_FAILURE,
         },
+        learningProjectionDefaults: buildReplayLearningProjectionDefaults({
+          enabled: env.REPLAY_LEARNING_PROJECTION_ENABLED,
+          mode: env.REPLAY_LEARNING_PROJECTION_MODE,
+          delivery: env.REPLAY_LEARNING_PROJECTION_DELIVERY,
+          targetRuleState: env.REPLAY_LEARNING_TARGET_RULE_STATE,
+          minTotalSteps: env.REPLAY_LEARNING_MIN_TOTAL_STEPS,
+          minSuccessRatio: env.REPLAY_LEARNING_MIN_SUCCESS_RATIO,
+          maxMatcherBytes: env.REPLAY_LEARNING_MAX_MATCHER_BYTES,
+          maxToolPrefer: env.REPLAY_LEARNING_MAX_TOOL_PREFER,
+          episodeTtlDays: env.EPISODE_GC_TTL_DAYS,
+        }),
         sandboxValidationExecutor: async (input) => {
           if (!env.SANDBOX_ENABLED) {
             return {

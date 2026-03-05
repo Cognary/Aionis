@@ -392,6 +392,23 @@ const EnvSchema = z.object({
   REPLAY_GUIDED_REPAIR_LLM_TIMEOUT_MS: z.coerce.number().int().positive().max(60000).default(7000),
   REPLAY_GUIDED_REPAIR_LLM_MAX_TOKENS: z.coerce.number().int().positive().max(4000).default(500),
   REPLAY_GUIDED_REPAIR_LLM_TEMPERATURE: z.coerce.number().min(0).max(1).default(0.1),
+  // Replay closed-loop learning projection defaults.
+  REPLAY_LEARNING_PROJECTION_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
+  REPLAY_LEARNING_PROJECTION_MODE: z.enum(["rule_and_episode", "episode_only"]).default("rule_and_episode"),
+  REPLAY_LEARNING_PROJECTION_DELIVERY: z.enum(["async_outbox", "sync_inline"]).default("async_outbox"),
+  REPLAY_LEARNING_TARGET_RULE_STATE: z.enum(["draft", "shadow"]).default("draft"),
+  REPLAY_LEARNING_MIN_TOTAL_STEPS: z.coerce.number().int().min(0).max(500).default(1),
+  REPLAY_LEARNING_MIN_SUCCESS_RATIO: z.coerce.number().min(0).max(1).default(1),
+  REPLAY_LEARNING_MAX_MATCHER_BYTES: z.coerce.number().int().positive().max(1024 * 1024).default(16384),
+  REPLAY_LEARNING_MAX_TOOL_PREFER: z.coerce.number().int().positive().max(64).default(8),
+  EPISODE_GC_TTL_DAYS: z.coerce.number().int().positive().max(3650).default(30),
+  EPISODE_GC_RULE_STABLE_POSITIVE_MIN: z.coerce.number().int().min(1).max(100000).default(10),
+  EPISODE_GC_RULE_STABLE_NEGATIVE_WINDOW_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   // Shadow validation default controls for replay review automation.
   REPLAY_SHADOW_VALIDATE_EXECUTE_TIMEOUT_MS: z.coerce.number().int().positive().max(600000).default(15000),
   REPLAY_SHADOW_VALIDATE_EXECUTE_STOP_ON_FAILURE: z

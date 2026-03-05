@@ -8,6 +8,12 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import { createPostgresWriteStoreAccess } from "../store/write-access.js";
 import { HttpError } from "../util/http.js";
 import {
+  applyReplayLearningProjection,
+  enqueueReplayLearningProjectionOutbox,
+  type ReplayLearningProjectionResolvedConfig,
+  type ReplayLearningProjectionResult,
+} from "./replay-learning.js";
+import {
   ReplayPlaybookCompileRequest,
   ReplayPlaybookGetRequest,
   ReplayPlaybookPromoteRequest,
@@ -118,6 +124,7 @@ type ReplayPlaybookRunOptions = ReplayReadOptions & {
 type ReplayPlaybookReviewOptions = ReplayWriteOptions & {
   localExecutor?: ReplayLocalExecutorOptions;
   shadowValidationPolicy?: ReplayShadowValidationPolicyOptions;
+  learningProjectionDefaults?: ReplayLearningProjectionResolvedConfig;
   sandboxValidationExecutor?: (input: {
     tenant_id: string;
     scope: string;
@@ -644,6 +651,37 @@ async function evaluatePrecondition(raw: unknown): Promise<PreconditionResult> {
 function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.max(min, Math.min(max, Math.trunc(value)));
+}
+
+function resolveReplayLearningProjectionConfig(
+  requestObj: Record<string, unknown> | null,
+  defaults: ReplayLearningProjectionResolvedConfig | undefined,
+): ReplayLearningProjectionResolvedConfig {
+  const base: ReplayLearningProjectionResolvedConfig = defaults ?? {
+    enabled: false,
+    mode: "rule_and_episode",
+    delivery: "async_outbox",
+    target_rule_state: "draft",
+    min_total_steps: 1,
+    min_success_ratio: 1,
+    max_matcher_bytes: 16384,
+    max_tool_prefer: 8,
+    episode_ttl_days: 30,
+  };
+  const modeRaw = toStringOrNull(requestObj?.mode);
+  const deliveryRaw = toStringOrNull(requestObj?.delivery);
+  const stateRaw = toStringOrNull(requestObj?.target_rule_state);
+  return {
+    enabled: requestObj?.enabled === undefined ? base.enabled : requestObj.enabled === true,
+    mode: modeRaw === "episode_only" ? "episode_only" : "rule_and_episode",
+    delivery: deliveryRaw === "sync_inline" ? "sync_inline" : "async_outbox",
+    target_rule_state: stateRaw === "shadow" ? "shadow" : "draft",
+    min_total_steps: clampInt(Number(requestObj?.min_total_steps ?? base.min_total_steps), 0, 500),
+    min_success_ratio: Math.max(0, Math.min(1, Number(requestObj?.min_success_ratio ?? base.min_success_ratio))),
+    max_matcher_bytes: clampInt(Number(base.max_matcher_bytes), 1, 1024 * 1024),
+    max_tool_prefer: clampInt(Number(base.max_tool_prefer), 1, 64),
+    episode_ttl_days: clampInt(Number(base.episode_ttl_days), 1, 3650),
+  };
 }
 
 function asStringArray(input: unknown): string[] {
@@ -3760,6 +3798,99 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
     }
   }
 
+  const learningProjectionConfig = resolveReplayLearningProjectionConfig(
+    asObject((parsed as any).learning_projection),
+    opts.learningProjectionDefaults,
+  );
+  let learningProjectionResult: ReplayLearningProjectionResult | undefined;
+  if (parsed.action !== "approve") {
+    learningProjectionResult = {
+      triggered: false,
+      delivery: learningProjectionConfig.delivery,
+      status: "skipped",
+      reason: "review_action_not_approve",
+    };
+  } else if (reviewState !== "approved") {
+    learningProjectionResult = {
+      triggered: false,
+      delivery: learningProjectionConfig.delivery,
+      status: "skipped",
+      reason: "review_not_approved",
+    };
+  } else if (!learningProjectionConfig.enabled) {
+    learningProjectionResult = {
+      triggered: false,
+      delivery: learningProjectionConfig.delivery,
+      status: "skipped",
+      reason: "learning_projection_disabled",
+    };
+  } else {
+    const gateMetrics = extractShadowValidationGateMetrics(shadowValidation);
+    const inferredTotalSteps = Array.isArray((reviewedSlots as any).steps_template)
+      ? (reviewedSlots as any).steps_template.length
+      : 0;
+    const projectionSource = {
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      scope_key: tenancy.scope_key,
+      actor: parsed.actor ?? "replay_review",
+      playbook_id: parsed.playbook_id,
+      playbook_version: finalVersion,
+      playbook_node_id: finalNodeId ?? source.id,
+      playbook_title: source.title ?? null,
+      playbook_summary: source.text_summary ?? null,
+      playbook_slots: reviewedSlots as Record<string, unknown>,
+      source_commit_id: finalCommitId,
+      metrics: {
+        total_steps: gateMetrics?.total_steps ?? inferredTotalSteps,
+        success_ratio: gateMetrics?.success_ratio ?? 1,
+      },
+    };
+    if (learningProjectionConfig.delivery === "sync_inline") {
+      try {
+        learningProjectionResult = await applyReplayLearningProjection(client, projectionSource, learningProjectionConfig, opts);
+      } catch (err: any) {
+        learningProjectionResult = {
+          triggered: true,
+          delivery: learningProjectionConfig.delivery,
+          status: "failed",
+          reason: String(err?.code ?? err?.message ?? err),
+        };
+      }
+    } else {
+      try {
+        const payload = {
+          tenant_id: tenancy.tenant_id,
+          scope: tenancy.scope,
+          scope_key: tenancy.scope_key,
+          actor: parsed.actor ?? "replay_review",
+          playbook_id: parsed.playbook_id,
+          playbook_version: finalVersion,
+          source_commit_id: finalCommitId ?? null,
+          config: learningProjectionConfig,
+        };
+        const enq = await enqueueReplayLearningProjectionOutbox(client, {
+          scopeKey: tenancy.scope_key,
+          commitId: finalCommitId,
+          payload,
+        });
+        learningProjectionResult = {
+          triggered: true,
+          delivery: learningProjectionConfig.delivery,
+          status: "queued",
+          job_key: enq.job_key,
+        };
+      } catch (err: any) {
+        learningProjectionResult = {
+          triggered: true,
+          delivery: learningProjectionConfig.delivery,
+          status: "failed",
+          reason: String(err?.code ?? err?.message ?? err),
+        };
+      }
+    }
+  }
+
   return {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
@@ -3776,6 +3907,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
     commit_id: finalCommitId,
     commit_uri: finalCommitUri,
     commit_hash: finalCommitHash,
+    learning_projection_result: learningProjectionResult,
   };
 }
 

@@ -629,6 +629,14 @@ export type ReplayPlaybookRepairReviewInput = {
     max_unknown_steps?: number;
     min_success_ratio?: number;
   };
+  learning_projection?: {
+    enabled?: boolean;
+    mode?: "rule_and_episode" | "episode_only";
+    delivery?: "async_outbox" | "sync_inline";
+    target_rule_state?: "draft" | "shadow";
+    min_total_steps?: number;
+    min_success_ratio?: number;
+  };
   metadata?: Record<string, unknown>;
 };
 
@@ -1400,6 +1408,27 @@ export type ReplayPlaybookRepairResponse = {
 };
 
 export type ReplayPlaybookRepairReviewResponse = {
+  learning_projection_result?: {
+    triggered?: boolean;
+    delivery?: "async_outbox" | "sync_inline";
+    status?: "queued" | "applied" | "skipped" | "failed";
+    reason?: string;
+    job_key?: string;
+    generated_rule_node_id?: string;
+    generated_rule_uri?: string;
+    generated_episode_node_id?: string;
+    generated_episode_uri?: string;
+    rule_state?: "draft" | "shadow";
+    commit_id?: string;
+    commit_uri?: string;
+    warnings?: Array<{
+      code?: "overlapping_rules_detected" | "duplicate_rule_fingerprint_skipped" | "episode_gc_policy_attached";
+      message?: string;
+      related_rule_node_ids?: string[];
+      [k: string]: unknown;
+    }>;
+    [k: string]: unknown;
+  };
   [k: string]: unknown;
 };
 

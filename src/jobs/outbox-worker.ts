@@ -7,6 +7,11 @@ import { createEmbeddingProviderFromEnv } from "../embeddings/index.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { runEmbedBackfill } from "./embedBackfillLib.js";
 import { sha256Hex } from "../util/crypto.js";
+import {
+  applyReplayLearningProjectionFromPayload,
+  buildReplayLearningProjectionDefaults,
+  classifyReplayLearningProjectionError,
+} from "../memory/replay-learning.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
@@ -64,6 +69,7 @@ async function processBatch(): Promise<{
       scope: string;
       commit_id: string;
       event_type: string;
+      job_key: string | null;
       payload: any;
       attempts: number;
       claimed_at: string;
@@ -80,7 +86,12 @@ async function processBatch(): Promise<{
               OR claimed_at < now() - ($2::int * interval '1 millisecond')
             )
           ORDER BY
-            CASE WHEN event_type = 'embed_nodes' THEN 0 WHEN event_type = 'topic_cluster' THEN 1 ELSE 2 END,
+            CASE
+              WHEN event_type = 'embed_nodes' THEN 0
+              WHEN event_type = 'topic_cluster' THEN 1
+              WHEN event_type = 'replay_learning_projection' THEN 2
+              ELSE 3
+            END,
             id ASC
           LIMIT $1
           FOR UPDATE SKIP LOCKED
@@ -89,7 +100,15 @@ async function processBatch(): Promise<{
         SET claimed_at = now(), attempts = attempts + 1
         FROM eligible e
         WHERE o.id = e.id
-        RETURNING o.id, o.scope, o.commit_id::text AS commit_id, o.event_type, o.payload, o.attempts, o.claimed_at::text
+        RETURNING
+          o.id,
+          o.scope,
+          o.commit_id::text AS commit_id,
+          o.event_type,
+          o.job_key,
+          o.payload,
+          o.attempts,
+          o.claimed_at::text
       `,
       [env.OUTBOX_BATCH_SIZE, env.OUTBOX_CLAIM_TIMEOUT_MS, env.OUTBOX_MAX_ATTEMPTS],
     );
@@ -103,7 +122,7 @@ async function processBatch(): Promise<{
 
   // Process embed backfill first to avoid consuming topic_cluster items before embeddings exist.
   claimed.sort((a, b) => {
-    const pri = (t: string) => (t === "embed_nodes" ? 0 : t === "topic_cluster" ? 1 : 2);
+    const pri = (t: string) => (t === "embed_nodes" ? 0 : t === "topic_cluster" ? 1 : t === "replay_learning_projection" ? 2 : 3);
     const d = pri(a.event_type) - pri(b.event_type);
     return d !== 0 ? d : a.id - b.id;
   });
@@ -237,6 +256,122 @@ async function processBatch(): Promise<{
              WHERE id = $1 AND claimed_at::text = $2`,
             [r.id, r.claimed_at, JSON.stringify(payloadPatch)],
           );
+          return;
+        }
+
+        if (r.event_type === "replay_learning_projection") {
+          try {
+            const payload = r.payload && typeof r.payload === "object" && !Array.isArray(r.payload) ? r.payload : {};
+            const payloadConfig =
+              payload.config && typeof payload.config === "object" && !Array.isArray(payload.config)
+                ? (payload.config as Record<string, unknown>)
+                : {};
+            const defaults = buildReplayLearningProjectionDefaults({
+              enabled: env.REPLAY_LEARNING_PROJECTION_ENABLED,
+              mode: env.REPLAY_LEARNING_PROJECTION_MODE,
+              delivery: env.REPLAY_LEARNING_PROJECTION_DELIVERY,
+              targetRuleState: env.REPLAY_LEARNING_TARGET_RULE_STATE,
+              minTotalSteps: env.REPLAY_LEARNING_MIN_TOTAL_STEPS,
+              minSuccessRatio: env.REPLAY_LEARNING_MIN_SUCCESS_RATIO,
+              maxMatcherBytes: env.REPLAY_LEARNING_MAX_MATCHER_BYTES,
+              maxToolPrefer: env.REPLAY_LEARNING_MAX_TOOL_PREFER,
+              episodeTtlDays: env.EPISODE_GC_TTL_DAYS,
+            });
+            const projectionOut = await applyReplayLearningProjectionFromPayload(
+              client,
+              {
+                tenant_id: String(payload.tenant_id ?? env.MEMORY_TENANT_ID),
+                scope: String(payload.scope ?? env.MEMORY_SCOPE),
+                scope_key: String(payload.scope_key ?? r.scope),
+                actor: String(payload.actor ?? "replay_learning_projection_worker"),
+                playbook_id: String(payload.playbook_id ?? ""),
+                playbook_version: Number(payload.playbook_version ?? 1),
+                source_commit_id: typeof payload.source_commit_id === "string" ? payload.source_commit_id : null,
+                config: {
+                  enabled: payloadConfig.enabled === undefined ? defaults.enabled : payloadConfig.enabled === true,
+                  mode: payloadConfig.mode === "episode_only" ? "episode_only" : "rule_and_episode",
+                  delivery: payloadConfig.delivery === "sync_inline" ? "sync_inline" : "async_outbox",
+                  target_rule_state: payloadConfig.target_rule_state === "shadow" ? "shadow" : "draft",
+                  min_total_steps:
+                    Number.isFinite(Number(payloadConfig.min_total_steps))
+                      ? Math.max(0, Math.min(500, Math.trunc(Number(payloadConfig.min_total_steps))))
+                      : defaults.min_total_steps,
+                  min_success_ratio:
+                    Number.isFinite(Number(payloadConfig.min_success_ratio))
+                      ? Math.max(0, Math.min(1, Number(payloadConfig.min_success_ratio)))
+                      : defaults.min_success_ratio,
+                  max_matcher_bytes: defaults.max_matcher_bytes,
+                  max_tool_prefer: defaults.max_tool_prefer,
+                  episode_ttl_days: defaults.episode_ttl_days,
+                },
+              },
+              {
+                defaultScope: env.MEMORY_SCOPE,
+                defaultTenantId: env.MEMORY_TENANT_ID,
+                maxTextLen: env.MAX_TEXT_LEN,
+                piiRedaction: env.PII_REDACTION,
+                allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+                shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+                shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+                writeAccessShadowMirrorV2: false,
+                embedder,
+                embeddedRuntime: null,
+              },
+            );
+            await client.query(
+              `UPDATE memory_outbox
+               SET
+                 payload = payload || $3::jsonb,
+                 last_error = NULL,
+                 published_at = now()
+               WHERE id = $1 AND claimed_at::text = $2`,
+              [
+                r.id,
+                r.claimed_at,
+                JSON.stringify({
+                  replay_learning_projection: projectionOut,
+                }),
+              ],
+            );
+          } catch (err: any) {
+            const classified = classifyReplayLearningProjectionError(err);
+            const errorPayload = {
+              replay_learning_projection: {
+                status: "failed",
+                event_type: r.event_type,
+                job_key: r.job_key,
+                playbook_id: r.payload?.playbook_id ?? null,
+                playbook_version: r.payload?.playbook_version ?? null,
+                error_code: classified.error_code,
+                error_class: classified.error_class,
+                message: classified.message,
+              },
+            };
+            if (classified.error_class === "fatal") {
+              await client.query(
+                `UPDATE memory_outbox
+                 SET
+                   payload = payload || $3::jsonb,
+                   last_error = $4,
+                   failed_at = now(),
+                   failed_reason = $5,
+                   claimed_at = NULL
+                 WHERE id = $1 AND claimed_at::text = $2`,
+                [r.id, r.claimed_at, JSON.stringify(errorPayload), classified.message, classified.error_code],
+              );
+            } else {
+              await client.query(
+                `UPDATE memory_outbox
+                 SET
+                   payload = payload || $3::jsonb,
+                   claimed_at = NULL,
+                   last_error = $4
+                 WHERE id = $1 AND claimed_at::text = $2`,
+                [r.id, r.claimed_at, JSON.stringify(errorPayload), classified.message],
+              );
+            }
+          }
+          return;
         } else {
           // Unknown event type: mark as processed to avoid poison-looping forever.
           await client.query(

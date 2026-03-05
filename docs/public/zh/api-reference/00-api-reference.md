@@ -150,6 +150,23 @@ Memory 路由使用以下任一方式：
    - `REPLAY_REPAIR_REVIEW_POLICY_JSON`（支持 `endpoint` / `tenant_default` / `tenant_endpoint` / `tenant_scope_default` / `tenant_scope_endpoint`）
 15. `playbooks/repair/review` 响应包含 `auto_promote_policy_resolution`，用于查看命中来源与最终生效策略。
 16. `GET /v1/admin/control/diagnostics/tenant/:tenant_id` 的 `diagnostics.replay_policy` 会汇总策略命中与覆盖统计。
+17. `playbooks/repair/review` 支持可选闭环学习投影请求：
+   - `learning_projection.enabled`
+   - `learning_projection.mode=rule_and_episode|episode_only`
+   - `learning_projection.delivery=async_outbox|sync_inline`
+   - `learning_projection.target_rule_state=draft|shadow`
+   - `learning_projection.min_total_steps`
+   - `learning_projection.min_success_ratio`
+18. `playbooks/repair/review` 响应可包含 `learning_projection_result`：
+   - `status=queued|applied|skipped|failed`
+   - 产物 URI（`generated_rule_uri`、`generated_episode_uri`）
+   - warning 代码：
+     - `overlapping_rules_detected`
+     - `duplicate_rule_fingerprint_skipped`
+     - `episode_gc_policy_attached`
+19. 学习 episode 带有生命周期元数据并可被保留策略归档：
+   - stage-1 recall 默认排除 archived 学习 episode
+   - `find/resolve` 仍可查询 archived 对象用于审计/回放
 
 ## 错误结构
 

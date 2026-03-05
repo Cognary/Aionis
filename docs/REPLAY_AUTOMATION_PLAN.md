@@ -182,6 +182,25 @@ Status:
 2. [x] Sensitive-command execution review controls (`sensitive_review_mode`, explicit override gate).
 3. [ ] Continue adaptive replay lifecycle hardening.
 
+### v1.1 Closed-Loop Learning Projection
+
+1. Project approved replay repairs into governed memory artifacts.
+2. Detect replay-derived rule overlap and duplicate fingerprints.
+3. Attach lifecycle metadata to replay-learning episodes and archive by policy.
+4. Keep outbox isolation with fatal/retryable classification.
+
+Status:
+
+1. [x] `playbooks/repair/review` supports `learning_projection` request block.
+2. [x] Response includes `learning_projection_result` and warning payloads.
+3. [x] Replay-learning rule projection stores provenance fingerprints (`matcher_fingerprint`, `policy_fingerprint`).
+4. [x] Overlap and duplicate detection emits `overlapping_rules_detected` and `duplicate_rule_fingerprint_skipped`.
+5. [x] Async projection delivery via outbox event `replay_learning_projection`.
+6. [x] Worker classifies projection failures as `retryable` or `fatal` and dead-letters fatal failures immediately.
+7. [x] Episode lifecycle metadata (`lifecycle_state`, `ttl_expires_at`, `archive_candidate`) is attached at projection time.
+8. [x] Stage-1 recall excludes archived replay-learning episodes by default.
+9. [x] Added `job:replay-learning-retention` for TTL and rule-stability archival.
+
 ## 11. Known Gaps (Current)
 
 1. Embedded backend currently supports replay write path, but replay read/compile APIs require postgres in this phase.

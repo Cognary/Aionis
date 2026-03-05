@@ -199,6 +199,16 @@ export function createPostgresRecallStoreAccess(
         FROM knn k
         WHERE k.type IN ('event', 'topic', 'concept', 'entity', 'rule')
           AND (
+            k.type NOT IN ('event', 'evidence')
+            OR NOT EXISTS (
+              SELECT 1
+              FROM memory_nodes e
+              WHERE e.id = k.id
+                AND coalesce(e.slots->>'replay_learning_episode', 'false') = 'true'
+                AND coalesce(e.slots->>'lifecycle_state', 'active') = 'archived'
+            )
+          )
+          AND (
             k.type <> 'topic'
             OR EXISTS (
               SELECT 1
@@ -268,6 +278,16 @@ export function createPostgresRecallStoreAccess(
           1.0 - k.distance AS similarity
         FROM knn k
         WHERE k.type IN ('event', 'topic', 'concept', 'entity', 'rule')
+          AND (
+            k.type NOT IN ('event', 'evidence')
+            OR NOT EXISTS (
+              SELECT 1
+              FROM memory_nodes e
+              WHERE e.id = k.id
+                AND coalesce(e.slots->>'replay_learning_episode', 'false') = 'true'
+                AND coalesce(e.slots->>'lifecycle_state', 'active') = 'archived'
+            )
+          )
           AND (
             k.type <> 'topic'
             OR EXISTS (
