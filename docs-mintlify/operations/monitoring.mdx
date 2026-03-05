@@ -1,0 +1,20 @@
+# Monitoring and SLO
+
+## Core metrics
+
+1. Request throughput and error rate.
+2. Write and recall p95 latency.
+3. Policy decision coverage and feedback coverage.
+4. Replay success ratio for validation runs.
+
+## Alert recommendations
+
+1. Sustained 5xx spike above release threshold.
+2. Recall latency regression beyond SLO target.
+3. Missing decision linkage in policy-critical flows.
+4. Replay failure bursts after deployment.
+
+## Practical review cadence
+
+1. Daily: health + latency + error trends.
+2. Weekly: SLO trend + replay quality + governance drift.

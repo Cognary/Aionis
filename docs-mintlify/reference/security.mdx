@@ -1,0 +1,21 @@
+# Security
+
+## Baseline controls
+
+1. Never deploy production with `MEMORY_AUTH_MODE=off`.
+2. Use least-privilege credentials per environment.
+3. Protect admin routes with dedicated admin credentials.
+4. Restrict CORS to explicit trusted origins.
+5. Rotate keys and tokens on schedule or incident.
+
+## Operational checks
+
+1. Confirm auth mode before each release.
+2. Confirm dangerous operation switches remain default-safe.
+3. Audit random sample of sensitive actions weekly.
+
+## Incident response readiness
+
+1. Keep request/decision/replay IDs in logs.
+2. Keep credential rotation runbook documented and tested.
+3. Preserve release artifacts for forensic analysis.

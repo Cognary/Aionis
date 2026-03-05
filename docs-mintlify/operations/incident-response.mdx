@@ -1,0 +1,43 @@
+# Incident Response and Replay
+
+## Incident workflow
+
+1. Capture failing `request_id` from client and server logs.
+2. Resolve `run_id`, `decision_id`, and `commit_uri` chain.
+3. Reconstruct execution path with replay APIs.
+4. Apply mitigation.
+5. Re-run replay to verify fix.
+
+## Evidence package
+
+1. Timeline of key events.
+2. Request/decision payload snapshots.
+3. Replay before/after comparison.
+4. Mitigation and rollback notes.
+
+## Example: replay-based fix validation
+
+Scenario:
+1. A support workflow selected `email_sender` instead of `ticket_router` after a rule update.
+
+Validation steps:
+1. Pull original IDs: `request_id`, `run_id`, `decision_id`, `commit_uri`.
+2. Replay original chain and confirm wrong selection is reproducible.
+3. Apply rule fix.
+4. Replay same workflow and verify selected tool changed to expected target.
+
+Expected comparison:
+
+| Check | Before fix | After fix |
+| --- | --- | --- |
+| selected tool | `email_sender` | `ticket_router` |
+| decision_id | old chain | new chain |
+| status | failed expectation | pass |
+
+## Fast command
+
+```bash
+curl -sS "$BASE_URL/v1/memory/resolve" \
+  -H 'content-type: application/json' \
+  -d "{\"tenant_id\":\"default\",\"scope\":\"default\",\"uri\":\"$COMMIT_URI\"}" | jq
+```

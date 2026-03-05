@@ -1,0 +1,29 @@
+# Go-live Checklist
+
+Use this checklist before enabling production traffic.
+
+## T-24h checks
+
+1. Core gate passes in staging.
+2. Authentication and isolation settings verified.
+3. Rollback owner and release owner assigned.
+4. Replay evidence chain prepared.
+5. Monitoring dashboards and alert channels active.
+
+## T-2h checks
+
+1. Target environment health is green.
+2. Write/recall/policy smoke path passes.
+3. Release artifact and version metadata finalized.
+
+## Launch checks
+
+1. Shift traffic gradually.
+2. Track p95 latency and error rate during rollout window.
+3. Keep rollback path ready and tested.
+
+## Post-release checks
+
+1. Re-run core gate.
+2. Validate decision/feedback linkage.
+3. Archive release evidence package.

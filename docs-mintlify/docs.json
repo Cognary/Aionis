@@ -1,0 +1,141 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Aionis Docs",
+  "description": "Execution memory infrastructure for production AI agents",
+  "colors": {
+    "primary": "#18e299"
+  },
+  "seo": {
+    "metatags": {
+      "canonical": "https://doc.aionisos.com"
+    },
+    "indexing": "navigable"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/Cognary/Aionis"
+      }
+    ],
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/Cognary/Aionis"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/Cognary/Aionis",
+      "website": "https://doc.aionisos.com"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guide",
+        "groups": [
+          {
+            "group": "Start",
+            "pages": [
+              "index",
+              "guide/00-overview",
+              "guide/10-role-based-paths",
+              "guide/01-start-here",
+              "guide/02-core-concepts",
+              "guide/03-memory-policy-loop"
+            ]
+          },
+          {
+            "group": "Build",
+            "pages": [
+              "guide/04-api-guide",
+              "guide/05-sdk-guide",
+              "guide/06-integrations"
+            ]
+          },
+          {
+            "group": "Operate",
+            "pages": [
+              "guide/07-operations-and-gates",
+              "guide/08-deploy",
+              "guide/09-troubleshooting"
+            ]
+          },
+          {
+            "group": "Tutorials",
+            "pages": [
+              "guide/tutorials/index",
+              "guide/tutorials/env-template",
+              "guide/tutorials/agent-integration",
+              "guide/tutorials/incident-replay",
+              "guide/tutorials/release-gate",
+              "guide/tutorials/policy-tuning"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API",
+        "groups": [
+          {
+            "group": "API Reference",
+            "pages": [
+              "api-reference/index",
+              "api-reference/authentication",
+              "api-reference/memory",
+              "api-reference/policy",
+              "api-reference/replay",
+              "api-reference/sandbox",
+              "api-reference/errors"
+            ]
+          },
+          {
+            "group": "Endpoint Schemas",
+            "pages": [
+              "api-reference/endpoints/index",
+              "api-reference/endpoints/write",
+              "api-reference/endpoints/recall-text",
+              "api-reference/endpoints/context-assemble",
+              "api-reference/endpoints/rules-evaluate",
+              "api-reference/endpoints/tools-select",
+              "api-reference/endpoints/resolve",
+              "api-reference/endpoints/replay-runs-get"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Operations",
+        "groups": [
+          {
+            "group": "Run in Production",
+            "pages": [
+              "operations/index",
+              "operations/go-live",
+              "operations/monitoring",
+              "operations/incident-response",
+              "operations/runbooks"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/index",
+              "reference/configuration",
+              "reference/security",
+              "reference/faq",
+              "reference/changelog",
+              "reference/roadmap"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

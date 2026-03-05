@@ -1,0 +1,360 @@
+# Tutorial: Integrate One Agent End-to-End
+
+Ship a first production-ready Aionis integration with replay-ready provenance.
+
+## Metadata
+
+- 📖 14 minutes
+- ⚙️ Running Aionis endpoint (`BASE_URL`)., API key or bearer token configured (`AIONIS_API_KEY`)., A test tenant/scope pair.
+- 🎯 You can execute write -> recall -> policy -> decision and keep a complete provenance chain.
+
+
+
+> **Tip - Copy and run**
+> Use the copy button at the top-right of each code block. If you have not prepared variables yet, run [One-click Environment Template](env-template) first.
+
+## Input
+
+### Environment contract
+
+Use these values across all requests:
+
+1. `tenant_id = default`
+2. `scope = support`
+3. `run_id = run_<timestamp>`
+
+### Input fields
+
+| Field | Required | Used in steps | Example |
+| --- | --- | --- | --- |
+| `BASE_URL` | Yes | All | `http://localhost:3001` |
+| `AIONIS_API_KEY` | Yes | All | `aionis_live_xxx` |
+| `tenant_id` | Yes | 1, 2, 3, 4 | `default` |
+| `scope` | Yes | 1, 2, 3, 4 | `support` |
+| `query_text` | Yes | 2 | `invoice request` |
+| `run_id` | Yes | 3 | `run_1741311000` |
+| `candidates[]` | Yes | 3 | `["ticket_router","email_sender"]` |
+| `uri` | Yes | 4 | `aionis://default/support/decision/<decision_id>` |
+
+### Output fields to persist
+
+| Field | Source step | Why keep it |
+| --- | --- | --- |
+| `request_id` | 1, 2, 3, 4 | Request-level trace and incident correlation |
+| `data.commit_id` | 1 | Commit lineage and audit |
+| `data.commit_uri` | 1 | Resolve/replay path reconstruction |
+| `run_id` | 3 | End-to-end workflow correlation |
+| `decision.decision_id` | 3 | Policy/action decision provenance |
+| `decision.decision_uri` | 3 | Deterministic object lookup |
+| `selection.selected` | 3 | Action outcome validation |
+
+## Steps
+
+### Step 1: Write one memory event
+
+
+#### TypeScript
+
+```ts
+const baseUrl = process.env.BASE_URL!
+const apiKey = process.env.AIONIS_API_KEY!
+
+const writeRes = await fetch(`${baseUrl}/v1/memory/write`, {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    'x-api-key': apiKey
+  },
+  body: JSON.stringify({
+    tenant_id: 'default',
+    scope: 'support',
+    input_text: 'Customer requested invoice PDF',
+    nodes: [
+      {
+        type: 'event',
+        memory_lane: 'shared',
+        text_summary: 'Customer requested invoice PDF'
+      }
+    ]
+  })
+})
+
+const writeData = await writeRes.json()
+console.log(writeData)
+```
+
+#### Python
+
+```python
+import os
+import requests
+
+base_url = os.environ["BASE_URL"]
+api_key = os.environ["AIONIS_API_KEY"]
+
+resp = requests.post(
+    f"{base_url}/v1/memory/write",
+    headers={"content-type": "application/json", "X-Api-Key": api_key},
+    json={
+        "tenant_id": "default",
+        "scope": "support",
+        "input_text": "Customer requested invoice PDF",
+        "nodes": [
+            {
+                "type": "event",
+                "memory_lane": "shared",
+                "text_summary": "Customer requested invoice PDF",
+            }
+        ],
+    },
+    timeout=20,
+)
+
+print(resp.json())
+```
+
+#### cURL
+
+```bash
+curl -sS "$BASE_URL/v1/memory/write" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"support",
+    "input_text":"Customer requested invoice PDF",
+    "nodes":[
+      {
+        "type":"event",
+        "memory_lane":"shared",
+        "text_summary":"Customer requested invoice PDF"
+      }
+    ]
+  }' | jq
+```
+
+
+Persist:
+
+1. `request_id`
+2. `data.commit_id`
+3. `data.commit_uri`
+
+### Step 2: Recall context by text
+
+
+#### TypeScript
+
+```ts
+const recallRes = await fetch(`${baseUrl}/v1/memory/recall_text`, {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    'x-api-key': apiKey
+  },
+  body: JSON.stringify({
+    tenant_id: 'default',
+    scope: 'support',
+    query_text: 'invoice request',
+    limit: 5
+  })
+})
+
+const recallData = await recallRes.json()
+console.log(recallData)
+```
+
+#### Python
+
+```python
+recall = requests.post(
+    f"{base_url}/v1/memory/recall_text",
+    headers={"content-type": "application/json", "X-Api-Key": api_key},
+    json={
+        "tenant_id": "default",
+        "scope": "support",
+        "query_text": "invoice request",
+        "limit": 5,
+    },
+    timeout=20,
+)
+
+print(recall.json())
+```
+
+#### cURL
+
+```bash
+curl -sS "$BASE_URL/v1/memory/recall_text" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"support",
+    "query_text":"invoice request",
+    "limit":5
+  }' | jq
+```
+
+
+Persist:
+
+1. `request_id`
+2. `tenant_id`
+3. `scope`
+
+### Step 3: Evaluate rules and select tool
+
+
+#### TypeScript
+
+```ts
+const runId = `run_${Date.now()}`
+
+await fetch(`${baseUrl}/v1/memory/rules/evaluate`, {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    'x-api-key': apiKey
+  },
+  body: JSON.stringify({
+    tenant_id: 'default',
+    scope: 'support',
+    context: { intent: 'billing_support' }
+  })
+})
+
+const selectRes = await fetch(`${baseUrl}/v1/memory/tools/select`, {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    'x-api-key': apiKey
+  },
+  body: JSON.stringify({
+    tenant_id: 'default',
+    scope: 'support',
+    run_id: runId,
+    context: { intent: 'billing_support' },
+    candidates: ['ticket_router', 'email_sender']
+  })
+})
+
+const selectData = await selectRes.json()
+console.log(selectData)
+```
+
+#### Python
+
+```python
+import time
+
+run_id = f"run_{int(time.time())}"
+
+requests.post(
+    f"{base_url}/v1/memory/rules/evaluate",
+    headers={"content-type": "application/json", "X-Api-Key": api_key},
+    json={"tenant_id": "default", "scope": "support", "context": {"intent": "billing_support"}},
+    timeout=20,
+)
+
+selection = requests.post(
+    f"{base_url}/v1/memory/tools/select",
+    headers={"content-type": "application/json", "X-Api-Key": api_key},
+    json={
+        "tenant_id": "default",
+        "scope": "support",
+        "run_id": run_id,
+        "context": {"intent": "billing_support"},
+        "candidates": ["ticket_router", "email_sender"],
+    },
+    timeout=20,
+)
+
+print(selection.json())
+```
+
+#### cURL
+
+```bash
+RUN_ID="run_$(date +%s)"
+
+curl -sS "$BASE_URL/v1/memory/rules/evaluate" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d '{"tenant_id":"default","scope":"support","context":{"intent":"billing_support"}}' | jq
+
+curl -sS "$BASE_URL/v1/memory/tools/select" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d "{\"tenant_id\":\"default\",\"scope\":\"support\",\"run_id\":\"$RUN_ID\",\"context\":{\"intent\":\"billing_support\"},\"candidates\":[\"ticket_router\",\"email_sender\"]}" | jq
+```
+
+
+Persist:
+
+1. `run_id`
+2. `decision.decision_id`
+3. `decision.decision_uri`
+4. `selection.selected`
+
+### Step 4: Validate provenance chain
+
+Use resolve on `decision_uri`:
+
+```bash
+curl -sS "$BASE_URL/v1/memory/resolve" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"support",
+    "uri":"aionis://default/support/decision/<decision_id>",
+    "include_meta":true
+  }' | jq
+```
+
+## Expected response sample
+
+```json
+{
+  "status": "ok",
+  "request_id": "req_123",
+  "tenant_id": "default",
+  "scope": "support",
+  "data": {
+    "commit_id": "commit_123",
+    "commit_uri": "memory://commit/commit_123"
+  },
+  "decision": {
+    "decision_id": "8fe92f61-9466-4f9e-96ef-04bc56b96b19",
+    "decision_uri": "aionis://default/support/decision/8fe92f61-9466-4f9e-96ef-04bc56b96b19"
+  }
+}
+```
+
+## Common failure and fix
+
+Failure:
+
+```json
+{"error":"write_nodes_required","message":"write request must include at least one node"}
+```
+
+Fix:
+
+1. Add at least one recallable node in `nodes[]`.
+2. Keep `tenant_id` + `scope` explicit.
+3. Retry once with corrected payload.
+
+## Success criteria
+
+1. `write` succeeds and returns `commit_id` + `commit_uri`.
+2. `recall_text` returns context/candidates without auth or scope errors.
+3. `tools/select` returns one `selection.selected` and a `decision_id`.
+4. `resolve` on decision URI returns a concrete decision object.
+
+### Production checklist
+
+1. Always send both `tenant_id` and `scope`.
+2. Log `request_id`, `run_id`, `decision_id`, `commit_uri` for each user-visible action.
+3. Reject actions when policy response is missing or invalid.

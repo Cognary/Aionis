@@ -1,0 +1,96 @@
+# Start Here
+
+This page gets you to a working Aionis integration in minutes.
+
+## Metadata
+
+- 📖 8 minutes
+- ⚙️ Docker and Docker Compose., Node.js `>=18`., `curl` and `jq`.
+- 🎯 You can run Aionis and validate first write/recall integration.
+- 📝 Run Aionis locally. · Perform a recallable write. · Verify retrieval and replay-ready IDs.
+
+
+
+## End-to-end flow
+
+```mermaid
+flowchart LR
+  A["Developer"] --> B["Write memory"]
+  B --> C["Recall context"]
+  C --> D["Apply policy"]
+  D --> E["Execute action"]
+  E --> F["Persist decision"]
+```
+
+## Local quickstart
+
+```bash
+git clone https://github.com/Cognary/Aionis.git
+cd Aionis
+cp .env.example .env
+```
+
+Recommended local `.env` values:
+
+```bash
+PORT=3001
+MEMORY_AUTH_MODE=off
+EMBEDDING_PROVIDER=fake
+```
+
+Start the stack:
+
+```bash
+make stack-up
+curl -fsS http://localhost:3001/health | jq
+```
+
+Write and recall:
+
+```bash
+curl -sS http://localhost:3001/v1/memory/write \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"default",
+    "input_text":"Customer prefers email follow-up",
+    "memory_lane":"shared",
+    "nodes":[{"type":"event","memory_lane":"shared","text_summary":"Customer prefers email follow-up"}]
+  }' | jq
+
+curl -sS http://localhost:3001/v1/memory/recall_text \
+  -H 'content-type: application/json' \
+  -d '{"tenant_id":"default","scope":"default","query_text":"preferred follow-up channel","limit":5}' | jq
+```
+
+Stop services:
+
+```bash
+make stack-down
+```
+
+## Hosted quickstart
+
+```bash
+export BASE_URL="https://api.your-domain.com"
+export API_KEY="your_api_key"
+
+curl -fsS "$BASE_URL/health" | jq
+
+curl -sS "$BASE_URL/v1/memory/write" \
+  -H 'content-type: application/json' \
+  -H "X-Api-Key: $API_KEY" \
+  -d '{
+    "tenant_id":"default",
+    "scope":"default",
+    "input_text":"hosted onboarding write",
+    "memory_lane":"shared",
+    "nodes":[{"type":"event","memory_lane":"shared","text_summary":"hosted onboarding write"}]
+  }' | jq
+```
+
+## Success criteria
+
+1. `/health` returns healthy status.
+2. `write` returns `request_id` and commit fields.
+3. `recall_text` returns candidate/context data.

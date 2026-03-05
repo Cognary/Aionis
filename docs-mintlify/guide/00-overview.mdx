@@ -1,0 +1,57 @@
+# Overview
+
+Aionis is execution memory infrastructure for production AI agents.
+
+## Metadata
+
+- 📖 4 minutes
+- ⚙️ Basic understanding of API-based agent applications.
+- 🎯 You can explain where Aionis fits and choose the right reading path.
+- 📝 Where Aionis fits in a production agent stack. · Which problems it solves beyond retrieval. · Which doc path to follow for your role.
+
+
+
+Aionis records what AI agents actually did and allows workflows to be replayed later.
+
+## Why teams use Aionis
+
+Most memory tools optimize only retrieval quality. Production teams also need:
+
+1. Traceability: identify exactly which request, run, and decision changed behavior.
+2. Control: apply rules before tools/actions are selected.
+3. Replay: reconstruct and verify historical execution paths.
+4. Operability: gate releases with repeatable checks.
+
+## Core loop
+
+```mermaid
+flowchart LR
+  A["Memory"] --> B["Policy"] --> C["Action"] --> D["Replay"]
+```
+
+## Key capabilities
+
+1. Verifiable writes with `commit_id` and `commit_uri`.
+2. Context assembly with explicit layer and budget controls.
+3. Policy-loop endpoints for rule evaluation, selection, and feedback.
+4. Decision provenance using `request_id`, `run_id`, `decision_id`, `commit_uri`.
+5. Production gate workflow for safe release rollout.
+
+## Who should read this
+
+1. Application developers integrating agent memory.
+2. Platform engineers operating multi-tenant agent infrastructure.
+3. AI product teams that need incident replay and decision auditability.
+
+## Role-based reading paths
+
+For role-specific reading orders, use:
+
+- [Role-based Paths](10-role-based-paths)
+
+For step-by-step implementation tasks, use:
+
+- [Tutorial: Integrate One Agent End-to-End](tutorials/agent-integration)
+- [Tutorial: Incident Replay for a Production Failure](tutorials/incident-replay)
+- [Tutorial: Release Gate with Replay Evidence](tutorials/release-gate)
+- [Tutorial: Policy Tuning with Closed-loop Feedback](tutorials/policy-tuning)

@@ -1,0 +1,48 @@
+# Configuration Reference
+
+This page summarizes key runtime configuration groups.
+
+## Core runtime
+
+1. `AIONIS_MODE`
+2. `APP_ENV`
+3. `PORT`
+4. `DATABASE_URL`
+
+## Auth and isolation
+
+1. `MEMORY_AUTH_MODE`
+2. `MEMORY_API_KEYS_JSON`
+3. `MEMORY_JWT_HS256_SECRET`
+4. `MEMORY_TENANT_ID`
+5. `MEMORY_SCOPE`
+
+## Embeddings
+
+1. `EMBEDDING_PROVIDER`
+2. `EMBEDDING_DIM`
+3. Provider-specific key/model variables.
+
+## Limits and quotas
+
+1. `RATE_LIMIT_ENABLED`
+2. `TENANT_QUOTA_ENABLED`
+3. Endpoint-specific RPS/burst settings.
+
+## Recommended workflow
+
+1. Keep separate env values for dev/staging/prod.
+2. Store secrets outside source control.
+3. Validate config with staging smoke and production gate before rollout.
+
+## Baseline production settings
+
+| Key | Typical production value | Why |
+| --- | --- | --- |
+| `AIONIS_MODE` | `service` | Enables service-oriented runtime profile |
+| `APP_ENV` | `prod` | Activates production guard behavior |
+| `MEMORY_AUTH_MODE` | `api_key` or `api_key_or_jwt` | Prevents unauthenticated writes/reads |
+| `RATE_LIMIT_ENABLED` | `true` | Protects API under burst load |
+| `TENANT_QUOTA_ENABLED` | `true` | Enforces tenant-level fairness and isolation |
+| `TRUST_PROXY` | `true` (behind trusted proxy) | Correct client IP handling for limits/audit |
+| `CORS_ALLOW_ORIGINS` | explicit allowlist | Reduces cross-origin abuse risk |

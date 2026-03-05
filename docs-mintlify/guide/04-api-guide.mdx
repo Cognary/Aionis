@@ -1,0 +1,83 @@
+# API Guide
+
+Use this page as the integration contract source.
+
+## Metadata
+
+- 📖 8 minutes
+- ⚙️ Basic HTTP client usage (`curl` or SDK client).
+- 🎯 You can integrate with correct auth, isolation, and error-handling behavior.
+
+
+
+## Authentication
+
+1. `X-Api-Key: <key>`
+2. `Authorization: Bearer <token>`
+3. `X-Admin-Token: <token>` for admin/control endpoints
+
+## Isolation model
+
+1. Isolation boundary is `(tenant_id, scope)`.
+2. Always send both fields explicitly.
+3. Private-lane visibility requires owner identity match.
+
+## Endpoint groups
+
+1. Memory:
+   `POST /v1/memory/write`,
+   `POST /v1/memory/recall`,
+   `POST /v1/memory/recall_text`,
+   `POST /v1/memory/context/assemble`,
+   `POST /v1/memory/find`,
+   `POST /v1/memory/resolve`
+2. Sessions/events:
+   `POST /v1/memory/sessions`,
+   `POST /v1/memory/events`,
+   `GET /v1/memory/sessions/:session_id/events`
+3. Policy:
+   `POST /v1/memory/rules/evaluate`,
+   `POST /v1/memory/tools/select`,
+   `POST /v1/memory/tools/decision`,
+   `POST /v1/memory/tools/run`,
+   `POST /v1/memory/tools/feedback`
+4. Replay:
+   `POST /v1/memory/replay/*`
+5. Sandbox (experimental):
+   `POST /v1/memory/sandbox/*`
+
+Detailed groups are listed in [API Reference](/api-reference/).
+
+## Response fields to persist
+
+1. `request_id`
+2. `tenant_id`
+3. `scope`
+4. `run_id`
+5. `decision_id` / `decision_uri`
+6. `commit_id` / `commit_uri`
+
+## Error model
+
+```json
+{
+  "error": "string_code",
+  "message": "human_readable_message",
+  "details": {}
+}
+```
+
+Common classes:
+
+1. `invalid_request` (400)
+2. `unauthorized` / `forbidden` (401/403)
+3. `not_found` (404)
+4. `rate_limited_*` (429)
+5. `backend_capability_unsupported` (501)
+
+## Integration checklist
+
+1. Verify `write -> recall_text -> resolve` on target environment.
+2. Validate both success and failure auth cases.
+3. Capture provenance IDs in logs and telemetry.
+4. Implement retry/backoff for `429` and transient `5xx`.

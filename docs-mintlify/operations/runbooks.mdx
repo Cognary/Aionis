@@ -1,0 +1,26 @@
+# Runbooks
+
+## Core production gate
+
+```bash
+npm run -s gate:core:prod -- --base-url "$BASE_URL" --scope default
+```
+
+## Weekly governance evidence
+
+```bash
+npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
+```
+
+## Replay regression checks
+
+```bash
+npm run -s e2e:replay-learning-fault-smoke
+npm run -s e2e:replay-learning-retention-smoke
+```
+
+## Scope consistency check
+
+```bash
+npm run -s job:consistency-check:scope -- --scope default --strict-warnings
+```

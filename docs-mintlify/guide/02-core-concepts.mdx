@@ -1,0 +1,86 @@
+# Core Concepts
+
+
+## Metadata
+
+- 📖 6 minutes
+- ⚙️ Basic familiarity with request/response APIs.
+- 🎯 You can reason about Aionis concepts during integration and debugging.
+
+
+## Event
+
+Definition:
+1. A typed memory node that represents something that happened.
+
+Why it exists:
+1. Agent systems need durable execution facts, not only transient prompts.
+
+Role:
+1. Events become recallable context and replay evidence.
+
+## Memory
+
+Definition:
+1. Durable graph state of nodes, edges, and commit lineage.
+
+Why it exists:
+1. Production agents need auditable state transitions.
+
+Role:
+1. Memory provides long-term, queryable runtime context.
+
+## Memory lane
+
+Definition:
+1. Visibility partition for memory objects.
+
+Why it exists:
+1. Different users/agents require scoped access boundaries.
+
+Role:
+1. Lane metadata controls what is visible in retrieval flows.
+
+## Replay execution
+
+Definition:
+1. Reconstruction and rerun of historical workflow paths.
+
+Why it exists:
+1. Incident analysis and regression validation require reproducibility.
+
+Role:
+1. Replay links `request_id -> run_id -> decision_id -> commit_uri`.
+
+## Policy loop
+
+Definition:
+1. Rule-driven execution control around tool/action selection.
+
+Why it exists:
+1. Teams need predictable, governed decisions instead of opaque behavior.
+
+Role:
+1. `rules/evaluate -> tools/select -> tools/decision -> tools/feedback`.
+
+## Decision provenance
+
+Definition:
+1. Trace chain that records why an execution decision happened.
+
+Why it exists:
+1. Debugging and compliance require causality, not guesses.
+
+Role:
+1. Provenance data powers replay, audits, and rollout safety checks.
+
+## Context assembly
+
+Definition:
+1. Budgeted composition of layered context for planners/runtimes.
+
+Why it exists:
+1. Raw retrieval output is noisy and often too large.
+
+Role:
+1. `context/assemble` returns deterministic, bounded context.

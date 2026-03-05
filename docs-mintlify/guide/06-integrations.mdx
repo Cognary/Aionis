@@ -1,0 +1,72 @@
+# Integrations
+
+This page maps Aionis into common runtime and framework environments.
+
+## Metadata
+
+- 📖 6 minutes
+- ⚙️ Completed [API Guide](04-api-guide) or [SDK Guide](05-sdk-guide).
+- 🎯 You can choose and wire the right integration path for your runtime.
+
+
+
+## Integration pattern
+
+1. Retrieve context before planning.
+2. Apply policy before action.
+3. Persist outcomes and feedback after action.
+4. Keep replay IDs across all steps.
+
+## Minimum environment variables
+
+```bash
+export AIONIS_BASE_URL="http://localhost:3001"
+export AIONIS_SCOPE="default"
+export AIONIS_API_KEY="your_api_key"
+# or
+export AIONIS_AUTH_BEARER="Bearer <token>"
+```
+
+## MCP
+
+```bash
+npm run build
+AIONIS_BASE_URL=http://localhost:${PORT:-3001} AIONIS_SCOPE=default node dist/mcp/aionis-mcp.js
+npm run -s mcp:smoke
+```
+
+## Playground
+
+```bash
+npm --prefix apps/playground install
+npm run -s playground:dev
+```
+
+## Ops Console
+
+```bash
+npm --prefix apps/ops install
+npm run -s ops:dev
+```
+
+## LangGraph and OpenWork
+
+Recommended order:
+
+1. `recall/context`
+2. `rules/select`
+3. action execution
+4. `write/feedback`
+
+LangGraph smoke:
+
+```bash
+npm run -s langgraph:smoke
+```
+
+## OpenClaw
+
+```bash
+openclaw plugins install @aionis/openclaw
+openclaw aionis-memory bootstrap
+```

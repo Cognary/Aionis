@@ -1,0 +1,64 @@
+# Operations and Gates
+
+This page defines the production operating baseline.
+
+## Metadata
+
+- 📖 7 minutes
+- ⚙️ Running environment with core APIs reachable.
+- 🎯 You can run release gates and use replay for production validation.
+
+
+
+## Daily checks
+
+Health:
+
+```bash
+curl -sS http://localhost:${PORT:-3001}/health | jq
+```
+
+Core production gate:
+
+```bash
+npm run -s gate:core:prod -- --base-url "http://localhost:${PORT:-3001}" --scope default
+```
+
+Policy sanity:
+
+```bash
+curl -sS http://localhost:${PORT:-3001}/v1/memory/rules/evaluate \
+  -H 'content-type: application/json' \
+  -d '{"tenant_id":"default","scope":"default","context":{"intent":"support_triage"}}' | jq '{matched}'
+```
+
+## Replay Execution
+
+Replay identifiers:
+
+1. `request_id`
+2. `run_id`
+3. `decision_id`
+4. `commit_uri`
+
+Operational replay workflow:
+
+1. Extract failing `request_id` from logs.
+2. Rebuild run/decision chain with `run_id` and `decision_id`.
+3. Resolve affected objects via `POST /v1/memory/resolve` and `commit_uri`.
+4. Replay workflow and compare with expected behavior.
+
+## Release evidence checklist
+
+1. Core gate summary.
+2. Health and consistency outputs.
+3. Performance snapshot.
+4. Replay evidence chain for at least one workflow.
+
+## Regression checks
+
+```bash
+npm run -s e2e:replay-learning-fault-smoke
+npm run -s e2e:replay-learning-retention-smoke
+RUN_REPLAY_LEARNING_SMOKES=true npm run -s regression:oneclick
+```

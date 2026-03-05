@@ -1,0 +1,21 @@
+# FAQ
+
+## Why does write succeed but recall return weak context?
+
+Most often `nodes` were missing in write payload or embedding configuration is not set for semantic retrieval.
+
+## Which fields should I always log?
+
+`request_id`, `run_id`, `decision_id`, and `commit_uri`.
+
+## Can I use Aionis without policy loop?
+
+Yes. Start with memory APIs, then add policy APIs when execution governance is needed.
+
+## Is sandbox production-ready?
+
+Sandbox APIs are experimental. Gate usage with strict policy and isolated execution settings.
+
+## Where should I start if production errors spike?
+
+Run core gate, check request-level error patterns, then replay a failing chain end-to-end.

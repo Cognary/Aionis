@@ -1,0 +1,96 @@
+# SDK Guide
+
+Aionis provides official SDKs for TypeScript and Python.
+
+## Metadata
+
+- 📖 7 minutes
+- ⚙️ Installed TypeScript or Python runtime for your stack.
+- 🎯 You can call Aionis through official SDKs with production-safe error handling.
+
+
+
+## Packages
+
+1. TypeScript: `@aionis/sdk`
+2. Python: `aionis-sdk`
+
+## Install
+
+```bash
+npm i @aionis/sdk
+pip install aionis-sdk
+```
+
+## TypeScript example
+
+```ts
+import { AionisClient } from '@aionis/sdk'
+
+const client = new AionisClient({
+  base_url: 'http://localhost:3001',
+  api_key: process.env.API_KEY,
+  timeout_ms: 10000
+})
+
+const writeOut = await client.write({
+  scope: 'default',
+  input_text: 'sdk write',
+  nodes: [{ type: 'event', text_summary: 'sdk write', memory_lane: 'shared' }]
+})
+
+const recallOut = await client.recallText({
+  scope: 'default',
+  query_text: 'sdk write',
+  limit: 5
+})
+
+console.log(writeOut.request_id, recallOut.request_id)
+```
+
+## Python example
+
+```python
+from aionis_sdk import AionisClient
+
+client = AionisClient(
+    base_url='http://localhost:3001',
+    api_key='your_api_key',
+    timeout_s=10.0,
+)
+
+write_out = client.write({
+    'scope': 'default',
+    'input_text': 'python sdk write',
+    'nodes': [{'type': 'event', 'text_summary': 'python sdk write', 'memory_lane': 'shared'}]
+})
+
+recall_out = client.recall_text({
+    'scope': 'default',
+    'query_text': 'python sdk write',
+    'limit': 5,
+})
+
+print(write_out.get('request_id'), recall_out.get('request_id'))
+```
+
+## Method coverage (high level)
+
+1. Memory and context APIs.
+2. Policy-loop APIs.
+3. Replay and sandbox APIs.
+4. Admin/control APIs (admin auth required).
+
+## Error handling baseline
+
+1. Treat `AionisApiError` as contract-level response failure.
+2. Treat `AionisNetworkError` as retryable transport failure.
+3. Log `request_id` and server error code for each failed request.
+
+## Validation commands
+
+```bash
+npm run -s sdk:smoke
+npm run -s sdk:tools-feedback-smoke
+npm run -s sdk:py:smoke
+```
