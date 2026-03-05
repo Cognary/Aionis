@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-03-05
+
+### Changed
+
+1. Aligned TypeScript SDK release baseline from `0.2.10` to `0.2.11` to resolve npm immutable-version collisions on prior patch numbers.
+2. No TypeScript SDK API surface change in this patch release.
+
 ## [0.2.10] - 2026-03-05
 
 ### Changed
