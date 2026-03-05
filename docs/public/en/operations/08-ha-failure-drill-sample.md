@@ -4,7 +4,7 @@ title: "HA Failure Drill Sample"
 
 # HA Failure Drill Sample
 
-Last updated: `2026-03-03`
+Last updated: `2026-03-05`
 
 This sample shows a concise, production-ready drill record format.
 
@@ -15,7 +15,7 @@ This sample shows a concise, production-ready drill record format.
 3. Environment: `staging-ha`
 4. Owner: `platform-oncall`
 5. Participants: `backend-lead`, `sre-lead`
-6. Release/Tag: `v0.2.5`
+6. Release/Tag: `v0.2.8`
 
 ## Scenario A: Database Restore
 

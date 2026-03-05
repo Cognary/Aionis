@@ -4,7 +4,7 @@ title: "SDK Release Runbook"
 
 # SDK Release Runbook
 
-Last updated: `2026-03-03`
+Last updated: `2026-03-05`
 
 ## Release prerequisites
 
@@ -74,7 +74,7 @@ npm run sdk:py:publish
 
 Use `workflow_dispatch` on `SDK Publish` with:
 
-1. `tag`: optional (`sdk-v0.2.5`)
+1. `tag`: optional (`sdk-v0.2.8`)
 2. `dry_run`: `true`
 
 ## Secrets
