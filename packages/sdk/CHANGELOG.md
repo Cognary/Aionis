@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.16] - 2026-03-06
+
+### Changed
+
+1. Aligned the TypeScript SDK release version with the Python SDK at `0.2.16`.
+2. No TypeScript SDK API surface change in this version alignment release.
+
 ## [0.2.12] - 2026-03-05
 
 ### Changed
