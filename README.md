@@ -8,65 +8,134 @@
 [![GHCR](https://img.shields.io/badge/ghcr-ghcr.io%2Fcognary%2Faionis-2496ed?logo=docker&logoColor=white)](https://ghcr.io/cognary/aionis)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-**Aionis is Memory Infrastructure for Production Agents.**
+## Replayable Execution Memory for Agents
 
-Aionis is a memory kernel focused on **verifiable writes**, **operable pipelines**, and **policy-aware recall**, turning memory from retrieval-only context into an executable loop:
+Aionis is a memory kernel that records agent execution traces and compiles them into replayable workflows.
 
-`Memory -> Policy -> Action -> Replay`
+Instead of asking the model to reason through the same task repeatedly, Aionis allows agents to reuse successful executions.
 
-## What Problem Aionis Solves
+---
 
-Most memory stacks stop at retrieval. In production, teams still face:
+## The Problem
 
-1. Memory that can be fetched but cannot be audited or replayed reliably.
-2. Write paths coupled to embedding availability.
-3. No controlled policy loop that changes runtime behavior.
-4. Weak operations surface for long-running systems.
+Most memory systems store text:
 
-Aionis is built to solve these as a long-running system core.
+- conversation history
+- embeddings
+- entity memory
 
-## Six Core Differentiators
+But they do not remember how work gets done.
 
-1. **Verifiable Write Chain**
-   Every mutation is anchored by `commit_id` and `commit_uri` for audit and replay.
+Agents still re-reason every task.
 
-2. **URI-First Object Model**
-   Nodes, edges, commits, and decisions are referenceable with stable URIs across API, SDK, and ops tools.
+---
 
-3. **Layered Context Orchestration**
-   Context is assembled with explicit layers (`facts/episodes/rules/decisions/tools/citations`) and budget controls.
+## The Aionis Approach
 
-4. **Closed-Loop Learning (Policy + Replay + Projection)**
-   Aionis supports `Replay -> Review -> Learning Projection -> Rule/Episode -> Next Execution` through `replay/playbooks/repair/review` with `learning_projection`. Edge-case safeguards are built in: overlapping rule warnings (`overlapping_rules_detected`), duplicate fingerprint skip (`duplicate_rule_fingerprint_skipped`), episode lifecycle policy (`episode_gc_policy_attached`), and outbox fatal/retryable isolation.
+Aionis records execution history.
 
-5. **Production-Grade Evidence and Gates**
-   Release readiness is validated with reproducible checks, runbooks, and benchmark artifacts.
+```text
+Agent Run
+↓
+Execution Trace
+↓
+Compile Playbook
+↓
+Replay Execution
+```
 
-6. **Sandbox Interface (Experimental)**
-   A controlled execution API surface (`sandbox/sessions`, `sandbox/execute`, `sandbox/runs/*`) can be linked to policy-loop provenance.
+Once a workflow succeeds, it becomes reusable.
 
-Sandbox now includes:
+---
 
-1. remote executor hardening (`http_remote`) with host allowlist, DNS/IP egress controls, and optional mTLS
-2. project-level budget overrides (`sandbox-project-budgets`) on top of tenant budgets
-3. artifact bundle contract (`sandbox_run_artifact_v2`) with manifest/hash/object-store pointers
+## Replay Model
 
-## Architecture Snapshot
+Aionis implements a three-mode execution model:
 
-Aionis uses a verifiable memory graph as the system-of-record, with write durability separated from derived async processing.
+| Mode | Description |
+| --- | --- |
+| `simulate` | audit-only validation |
+| `strict` | deterministic execution |
+| `guided` | execution with repair suggestions |
 
-1. SoR model: graph objects + commit lineage.
-2. Derived async: embeddings/topics/compression run asynchronously and do not block core writes.
-3. Recall path: candidate retrieval -> bounded context assembly.
-4. Policy path: evaluate -> select -> decision -> feedback.
+Replay focuses on actions, not LLM token streams.
 
-## Security and Hard Contracts
+---
 
-1. Tenant isolation is explicit via `tenant_id + scope`.
-2. Memory auth supports API key and bearer token modes.
-3. Admin surfaces are separated and require admin token.
-4. Sandbox remote execution supports explicit egress controls and optional mTLS for production isolation.
-5. Public API contracts are documented and stable across SDKs.
+## Governance First
+
+Aionis follows an audit-first design:
+
+```text
+guided run
+↓
+repair suggestion
+↓
+human review
+↓
+shadow validation
+↓
+promotion
+```
+
+By default:
+
+- repairs require review
+- shadow validation runs first
+- playbooks are not auto-promoted
+
+---
+
+## Benchmark
+
+Real workflow benchmark (100 runs):
+
+- Baseline success rate: `98%`
+- Replay success rate: `95%`
+- Replay stability: `95%`
+
+Latency improvement:
+
+- `8x - 20x` faster execution
+
+---
+
+## Comparison
+
+| Capability | Memory Plugins | Aionis |
+| --- | --- | --- |
+| Conversation recall | ✓ | ✓ |
+| Vector search | ✓ | ✓ |
+| Execution trace | ✗ | ✓ |
+| Workflow replay | ✗ | ✓ |
+| Policy loop | ✗ | ✓ |
+| Governed repair | ✗ | ✓ |
+
+Most systems store information.
+
+Aionis stores how work gets done.
+
+---
+
+## Architecture
+
+```text
+LLM
+↓
+Agent Planner
+↓
+Aionis Memory Kernel
+↓
+Tools / Environment
+```
+
+Aionis acts as the execution memory layer of the agent stack.
+
+---
+
+## In One Sentence
+
+Aionis turns successful agent runs into governed, replayable workflows.
 
 ## 3-Minute Quickstart
 
