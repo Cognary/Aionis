@@ -1,0 +1,22 @@
+---
+import type { CollectionEntry } from 'astro:content'
+import { formatDate, readingTime } from '../utils/format'
+import Iconoir from './Iconoir.astro'
+
+interface Props {
+  post: CollectionEntry<'blog'>
+}
+
+const { post } = Astro.props
+const minutes = readingTime(post.body)
+---
+
+<article class="post-card">
+  <div class="post-card-meta">
+    <span><Iconoir name="calendar" class="meta-icon" />{formatDate(post.data.pubDate)}</span>
+    <span><Iconoir name="tag" class="meta-icon" />{post.data.category}</span>
+    <span><Iconoir name="clock" class="meta-icon" />{minutes} min read</span>
+  </div>
+  <h2><a href={`/posts/${post.slug}/`}>{post.data.title}</a></h2>
+  <p>{post.data.description}</p>
+</article>

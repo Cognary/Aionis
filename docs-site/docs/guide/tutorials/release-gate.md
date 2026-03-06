@@ -1,0 +1,182 @@
+# Tutorial: Release Gate with Replay Evidence
+
+Run a production release gate that combines health checks, policy sanity, and replay proof.
+
+## Before you start
+
+1. You have a staging environment with near-production data shape.
+2. You can run gate scripts and API checks.
+3. You have at least one known-good replay run ID.
+
+## What you will finish with
+
+A release evidence packet that combines health output, gate output, policy sanity, and replay proof.
+
+> **Tip - Copy and run**
+> Use code block copy buttons directly. If variables are missing, initialize them with [One-click Environment Template](env-template).
+
+## Input
+
+### Input fields
+
+| Field | Required | Used in steps | Example |
+| --- | --- | --- | --- |
+| `BASE_URL` | Yes | 1, 2, 3 | `http://localhost:3001` |
+| `AIONIS_API_KEY` | Yes | 2, 3 | `aionis_live_xxx` |
+| `tenant_id` | Yes | 2, 3 | `default` |
+| `scope` | Yes | 1, 2, 3 | `support` |
+| `known_good_run_id` | Yes | 3 | `3d1868e2-e6d3-4f69-952e-61f53ef2ef30` |
+
+### Output fields to persist
+
+| Field | Source step | Why keep it |
+| --- | --- | --- |
+| Health response | 1 | Runtime readiness proof |
+| Core gate summary | 1 | Release approval gate evidence |
+| `applied` policy result | 2 | Pre-release decision consistency |
+| Replay `timeline[]` | 3 | Workflow stability proof |
+| `run_id`, `decision_id`, `commit_uri` | 3 | Compliance-grade provenance chain |
+
+## Steps
+
+### Step 1: Run baseline health and gate checks
+
+```bash
+curl -sS "$BASE_URL/health" | jq
+npm run -s gate:core:prod -- --base-url "$BASE_URL" --scope support
+```
+
+### Step 2: Run policy sanity probe
+
+
+#### TypeScript
+
+```ts
+const res = await fetch(`${process.env.BASE_URL}/v1/memory/rules/evaluate`, {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    'x-api-key': process.env.AIONIS_API_KEY!
+  },
+  body: JSON.stringify({
+    tenant_id: 'default',
+    scope: 'support',
+    context: { intent: 'billing_support' },
+    include_shadow: true
+  })
+})
+
+console.log(await res.json())
+```
+
+#### Python
+
+```python
+import os
+import requests
+
+policy = requests.post(
+    f"{os.environ['BASE_URL']}/v1/memory/rules/evaluate",
+    headers={"content-type": "application/json", "X-Api-Key": os.environ["AIONIS_API_KEY"]},
+    json={
+        "tenant_id": "default",
+        "scope": "support",
+        "context": {"intent": "billing_support"},
+        "include_shadow": True,
+    },
+    timeout=20,
+)
+
+print(policy.json())
+```
+
+#### cURL
+
+```bash
+curl -sS "$BASE_URL/v1/memory/rules/evaluate" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"support",
+    "context":{"intent":"billing_support"},
+    "include_shadow":true
+  }' | jq '{considered,matched,applied}'
+```
+
+
+### Step 3: Validate one replay chain
+
+```bash
+curl -sS "$BASE_URL/v1/memory/replay/runs/get" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"support",
+    "run_id":"<known_good_run_uuid>",
+    "include_steps":true,
+    "include_artifacts":true
+  }' | jq
+```
+
+Pass criteria:
+
+1. required steps are `success`
+2. no `unknown` or `failed` status on gated path
+3. provenance identifiers are present (`run_id`, `decision_id`, `commit_uri`)
+
+### Step 4: Attach release evidence
+
+Include these artifacts in change approval:
+
+1. health output
+2. core gate summary
+3. policy sanity output
+4. replay timeline with IDs
+
+## Expected response sample
+
+```json
+{
+  "health": { "ok": true },
+  "policy_probe": {
+    "status": "ok",
+    "considered": 5,
+    "matched": 2
+  },
+  "replay_probe": {
+    "run_id": "3d1868e2-e6d3-4f69-952e-61f53ef2ef30",
+    "required_steps_success": true
+  }
+}
+```
+
+## Common failure and fix
+
+Failure:
+
+```text
+gate:core:prod failed: policy check mismatch on support scope
+```
+
+Fix:
+
+1. Re-run `rules/evaluate` with the exact gate context payload.
+2. Check for recently promoted rules in wrong state.
+3. Re-validate in staging before go-live decision.
+
+## Success criteria
+
+1. Health endpoint and core gate both pass.
+2. Policy probe output is stable for the release context.
+3. Replay probe confirms required steps as successful.
+4. Release packet includes run-level provenance IDs and artifacts.
+
+### Rollback trigger guidance
+
+Rollback if any of these happen after release:
+
+1. core gate fails on hotfix run
+2. policy decision diverges on critical path
+3. replay shows failed or unknown status on required steps

@@ -1,0 +1,45 @@
+---
+import { getCollection, render } from 'astro:content'
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Iconoir from '../../components/Iconoir.astro'
+import { formatDate, readingTime } from '../../utils/format'
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog')
+  return posts.map((post) => ({
+    params: { slug: post.slug },
+    props: { post }
+  }))
+}
+
+const { post } = Astro.props
+const { Content } = await render(post)
+const minutes = readingTime(post.body)
+const title = `${post.data.title} | Aionis Blog`
+---
+
+<BaseLayout title={title} description={post.data.description}>
+  <article class="post-shell">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <Iconoir name="posts" class="breadcrumb-icon" />
+      <a href="/">Blog</a>
+      <span>/</span>
+      <span>{post.data.title}</span>
+    </nav>
+
+    <header class="post-header">
+      <div class="eyebrow">{post.data.category}</div>
+      <h1>{post.data.title}</h1>
+      <p class="post-description">{post.data.description}</p>
+      <div class="post-meta">
+        <span><Iconoir name="calendar" class="meta-icon" />{formatDate(post.data.pubDate)}</span>
+        <span><Iconoir name="clock" class="meta-icon" />{minutes} min read</span>
+        {post.data.tags.map((tag) => <span><Iconoir name="tag" class="meta-icon" />{tag}</span>)}
+      </div>
+    </header>
+
+    <div class="post-content prose">
+      <Content />
+    </div>
+  </article>
+</BaseLayout>
