@@ -1,0 +1,81 @@
+# POST /v1/memory/tools/select
+
+> `POST /v1/memory/tools/select`
+
+Applies policy to candidate tools and persists a provenance decision.
+
+## Request schema
+
+Required:
+
+1. `context`
+2. `candidates[]` (min 1)
+
+Common fields:
+
+1. `tenant_id?: string`
+2. `scope?: string`
+3. `run_id?: string`
+4. `context: object`
+5. `candidates: string[]`
+6. `include_shadow?: boolean` (default `false`)
+7. `rules_limit?: number` (default 50, max 200)
+8. `strict?: boolean` (default `true`)
+
+## Example request
+
+```bash
+curl -sS "$BASE_URL/v1/memory/tools/select" \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"support",
+    "run_id":"run_20260305_001",
+    "context":{"intent":"billing_support"},
+    "candidates":["ticket_router","email_sender"],
+    "strict":true
+  }' | jq
+```
+
+## Response schema
+
+Key response fields:
+
+1. `selection.selected`
+2. `selection.allowed[]`
+3. `rules.applied`
+4. `decision.decision_id`
+5. `decision.decision_uri`
+6. `decision.run_id`
+
+## Idempotency
+
+1. Not idempotent by default.
+2. Each successful call persists a decision record.
+3. Avoid blind retries; if you retry, keep `run_id` stable and dedupe on your side.
+
+## Rate limit
+
+1. Uses recall-class limiter and recall tenant quota.
+2. Back off on `429` and `5xx` only.
+
+## Error codes
+
+Common errors:
+
+1. `invalid_request` (400)
+2. `unauthorized` / `forbidden` (401/403)
+3. `rate_limited_*` (429)
+
+## Replay IDs to persist
+
+1. `request_id`
+2. `run_id`
+3. `decision.decision_id`
+4. `decision.decision_uri`
+5. `rules.applied.sources[]` rule IDs
+
+## Operational notes
+
+1. Use one `run_id` per execution attempt and keep it across decision and feedback.
+2. Persist `decision_id` before action execution to ensure replay continuity.

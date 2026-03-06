@@ -1,0 +1,62 @@
+---
+import '../styles/global.css'
+import Iconoir from '../components/Iconoir.astro'
+
+interface Props {
+  title?: string
+  description?: string
+}
+
+const {
+  title = 'Aionis Blog',
+  description = 'Technical writing about execution memory, replay, and production agent systems.'
+} = Astro.props
+
+const canonical = new URL(Astro.url.pathname, Astro.site)
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Aionis Blog" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="site-header">
+        <a class="site-brand" href="/">Aionis Blog</a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="/">
+            <Iconoir name="posts" class="nav-icon" />
+            <span>Posts</span>
+          </a>
+          <a href="https://doc.aionisos.com" target="_blank" rel="noreferrer">
+            <Iconoir name="docs" class="nav-icon" />
+            <span>Docs</span>
+          </a>
+          <a href="https://github.com/Cognary/Aionis" target="_blank" rel="noreferrer">
+            <Iconoir name="github" class="nav-icon" />
+            <span>GitHub</span>
+          </a>
+        </nav>
+      </header>
+      <main>
+        <slot />
+      </main>
+      <footer class="site-footer">
+        <div>Aionis Blog</div>
+        <div>Execution memory and workflow replay for autonomous agents.</div>
+      </footer>
+    </div>
+  </body>
+</html>

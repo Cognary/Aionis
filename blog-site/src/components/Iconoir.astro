@@ -1,0 +1,34 @@
+---
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+interface Props {
+  name: string
+  class?: string
+}
+
+const { name, class: className = '' } = Astro.props
+
+const iconMap: Record<string, string> = {
+  posts: 'regular/journal-page.svg',
+  docs: 'regular/open-book.svg',
+  github: 'regular/github.svg',
+  calendar: 'regular/calendar.svg',
+  clock: 'regular/clock.svg',
+  tag: 'regular/label.svg'
+}
+
+const fileName = iconMap[name]
+
+if (!fileName) {
+  throw new Error(`Unknown Iconoir icon: ${name}`)
+}
+
+const iconPath = join(process.cwd(), 'node_modules', 'iconoir', 'icons', fileName)
+const svg = readFileSync(iconPath, 'utf8').replace(
+  '<svg ',
+  '<svg aria-hidden="true" focusable="false" class="iconoir-svg" '
+)
+---
+
+<span class:list={['iconoir-inline', className]} set:html={svg} />

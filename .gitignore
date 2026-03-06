@@ -12,6 +12,10 @@ dist
 artifacts
 .tmp
 pgdata
+.astro
+**/.astro
+.vitepress/cache
+**/.vitepress/cache
 
 # Python build artifacts
 *.egg-info

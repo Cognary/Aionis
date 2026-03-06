@@ -1,0 +1,29 @@
+---
+import { getCollection } from 'astro:content'
+import BaseLayout from '../layouts/BaseLayout.astro'
+import PostCard from '../components/PostCard.astro'
+
+const posts = (await getCollection('blog'))
+  .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
+---
+
+<BaseLayout
+  title="Aionis Blog"
+  description="Technical writing about execution memory, replay, and production agent systems."
+>
+  <section class="home-hero">
+    <div class="eyebrow">Blog</div>
+    <h1>Notes on execution memory, replay, and agent systems.</h1>
+    <p>
+      Technical writing about how Aionis is built, how replayable workflows behave in practice,
+      and what production agent systems need beyond prompt history and retrieval.
+    </p>
+  </section>
+
+  <section class="post-grid-section">
+    <div class="section-label">Posts</div>
+    <div class="post-list">
+      {posts.map((post) => <PostCard post={post} />)}
+    </div>
+  </section>
+</BaseLayout>

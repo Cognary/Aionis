@@ -1,0 +1,49 @@
+# Error Model
+
+Use this page to implement client retry, alerting, and incident triage behavior.
+
+## Standard response shape
+
+```json
+{
+  "error": "string_code",
+  "message": "human_readable_message",
+  "details": {}
+}
+```
+
+## Common classes
+
+1. `invalid_request` (400)
+2. `unauthorized` / `forbidden` (401/403)
+3. `not_found` (404)
+4. `rate_limited_*` (429)
+5. `backend_capability_unsupported` (501)
+
+## Error example and fix
+
+Example error:
+
+```json
+{
+  "error": "rate_limited_write",
+  "message": "too many requests",
+  "details": { "retry_after_ms": 800 }
+}
+```
+
+Fix:
+1. Retry after the provided delay.
+2. Add exponential backoff + jitter in client retry policy.
+3. Reduce burst concurrency for the affected endpoint group.
+
+## Recommended client behavior
+
+1. Retry transient network failures.
+2. Retry `429` using exponential backoff + jitter.
+3. Persist and display `request_id` for all failures.
+4. Log `error` + `details` to preserve incident triage context.
+
+## Do not retry blindly
+
+Do not blindly retry `400`, `401`, `403`, or schema errors. These usually indicate caller bugs, missing credentials, or policy violations that require input changes instead of transport retry.

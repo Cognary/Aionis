@@ -1,0 +1,273 @@
+# Tutorial: Policy Tuning with Closed-loop Feedback
+
+Tune rule and tool selection behavior using deterministic context and feedback cycles.
+
+## Before you start
+
+1. You have existing tool candidates and at least one real business intent to model.
+2. You can run repeated evaluation requests in staging.
+3. You can compare before/after policy behavior on the same context set.
+
+## What you will finish with
+
+A repeatable tuning loop that improves selection quality while preserving `run_id` and `decision_id` provenance.
+
+> **Tip - Copy and run**
+> Use the built-in copy button for each code block. Initialize common variables once via [One-click Environment Template](env-template).
+
+## Input
+
+### Input fields
+
+| Field | Required | Used in steps | Example |
+| --- | --- | --- | --- |
+| `BASE_URL` | Yes | 2, 4 | `http://localhost:3001` |
+| `AIONIS_API_KEY` | Yes | 2, 4 | `aionis_live_xxx` |
+| `tenant_id` | Yes | 2, 4 | `default` |
+| `scope` | Yes | 2, 4 | `support` |
+| `context` | Yes | 2, 4 | `{"intent":"billing_support","priority":"high"}` |
+| `candidates[]` | Yes | 2, 4 | `["ticket_router","email_sender"]` |
+| `run_id` | Yes | 2, 4 | `run_1741311000` |
+| `selected_tool` | Yes | 4 | `ticket_router` |
+
+### Output fields to persist
+
+| Field | Source step | Why keep it |
+| --- | --- | --- |
+| `request_id` | 2, 4 | Batch-level traceability |
+| `matched` and `applied` | 2 | Rule effectiveness analysis |
+| `decision.decision_id` | 2 | Compare pre/post tuning decisions |
+| `selection.selected` | 2 | Accuracy against expected tool |
+| Feedback result | 4 | Closed-loop learning confirmation |
+
+## Steps
+
+### Step 1: Freeze a test context set
+
+Prepare 10-20 representative contexts. Each context includes:
+
+1. `intent`
+2. user/ticket attributes
+3. expected allowed/denied tools
+
+### Step 2: Evaluate baseline behavior
+
+
+#### TypeScript
+
+```ts
+const baseUrl = process.env.BASE_URL!
+const apiKey = process.env.AIONIS_API_KEY!
+const runId = `run_${Date.now()}`
+
+const context = { intent: 'billing_support', priority: 'high' }
+const candidates = ['ticket_router', 'email_sender']
+
+const evalRes = await fetch(`${baseUrl}/v1/memory/rules/evaluate`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-api-key': apiKey },
+  body: JSON.stringify({ tenant_id: 'default', scope: 'support', context, include_shadow: true })
+})
+
+const selectRes = await fetch(`${baseUrl}/v1/memory/tools/select`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-api-key': apiKey },
+  body: JSON.stringify({ tenant_id: 'default', scope: 'support', run_id: runId, context, candidates, strict: true })
+})
+
+console.log(await evalRes.json())
+console.log(await selectRes.json())
+```
+
+#### Python
+
+```python
+import os
+import time
+import requests
+
+base_url = os.environ["BASE_URL"]
+api_key = os.environ["AIONIS_API_KEY"]
+run_id = f"run_{int(time.time())}"
+context = {"intent": "billing_support", "priority": "high"}
+candidates = ["ticket_router", "email_sender"]
+
+eval_resp = requests.post(
+    f"{base_url}/v1/memory/rules/evaluate",
+    headers={"content-type": "application/json", "X-Api-Key": api_key},
+    json={"tenant_id": "default", "scope": "support", "context": context, "include_shadow": True},
+    timeout=20,
+)
+
+select_resp = requests.post(
+    f"{base_url}/v1/memory/tools/select",
+    headers={"content-type": "application/json", "X-Api-Key": api_key},
+    json={
+        "tenant_id": "default",
+        "scope": "support",
+        "run_id": run_id,
+        "context": context,
+        "candidates": candidates,
+        "strict": True,
+    },
+    timeout=20,
+)
+
+print(eval_resp.json())
+print(select_resp.json())
+```
+
+#### cURL
+
+```bash
+RUN_ID="run_$(date +%s)"
+
+curl -sS "$BASE_URL/v1/memory/rules/evaluate" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"support",
+    "context":{"intent":"billing_support","priority":"high"},
+    "include_shadow":true
+  }' | jq
+
+curl -sS "$BASE_URL/v1/memory/tools/select" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d "{\"tenant_id\":\"default\",\"scope\":\"support\",\"run_id\":\"$RUN_ID\",\"context\":{\"intent\":\"billing_support\",\"priority\":\"high\"},\"candidates\":[\"ticket_router\",\"email_sender\"],\"strict\":true}" | jq
+```
+
+
+Capture each run:
+
+1. selected tool
+2. source rule IDs
+3. decision ID
+
+### Step 3: Apply targeted rule updates
+
+When behavior is wrong:
+
+1. adjust condition specificity first
+2. adjust priority/weight second
+3. avoid broad deny policies without scoped exceptions
+
+### Step 4: Record feedback signal
+
+
+#### TypeScript
+
+```ts
+const feedbackRes = await fetch(`${baseUrl}/v1/memory/tools/feedback`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-api-key': apiKey },
+  body: JSON.stringify({
+    tenant_id: 'default',
+    scope: 'support',
+    run_id: '<run_id>',
+    outcome: 'positive',
+    context: { intent: 'billing_support', priority: 'high' },
+    candidates: ['ticket_router', 'email_sender'],
+    selected_tool: 'ticket_router',
+    input_text: 'post-run feedback'
+  })
+})
+
+console.log(await feedbackRes.json())
+```
+
+#### Python
+
+```python
+feedback = requests.post(
+    f"{base_url}/v1/memory/tools/feedback",
+    headers={"content-type": "application/json", "X-Api-Key": api_key},
+    json={
+        "tenant_id": "default",
+        "scope": "support",
+        "run_id": "<run_id>",
+        "outcome": "positive",
+        "context": {"intent": "billing_support", "priority": "high"},
+        "candidates": ["ticket_router", "email_sender"],
+        "selected_tool": "ticket_router",
+        "input_text": "post-run feedback",
+    },
+    timeout=20,
+)
+
+print(feedback.json())
+```
+
+#### cURL
+
+```bash
+curl -sS "$BASE_URL/v1/memory/tools/feedback" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"support",
+    "run_id":"<run_id>",
+    "outcome":"positive",
+    "context":{"intent":"billing_support","priority":"high"},
+    "candidates":["ticket_router","email_sender"],
+    "selected_tool":"ticket_router",
+    "input_text":"post-run feedback"
+  }' | jq
+```
+
+
+### Step 5: Re-run and compare
+
+Use the same context set and compare:
+
+1. match rate vs expected tool
+2. conflict count from policy explanations
+3. strict-mode fallback/failure rate
+
+## Expected response sample
+
+```json
+{
+  "evaluation": {
+    "status": "ok",
+    "matched": 3
+  },
+  "selection": {
+    "selected": "ticket_router",
+    "decision_id": "8fe92f61-9466-4f9e-96ef-04bc56b96b19"
+  },
+  "feedback": {
+    "status": "ok",
+    "outcome": "positive"
+  }
+}
+```
+
+## Common failure and fix
+
+Failure:
+
+```json
+{"error":"invalid_request","message":"run_id is required for policy flow"}
+```
+
+Fix:
+
+1. Generate one stable `run_id` per test case.
+2. Use the same `run_id` in `tools/select` and `tools/feedback`.
+3. Persist `decision_id` to compare old/new policy output.
+
+## Success criteria
+
+1. Baseline and post-change runs are both reproducible with stable `run_id` handling.
+2. Tool match rate improves on the fixed context set.
+3. `decision_id` and source rule IDs are captured for before/after comparison.
+4. Feedback submission succeeds for each tuned scenario.
+
+### Guardrails
+
+1. Keep tuning in staging until replay on core workflows is stable.
+2. Promote policy updates gradually (`draft -> shadow -> active`).
+3. Persist `run_id`, `decision_id`, and `request_id` for every evaluation batch.
