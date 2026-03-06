@@ -91,12 +91,13 @@ By default:
 Real workflow benchmark (100 runs):
 
 - Baseline success rate: `98%`
-- Replay success rate: `95%`
-- Replay stability: `95%`
+- Replay success rate: `98%`
+- Replay stability: `98%`
 
 Latency improvement:
 
-- `8x - 20x` faster execution
+- `9.21x` faster on `replay1`
+- `19.29x` faster on `replay2`
 
 ---
 
