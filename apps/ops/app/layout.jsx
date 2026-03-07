@@ -43,6 +43,7 @@ export default function RootLayout({ children }) {
             <nav className="appnav" aria-label="Ops pages">
               <Link href="/">Dashboard</Link>
               <Link href="/governance">Governance</Link>
+              <Link href="/automations">Automations</Link>
               <Link href="/actions">Actions</Link>
               <Link href="/audit">Audit</Link>
             </nav>

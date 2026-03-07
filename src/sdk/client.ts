@@ -2,6 +2,42 @@ import { randomUUID } from "node:crypto";
 import type {
   AionisClientOptions,
   AionisResponse,
+  AutomationCreateInput,
+  AutomationAssignReviewerInput,
+  AutomationCreateResponse,
+  AutomationTelemetryInput,
+  AutomationTelemetryResponse,
+  AutomationGetInput,
+  AutomationShadowReportInput,
+  AutomationShadowReportResponse,
+  AutomationShadowReviewInput,
+  AutomationShadowValidateInput,
+  AutomationShadowValidateDispatchInput,
+  AutomationShadowValidateDispatchResponse,
+  AutomationShadowValidateResponse,
+  AutomationCompensationPolicyMatrixInput,
+  AutomationCompensationPolicyMatrixResponse,
+  AutomationListInput,
+  AutomationListResponse,
+  AutomationGetResponse,
+  AutomationPromoteInput,
+  AutomationPromoteResponse,
+  AutomationValidateInput,
+  AutomationValidateResponse,
+  AutomationRunApproveRepairInput,
+  AutomationRunCancelInput,
+  AutomationRunCompensationAssignInput,
+  AutomationRunCompensationRecordActionInput,
+  AutomationRunCompensationRetryInput,
+  AutomationRunGetInput,
+  AutomationRunListInput,
+  AutomationRunListResponse,
+  AutomationRunAssignReviewerInput,
+  AutomationRunGetResponse,
+  AutomationRunRejectRepairInput,
+  AutomationRunInput,
+  AutomationRunResponse,
+  AutomationRunResumeInput,
   ApiErrorPayload,
   ControlAlertDeliveriesQuery,
   ControlAlertDeliveriesResponse,
@@ -311,6 +347,98 @@ export class AionisClient {
 
   async toolsFeedback(input: ToolsFeedbackInput, opts?: RequestOptions): Promise<AionisResponse<ToolsFeedbackResponse>> {
     return this.requestPost<ToolsFeedbackInput, ToolsFeedbackResponse>("/v1/memory/tools/feedback", input, opts);
+  }
+
+  async automationCreate(input: AutomationCreateInput, opts?: RequestOptions): Promise<AionisResponse<AutomationCreateResponse>> {
+    return this.requestPost<AutomationCreateInput, AutomationCreateResponse>("/v1/automations/create", input, opts);
+  }
+
+  async automationGet(input: AutomationGetInput, opts?: RequestOptions): Promise<AionisResponse<AutomationGetResponse>> {
+    return this.requestPost<AutomationGetInput, AutomationGetResponse>("/v1/automations/get", input, opts);
+  }
+
+  async automationShadowReport(input: AutomationShadowReportInput, opts?: RequestOptions): Promise<AionisResponse<AutomationShadowReportResponse>> {
+    return this.requestPost<AutomationShadowReportInput, AutomationShadowReportResponse>("/v1/automations/shadow/report", input, opts);
+  }
+
+  async automationShadowReview(input: AutomationShadowReviewInput, opts?: RequestOptions): Promise<AionisResponse<AutomationShadowReportResponse>> {
+    return this.requestPost<AutomationShadowReviewInput, AutomationShadowReportResponse>("/v1/automations/shadow/review", input, opts);
+  }
+
+  async automationShadowValidate(input: AutomationShadowValidateInput, opts?: RequestOptions): Promise<AionisResponse<AutomationShadowValidateResponse>> {
+    return this.requestPost<AutomationShadowValidateInput, AutomationShadowValidateResponse>("/v1/automations/shadow/validate", input, opts);
+  }
+
+  async automationShadowValidateDispatch(input: AutomationShadowValidateDispatchInput, opts?: RequestOptions): Promise<AionisResponse<AutomationShadowValidateDispatchResponse>> {
+    return this.requestPost<AutomationShadowValidateDispatchInput, AutomationShadowValidateDispatchResponse>("/v1/automations/shadow/validate/dispatch", input, opts);
+  }
+
+  async automationCompensationPolicyMatrix(input: AutomationCompensationPolicyMatrixInput = {}, opts?: RequestOptions): Promise<AionisResponse<AutomationCompensationPolicyMatrixResponse>> {
+    return this.requestPost<AutomationCompensationPolicyMatrixInput, AutomationCompensationPolicyMatrixResponse>("/v1/automations/compensation/policy_matrix", input, opts);
+  }
+
+  async automationList(input: AutomationListInput, opts?: RequestOptions): Promise<AionisResponse<AutomationListResponse>> {
+    return this.requestPost<AutomationListInput, AutomationListResponse>("/v1/automations/list", input, opts);
+  }
+
+  async automationTelemetry(input: AutomationTelemetryInput, opts?: RequestOptions): Promise<AionisResponse<AutomationTelemetryResponse>> {
+    return this.requestPost<AutomationTelemetryInput, AutomationTelemetryResponse>("/v1/automations/telemetry", input, opts);
+  }
+
+  async automationAssignReviewer(input: AutomationAssignReviewerInput, opts?: RequestOptions): Promise<AionisResponse<AutomationGetResponse>> {
+    return this.requestPost<AutomationAssignReviewerInput, AutomationGetResponse>("/v1/automations/assign_reviewer", input, opts);
+  }
+
+  async automationPromote(input: AutomationPromoteInput, opts?: RequestOptions): Promise<AionisResponse<AutomationPromoteResponse>> {
+    return this.requestPost<AutomationPromoteInput, AutomationPromoteResponse>("/v1/automations/promote", input, opts);
+  }
+
+  async automationValidate(input: AutomationValidateInput, opts?: RequestOptions): Promise<AionisResponse<AutomationValidateResponse>> {
+    return this.requestPost<AutomationValidateInput, AutomationValidateResponse>("/v1/automations/validate", input, opts);
+  }
+
+  async automationRun(input: AutomationRunInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunResponse>> {
+    return this.requestPost<AutomationRunInput, AutomationRunResponse>("/v1/automations/run", input, opts);
+  }
+
+  async automationRunGet(input: AutomationRunGetInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunGetResponse>> {
+    return this.requestPost<AutomationRunGetInput, AutomationRunGetResponse>("/v1/automations/runs/get", input, opts);
+  }
+
+  async automationRunList(input: AutomationRunListInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunListResponse>> {
+    return this.requestPost<AutomationRunListInput, AutomationRunListResponse>("/v1/automations/runs/list", input, opts);
+  }
+
+  async automationRunAssignReviewer(input: AutomationRunAssignReviewerInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunResponse>> {
+    return this.requestPost<AutomationRunAssignReviewerInput, AutomationRunResponse>("/v1/automations/runs/assign_reviewer", input, opts);
+  }
+
+  async automationRunCancel(input: AutomationRunCancelInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunResponse>> {
+    return this.requestPost<AutomationRunCancelInput, AutomationRunResponse>("/v1/automations/runs/cancel", input, opts);
+  }
+
+  async automationRunApproveRepair(input: AutomationRunApproveRepairInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunResponse>> {
+    return this.requestPost<AutomationRunApproveRepairInput, AutomationRunResponse>("/v1/automations/runs/approve_repair", input, opts);
+  }
+
+  async automationRunCompensationRetry(input: AutomationRunCompensationRetryInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunResponse>> {
+    return this.requestPost<AutomationRunCompensationRetryInput, AutomationRunResponse>("/v1/automations/runs/compensation/retry", input, opts);
+  }
+
+  async automationRunCompensationAssign(input: AutomationRunCompensationAssignInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunGetResponse>> {
+    return this.requestPost<AutomationRunCompensationAssignInput, AutomationRunGetResponse>("/v1/automations/runs/compensation/assign", input, opts);
+  }
+
+  async automationRunCompensationRecordAction(input: AutomationRunCompensationRecordActionInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunGetResponse>> {
+    return this.requestPost<AutomationRunCompensationRecordActionInput, AutomationRunGetResponse>("/v1/automations/runs/compensation/record_action", input, opts);
+  }
+
+  async automationRunResume(input: AutomationRunResumeInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunResponse>> {
+    return this.requestPost<AutomationRunResumeInput, AutomationRunResponse>("/v1/automations/runs/resume", input, opts);
+  }
+
+  async automationRunRejectRepair(input: AutomationRunRejectRepairInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunResponse>> {
+    return this.requestPost<AutomationRunRejectRepairInput, AutomationRunResponse>("/v1/automations/runs/reject_repair", input, opts);
   }
 
   async health(opts?: RequestOptions): Promise<AionisResponse<HealthResponse>> {

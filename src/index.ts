@@ -67,6 +67,31 @@ import { getToolsDecisionById } from "./memory/tools-decision.js";
 import { getToolsRunLifecycle } from "./memory/tools-run.js";
 import { toolSelectionFeedback } from "./memory/tools-feedback.js";
 import {
+  automationCreate,
+  automationAssignReviewer,
+  automationCompensationPolicyMatrix,
+  automationGet,
+  automationList,
+  automationTelemetry,
+  automationShadowReport,
+  automationShadowReview,
+  automationShadowValidate,
+  automationShadowValidateDispatch,
+  automationPromote,
+  automationRun,
+  automationRunAssignReviewer,
+  automationRunCancel,
+  automationRunApproveRepair,
+  automationRunCompensationAssign,
+  automationRunCompensationRecordAction,
+  automationRunCompensationRetry,
+  automationRunGet,
+  automationRunList,
+  automationRunRejectRepair,
+  automationRunResume,
+  automationValidate,
+} from "./memory/automation.js";
+import {
   replayPlaybookCompileFromRun,
   replayPlaybookGet,
   replayPlaybookPromote,
@@ -4777,6 +4802,681 @@ app.post("/v1/memory/replay/playbooks/run", async (req, reply) => {
   return reply.code(200).send(out);
 });
 
+function buildAutomationReplayRunOptions(reply: any, source: string): Parameters<typeof replayPlaybookRun>[2] {
+  const localExecutorMode = env.SANDBOX_ENABLED && env.SANDBOX_EXECUTOR_MODE === "local_process"
+    ? "local_process" as const
+    : "disabled" as const;
+  return {
+    defaultScope: env.MEMORY_SCOPE,
+    defaultTenantId: env.MEMORY_TENANT_ID,
+    embeddedRuntime,
+    writeOptions: {
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+      maxTextLen: env.MAX_TEXT_LEN,
+      piiRedaction: env.PII_REDACTION,
+      allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+      shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+      shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+      writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
+      embedder,
+      embeddedRuntime,
+    },
+    localExecutor: {
+      enabled: env.SANDBOX_ENABLED && env.SANDBOX_EXECUTOR_MODE === "local_process",
+      mode: localExecutorMode,
+      allowedCommands: sandboxAllowedCommands,
+      workdir: env.SANDBOX_EXECUTOR_WORKDIR,
+      timeoutMs: env.SANDBOX_EXECUTOR_TIMEOUT_MS,
+      stdioMaxBytes: env.SANDBOX_STDIO_MAX_BYTES,
+    },
+    guidedRepair: {
+      strategy: env.REPLAY_GUIDED_REPAIR_STRATEGY,
+      allowRequestBuiltinLlm: env.REPLAY_GUIDED_REPAIR_ALLOW_REQUEST_BUILTIN_LLM,
+      maxErrorChars: env.REPLAY_GUIDED_REPAIR_MAX_ERROR_CHARS,
+      httpEndpoint: env.REPLAY_GUIDED_REPAIR_HTTP_ENDPOINT,
+      httpTimeoutMs: env.REPLAY_GUIDED_REPAIR_HTTP_TIMEOUT_MS,
+      httpAuthToken: env.REPLAY_GUIDED_REPAIR_HTTP_AUTH_TOKEN,
+      llmBaseUrl: env.REPLAY_GUIDED_REPAIR_LLM_BASE_URL,
+      llmApiKey: env.REPLAY_GUIDED_REPAIR_LLM_API_KEY,
+      llmModel: env.REPLAY_GUIDED_REPAIR_LLM_MODEL,
+      llmTimeoutMs: env.REPLAY_GUIDED_REPAIR_LLM_TIMEOUT_MS,
+      llmMaxTokens: env.REPLAY_GUIDED_REPAIR_LLM_MAX_TOKENS,
+      llmTemperature: env.REPLAY_GUIDED_REPAIR_LLM_TEMPERATURE,
+    },
+    sandboxBudgetGuard: async (input: { tenant_id: string; scope: string; project_id: string | null }) => {
+      await enforceSandboxTenantBudget(reply, input.tenant_id, input.scope, input.project_id);
+    },
+    sandboxExecutor: async (input: {
+      tenant_id: string;
+      scope: string;
+      project_id: string | null;
+      argv: string[];
+      timeout_ms: number;
+      mode: "sync" | "async";
+      metadata?: Record<string, unknown>;
+    }) => {
+      if (!env.SANDBOX_ENABLED) {
+        return {
+          ok: false,
+          status: "failed",
+          stdout: "",
+          stderr: "",
+          exit_code: null,
+          error: "sandbox_disabled",
+          run_id: null,
+        };
+      }
+      const sandboxMode = input.mode === "async" ? "async" : "sync";
+      const sessionOut = await store.withTx((client) =>
+        createSandboxSession(
+          client,
+          {
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            actor: source,
+            profile: "restricted",
+            ttl_seconds: 900,
+            metadata: {
+              source,
+              ...(input.metadata ?? {}),
+            },
+          },
+          {
+            defaultScope: env.MEMORY_SCOPE,
+            defaultTenantId: env.MEMORY_TENANT_ID,
+          },
+        ),
+      );
+      const queued = await store.withTx((client) =>
+        enqueueSandboxRun(
+          client,
+          {
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            project_id: input.project_id ?? undefined,
+            actor: source,
+            session_id: sessionOut.session.session_id,
+            mode: sandboxMode,
+            timeout_ms: input.timeout_ms,
+            action: {
+              kind: "command",
+              argv: input.argv,
+            },
+            metadata: {
+              source,
+              ...(input.metadata ?? {}),
+            },
+          },
+          {
+            defaultScope: env.MEMORY_SCOPE,
+            defaultTenantId: env.MEMORY_TENANT_ID,
+            defaultTimeoutMs: env.SANDBOX_EXECUTOR_TIMEOUT_MS,
+          },
+        ),
+      );
+      if (sandboxMode === "async") {
+        sandboxExecutor.enqueue(queued.run.run_id);
+        return {
+          ok: false,
+          status: queued.run.status ?? "queued",
+          stdout: "",
+          stderr: "",
+          exit_code: null,
+          error: null,
+          run_id: queued.run.run_id,
+        };
+      }
+      await sandboxExecutor.executeSync(queued.run.run_id);
+      const final = await store.withClient((client) =>
+        getSandboxRun(
+          client,
+          {
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            run_id: queued.run.run_id,
+          },
+          {
+            defaultScope: env.MEMORY_SCOPE,
+            defaultTenantId: env.MEMORY_TENANT_ID,
+          },
+        ),
+      );
+      return {
+        ok: final.run.status === "succeeded",
+        status: final.run.status,
+        stdout: final.run.output?.stdout ?? "",
+        stderr: final.run.output?.stderr ?? "",
+        exit_code: Number.isFinite(final.run.exit_code ?? NaN) ? Number(final.run.exit_code) : null,
+        error: final.run.error ? String(final.run.error) : null,
+        run_id: final.run.run_id,
+      };
+    },
+  };
+}
+
+function buildAutomationTestHook() {
+  const raw = process.env.AUTOMATION_TEST_FAULT_INJECTION_JSON?.trim();
+  if (!raw) return undefined;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  const byAction = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  return async (input: { action: string; stage: string; run_id?: string | null; node_id?: string | null }) => {
+    const actionEntry = byAction[input.action];
+    if (!actionEntry || typeof actionEntry !== "object" || Array.isArray(actionEntry)) return;
+    const expectedStage = typeof (actionEntry as Record<string, unknown>).stage === "string"
+      ? String((actionEntry as Record<string, unknown>).stage)
+      : null;
+    if (expectedStage !== input.stage) return;
+    throw new HttpError(500, "automation_injected_db_failure", "automation test hook injected db failure", {
+      action: input.action,
+      stage: input.stage,
+      run_id: input.run_id ?? null,
+      node_id: input.node_id ?? null,
+    });
+  };
+}
+
+app.post("/v1/automations/create", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_create");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationCreate(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/get", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationGet(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/list", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationList(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/telemetry", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationTelemetry(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/compensation/policy_matrix", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationCompensationPolicyMatrix(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/shadow/report", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationShadowReport(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/shadow/review", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_promote");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationShadowReview(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/shadow/validate", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationShadowValidate(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_shadow_validate"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/shadow/validate/dispatch", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationShadowValidateDispatch(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_shadow_validate_dispatch"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/assign_reviewer", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_promote");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationAssignReviewer(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/promote", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_promote");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationPromote(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/validate", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_validate");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationValidate(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/graph/validate", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_validate");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationValidate(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/run", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRun(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/get", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunGet(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/list", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunList(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/assign_reviewer", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_get");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunAssignReviewer(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/cancel", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_cancel");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunCancel(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run_cancel"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/resume", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_resume");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunResume(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run_resume"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/reject_repair", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_reject_repair");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunRejectRepair(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run_reject_repair"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/approve_repair", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_approve_repair");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunApproveRepair(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run_approve_repair"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/compensation/retry", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_compensation_retry");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunCompensationRetry(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run_compensation_retry"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/compensation/record_action", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_compensation_record_action");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationRunCompensationRecordAction(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/compensation/assign", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_compensation_record_action");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationRunCompensationAssign(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
 function assertSandboxEnabled(req: any) {
   if (!env.SANDBOX_ENABLED) {
     throw new HttpError(400, "sandbox_disabled", "sandbox interface is disabled");
@@ -5175,6 +5875,18 @@ function withIdentityFromRequest(
     | "replay_playbook_repair"
     | "replay_playbook_repair_review"
     | "replay_playbook_run"
+    | "automation_create"
+    | "automation_get"
+    | "automation_promote"
+    | "automation_validate"
+    | "automation_run"
+    | "automation_run_get"
+    | "automation_run_cancel"
+    | "automation_run_resume"
+    | "automation_run_reject_repair"
+    | "automation_run_approve_repair"
+    | "automation_run_compensation_retry"
+    | "automation_run_compensation_record_action"
     | "sandbox_session_create"
     | "sandbox_execute"
     | "sandbox_run_get"

@@ -640,6 +640,240 @@ export type ReplayPlaybookRepairReviewInput = {
   metadata?: Record<string, unknown>;
 };
 
+export type AutomationDefStatus = "draft" | "shadow" | "active" | "disabled";
+
+export type AutomationRunLifecycleState = "queued" | "running" | "paused" | "compensating" | "terminal";
+
+export type AutomationRunPauseReason = "approval_required" | "repair_required" | "dependency_wait" | "operator_pause";
+
+export type AutomationRunTerminalOutcome = "succeeded" | "failed" | "cancelled" | "failed_compensated" | "cancelled_compensated";
+
+export type AutomationNodeKind = "playbook" | "approval" | "condition" | "artifact_gate";
+
+export type AutomationNodeLifecycleState = "pending" | "ready" | "running" | "paused" | "retrying" | "compensating" | "terminal";
+
+export type AutomationNodePauseReason = "approval_required" | "repair_required";
+
+export type AutomationNodeTerminalOutcome = "succeeded" | "failed" | "rejected" | "skipped" | "compensated";
+
+export type AutomationCreateInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  automation_id: string;
+  name: string;
+  status?: AutomationDefStatus;
+  graph: {
+    nodes: Array<Record<string, unknown>>;
+    edges?: Array<Record<string, unknown>>;
+  };
+  input_contract?: Record<string, unknown>;
+  output_contract?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+export type AutomationTelemetryInput = {
+  tenant_id?: string;
+  scope?: string;
+  automation_id?: string;
+  window_hours?: number;
+  incident_limit?: number;
+};
+
+export type AutomationValidateInput = {
+  tenant_id?: string;
+  scope?: string;
+  graph: {
+    nodes: Array<Record<string, unknown>>;
+    edges?: Array<Record<string, unknown>>;
+  };
+};
+
+export type AutomationGetInput = {
+  tenant_id?: string;
+  scope?: string;
+  automation_id: string;
+  version?: number;
+};
+
+export type AutomationListInput = {
+  tenant_id?: string;
+  scope?: string;
+  status?: AutomationDefStatus;
+  promotion_only?: boolean;
+  reviewer?: string;
+  limit?: number;
+};
+
+export type AutomationAssignReviewerInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  automation_id: string;
+  reviewer: string;
+  note?: string;
+};
+
+export type AutomationShadowReportInput = {
+  tenant_id?: string;
+  scope?: string;
+  automation_id: string;
+  shadow_version?: number;
+  active_version?: number;
+};
+
+export type AutomationShadowReviewInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  automation_id: string;
+  shadow_version?: number;
+  verdict: "approved" | "needs_changes" | "rejected";
+  note?: string;
+};
+
+export type AutomationShadowValidateInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  automation_id: string;
+  shadow_version?: number;
+  mode?: "enqueue" | "inline";
+  note?: string;
+  params?: Record<string, unknown>;
+};
+
+export type AutomationShadowValidateDispatchInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  automation_id?: string;
+  limit?: number;
+  dry_run?: boolean;
+};
+
+export type AutomationCompensationPolicyMatrixInput = {
+  tenant_id?: string;
+  scope?: string;
+};
+
+export type AutomationRunInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  automation_id: string;
+  version?: number;
+  params?: Record<string, unknown>;
+  options?: {
+    execution_mode?: "default" | "shadow";
+    allow_local_exec?: boolean;
+    record_run?: boolean;
+    stop_on_failure?: boolean;
+  };
+};
+
+export type AutomationPromoteInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  automation_id: string;
+  from_version?: number;
+  target_status: AutomationDefStatus;
+  note?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type AutomationRunGetInput = {
+  tenant_id?: string;
+  scope?: string;
+  run_id: string;
+  include_nodes?: boolean;
+};
+
+export type AutomationRunListInput = {
+  tenant_id?: string;
+  scope?: string;
+  automation_id?: string;
+  actionable_only?: boolean;
+  compensation_only?: boolean;
+  reviewer?: string;
+  compensation_owner?: string;
+  escalation_owner?: string;
+  workflow_bucket?: "retry" | "manual_cleanup" | "escalate" | "observe" | "other";
+  sla_status?: "unset" | "on_track" | "at_risk" | "breached" | "met";
+  limit?: number;
+};
+
+export type AutomationRunCompensationRecordActionInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  action: "manual_cleanup_started" | "manual_cleanup_completed" | "engineering_escalated" | "observation_noted";
+  note?: string;
+  external_ref?: string;
+};
+
+export type AutomationRunCompensationAssignInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  owner?: string;
+  escalation_owner?: string;
+  sla_target_at?: string;
+  note?: string;
+};
+
+export type AutomationRunAssignReviewerInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  reviewer: string;
+  note?: string;
+};
+
+export type AutomationRunCancelInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  reason?: string;
+};
+
+export type AutomationRunApproveRepairInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  reason?: string;
+};
+
+export type AutomationRunCompensationRetryInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  reason?: string;
+};
+
+export type AutomationRunResumeInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  reason?: string;
+};
+
+export type AutomationRunRejectRepairInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  run_id: string;
+  reason?: string;
+};
+
 export type SandboxSessionCreateInput = {
   tenant_id?: string;
   scope?: string;
@@ -1454,6 +1688,344 @@ export type ReplayPlaybookRepairReviewResponse = {
     }>;
     [k: string]: unknown;
   };
+  [k: string]: unknown;
+};
+
+export type AutomationCreateResponse = {
+  tenant_id: string;
+  scope: string;
+  automation: {
+    automation_id: string;
+    name: string;
+    status: AutomationDefStatus;
+    definition_status?: AutomationDefStatus;
+    version: number;
+    latest_version: number;
+    input_contract: Record<string, unknown>;
+    output_contract: Record<string, unknown>;
+    metadata: Record<string, unknown>;
+    graph: Record<string, unknown>;
+    compile_summary: Record<string, unknown>;
+    actor?: string | null;
+    [k: string]: unknown;
+  };
+  validation: {
+    node_ids: string[];
+    start_node_ids: string[];
+    topological_order: string[];
+    issues: Array<Record<string, unknown>>;
+  };
+  [k: string]: unknown;
+};
+
+export type AutomationGetResponse = {
+  tenant_id: string;
+  scope: string;
+  automation: {
+    automation_id: string;
+    name: string;
+    status: AutomationDefStatus;
+    definition_status?: AutomationDefStatus;
+    version: number;
+    latest_version: number;
+    input_contract: Record<string, unknown>;
+    output_contract: Record<string, unknown>;
+    metadata: Record<string, unknown>;
+    version_metadata?: Record<string, unknown>;
+    review_assignment?: Record<string, unknown>;
+    shadow_review?: Record<string, unknown>;
+    shadow_validation?: Record<string, unknown>;
+    graph: Record<string, unknown>;
+    compile_summary: Record<string, unknown>;
+    created_at?: string;
+    updated_at?: string;
+    version_created_at?: string;
+    [k: string]: unknown;
+  };
+  validation: {
+    node_ids: string[];
+    start_node_ids: string[];
+    topological_order: string[];
+    issues: Array<Record<string, unknown>>;
+  };
+  [k: string]: unknown;
+};
+
+export type AutomationListResponse = {
+  tenant_id: string;
+  scope: string;
+  automations: Array<{
+    automation_id: string;
+    name: string;
+    status: AutomationDefStatus;
+    definition_status?: AutomationDefStatus;
+    version: number;
+    latest_version: number;
+    metadata?: Record<string, unknown>;
+    version_metadata?: Record<string, unknown>;
+    review_assignment?: Record<string, unknown>;
+    shadow_review?: Record<string, unknown>;
+    shadow_validation?: Record<string, unknown>;
+    compile_summary?: Record<string, unknown>;
+    updated_at?: string;
+    version_created_at?: string;
+    action_hint?: string | null;
+    [k: string]: unknown;
+  }>;
+  [k: string]: unknown;
+};
+
+export type AutomationShadowReportResponse = {
+  tenant_id: string;
+  scope: string;
+  automation_id: string;
+  versions: {
+    shadow: null | {
+      version: number;
+      status: AutomationDefStatus | string;
+      compile_summary?: Record<string, unknown>;
+      version_metadata?: Record<string, unknown>;
+      review_assignment?: Record<string, unknown>;
+      shadow_review?: Record<string, unknown>;
+      shadow_review_history?: Array<Record<string, unknown>>;
+      shadow_validation?: Record<string, unknown>;
+      shadow_validation_history?: Array<Record<string, unknown>>;
+      created_at?: string;
+    };
+    active: null | {
+      version: number;
+      status: AutomationDefStatus | string;
+      compile_summary?: Record<string, unknown>;
+      version_metadata?: Record<string, unknown>;
+      created_at?: string;
+    };
+  };
+  runs: {
+    shadow: (AutomationRunView & { [k: string]: unknown }) | null;
+    active: (AutomationRunView & { [k: string]: unknown }) | null;
+  };
+  evidence: {
+    shadow: Record<string, unknown>;
+    active: Record<string, unknown>;
+  };
+  history: {
+    shadow_runs: Array<AutomationRunView & { [k: string]: unknown }>;
+    active_runs: Array<AutomationRunView & { [k: string]: unknown }>;
+    shadow_reviews: Array<Record<string, unknown>>;
+    shadow_validations: Array<Record<string, unknown>>;
+  };
+  notes: {
+    shadow_review_note?: string | null;
+    shadow_review_verdict?: string | null;
+    shadow_validation_status?: string | null;
+    shadow_promotion_note?: string | null;
+    active_promotion_note?: string | null;
+  };
+  comparison: {
+    readiness: {
+      status: "ready" | "needs_review" | "blocked";
+      reasons: string[];
+    };
+    changed_nodes: number;
+    node_deltas: Array<Record<string, unknown>>;
+  };
+  [k: string]: unknown;
+};
+
+export type AutomationShadowValidateResponse = {
+  tenant_id: string;
+  scope: string;
+  automation_id: string;
+  accepted: boolean;
+  queued: boolean;
+  validation_request: Record<string, unknown> | null;
+  run?: (AutomationRunView & { [k: string]: unknown }) | null;
+  report: AutomationShadowReportResponse;
+  [k: string]: unknown;
+};
+
+export type AutomationShadowValidateDispatchResponse = {
+  tenant_id: string;
+  scope: string;
+  automation_id?: string | null;
+  limit: number;
+  dry_run: boolean;
+  matched: number;
+  dispatched?: number;
+  completed?: number;
+  failed?: number;
+  claims?: Array<Record<string, unknown>>;
+  results?: Array<Record<string, unknown>>;
+  [k: string]: unknown;
+};
+
+export type AutomationCompensationPolicyMatrixResponse = {
+  tenant_id: string;
+  scope: string;
+  matrix: Array<{
+    class: string;
+    status: "blocked" | "running" | "retryable" | "succeeded" | string;
+    retry_allowed: boolean;
+    escalation: string;
+    summary: string;
+    operator_action: string;
+    [k: string]: unknown;
+  }>;
+  [k: string]: unknown;
+};
+
+export type AutomationPromoteResponse = {
+  tenant_id: string;
+  scope: string;
+  from_version: number;
+  to_version: number;
+  status?: AutomationDefStatus;
+  unchanged?: boolean;
+  reason?: string | null;
+  automation: {
+    automation_id: string;
+    name: string;
+    status: AutomationDefStatus;
+    definition_status?: AutomationDefStatus;
+    version: number;
+    latest_version: number;
+    input_contract: Record<string, unknown>;
+    output_contract: Record<string, unknown>;
+    metadata: Record<string, unknown>;
+    version_metadata?: Record<string, unknown>;
+    graph: Record<string, unknown>;
+    compile_summary: Record<string, unknown>;
+    created_at?: string;
+    updated_at?: string;
+    version_created_at?: string;
+    [k: string]: unknown;
+  };
+  validation: {
+    node_ids: string[];
+    start_node_ids: string[];
+    topological_order: string[];
+    issues: Array<Record<string, unknown>>;
+  };
+  [k: string]: unknown;
+};
+
+export type AutomationTelemetryResponse = {
+  tenant_id: string;
+  scope: string;
+  window_hours: number;
+  automation_id?: string | null;
+  summary: {
+    total_runs: number;
+    terminal_runs: number;
+    succeeded_runs: number;
+    failed_runs: number;
+    cancelled_runs: number;
+    compensated_runs: number;
+    paused_runs: number;
+    repair_paused_runs: number;
+    approval_paused_runs: number;
+    compensation_failed_runs: number;
+    shadow_runs: number;
+    active_runs: number;
+    success_rate?: number | null;
+    pause_rate?: number | null;
+    compensation_failure_rate?: number | null;
+    p95_duration_seconds?: number | null;
+    slo?: Record<string, unknown>;
+    [k: string]: unknown;
+  };
+  root_causes: Array<{
+    root_cause_code?: string | null;
+    count: number;
+    [k: string]: unknown;
+  }>;
+  incidents: Array<AutomationRunView & {
+    action_hint?: string | null;
+  }>;
+  [k: string]: unknown;
+};
+
+export type AutomationValidateResponse = {
+  tenant_id: string;
+  scope: string;
+  validation: {
+    node_ids: string[];
+    start_node_ids: string[];
+    topological_order: string[];
+    issues: Array<Record<string, unknown>>;
+  };
+  graph: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
+export type AutomationRunNodeView = {
+  run_id: string;
+  node_id: string;
+  attempt: number;
+  node_kind: AutomationNodeKind | string;
+  lifecycle_state: AutomationNodeLifecycleState | string;
+  pause_reason: AutomationNodePauseReason | null;
+  terminal_outcome: AutomationNodeTerminalOutcome | null;
+  status_summary: string;
+  depends_on_json?: unknown;
+  blocking_node_ids_json?: unknown;
+  error_code?: string | null;
+  error_message?: string | null;
+  approval_id?: string | null;
+  playbook_id?: string | null;
+  playbook_version?: number | null;
+  playbook_run_id?: string | null;
+  input_snapshot_json?: unknown;
+  output_snapshot_json?: unknown;
+  [k: string]: unknown;
+};
+
+export type AutomationRunView = {
+  run_id: string;
+  tenant_id: string;
+  scope: string;
+  automation_id: string;
+  automation_version: number;
+  requested_by?: string | null;
+  lifecycle_state: AutomationRunLifecycleState | string;
+  pause_reason: AutomationRunPauseReason | null;
+  terminal_outcome: AutomationRunTerminalOutcome | null;
+  status_summary: string;
+  root_cause_code?: string | null;
+  root_cause_node_id?: string | null;
+  root_cause_message?: string | null;
+  compensation_attempted?: boolean;
+  compensation_status?: string;
+  execution_mode?: "default" | "shadow";
+  review_assignment?: Record<string, unknown>;
+  compensation_workflow?: Record<string, unknown>;
+  summary?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
+export type AutomationRunResponse = {
+  run: AutomationRunView & {
+    version?: number;
+  };
+  nodes: AutomationRunNodeView[];
+  [k: string]: unknown;
+};
+
+export type AutomationRunGetResponse = {
+  run: AutomationRunView & {
+    summary?: Record<string, unknown>;
+  };
+  nodes?: AutomationRunNodeView[];
+  compensation_workflow_history?: Array<Record<string, unknown>>;
+  [k: string]: unknown;
+};
+
+export type AutomationRunListResponse = {
+  tenant_id: string;
+  scope: string;
+  runs: Array<AutomationRunView & {
+    action_hint?: string | null;
+  }>;
   [k: string]: unknown;
 };
 

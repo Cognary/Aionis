@@ -419,6 +419,189 @@ async function main() {
     }
   }
 
+  const automationId = `sdk_smoke_automation_${stamp}`;
+  const automationCreated = await client.automationCreate({
+    scope,
+    actor: "sdk_smoke",
+    automation_id: automationId,
+    name: "SDK Smoke Approval Automation",
+    status: "draft",
+    graph: {
+      nodes: [
+        {
+          node_id: "approval_gate",
+          kind: "approval",
+          name: "Approval Gate",
+        },
+      ],
+      edges: [],
+    },
+    metadata: {
+      source: "sdk_smoke",
+    },
+  });
+  const automationRunPaused = await client.automationRun({
+    scope,
+    actor: "sdk_smoke",
+    automation_id: automationId,
+    params: {
+      smoke: true,
+    },
+  });
+  const pausedRunId = String((automationRunPaused.data as any)?.run?.run_id ?? "");
+  const automationRunGetPaused = await client.automationRunGet({
+    scope,
+    run_id: pausedRunId,
+    include_nodes: true,
+  });
+  const automationRunResumed = await client.automationRunResume({
+    scope,
+    actor: "sdk_smoke",
+    run_id: pausedRunId,
+    reason: "sdk smoke approval",
+  });
+  const automationRunPaused2 = await client.automationRun({
+    scope,
+    actor: "sdk_smoke",
+    automation_id: automationId,
+    params: {
+      smoke: true,
+      second_run: true,
+    },
+  });
+  const pausedRunId2 = String((automationRunPaused2.data as any)?.run?.run_id ?? "");
+  const automationRunCancelled = await client.automationRunCancel({
+    scope,
+    actor: "sdk_smoke",
+    run_id: pausedRunId2,
+    reason: "sdk smoke cancel",
+  });
+  const automationPromoted = await client.automationPromote({
+    scope,
+    actor: "sdk_smoke",
+    automation_id: automationId,
+    from_version: Number((automationCreated.data as any)?.automation?.version ?? 1),
+    target_status: "shadow",
+    note: "sdk smoke promote to shadow",
+  });
+  const shadowVersion = Number((automationPromoted.data as any)?.to_version ?? 0);
+  let shadowDefaultRunError:
+    | {
+        status: number | null;
+        request_id: string | null;
+        code: string | null;
+      }
+    | null = null;
+  try {
+    await client.automationRun({
+      scope,
+      actor: "sdk_smoke",
+      automation_id: automationId,
+      version: shadowVersion,
+      params: {
+        smoke: true,
+        shadow_attempt: "default",
+      },
+    });
+    throw new Error("default run on shadow version must fail");
+  } catch (err) {
+    if (!(err instanceof AionisApiError) || err.code !== "automation_version_shadow_not_runnable") throw err;
+    shadowDefaultRunError = {
+      status: err.status ?? null,
+      request_id: err.request_id ?? null,
+      code: err.code ?? null,
+    };
+  }
+  const automationShadowRun = await client.automationRun({
+    scope,
+    actor: "sdk_smoke",
+    automation_id: automationId,
+    version: shadowVersion,
+    params: {
+      smoke: true,
+      shadow_attempt: "explicit",
+    },
+    options: {
+      execution_mode: "shadow",
+    },
+  });
+  if ((automationShadowRun.data as any)?.run?.terminal_outcome !== "succeeded") {
+    throw new Error("shadow automation run must succeed for approval-only sdk smoke DAG");
+  }
+  if ((automationShadowRun.data as any)?.run?.execution_mode !== "shadow") {
+    throw new Error("shadow automation run must report execution_mode=shadow");
+  }
+  if ((automationRunCancelled.data as any)?.run?.terminal_outcome !== "cancelled") {
+    throw new Error("cancelled automation run must retain terminal_outcome=cancelled");
+  }
+  const automationShadowValidateEnqueue = await client.automationShadowValidate({
+    scope,
+    actor: "sdk_smoke",
+    automation_id: automationId,
+    shadow_version: shadowVersion,
+    mode: "enqueue",
+    note: "sdk smoke queued shadow validation",
+  });
+  const automationShadowValidateInline = await client.automationShadowValidate({
+    scope,
+    actor: "sdk_smoke",
+    automation_id: automationId,
+    shadow_version: shadowVersion,
+    mode: "inline",
+    note: "sdk smoke inline shadow validation",
+  });
+  const automationShadowReportBeforeReview = await client.automationShadowReport({
+    scope,
+    automation_id: automationId,
+    shadow_version: shadowVersion,
+  });
+  let shadowPromoteWithoutReviewError:
+    | {
+        status: number | null;
+        request_id: string | null;
+        code: string | null;
+      }
+    | null = null;
+  try {
+    await client.automationPromote({
+      scope,
+      actor: "sdk_smoke",
+      automation_id: automationId,
+      from_version: shadowVersion,
+      target_status: "active",
+      note: "sdk smoke promote to active without review",
+    });
+    throw new Error("shadow promotion to active must fail before approved review");
+  } catch (err) {
+    if (!(err instanceof AionisApiError) || err.code !== "automation_shadow_review_required") throw err;
+    shadowPromoteWithoutReviewError = {
+      status: err.status ?? null,
+      request_id: err.request_id ?? null,
+      code: err.code ?? null,
+    };
+  }
+  const automationShadowReviewed = await client.automationShadowReview({
+    scope,
+    actor: "sdk_smoke_reviewer",
+    automation_id: automationId,
+    shadow_version: shadowVersion,
+    verdict: "approved",
+    note: "sdk smoke approved shadow review",
+  });
+  const automationShadowReportAfterReview = await client.automationShadowReport({
+    scope,
+    automation_id: automationId,
+    shadow_version: shadowVersion,
+  });
+  const automationActivated = await client.automationPromote({
+    scope,
+    actor: "sdk_smoke",
+    automation_id: automationId,
+    from_version: shadowVersion,
+    target_status: "active",
+    note: "sdk smoke promote to active",
+  });
+
   const out = {
     ok: true,
     base_url: baseUrl,
@@ -456,6 +639,101 @@ async function main() {
       pack_import: packImport,
       recall_text: recallText,
       context_assemble: contextAssemble,
+      automation: {
+        create: {
+          status: automationCreated.status,
+          request_id: automationCreated.request_id,
+          automation_id: (automationCreated.data as any)?.automation?.automation_id ?? null,
+          version: (automationCreated.data as any)?.automation?.version ?? null,
+        },
+        promote: {
+          status: automationPromoted.status,
+          request_id: automationPromoted.request_id,
+          from_version: (automationPromoted.data as any)?.from_version ?? null,
+          to_version: (automationPromoted.data as any)?.to_version ?? null,
+          promoted_status: (automationPromoted.data as any)?.automation?.status ?? null,
+        },
+        shadow_report_before_review: {
+          status: automationShadowReportBeforeReview.status,
+          request_id: automationShadowReportBeforeReview.request_id,
+          readiness: (automationShadowReportBeforeReview.data as any)?.comparison?.readiness?.status ?? null,
+          verdict: (automationShadowReportBeforeReview.data as any)?.notes?.shadow_review_verdict ?? null,
+          validation_status: (automationShadowReportBeforeReview.data as any)?.notes?.shadow_validation_status ?? null,
+        },
+        shadow_validate_enqueue: {
+          status: automationShadowValidateEnqueue.status,
+          request_id: automationShadowValidateEnqueue.request_id,
+          queued: (automationShadowValidateEnqueue.data as any)?.queued ?? null,
+          validation_status: (automationShadowValidateEnqueue.data as any)?.validation_request?.status ?? null,
+        },
+        shadow_validate_inline: {
+          status: automationShadowValidateInline.status,
+          request_id: automationShadowValidateInline.request_id,
+          queued: (automationShadowValidateInline.data as any)?.queued ?? null,
+          validation_status: (automationShadowValidateInline.data as any)?.validation_request?.status ?? null,
+          validation_run_id: (automationShadowValidateInline.data as any)?.run?.run_id ?? null,
+        },
+        shadow_promote_without_review_error: shadowPromoteWithoutReviewError,
+        shadow_review: {
+          status: automationShadowReviewed.status,
+          request_id: automationShadowReviewed.request_id,
+          verdict: (automationShadowReviewed.data as any)?.notes?.shadow_review_verdict ?? null,
+          note: (automationShadowReviewed.data as any)?.notes?.shadow_review_note ?? null,
+        },
+        shadow_report_after_review: {
+          status: automationShadowReportAfterReview.status,
+          request_id: automationShadowReportAfterReview.request_id,
+          readiness: (automationShadowReportAfterReview.data as any)?.comparison?.readiness?.status ?? null,
+          verdict: (automationShadowReportAfterReview.data as any)?.notes?.shadow_review_verdict ?? null,
+          validation_status: (automationShadowReportAfterReview.data as any)?.notes?.shadow_validation_status ?? null,
+          review_count: Array.isArray((automationShadowReportAfterReview.data as any)?.history?.shadow_reviews)
+            ? (automationShadowReportAfterReview.data as any).history.shadow_reviews.length
+            : 0,
+          validation_count: Array.isArray((automationShadowReportAfterReview.data as any)?.history?.shadow_validations)
+            ? (automationShadowReportAfterReview.data as any).history.shadow_validations.length
+            : 0,
+        },
+        activate: {
+          status: automationActivated.status,
+          request_id: automationActivated.request_id,
+          from_version: (automationActivated.data as any)?.from_version ?? null,
+          to_version: (automationActivated.data as any)?.to_version ?? null,
+          promoted_status: (automationActivated.data as any)?.automation?.status ?? null,
+        },
+        shadow_default_run_error: shadowDefaultRunError,
+        shadow_run: {
+          status: automationShadowRun.status,
+          request_id: automationShadowRun.request_id,
+          run_id: (automationShadowRun.data as any)?.run?.run_id ?? null,
+          execution_mode: (automationShadowRun.data as any)?.run?.execution_mode ?? null,
+          lifecycle_state: (automationShadowRun.data as any)?.run?.lifecycle_state ?? null,
+          terminal_outcome: (automationShadowRun.data as any)?.run?.terminal_outcome ?? null,
+        },
+        run_paused: {
+          status: automationRunPaused.status,
+          request_id: automationRunPaused.request_id,
+          run_id: (automationRunPaused.data as any)?.run?.run_id ?? null,
+          lifecycle_state: (automationRunPaused.data as any)?.run?.lifecycle_state ?? null,
+          pause_reason: (automationRunPaused.data as any)?.run?.pause_reason ?? null,
+        },
+        get_paused: {
+          status: automationRunGetPaused.status,
+          request_id: automationRunGetPaused.request_id,
+          node_count: Array.isArray((automationRunGetPaused.data as any)?.nodes) ? (automationRunGetPaused.data as any).nodes.length : 0,
+        },
+        resume: {
+          status: automationRunResumed.status,
+          request_id: automationRunResumed.request_id,
+          lifecycle_state: (automationRunResumed.data as any)?.run?.lifecycle_state ?? null,
+          terminal_outcome: (automationRunResumed.data as any)?.run?.terminal_outcome ?? null,
+        },
+        cancel: {
+          status: automationRunCancelled.status,
+          request_id: automationRunCancelled.request_id,
+          lifecycle_state: (automationRunCancelled.data as any)?.run?.lifecycle_state ?? null,
+          terminal_outcome: (automationRunCancelled.data as any)?.run?.terminal_outcome ?? null,
+        },
+      },
     },
   };
   process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
