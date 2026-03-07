@@ -12,6 +12,7 @@ Aionis integrates with agent runtimes and orchestration frameworks through stabl
 2. [OpenWork Integration](/public/en/integrations/02-openwork)
 3. [LangGraph Integration](/public/en/integrations/03-langgraph)
 4. [OpenClaw Integration](/public/en/integrations/04-openclaw)
+5. [Codex Local Profile](/public/en/integrations/05-codex-local)
 
 ## Recommended Rollout Path
 
@@ -40,9 +41,10 @@ For production integrations, persist and propagate:
 ## Next Steps
 
 1. [MCP Integration](/public/en/integrations/01-mcp)
-2. [OpenClaw Integration](/public/en/integrations/04-openclaw)
-3. [API Reference](/public/en/api-reference/00-api-reference)
-4. [SDK Guide](/public/en/reference/05-sdk)
+2. [Codex Local Profile](/public/en/integrations/05-codex-local)
+3. [OpenClaw Integration](/public/en/integrations/04-openclaw)
+4. [API Reference](/public/en/api-reference/00-api-reference)
+5. [SDK Guide](/public/en/reference/05-sdk)
 
 ## Related
 

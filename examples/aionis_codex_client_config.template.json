@@ -1,0 +1,14 @@
+{
+  "mcp": {
+    "aionis-dev": {
+      "type": "local",
+      "command": ["bash", "/path/to/Aionis/scripts/mcp-aionis-dev-standalone.sh"],
+      "enabled": true,
+      "environment": {
+        "AIONIS_STANDALONE_CONTAINER": "aionis-standalone",
+        "AIONIS_BASE_URL": "http://127.0.0.1:3001",
+        "AIONIS_SCOPE": "default"
+      }
+    }
+  }
+}
