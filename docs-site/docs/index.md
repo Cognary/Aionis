@@ -56,6 +56,7 @@ aside: false
 <ul class="mint-quick-nav">
   <li><a href="/guide/overview">Understand the product</a></li>
   <li><a href="/guide/quickstart">Run the quickstart</a></li>
+  <li><a href="/guide/codex-local-profile">Set up Codex Local Profile</a></li>
   <li><a href="/api/">Integrate the APIs</a></li>
   <li><a href="/operations/">Prepare for production</a></li>
 </ul>
@@ -91,6 +92,15 @@ aside: false
     <div class="card-body">
       <h3>Quickstart</h3>
       <p>Get to a working write and recall flow fast, then keep the IDs required for later replay.</p>
+    </div>
+  </a>
+  <a class="home-card" href="/guide/codex-local-profile">
+    <div class="card-icon-panel">
+      <IoTerminal class="card-icon" width="22" height="22" stroke-width="1.7" />
+    </div>
+    <div class="card-body">
+      <h3>Codex Local Profile</h3>
+      <p>Run Codex with the built-in Dev MCP, standalone Docker, and a tracked local replay loop.</p>
     </div>
   </a>
   <a class="home-card" href="/api/">

@@ -154,3 +154,13 @@ curl -sS "$BASE_URL/v1/memory/write" \
 2. [Memory and Policy Loop](memory-policy-loop)
 3. [API Guide](api-guide)
 4. [SDK Guide](sdk-guide) if you do not want to stay at raw HTTP level
+
+## If you are a Codex user
+
+If your goal is to run Codex locally with the built-in Dev MCP and a tracked replay loop, do not stop at this page.
+
+Use [Codex Local Profile](codex-local-profile) for the productized path that combines:
+
+1. standalone Docker
+2. Aionis Dev MCP
+3. `codex-aionis` as the tracked launcher

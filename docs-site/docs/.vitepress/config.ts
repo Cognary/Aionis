@@ -18,6 +18,7 @@ const pageDescriptionOverrides: Record<string, string> = {
   '/guide/api-guide': 'Integrate Aionis through REST APIs for memory write, recall, policy, and replay operations.',
   '/guide/sdk-guide': 'Use Aionis SDK patterns for production agent workflows and integration ergonomics.',
   '/guide/integrations': 'Connect Aionis to common agent frameworks, tooling stacks, and platform integrations.',
+  '/guide/codex-local-profile': 'Run Codex with Aionis Dev MCP, standalone Docker, and a tracked replayable local workflow.',
   '/guide/operations-and-gates': 'Operate Aionis reliably with policy gates, incident debugging, and replay diagnostics.',
   '/guide/deploy': 'Deploy Aionis in production with environment setup, rollout strategy, and reliability controls.',
   '/guide/troubleshooting': 'Diagnose and fix common Aionis integration and runtime issues quickly.',
@@ -170,7 +171,8 @@ export default defineConfig({
             { text: 'Memory and Policy Loop', link: '/guide/memory-policy-loop' },
             { text: 'API Guide', link: '/guide/api-guide' },
             { text: 'SDK Guide', link: '/guide/sdk-guide' },
-            { text: 'Integrations', link: '/guide/integrations' }
+            { text: 'Integrations', link: '/guide/integrations' },
+            { text: 'Codex Local Profile', link: '/guide/codex-local-profile' }
           ]
         },
         {
