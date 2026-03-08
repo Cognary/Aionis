@@ -21,14 +21,17 @@ import { loadEnv } from "../config.js";
 import { CAPABILITY_CONTRACT, capabilityContract } from "../capability-contract.js";
 import { createAuthResolver } from "../util/auth.js";
 import {
+  createControlApiKey,
   createApiKeyPrincipalResolver,
   normalizeControlAlertRouteTarget,
   normalizeControlIncidentPublishSourceDir,
   normalizeControlIncidentPublishTarget,
+  upsertControlProject,
 } from "../control-plane.js";
 import { memoryRecallParsed, type RecallAuth } from "../memory/recall.js";
 import { ruleMatchesContext } from "../memory/rule-engine.js";
 import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
+import { evaluateRules, evaluateRulesAppliedOnly } from "../memory/rules-evaluate.js";
 import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
@@ -51,6 +54,17 @@ import { asPostgresMemoryStore, createMemoryStore } from "../store/memory-store.
 import { createEmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 
 type QueryResult<T> = { rows: T[]; rowCount: number };
+
+function createDbFixture(client: { query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> }) {
+  return {
+    pool: {
+      connect: async () => ({
+        query: client.query.bind(client),
+        release: () => {},
+      }),
+    },
+  } as any;
+}
 
 function encodeBase64UrlJson(v: unknown): string {
   return Buffer.from(JSON.stringify(v), "utf8").toString("base64url");
@@ -212,6 +226,7 @@ class ResolveFixturePgClient {
             last_activated: null,
             created_at: new Date().toISOString(),
             commit_id: "00000000-0000-0000-0000-00000000c101",
+            commit_scope: "default",
           } as any,
         ] as T[],
         rowCount: 1,
@@ -255,6 +270,7 @@ class ResolveFixturePgClient {
             metadata_json: { strict: true },
             created_at: new Date().toISOString(),
             commit_id: "00000000-0000-0000-0000-00000000c101",
+            commit_scope: "default",
           } as any,
         ] as T[],
         rowCount: 1,
@@ -287,6 +303,7 @@ class ResolveFixturePgClient {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             commit_id: "00000000-0000-0000-0000-00000000c101",
+            commit_scope: "default",
             topic_state: null,
             member_count: null,
           } as any,
@@ -296,6 +313,27 @@ class ResolveFixturePgClient {
     }
 
     throw new Error(`ResolveFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class RulesEvaluateFixturePgClient {
+  private readonly rows: any[];
+
+  constructor(rows: any[]) {
+    this.rows = rows;
+  }
+
+  async query<T>(sql: string, _params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+
+    if (s.includes("FROM memory_rule_defs d") && s.includes("JOIN memory_nodes n ON n.id = d.rule_node_id AND n.scope = d.scope")) {
+      return {
+        rows: this.rows as T[],
+        rowCount: this.rows.length,
+      };
+    }
+
+    throw new Error(`RulesEvaluateFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
   }
 }
 
@@ -965,6 +1003,43 @@ async function run() {
     ],
     edges: [],
   };
+  await assert.rejects(
+    () =>
+      applyMemoryWrite(
+        {} as any,
+        {
+          ...preparedWriteMinimal,
+          nodes: [{ ...preparedWriteMinimal.nodes[0], scope: "other" }],
+        } as any,
+        {
+          maxTextLen: 8000,
+          piiRedaction: false,
+          allowCrossScopeEdges: false,
+          shadowDualWriteEnabled: false,
+          shadowDualWriteStrict: false,
+          write_access: {
+            capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+            capabilities: { shadow_mirror_v2: false },
+            nodeScopesByIds: async () => new Map<string, string>(),
+            parentCommitHash: async () => null,
+            insertCommit: async () => "00000000-0000-0000-0000-00000000ac10",
+            insertNode: async () => {},
+            insertRuleDef: async () => {},
+            upsertEdge: async () => {},
+            readyEmbeddingNodeIds: async () => new Set<string>(),
+            insertOutboxEvent: async () => {},
+            appendAfterTopicClusterEventIds: async () => {},
+            mirrorCommitArtifactsToShadowV2: async () => ({ commits: 0, nodes: 0, edges: 0, outbox: 0 }),
+          } as any,
+        },
+      ),
+    (err: any) =>
+      err instanceof HttpError &&
+      err.statusCode === 400 &&
+      err.code === "cross_scope_node_not_allowed" &&
+      (err.details as any)?.request_scope === "default" &&
+      (err.details as any)?.node_scope_key === "other",
+  );
   const writeOutNoMirror = await applyMemoryWrite({} as any, preparedWriteMinimal as any, {
     maxTextLen: 8000,
     piiRedaction: false,
@@ -2377,33 +2452,191 @@ async function run() {
     (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "conflicting_filters",
   );
 
-  // API key principal resolver cache must stay bounded and evict old entries.
-  let apiKeyLookupQueries = 0;
-  const resolver = createApiKeyPrincipalResolver(
+  const ruleVisibilityRows = [
     {
-      pool: {
-        connect: async () => ({
-          query: async () => {
-            apiKeyLookupQueries += 1;
-            return {
-              rows: [{ tenant_id: "default", agent_id: null, team_id: null, role: null, key_prefix: "ak_live_test" }],
-              rowCount: 1,
-            };
-          },
-          release: () => {},
-        }),
-      },
-    } as any,
-    { ttl_ms: 60_000, negative_ttl_ms: 60_000, max_entries: 2 },
+      rule_node_id: "00000000-0000-0000-0000-00000000r101",
+      state: "active",
+      rule_scope: "global",
+      target_agent_id: null,
+      target_team_id: null,
+      rule_memory_lane: "shared",
+      rule_owner_agent_id: null,
+      rule_owner_team_id: null,
+      if_json: {},
+      then_json: { tool: { allow: ["bash"] } },
+      exceptions_json: [],
+      positive_count: 0,
+      negative_count: 0,
+      rule_commit_id: "00000000-0000-0000-0000-00000000c201",
+      rule_summary: "shared rule",
+      rule_slots: {},
+      updated_at: new Date().toISOString(),
+    },
+    {
+      rule_node_id: "00000000-0000-0000-0000-00000000r102",
+      state: "active",
+      rule_scope: "global",
+      target_agent_id: null,
+      target_team_id: null,
+      rule_memory_lane: "private",
+      rule_owner_agent_id: "agent_a",
+      rule_owner_team_id: null,
+      if_json: {},
+      then_json: { tool: { deny: ["rm"] } },
+      exceptions_json: [],
+      positive_count: 0,
+      negative_count: 0,
+      rule_commit_id: "00000000-0000-0000-0000-00000000c202",
+      rule_summary: "private rule",
+      rule_slots: {},
+      updated_at: new Date().toISOString(),
+    },
+  ];
+
+  const rulesNoContext = await evaluateRules(
+    new RulesEvaluateFixturePgClient(ruleVisibilityRows) as any,
+    { tenant_id: "default", scope: "default", context: {}, include_shadow: false, limit: 10 },
+    "default",
+    "default",
   );
-  await resolver("k1");
-  await resolver("k2");
-  await resolver("k3");
-  assert.equal(apiKeyLookupQueries, 3);
-  await resolver("k1"); // should be evicted when cache max_entries=2
-  assert.equal(apiKeyLookupQueries, 4);
-  await resolver("k3"); // latest key should still be cached
-  assert.equal(apiKeyLookupQueries, 4);
+  assert.equal((rulesNoContext as any).matched, 1);
+  assert.deepEqual(
+    ((rulesNoContext as any).active ?? []).map((r: any) => r.rule_node_id).sort(),
+    ["00000000-0000-0000-0000-00000000r101"],
+  );
+  assert.equal((rulesNoContext as any).agent_visibility_summary?.rule_scope?.filtered_by_lane, 1);
+  assert.equal((rulesNoContext as any).agent_visibility_summary?.lane?.applied, true);
+  assert.equal((rulesNoContext as any).agent_visibility_summary?.lane?.reason, "missing_agent_context_fail_closed");
+
+  const rulesWithAgent = await evaluateRules(
+    new RulesEvaluateFixturePgClient(ruleVisibilityRows) as any,
+    { tenant_id: "default", scope: "default", context: { agent: { id: "agent_a" } }, include_shadow: false, limit: 10 },
+    "default",
+    "default",
+  );
+  assert.equal((rulesWithAgent as any).matched, 2);
+  assert.deepEqual(
+    ((rulesWithAgent as any).active ?? []).map((r: any) => r.rule_node_id).sort(),
+    ["00000000-0000-0000-0000-00000000r101", "00000000-0000-0000-0000-00000000r102"],
+  );
+
+  const appliedOnlyNoContext = await evaluateRulesAppliedOnly(
+    new RulesEvaluateFixturePgClient(ruleVisibilityRows) as any,
+    {
+      scope: "default",
+      tenant_id: "default",
+      default_tenant_id: "default",
+      context: {},
+      include_shadow: false,
+      limit: 10,
+    },
+  );
+  assert.deepEqual(
+    (((appliedOnlyNoContext as any).applied?.sources as any[]) ?? []).map((s: any) => s.rule_node_id).sort(),
+    ["00000000-0000-0000-0000-00000000r101"],
+  );
+  assert.equal((appliedOnlyNoContext as any).agent_visibility_summary?.rule_scope?.filtered_by_lane, 1);
+
+  await assert.rejects(
+    () =>
+      upsertControlProject(
+        createDbFixture({
+          async query<T>(sql: string): Promise<QueryResult<T>> {
+            const s = sql.replace(/\s+/g, " ").trim();
+            if (s.includes("INSERT INTO control_projects") && s.includes("ON CONFLICT (project_id)")) {
+              return { rows: [] as T[], rowCount: 0 };
+            }
+            if (s.includes("SELECT tenant_id FROM control_projects") && s.includes("WHERE project_id = $1")) {
+              return { rows: [{ tenant_id: "tenant_b" } as any] as T[], rowCount: 1 };
+            }
+            throw new Error(`unexpected control project query: ${s}`);
+          },
+        }),
+        { project_id: "proj_1", tenant_id: "tenant_a" },
+      ),
+    (err: any) =>
+      err instanceof HttpError &&
+      err.statusCode === 409 &&
+      err.code === "project_tenant_mismatch" &&
+      (err.details as any)?.project_tenant_id === "tenant_b",
+  );
+
+  await assert.rejects(
+    () =>
+      createControlApiKey(
+        createDbFixture({
+          async query<T>(sql: string): Promise<QueryResult<T>> {
+            const s = sql.replace(/\s+/g, " ").trim();
+            if (s.includes("SELECT tenant_id FROM control_projects") && s.includes("WHERE project_id = $1")) {
+              return { rows: [{ tenant_id: "tenant_b" } as any] as T[], rowCount: 1 };
+            }
+            throw new Error(`unexpected control api key query: ${s}`);
+          },
+        }),
+        { tenant_id: "tenant_a", project_id: "proj_1" },
+      ),
+    (err: any) =>
+      err instanceof HttpError &&
+      err.statusCode === 409 &&
+      err.code === "project_tenant_mismatch" &&
+      (err.details as any)?.project_tenant_id === "tenant_b",
+  );
+
+  // API key principal resolver must not cache successful lookups by default.
+  let uncachedPositiveQueries = 0;
+  const uncachedResolver = createApiKeyPrincipalResolver(
+    createDbFixture({
+      async query<T>(): Promise<QueryResult<T>> {
+        uncachedPositiveQueries += 1;
+        return {
+          rows: [{ tenant_id: "default", agent_id: null, team_id: null, role: null, key_prefix: "ak_live_test" }] as any as T[],
+          rowCount: 1,
+        };
+      },
+    }),
+    { negative_ttl_ms: 60_000, max_entries: 2 },
+  );
+  await uncachedResolver("k1");
+  await uncachedResolver("k1");
+  assert.equal(uncachedPositiveQueries, 2);
+
+  // Negative cache should still suppress repeated misses.
+  let negativeQueries = 0;
+  const negativeResolver = createApiKeyPrincipalResolver(
+    createDbFixture({
+      async query<T>(): Promise<QueryResult<T>> {
+        negativeQueries += 1;
+        return { rows: [] as T[], rowCount: 0 };
+      },
+    }),
+    { negative_ttl_ms: 60_000, max_entries: 2 },
+  );
+  await negativeResolver("missing");
+  await negativeResolver("missing");
+  assert.equal(negativeQueries, 1);
+
+  // Optional positive cache remains bounded when explicitly enabled.
+  let cachedPositiveQueries = 0;
+  const cachedResolver = createApiKeyPrincipalResolver(
+    createDbFixture({
+      async query<T>(): Promise<QueryResult<T>> {
+        cachedPositiveQueries += 1;
+        return {
+          rows: [{ tenant_id: "default", agent_id: null, team_id: null, role: null, key_prefix: "ak_live_test" }] as any as T[],
+          rowCount: 1,
+        };
+      },
+    }),
+    { ttl_ms: 60_000, negative_ttl_ms: 60_000, max_entries: 2, cache_positive: true },
+  );
+  await cachedResolver("k1");
+  await cachedResolver("k2");
+  await cachedResolver("k3");
+  assert.equal(cachedPositiveQueries, 3);
+  await cachedResolver("k1"); // should be evicted when cache max_entries=2
+  assert.equal(cachedPositiveQueries, 4);
+  await cachedResolver("k3"); // latest key should still be cached
+  assert.equal(cachedPositiveQueries, 4);
 
   // Automation graph validation: valid DAG accepted, cycle rejected.
   const validAutomation = {

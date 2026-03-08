@@ -178,9 +178,6 @@ async function replayOnce(input: {
     eventType: input.eventType,
     limit: Math.max(input.limit * 8, input.limit),
   });
-  const replayedOriginalIds = new Set(
-    rows.map((row: any) => trim(row?.metadata?.replay_of_delivery_id)).filter(Boolean),
-  );
   const latestReplayByOriginal = new Map<string, any>();
   for (const row of rows) {
     const originalId = trim(row?.metadata?.replay_of_delivery_id);

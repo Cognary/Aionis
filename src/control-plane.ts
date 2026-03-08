@@ -4,7 +4,7 @@ import { posix as pathPosix } from "node:path";
 import type { Db } from "./db.js";
 import { withClient, withTx } from "./db.js";
 import { sha256Hex } from "./util/crypto.js";
-import { badRequest } from "./util/http.js";
+import { HttpError, badRequest } from "./util/http.js";
 import { TokenBucketLimiter } from "./util/ratelimit.js";
 
 export type ApiKeyPrincipal = {
@@ -467,21 +467,66 @@ export async function upsertControlProject(db: Db, input: ControlProjectInput) {
       VALUES ($1, $2, $3, $4, $5::jsonb)
       ON CONFLICT (project_id)
       DO UPDATE SET
-        tenant_id = EXCLUDED.tenant_id,
         display_name = EXCLUDED.display_name,
         status = EXCLUDED.status,
         metadata = EXCLUDED.metadata
+      WHERE control_projects.tenant_id = EXCLUDED.tenant_id
       RETURNING project_id, tenant_id, display_name, status, metadata, created_at, updated_at
       `,
       [projectId, tenantId, displayName, status, JSON.stringify(metadata)],
     );
-    return q.rows[0];
+    if (Number(q.rowCount ?? 0) > 0) return q.rows[0];
+    const existing = await client.query(
+      `
+      SELECT tenant_id
+      FROM control_projects
+      WHERE project_id = $1
+      LIMIT 1
+      `,
+      [projectId],
+    );
+    if (Number(existing.rowCount ?? 0) > 0) {
+      throw new HttpError(409, "project_tenant_mismatch", "project_id belongs to a different tenant", {
+        project_id: projectId,
+        tenant_id: tenantId,
+        project_tenant_id: String(existing.rows[0].tenant_id),
+      });
+    }
+    throw new Error(`failed to upsert control project: ${projectId}`);
   });
 }
 
 function generateApiKey(): string {
   const secret = randomBytes(24).toString("base64url");
   return `ak_live_${secret}`;
+}
+
+async function assertProjectBelongsToTenant(
+  client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<{ tenant_id: string }>; rowCount: number }> },
+  projectId: string | null,
+  tenantId: string,
+): Promise<void> {
+  if (!projectId) return;
+  const existing = await client.query(
+    `
+    SELECT tenant_id
+    FROM control_projects
+    WHERE project_id = $1
+    LIMIT 1
+    `,
+    [projectId],
+  );
+  if (existing.rowCount < 1) {
+    badRequest("invalid_project_id", "project_id was not found", { project_id: projectId });
+  }
+  const ownerTenantId = String(existing.rows[0].tenant_id);
+  if (ownerTenantId !== tenantId) {
+    throw new HttpError(409, "project_tenant_mismatch", "project_id belongs to a different tenant", {
+      project_id: projectId,
+      tenant_id: tenantId,
+      project_tenant_id: ownerTenantId,
+    });
+  }
 }
 
 export async function createControlApiKey(db: Db, input: ControlApiKeyInput) {
@@ -499,6 +544,7 @@ export async function createControlApiKey(db: Db, input: ControlApiKeyInput) {
   const keyPrefix = apiKey.slice(0, 14);
 
   return await withClient(db, async (client) => {
+    await assertProjectBelongsToTenant(client, projectId, tenantId);
     const q = await client.query(
       `
       INSERT INTO control_api_keys (tenant_id, project_id, label, role, agent_id, team_id, key_hash, key_prefix, metadata)
@@ -510,6 +556,11 @@ export async function createControlApiKey(db: Db, input: ControlApiKeyInput) {
     return { ...q.rows[0], api_key: apiKey };
   });
 }
+
+export type ApiKeyPrincipalResolver = ((rawApiKey: string) => Promise<ApiKeyPrincipal | null>) & {
+  invalidate(rawApiKey: string): void;
+  clear(): void;
+};
 
 export async function listControlApiKeys(
   db: Db,
@@ -648,9 +699,10 @@ export async function rotateControlApiKey(db: Db, id: string, input: ControlApiK
 
 export function createApiKeyPrincipalResolver(
   db: Db,
-  opts?: { ttl_ms?: number; negative_ttl_ms?: number; max_entries?: number },
-) {
-  const ttlMs = Math.max(5_000, Math.trunc(opts?.ttl_ms ?? 60_000));
+  opts?: { ttl_ms?: number; negative_ttl_ms?: number; max_entries?: number; cache_positive?: boolean },
+): ApiKeyPrincipalResolver {
+  const cachePositive = opts?.cache_positive === true;
+  const ttlMs = cachePositive ? Math.max(5_000, Math.trunc(opts?.ttl_ms ?? 60_000)) : 0;
   const negativeTtlMs = Math.max(1_000, Math.trunc(opts?.negative_ttl_ms ?? 10_000));
   const maxEntries = Math.max(1, Math.trunc(opts?.max_entries ?? 20_000));
   const cache = new Map<string, { expires_at: number; principal: ApiKeyPrincipal | null }>();
@@ -678,7 +730,7 @@ export function createApiKeyPrincipalResolver(
     }
   };
 
-  return async (rawApiKey: string): Promise<ApiKeyPrincipal | null> => {
+  const resolver = (async (rawApiKey: string): Promise<ApiKeyPrincipal | null> => {
     const key = trimOrNull(rawApiKey);
     if (!key) return null;
     const hash = sha256Hex(key);
@@ -711,14 +763,26 @@ export function createApiKeyPrincipalResolver(
             key_prefix: trimOrNull(row.key_prefix),
           }
         : null;
-      cacheSet(hash, principal, principal ? ttlMs : negativeTtlMs, now);
+      if (principal) {
+        if (cachePositive) cacheSet(hash, principal, ttlMs, now);
+      } else {
+        cacheSet(hash, null, negativeTtlMs, now);
+      }
       return principal;
     } catch (err: any) {
       // table missing during migration rollout should not block existing env key auth.
       if (String(err?.code ?? "") === "42P01") return null;
       throw err;
     }
+  }) as ApiKeyPrincipalResolver;
+
+  resolver.invalidate = (rawApiKey: string): void => {
+    const key = trimOrNull(rawApiKey);
+    if (!key) return;
+    cache.delete(sha256Hex(key));
   };
+  resolver.clear = () => cache.clear();
+  return resolver;
 }
 
 export async function upsertTenantQuotaProfile(

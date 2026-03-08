@@ -38,6 +38,12 @@ export function toTenantScopeKey(scope: string, tenantId: string, defaultTenantI
   return `tenant:${tenantId}::scope:${scope}`;
 }
 
+export function fromTenantScopeKey(scopeKey: string, tenantId: string, defaultTenantId: string): string {
+  if (tenantId === defaultTenantId) return scopeKey;
+  const prefix = `tenant:${tenantId}::scope:`;
+  return scopeKey.startsWith(prefix) ? scopeKey.slice(prefix.length) : scopeKey;
+}
+
 export function resolveTenantScope(
   req: { scope?: string; tenant_id?: string },
   defaults: { defaultScope: string; defaultTenantId: string },

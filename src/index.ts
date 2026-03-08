@@ -500,8 +500,8 @@ const recallTextEmbedLimiter = env.RATE_LIMIT_ENABLED
   : null;
 
 const resolveControlPlaneApiKeyPrincipal = createApiKeyPrincipalResolver(db, {
-  ttl_ms: 60_000,
   negative_ttl_ms: 10_000,
+  cache_positive: false,
 });
 
 const tenantQuotaResolver = createTenantQuotaResolver(db, {

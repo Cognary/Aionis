@@ -141,7 +141,7 @@ function laneEnforcementStatus(
   ctxTeamId: string | null,
 ): { applied: boolean; reason: string } {
   if (!ctxAgentId && !ctxTeamId) {
-    return { applied: false, reason: "missing_agent_context" };
+    return { applied: true, reason: "missing_agent_context_fail_closed" };
   }
   if (ctxAgentId && ctxTeamId) {
     return { applied: true, reason: "enforced_agent_team" };

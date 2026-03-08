@@ -1,7 +1,7 @@
 import type pg from "pg";
 import { HttpError, badRequest } from "../util/http.js";
 import { MemoryResolveRequest } from "./schemas.js";
-import { resolveTenantScope } from "./tenant.js";
+import { fromTenantScopeKey, resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
 
 type NodeRow = {
@@ -27,6 +27,7 @@ type NodeRow = {
   created_at: string;
   updated_at: string;
   commit_id: string | null;
+  commit_scope: string | null;
   topic_state: string | null;
   member_count: number | null;
 };
@@ -44,6 +45,7 @@ type EdgeRow = {
   last_activated: string | null;
   created_at: string;
   commit_id: string | null;
+  commit_scope: string | null;
 };
 
 type CommitRow = {
@@ -73,6 +75,7 @@ type DecisionRow = {
   metadata_json: unknown;
   created_at: string;
   commit_id: string | null;
+  commit_scope: string | null;
 };
 
 function pickSlotsPreview(slots: unknown, maxKeys: number): Record<string, unknown> | null {
@@ -90,6 +93,21 @@ function requireCompatibleFilter(field: string, uriValue: string | undefined, re
     field,
     uri_value: uriValue,
     request_value: requestValue,
+  });
+}
+
+function buildCommitUri(
+  tenantId: string,
+  scopeKey: string | null,
+  commitId: string | null,
+  defaultTenantId: string,
+): string | null {
+  if (!scopeKey || !commitId) return null;
+  return buildAionisUri({
+    tenant_id: tenantId,
+    scope: fromTenantScopeKey(scopeKey, tenantId, defaultTenantId),
+    type: "commit",
+    id: commitId,
   });
 }
 
@@ -132,10 +150,12 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
         e.decay_rate,
         e.last_activated::text AS last_activated,
         e.created_at::text AS created_at,
-        e.commit_id::text AS commit_id
+        e.commit_id::text AS commit_id,
+        c.scope::text AS commit_scope
       FROM memory_edges e
       JOIN memory_nodes src ON src.id = e.src_id AND src.scope = e.scope
       JOIN memory_nodes dst ON dst.id = e.dst_id AND dst.scope = e.scope
+      LEFT JOIN memory_commits c ON c.id = e.commit_id
       WHERE e.scope = $1 AND e.id = $2::uuid
       LIMIT 1
       `,
@@ -163,9 +183,7 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
         last_activated: row.last_activated,
         created_at: row.created_at,
         commit_id: row.commit_id,
-        commit_uri: row.commit_id
-          ? buildAionisUri({ tenant_id: tenancy.tenant_id, scope: tenancy.scope, type: "commit", id: row.commit_id })
-          : null,
+        commit_uri: buildCommitUri(tenancy.tenant_id, row.commit_scope, row.commit_id, defaultTenantId),
       },
     };
   }
@@ -186,17 +204,17 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
         (
           SELECT count(*)::int
           FROM memory_nodes n
-          WHERE n.scope = c.scope AND n.commit_id = c.id
+          WHERE n.commit_id = c.id
         ) AS node_count,
         (
           SELECT count(*)::int
           FROM memory_edges e
-          WHERE e.scope = c.scope AND e.commit_id = c.id
+          WHERE e.commit_id = c.id
         ) AS edge_count,
         (
           SELECT count(*)::int
           FROM memory_execution_decisions d
-          WHERE d.scope = c.scope AND d.commit_id = c.id
+          WHERE d.commit_id = c.id
         ) AS decision_count
       FROM memory_commits c
       WHERE c.scope = $1 AND c.id = $2::uuid
@@ -240,19 +258,21 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
     const rr = await client.query<DecisionRow>(
       `
       SELECT
-        id::text AS id,
-        decision_kind,
-        run_id,
-        selected_tool,
-        candidates_json,
-        context_sha256,
-        policy_sha256,
-        source_rule_ids::text[] AS source_rule_ids,
-        metadata_json,
-        created_at::text AS created_at,
-        commit_id::text AS commit_id
-      FROM memory_execution_decisions
-      WHERE scope = $1 AND id = $2::uuid
+        d.id::text AS id,
+        d.decision_kind,
+        d.run_id,
+        d.selected_tool,
+        d.candidates_json,
+        d.context_sha256,
+        d.policy_sha256,
+        d.source_rule_ids::text[] AS source_rule_ids,
+        d.metadata_json,
+        d.created_at::text AS created_at,
+        d.commit_id::text AS commit_id,
+        c.scope::text AS commit_scope
+      FROM memory_execution_decisions d
+      LEFT JOIN memory_commits c ON c.id = d.commit_id
+      WHERE d.scope = $1 AND d.id = $2::uuid
       LIMIT 1
       `,
       [tenancy.scope_key, uriParts.id],
@@ -278,9 +298,7 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
         metadata: row.metadata_json && typeof row.metadata_json === "object" ? row.metadata_json : {},
         created_at: row.created_at,
         commit_id: row.commit_id,
-        commit_uri: row.commit_id
-          ? buildAionisUri({ tenant_id: tenancy.tenant_id, scope: tenancy.scope, type: "commit", id: row.commit_id })
-          : null,
+        commit_uri: buildCommitUri(tenancy.tenant_id, row.commit_scope, row.commit_id, defaultTenantId),
       },
     };
   }
@@ -312,9 +330,11 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
       n.created_at::text AS created_at,
       n.updated_at::text AS updated_at,
       n.commit_id::text AS commit_id,
+      c.scope::text AS commit_scope,
       CASE WHEN n.type = 'topic'::memory_node_type THEN COALESCE(n.slots->>'topic_state', 'active') ELSE NULL END AS topic_state,
       CASE WHEN n.type = 'topic'::memory_node_type AND (n.slots->>'member_count') ~ '^[0-9]+$' THEN (n.slots->>'member_count')::int ELSE NULL END AS member_count
     FROM memory_nodes n
+    LEFT JOIN memory_commits c ON c.id = n.commit_id
     WHERE n.scope = $1
       AND n.id = $2::uuid
       AND n.type::text = $3
@@ -369,9 +389,7 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
     node.importance = row.importance;
     node.confidence = row.confidence;
     node.commit_id = row.commit_id;
-    node.commit_uri = row.commit_id
-      ? buildAionisUri({ tenant_id: tenancy.tenant_id, scope: tenancy.scope, type: "commit", id: row.commit_id })
-      : null;
+    node.commit_uri = buildCommitUri(tenancy.tenant_id, row.commit_scope, row.commit_id, defaultTenantId);
   }
 
   return {

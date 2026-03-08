@@ -164,6 +164,30 @@ function nodeEmbedText(n: PreparedNode, fallbackEventText: string | undefined): 
   return summary ?? title ?? null;
 }
 
+function assertSingleScopeWrite(scope: string, scopePublic: string, nodes: PreparedNode[], edges: PreparedEdge[]): void {
+  const crossScopeNode = nodes.find((n) => n.scope !== scope);
+  if (crossScopeNode) {
+    badRequest("cross_scope_node_not_allowed", "write batch cannot override node scope", {
+      request_scope: scopePublic,
+      request_scope_key: scope,
+      node_id: crossScopeNode.id,
+      client_id: crossScopeNode.client_id ?? null,
+      node_scope_key: crossScopeNode.scope,
+    });
+  }
+  const crossScopeEdge = edges.find((e) => e.scope !== scope);
+  if (crossScopeEdge) {
+    badRequest("cross_scope_edge_not_allowed", "write batch cannot override edge scope", {
+      request_scope: scopePublic,
+      request_scope_key: scope,
+      edge_id: crossScopeEdge.id,
+      edge_scope_key: crossScopeEdge.scope,
+      src_id: crossScopeEdge.src_id,
+      dst_id: crossScopeEdge.dst_id,
+    });
+  }
+}
+
 export async function prepareMemoryWrite(
   body: unknown,
   defaultScope: string,
@@ -283,6 +307,8 @@ export async function prepareMemoryWrite(
     return { ...e, id, scope: edgeScope, src_id, dst_id };
   });
 
+  assertSingleScopeWrite(scope, tenancy.scope, nodes, edges);
+
   // Embeddings are a derived artifact: we do NOT block /write.
   // If auto_embed is enabled and a provider is configured, we only compute an embed_text
   // that a worker can use to backfill embeddings asynchronously.
@@ -334,8 +360,8 @@ export async function applyMemoryWrite(
   const nodes = prepared.nodes;
   const edges = prepared.edges;
 
-  // Enforce scope policy: nodes/edges should not cross scopes by default.
-  // We allow node-level scope overrides, but edges must match both endpoints' scopes unless explicitly enabled.
+  // Each write batch must stay in a single scope because commit ids and URIs are scope-local.
+  assertSingleScopeWrite(scope, prepared.scope_public, nodes, edges);
   const localNodeScope = new Map(nodes.map((n) => [n.id, n.scope]));
 
   // Guard against explicit-id collisions across scopes.
