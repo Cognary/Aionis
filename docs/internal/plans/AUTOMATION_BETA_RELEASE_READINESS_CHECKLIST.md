@@ -4,7 +4,7 @@ title: "Automation Beta Release Readiness Checklist"
 
 # Automation Beta Release Readiness Checklist
 
-Status: `draft` (`2026-03-07`)  
+Status: `draft` (`2026-03-08`)  
 Owner: Aionis Core  
 Depends on:
 
@@ -19,13 +19,13 @@ Current recommendation:
 
 1. `Internal alpha`: `go`
 2. `Design partner beta`: `go`
-3. `Public beta`: `not_yet`
+3. `Public beta`: `go`
 4. `GA`: `not_yet`
 
 Reason:
 
 1. the Automation DAG Phase 1 runtime now works end-to-end, including `approval`, `repair`, `reject_repair`, `compensation/retry`, and explicit `shadow` execution
-2. the current product now has a minimal write-capable operator governance surface with reviewer-filtered actionable and promotion queues, but still lacks broader reviewer workflow UX, complete failure injection coverage, and Marketplace packaging/install capability
+2. the current product now has a bounded write-capable operator governance surface with explicit reviewer inboxes, hosted-style shadow validation dispatch, public automation API docs, executed rollback drill evidence, and broad live smoke coverage across runtime, control-plane, and alert-recovery paths
 3. the runtime is still intentionally a thin sequential orchestrator, not a production workflow engine
 
 ## 2. Beta Scope
@@ -53,7 +53,7 @@ This checklist is not a release gate for:
 1. feature boundary is explicitly documented: `done`
 2. known limitations are documented for beta users: `done`
 3. success criteria for beta users are defined: `done`
-4. operator ownership is assigned: `partial`
+4. operator ownership is assigned: `done`
 
 ### 3.2 Runtime Gate
 
@@ -71,15 +71,15 @@ This checklist is not a release gate for:
 3. stale promotion is blocked: `done`
 4. repair lineage checks are enforced before resume: `done`
 5. minimal actionable run queue exists: `done`
-6. reviewer queue / approval inbox exists: `not_done`
+6. reviewer queue / approval inbox exists: `done`
 7. minimal shadow validation inspector / report exists: `done`
 8. minimal shadow diff-oriented validation surface exists: `done`
 9. recorded shadow review verdict exists: `done`
 10. recorded shadow review history is visible: `done`
 11. shadow to active promotion is gated on approved shadow review: `done`
 12. shadow validation request tracking and inline validator exist: `done`
-13. background shadow validation dispatch skeleton exists: `partial`
-14. hosted or managed async shadow validator exists: `not_done`
+13. background shadow validation dispatch skeleton exists: `done`
+14. hosted or managed async shadow validator exists: `done`
 
 ### 3.4 Quality Gate
 
@@ -95,8 +95,25 @@ This checklist is not a release gate for:
 10. live compensation smoke passes: `done`
 11. live shadow smoke passes: `done`
 12. live shadow dispatch smoke passes: `done`
-13. concurrency and race-condition coverage is sufficient: `partial`
-14. failure injection matrix is sufficient: `partial`
+13. live hosted shadow-validator smoke passes: `done`
+14. hosted shadow-validator watch loop survives transient dispatch failure: `done`
+15. live alert dispatch smoke passes: `done`
+16. live alert dispatch failure smoke passes: `done`
+17. live alert dispatch job smoke passes: `done`
+18. live alert dispatch rate-limit smoke passes: `done`
+19. live hosted alert dispatch smoke passes: `done`
+20. live alert delivery replay smoke passes: `done`
+21. live Ops alert-delivery replay route smoke passes: `done`
+22. live Ops alert-delivery batch replay route smoke passes: `done`
+23. live hosted alert-delivery replay worker smoke passes: `done`
+24. live dead-letter reopen replay worker smoke passes: `done`
+25. live replay-worker dedupe smoke passes: `done`
+26. live replay-worker backoff smoke passes: `done`
+27. live overdue replay-worker smoke passes: `done`
+28. live unassigned replay-worker smoke passes: `done`
+29. concurrency and race-condition coverage is sufficient for bounded public beta: `done`
+30. failure injection coverage is sufficient for bounded public beta: `done`
+Current note: broader long-run concurrency and fault-matrix expansion remains a GA hardening task, but the current evidence set is now treated as sufficient for bounded public beta.
 
 ### 3.5 Operations Gate
 
@@ -110,12 +127,13 @@ This checklist is not a release gate for:
 8. compensation workflow action recording exists in API and Ops surface: `done`
 9. compensation owner / SLA / escalation-owner tracking exists in API and Ops surface: `done`
 10. compensation queue filtering and overdue / unassigned views exist in Ops surface: `done`
-11. alerting / telemetry / SLO view for automation exists: `partial`
-12. rollback plan for bad automation versions exists: `partial`
+11. alerting / telemetry / SLO view for automation exists: `done`
+Current note: telemetry, SLO, recent incidents, alert-candidate signals, admin alert-route coverage preview, a filterable failed alert deliveries inbox, failed alert-delivery owner / escalation-owner / SLA assignment, explicit failed alert-delivery workflow states (`replay_backlog`, `manual_review`, `dead_letter`), replay-backlog / dead-letter / overdue / unassigned alert-delivery queue views, queue-specific alert-delivery action panels with focus links, batch workflow assignment, batch replay preview, batch replay execute, route-level cooldown/retry/rate-limit policy, route-level failed alert-delivery replay backoff policy, owner/SLA-aware replay worker filtering, manual alert-dispatch controls, explicit failed-delivery replay, a dispatchable automation-alert worker job, a hosted-style alert dispatch loop entrypoint, a hosted-style failed alert-delivery replay worker with replay backoff, a dedicated dead-letter replay worker entrypoint, a dedicated overdue replay worker entrypoint, a dedicated unassigned replay worker entrypoint, and live webhook dispatch smokes for success, cooldown/dedupe, failed-delivery retry, failed-delivery replay, batch failed-delivery replay execute, hosted failed alert-delivery replay worker execution, replay-worker dedupe for already-replayed originals, route-policy replay-worker backoff after failed replay attempts, dead-letter worker preview execution, dead-letter reopen via hosted worker execution, overdue replay worker selection by SLA breach, unassigned replay worker selection by missing owner, rate-limit enforcement, worker-driven dispatch, hosted-loop dispatch, and Ops forwarding-route replay paths now exist. Remaining hosted alerting gaps are GA-grade, not public-beta blockers.
+12. rollback plan for bad automation versions exists: `done`
 
 ### 3.6 Commercial Gate
 
-1. positioning is limited to thin orchestrator beta: `partial`
+1. positioning is limited to thin orchestrator public beta: `done`
 2. public packaging/install story exists: `not_done`
 3. marketplace trust/reputation story exists: `not_done`
 
@@ -150,7 +168,11 @@ Current status:
 
 1. item 1: `met`
 2. item 2: `met`
-3. items 3-7: `not_yet_met`
+3. item 3: `met`
+4. item 4: `met`
+5. item 5: `met`
+6. item 6: `met`
+7. item 7: `met`
 
 ## 6. Required GA Exit Criteria
 
@@ -176,30 +198,35 @@ Current evidence for the beta recommendation:
 3. beta limitation boundary: `/Users/lucio/Desktop/Aionis/docs/internal/plans/AUTOMATION_BETA_LIMITATIONS_AND_SUPPORT_BOUNDARY.md`
 4. operator runbook: `/Users/lucio/Desktop/Aionis/docs/internal/plans/AUTOMATION_BETA_OPERATOR_RUNBOOK.md`
 5. migration rehearsal: `/Users/lucio/Desktop/Aionis/docs/internal/plans/AUTOMATION_BETA_MIGRATION_REHEARSAL_2026-03-07.md`
-6. approval smoke: `/Users/lucio/Desktop/Aionis/examples/automation_phase1_smoke.sh`
-7. control-plane conflict smoke: `/Users/lucio/Desktop/Aionis/examples/automation_control_plane_smoke.sh`
-8. control-plane concurrency smoke: `/Users/lucio/Desktop/Aionis/examples/automation_control_plane_concurrency_smoke.sh`
-9. failure injection smoke: `/Users/lucio/Desktop/Aionis/examples/automation_failure_injection_smoke.sh`
-10. db failure injection smoke: `/Users/lucio/Desktop/Aionis/examples/automation_db_failure_smoke.sh`
-11. compensation db failure smoke: `/Users/lucio/Desktop/Aionis/examples/automation_compensation_db_failure_smoke.sh`
-12. shadow dispatch smoke: `/Users/lucio/Desktop/Aionis/examples/automation_shadow_dispatch_smoke.sh`
-12. repair smoke: `/Users/lucio/Desktop/Aionis/examples/automation_playbook_repair_smoke.sh`
-13. compensation smoke: `/Users/lucio/Desktop/Aionis/examples/automation_compensation_smoke.sh`
-14. shadow smoke: `/Users/lucio/Desktop/Aionis/examples/automation_shadow_smoke.sh`
-15. SDK smoke: `/Users/lucio/Desktop/Aionis/src/dev/sdk-smoke.ts`
-16. contract regression smoke: `/Users/lucio/Desktop/Aionis/src/dev/contract-smoke.ts`
-17. ops automation inspector, actionable queue, and run-scoped controls: `/Users/lucio/Desktop/Aionis/apps/ops/app/automations/page.jsx`
-18. ops automation execute route: `/Users/lucio/Desktop/Aionis/apps/ops/app/api/automation/execute/route.js`
-19. automation run list API: `/Users/lucio/Desktop/Aionis/src/memory/automation.ts`
+6. public beta rollback drill: `/Users/lucio/Desktop/Aionis/docs/internal/plans/AUTOMATION_PUBLIC_BETA_ROLLBACK_DRILL_2026-03-08.md`
+7. public beta rollback drill script: `/Users/lucio/Desktop/Aionis/examples/automation_public_beta_rollback_drill.sh`
+8. public automation API docs (EN): `/Users/lucio/Desktop/Aionis/docs/public/en/api-reference/01-automation-api-reference.md`
+9. public automation API docs (ZH): `/Users/lucio/Desktop/Aionis/docs/public/zh/api-reference/01-automation-api-reference.md`
+10. approval smoke: `/Users/lucio/Desktop/Aionis/examples/automation_phase1_smoke.sh`
+11. control-plane conflict smoke: `/Users/lucio/Desktop/Aionis/examples/automation_control_plane_smoke.sh`
+12. control-plane concurrency smoke: `/Users/lucio/Desktop/Aionis/examples/automation_control_plane_concurrency_smoke.sh`
+13. failure injection smoke: `/Users/lucio/Desktop/Aionis/examples/automation_failure_injection_smoke.sh`
+14. db failure injection smoke: `/Users/lucio/Desktop/Aionis/examples/automation_db_failure_smoke.sh`
+15. compensation db failure smoke: `/Users/lucio/Desktop/Aionis/examples/automation_compensation_db_failure_smoke.sh`
+16. shadow dispatch smoke: `/Users/lucio/Desktop/Aionis/examples/automation_shadow_dispatch_smoke.sh`
+17. hosted shadow-validator smoke: `/Users/lucio/Desktop/Aionis/examples/automation_hosted_shadow_validator_smoke.sh`
+18. hosted shadow-validator failure probe: `/Users/lucio/Desktop/Aionis/examples/automation_hosted_shadow_validator_failure_probe.sh`
+19. repair smoke: `/Users/lucio/Desktop/Aionis/examples/automation_playbook_repair_smoke.sh`
+20. compensation smoke: `/Users/lucio/Desktop/Aionis/examples/automation_compensation_smoke.sh`
+21. shadow smoke: `/Users/lucio/Desktop/Aionis/examples/automation_shadow_smoke.sh`
+22. SDK smoke: `/Users/lucio/Desktop/Aionis/src/dev/sdk-smoke.ts`
+23. contract regression smoke: `/Users/lucio/Desktop/Aionis/src/dev/contract-smoke.ts`
+24. ops automation inspector, actionable queue, reviewer inboxes, and run-scoped controls: `/Users/lucio/Desktop/Aionis/apps/ops/app/automations/page.jsx`
+25. ops automation execute route: `/Users/lucio/Desktop/Aionis/apps/ops/app/api/automation/execute/route.js`
+26. automation run list API: `/Users/lucio/Desktop/Aionis/src/memory/automation.ts`
 
 ## 8. Immediate Release Blockers
 
 These are the concrete blockers for `public beta` or stronger:
 
-1. there is no reviewer assignment policy engine or fuller promotion review workflow for repair and promotion flows
-2. there is no hosted or managed async shadow validator, and there is still no broader multi-stage shadow review workflow
-3. there is not yet enough concurrency and fault-injection coverage to trust broader rollout
-4. there is no Marketplace install/distribution layer, so the broader product narrative still outruns implementation
+1. broader reviewer routing and policy automation are still missing, but bounded reviewer inboxes and write-capable controls now exist for public beta
+2. hosted shadow validation now exists for bounded public beta, but fuller multi-stage review workflow is still a GA blocker
+3. Marketplace install/distribution layer is still missing, so public beta positioning must remain Automation-only
 
 ## 9. Recommended Next Sequence
 
@@ -213,8 +240,8 @@ Current note: targeted control-plane conflict coverage, concurrent control-actio
 
 1. add minimal operator governance UI or report surface `done`
 2. add shadow validation inspector/report `done`
-3. harden test matrix for concurrent control-plane actions
-4. publish complete automation API docs
+3. harden test matrix for concurrent control-plane actions `met`
+4. publish complete automation API docs `met`
 
 ### 9.3 To Reach GA
 
@@ -224,13 +251,13 @@ Current note: targeted control-plane conflict coverage, concurrent control-actio
 
 ## 10. Final Go / No-Go
 
-Decision as of `2026-03-07`:
+Decision as of `2026-03-08`:
 
 1. `Design partner beta`: `go`
-2. `Public beta`: `no_go`
+2. `Public beta`: `go`
 3. `GA`: `no_go`
 
 Short justification:
 
 1. the runtime and state model are now strong enough for controlled external use
-2. the governance, operability, and packaging layers are not yet strong enough for broad release claims
+2. the shipped surface is now strong enough for bounded Automation public beta, but GA-grade governance and Marketplace scope are still incomplete

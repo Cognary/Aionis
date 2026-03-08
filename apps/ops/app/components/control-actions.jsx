@@ -138,6 +138,12 @@ export default function ControlActions({ dangerousActionsEnabled = false }) {
   const [alertTarget, setAlertTarget] = useState("");
   const [alertLabel, setAlertLabel] = useState("ops-route");
   const [alertEvents, setAlertEvents] = useState("*");
+  const [alertCooldownSeconds, setAlertCooldownSeconds] = useState(1800);
+  const [alertMaxDispatchesPerWindow, setAlertMaxDispatchesPerWindow] = useState(1);
+  const [alertRetryMaxAttempts, setAlertRetryMaxAttempts] = useState(1);
+  const [alertRetryBackoffMs, setAlertRetryBackoffMs] = useState(250);
+  const [alertReplayBackoffSeconds, setAlertReplayBackoffSeconds] = useState(300);
+  const [alertWindowSeconds, setAlertWindowSeconds] = useState(300);
 
   const [replayTenantId, setReplayTenantId] = useState("default");
   const [replayStatuses, setReplayStatuses] = useState("failed,dead_letter");
@@ -343,7 +349,13 @@ export default function ControlActions({ dangerousActionsEnabled = false }) {
               events: alertEvents
                 .split(",")
                 .map((v) => v.trim())
-                .filter(Boolean)
+                .filter(Boolean),
+              cooldown_seconds: alertCooldownSeconds,
+              max_dispatches_per_window: alertMaxDispatchesPerWindow,
+              retry_max_attempts: alertRetryMaxAttempts,
+              retry_backoff_ms: alertRetryBackoffMs,
+              replay_backoff_seconds: alertReplayBackoffSeconds,
+              window_seconds: alertWindowSeconds
             });
           }}
         >
@@ -370,6 +382,42 @@ export default function ControlActions({ dangerousActionsEnabled = false }) {
           <label>
             events (comma-separated)
             <input value={alertEvents} onChange={(e) => setAlertEvents(e.target.value)} placeholder="*,incident_publish.failed" />
+          </label>
+          <label>
+            cooldown seconds
+            <input type="number" value={alertCooldownSeconds} min={0} max={604800} onChange={(e) => setAlertCooldownSeconds(Number(e.target.value) || 0)} />
+          </label>
+          <label>
+            retry max attempts
+            <input type="number" value={alertRetryMaxAttempts} min={1} max={4} onChange={(e) => setAlertRetryMaxAttempts(Number(e.target.value) || 1)} />
+          </label>
+          <label>
+            max dispatches / window
+            <input
+              type="number"
+              value={alertMaxDispatchesPerWindow}
+              min={1}
+              max={1000}
+              onChange={(e) => setAlertMaxDispatchesPerWindow(Number(e.target.value) || 1)}
+            />
+          </label>
+          <label>
+            retry backoff ms
+            <input type="number" value={alertRetryBackoffMs} min={0} max={5000} onChange={(e) => setAlertRetryBackoffMs(Number(e.target.value) || 0)} />
+          </label>
+          <label>
+            replay backoff seconds
+            <input
+              type="number"
+              value={alertReplayBackoffSeconds}
+              min={0}
+              max={604800}
+              onChange={(e) => setAlertReplayBackoffSeconds(Number(e.target.value) || 0)}
+            />
+          </label>
+          <label>
+            window seconds
+            <input type="number" value={alertWindowSeconds} min={60} max={604800} onChange={(e) => setAlertWindowSeconds(Number(e.target.value) || 60)} />
           </label>
           <button type="submit" disabled={disabled}>{busy ? "Running..." : "Create Route"}</button>
         </form>

@@ -62,7 +62,7 @@ async function dispatchOnce(input: {
     data = { raw: text };
   }
   if (!response.ok) {
-    throw new Error(`hosted alert dispatch failed: http_${response.status} ${JSON.stringify(data)}`);
+    throw new Error(`automation alert dispatch failed: http_${response.status} ${JSON.stringify(data)}`);
   }
   return {
     status: response.status,
@@ -85,21 +85,16 @@ async function main() {
   const tenantId = argValue("--tenant-id") || process.env.MEMORY_TENANT_ID || "";
   const scope = argValue("--scope") || process.env.MEMORY_SCOPE || "";
   const automationId = argValue("--automation-id") || "";
-  const windowHours = asInt(argValue("--window-hours") || process.env.HOSTED_ALERT_DISPATCH_WINDOW_HOURS, 24, 1, 24 * 30);
-  const incidentLimit = asInt(argValue("--incident-limit") || process.env.HOSTED_ALERT_DISPATCH_INCIDENT_LIMIT, 8, 1, 100);
-  const dedupeTtlSeconds = asInt(
-    argValue("--dedupe-ttl-seconds") || process.env.HOSTED_ALERT_DISPATCH_DEDUPE_TTL_SECONDS,
-    1800,
-    60,
-    7 * 24 * 3600,
-  );
+  const windowHours = asInt(argValue("--window-hours"), 24, 1, 24 * 30);
+  const incidentLimit = asInt(argValue("--incident-limit"), 8, 1, 100);
+  const dedupeTtlSeconds = asInt(argValue("--dedupe-ttl-seconds"), 1800, 60, 7 * 24 * 3600);
   const candidateCodes = splitCsv(argValue("--candidate-codes") || process.env.AUTOMATION_ALERT_CANDIDATE_CODES);
   const dryRun = hasFlag("--dry-run");
-  const once = hasFlag("--once");
-  const intervalMs = asInt(argValue("--interval-ms") || process.env.HOSTED_ALERT_DISPATCH_INTERVAL_MS, 5000, 250, 24 * 3600 * 1000);
-  const maxRuns = asInt(argValue("--max-runs") || process.env.HOSTED_ALERT_DISPATCH_MAX_RUNS, 0, 0, 100000);
+  const watch = hasFlag("--watch");
+  const intervalMs = asInt(argValue("--interval-ms"), 5000, 250, 24 * 3600 * 1000);
+  const maxRuns = asInt(argValue("--max-runs"), 0, 0, 100000);
 
-  if (once) {
+  if (!watch) {
     const out = await dispatchOnce({
       baseUrl,
       adminToken,
@@ -117,7 +112,6 @@ async function main() {
       JSON.stringify(
         {
           ok: true,
-          hosted: true,
           watch: false,
           dry_run: dryRun,
           base_url: baseUrl,
@@ -138,7 +132,6 @@ async function main() {
     JSON.stringify(
       {
         ok: true,
-        hosted: true,
         watch: true,
         dry_run: dryRun,
         base_url: baseUrl,
@@ -152,7 +145,6 @@ async function main() {
       2,
     ),
   );
-
   let iteration = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {

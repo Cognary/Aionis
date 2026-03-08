@@ -176,6 +176,16 @@ export type AutomationTelemetryResponse = {
     slo?: Record<string, unknown>;
     [k: string]: unknown;
   };
+  alert_candidates: Array<{
+    code: string;
+    severity: "warning" | "critical" | string;
+    summary: string;
+    recommended_event_type?: string;
+    threshold?: number | null;
+    current_value?: number | null;
+    suggested_action?: string;
+    [k: string]: unknown;
+  }>;
   root_causes: Array<{
     root_cause_code?: string | null;
     count: number;
@@ -281,6 +291,43 @@ export type ControlAlertDeliveriesQuery = {
   status?: "sent" | "failed" | "skipped";
   limit?: number;
   offset?: number;
+};
+
+export type ControlAutomationAlertPreviewInput = {
+  tenant_id?: string;
+  scope?: string;
+  automation_id?: string;
+  window_hours?: number;
+  incident_limit?: number;
+};
+
+export type ControlAutomationAlertDispatchInput = {
+  tenant_id?: string;
+  scope?: string;
+  automation_id?: string;
+  window_hours?: number;
+  incident_limit?: number;
+  candidate_codes?: string[];
+  dry_run?: boolean;
+  dedupe_ttl_seconds?: number;
+};
+
+export type ControlAlertDeliveryReplayInput = {
+  ids: string[];
+  dry_run?: boolean;
+  dedupe_ttl_seconds?: number;
+  allow_disabled_route?: boolean;
+  override_target?: string;
+};
+
+export type ControlAlertDeliveryAssignInput = {
+  ids: string[];
+  owner?: string | null;
+  escalation_owner?: string | null;
+  sla_target_at?: string | null;
+  workflow_state?: "replay_backlog" | "manual_review" | "dead_letter" | null;
+  note?: string | null;
+  actor?: string;
 };
 
 export type ControlIncidentPublishJobInput = {
@@ -1358,6 +1405,98 @@ export type ControlAlertRoutesResponse = {
 
 export type ControlAlertDeliveriesResponse = {
   ok: boolean;
+  deliveries: Array<Record<string, unknown>>;
+};
+
+export type ControlAutomationAlertPreviewResponse = {
+  ok: boolean;
+  tenant_id?: string | null;
+  scope?: string | null;
+  window_hours?: number | null;
+  automation_id?: string | null;
+  summary?: Record<string, unknown>;
+  alert_previews: Array<{
+    code?: string;
+    severity?: string;
+    summary?: string;
+    recommended_event_type?: string;
+    threshold?: number | null;
+    current_value?: number | null;
+    suggested_action?: string;
+    route_count: number;
+    dispatch_ready: boolean;
+    routes: Array<{
+      id: string;
+      label?: string | null;
+      channel: string;
+      status?: string;
+      target?: string | null;
+      [k: string]: unknown;
+    }>;
+    [k: string]: unknown;
+  }>;
+};
+
+export type ControlAutomationAlertDispatchResponse = {
+  ok: boolean;
+  tenant_id?: string | null;
+  scope?: string | null;
+  window_hours?: number | null;
+  automation_id?: string | null;
+  dry_run: boolean;
+  summary?: Record<string, unknown>;
+  candidates_considered: number;
+  matched_routes: number;
+  dispatched: number;
+  failed: number;
+  skipped: number;
+  dry_run_rows: number;
+  results: Array<{
+    route_id?: string | null;
+    route_label?: string | null;
+    channel?: string | null;
+    event_type?: string | null;
+    code?: string | null;
+    severity?: string | null;
+    dedupe_key?: string | null;
+    status: "dry_run" | "sent" | "failed" | "skipped" | string;
+    skipped_reason?: string | null;
+    response_code?: number | null;
+    error?: string | null;
+    preview_body?: unknown;
+    [k: string]: unknown;
+  }>;
+};
+
+export type ControlAlertDeliveryReplayResponse = {
+  ok: boolean;
+  dry_run: boolean;
+  found_deliveries: number;
+  replayed: number;
+  failed: number;
+  skipped: number;
+  dry_run_rows: number;
+  results: Array<{
+    delivery_id?: string | null;
+    replay_of_delivery_id?: string | null;
+    route_id?: string | null;
+    route_label?: string | null;
+    channel?: string | null;
+    event_type?: string | null;
+    code?: string | null;
+    dedupe_key?: string | null;
+    status: "dry_run" | "sent" | "failed" | "skipped" | string;
+    skipped_reason?: string | null;
+    response_code?: number | null;
+    error?: string | null;
+    preview_body?: unknown;
+    [k: string]: unknown;
+  }>;
+};
+
+export type ControlAlertDeliveryAssignResponse = {
+  ok: boolean;
+  updated: number;
   deliveries: Array<Record<string, unknown>>;
 };
 

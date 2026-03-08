@@ -947,6 +947,28 @@ export async function listControlAlertRoutes(
   }
 }
 
+export async function getControlAlertRouteById(db: Db, idRaw: string) {
+  const id = trimOrNull(idRaw);
+  if (!id) return null;
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, tenant_id, channel, label, events, status, target, secret, headers, metadata, created_at, updated_at
+        FROM control_alert_routes
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [id],
+      );
+      return q.rows[0] ?? null;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return null;
+    throw err;
+  }
+}
+
 export async function updateControlAlertRouteStatus(db: Db, idRaw: string, statusRaw: AlertRouteStatus) {
   const id = trimOrNull(idRaw);
   if (!id) throw new Error("id is required");
@@ -1079,6 +1101,80 @@ export async function listControlAlertDeliveries(
   }
 }
 
+export async function listControlAlertDeliveriesByIds(db: Db, ids: string[]) {
+  const normalized = Array.from(
+    new Set(
+      (Array.isArray(ids) ? ids : [])
+        .map((id) => trimOrNull(id))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ).slice(0, 500);
+  if (normalized.length === 0) return [];
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT id, delivery_id, route_id, tenant_id, event_type, status, request_id, response_code, response_body, error, metadata, created_at
+        FROM control_alert_deliveries
+        WHERE delivery_id = ANY($1::uuid[])
+        ORDER BY created_at DESC
+        `,
+        [normalized],
+      );
+      return q.rows;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
+export async function updateControlAlertDeliveriesMetadata(
+  db: Db,
+  ids: string[],
+  buildNextMetadata: (row: any) => Record<string, unknown>,
+) {
+  const normalized = Array.from(
+    new Set(
+      (Array.isArray(ids) ? ids : [])
+        .map((id) => trimOrNull(id))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ).slice(0, 500);
+  if (normalized.length === 0) return [];
+  try {
+    return await withTx(db, async (client) => {
+      const existing = await client.query(
+        `
+        SELECT id, delivery_id, route_id, tenant_id, event_type, status, request_id, response_code, response_body, error, metadata, created_at
+        FROM control_alert_deliveries
+        WHERE delivery_id = ANY($1::uuid[])
+        ORDER BY created_at DESC
+        `,
+        [normalized],
+      );
+      const out = [];
+      for (const row of existing.rows) {
+        const nextMetadata = asJson(buildNextMetadata(row));
+        const updated = await client.query(
+          `
+          UPDATE control_alert_deliveries
+          SET metadata = $2::jsonb
+          WHERE delivery_id = $1::uuid
+          RETURNING id, delivery_id, route_id, tenant_id, event_type, status, request_id, response_code, response_body, error, metadata, created_at
+          `,
+          [row.delivery_id, JSON.stringify(nextMetadata)],
+        );
+        if (updated.rows[0]) out.push(updated.rows[0]);
+      }
+      return out;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return [];
+    throw err;
+  }
+}
+
 export async function findRecentControlAlertDeliveryByDedupe(
   db: Db,
   args: {
@@ -1110,6 +1206,38 @@ export async function findRecentControlAlertDeliveryByDedupe(
     });
   } catch (err: any) {
     if (String(err?.code ?? "") === "42P01") return null;
+    throw err;
+  }
+}
+
+export async function countRecentControlAlertDeliveriesByRoute(
+  db: Db,
+  args: {
+    route_id: string;
+    ttl_seconds: number;
+    status?: "sent" | "failed" | "skipped";
+  },
+) {
+  const routeId = trimOrNull(args.route_id);
+  if (!routeId) return 0;
+  const ttlSeconds = Number.isFinite(args.ttl_seconds) ? Math.max(60, Math.min(7 * 24 * 3600, Math.trunc(args.ttl_seconds))) : 1800;
+  const status = trimOrNull(args.status) || "sent";
+  try {
+    return await withClient(db, async (client) => {
+      const q = await client.query(
+        `
+        SELECT count(*)::int AS n
+        FROM control_alert_deliveries
+        WHERE route_id = $1
+          AND status = $2
+          AND created_at >= now() - (($3::text || ' seconds')::interval)
+        `,
+        [routeId, status, ttlSeconds],
+      );
+      return Number(q.rows[0]?.n ?? 0) || 0;
+    });
+  } catch (err: any) {
+    if (String(err?.code ?? "") === "42P01") return 0;
     throw err;
   }
 }

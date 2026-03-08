@@ -41,6 +41,14 @@ import type {
   ApiErrorPayload,
   ControlAlertDeliveriesQuery,
   ControlAlertDeliveriesResponse,
+  ControlAlertDeliveryAssignInput,
+  ControlAlertDeliveryAssignResponse,
+  ControlAlertDeliveryReplayInput,
+  ControlAlertDeliveryReplayResponse,
+  ControlAutomationAlertDispatchInput,
+  ControlAutomationAlertDispatchResponse,
+  ControlAutomationAlertPreviewInput,
+  ControlAutomationAlertPreviewResponse,
   ControlAlertRouteInput,
   ControlAlertRouteResponse,
   ControlAlertRoutesQuery,
@@ -695,6 +703,50 @@ export class AionisClient {
     opts?: RequestOptions,
   ): Promise<AionisResponse<ControlAlertDeliveriesResponse>> {
     return this.requestGet<ControlAlertDeliveriesResponse>("/v1/admin/control/alerts/deliveries", query, opts);
+  }
+
+  async controlReplayAlertDeliveries(
+    input: ControlAlertDeliveryReplayInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ControlAlertDeliveryReplayResponse>> {
+    return this.requestPost<ControlAlertDeliveryReplayInput, ControlAlertDeliveryReplayResponse>(
+      "/v1/admin/control/alerts/deliveries/replay",
+      input,
+      opts,
+    );
+  }
+
+  async controlAssignAlertDeliveries(
+    input: ControlAlertDeliveryAssignInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ControlAlertDeliveryAssignResponse>> {
+    return this.requestPost<ControlAlertDeliveryAssignInput, ControlAlertDeliveryAssignResponse>(
+      "/v1/admin/control/alerts/deliveries/assign",
+      input,
+      opts,
+    );
+  }
+
+  async controlAutomationAlertPreview(
+    input: ControlAutomationAlertPreviewInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ControlAutomationAlertPreviewResponse>> {
+    return this.requestPost<ControlAutomationAlertPreviewInput, ControlAutomationAlertPreviewResponse>(
+      "/v1/admin/control/automations/alerts/preview",
+      input,
+      opts,
+    );
+  }
+
+  async controlAutomationAlertDispatch(
+    input: ControlAutomationAlertDispatchInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ControlAutomationAlertDispatchResponse>> {
+    return this.requestPost<ControlAutomationAlertDispatchInput, ControlAutomationAlertDispatchResponse>(
+      "/v1/admin/control/automations/alerts/dispatch",
+      input,
+      opts,
+    );
   }
 
   async controlEnqueueIncidentPublishJob(

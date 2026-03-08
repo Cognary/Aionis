@@ -83,6 +83,7 @@ async function main() {
   const dryRun = hasFlag("--dry-run");
   const watch = hasFlag("--watch");
   const intervalMs = Math.max(250, Number(argValue("--interval-ms") || "5000") || 5000);
+  const maxRuns = Math.max(0, Number(argValue("--max-runs") || "0") || 0);
 
   if (!watch) {
     const out = await dispatchOnce({
@@ -102,22 +103,38 @@ async function main() {
   }
 
   // eslint-disable-next-line no-console
-  console.log(JSON.stringify({ ok: true, watch: true, base_url: baseUrl, interval_ms: intervalMs, limit, dry_run: dryRun }, null, 2));
+  console.log(JSON.stringify({ ok: true, watch: true, base_url: baseUrl, interval_ms: intervalMs, limit, dry_run: dryRun, max_runs: maxRuns || null }, null, 2));
+  let iteration = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const out = await dispatchOnce({
-      baseUrl,
-      apiKey,
-      bearer,
-      tenantId,
-      scope,
-      automationId,
-      actor,
-      limit,
-      dryRun,
-    });
-    // eslint-disable-next-line no-console
-    console.log(JSON.stringify({ ts: new Date().toISOString(), ...out }, null, 2));
+    iteration += 1;
+    try {
+      const out = await dispatchOnce({
+        baseUrl,
+        apiKey,
+        bearer,
+        tenantId,
+        scope,
+        automationId,
+        actor,
+        limit,
+        dryRun,
+      });
+      // eslint-disable-next-line no-console
+      console.log(JSON.stringify({ ts: new Date().toISOString(), iteration, ...out }, null, 2));
+    } catch (err) {
+      // Keep the hosted/watch loop alive across transient API failures.
+      // Operators can inspect the emitted error event without losing the worker.
+      // eslint-disable-next-line no-console
+      console.error(JSON.stringify({
+        ok: false,
+        watch: true,
+        ts: new Date().toISOString(),
+        iteration,
+        error: err instanceof Error ? err.message : String(err),
+      }, null, 2));
+    }
+    if (maxRuns > 0 && iteration >= maxRuns) return;
     await sleep(intervalMs);
   }
 }

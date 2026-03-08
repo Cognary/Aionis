@@ -26,7 +26,7 @@ Recommended product line:
 
 ## 2. Current State
 
-Current status as of `2026-03-07`:
+Current status as of `2026-03-08`:
 
 1. runtime core is `mostly_complete`
 2. governance is `partial`
@@ -36,7 +36,7 @@ Current status as of `2026-03-07`:
 Current release recommendation:
 
 1. `Design partner beta`: `go`
-2. `Public beta`: `no_go`
+2. `Public beta`: `go`
 3. `GA`: `no_go`
 
 ## 3. GA Decision Rule
@@ -113,7 +113,7 @@ GA requirement:
 
 Current blocker:
 
-1. public-beta and GA API docs are incomplete
+1. GA-facing API, managed-service, and escalation docs are still incomplete
 2. the larger roadmap still contains Marketplace language
 3. support and positioning material must stay narrower than the roadmap
 
@@ -168,8 +168,8 @@ Goal:
 Current status:
 
 1. `in_progress`
-2. minimal run-scoped controls, reviewer assignment, an actionable run queue, and a promotion queue now exist in Ops
-3. reviewer inbox semantics, assignment policy, and broader workflow routing are still missing
+2. minimal run-scoped controls, reviewer assignment, an actionable run queue, explicit reviewer inboxes, and a promotion queue now exist in Ops
+3. assignment policy and broader workflow routing are still missing
 
 Scope:
 
@@ -202,8 +202,8 @@ Goal:
 Current status:
 
 1. `in_progress`
-2. a first shadow report API and ops review surface now exist, including node deltas, recent history, recorded review verdicts, review history, review notes, shadow validation request tracking, and a dispatchable validator skeleton with live smoke coverage
-3. a hosted or managed background validator and fuller multi-stage review workflow are still missing
+2. a first shadow report API and ops review surface now exist, including node deltas, recent history, recorded review verdicts, review history, review notes, shadow validation request tracking, and a hosted-style validator loop with live smoke coverage
+3. a fuller multi-stage review workflow is still missing
 
 Scope:
 
@@ -235,7 +235,7 @@ Goal:
 Current status:
 
 1. `in_progress`
-2. run-level compensation assessment, repeat-action guidance, a compensation failures inbox, compensation workflow buckets, owner/escalation-owner/SLA filters, overdue and unassigned queue views, a compensation policy matrix, recorded manual-cleanup / engineering-escalation workflow actions, compensation owner / SLA / escalation-owner tracking, and a first telemetry/SLO surface now exist in API and Ops UI
+2. run-level compensation assessment, repeat-action guidance, a compensation failures inbox, compensation workflow buckets, owner/escalation-owner/SLA filters, overdue and unassigned queue views, a compensation policy matrix, recorded manual-cleanup / engineering-escalation workflow actions, compensation owner / SLA / escalation-owner tracking, and a first telemetry/SLO surface with alert candidates, alert-route coverage preview, a filterable failed alert deliveries inbox, failed alert-delivery owner / escalation-owner / SLA assignment, explicit failed alert-delivery workflow states (`replay_backlog`, `manual_review`, `dead_letter`), replay-backlog / dead-letter / overdue / unassigned alert-delivery queue views, queue-specific alert-delivery action panels with focus links, batch workflow assignment, batch replay preview, batch replay execute, route-level cooldown/retry/rate-limit policy, route-level failed alert-delivery replay backoff policy, owner/SLA-aware replay worker filtering, manual alert-dispatch controls, explicit failed-delivery replay, a dispatchable automation-alert worker job, a hosted-style alert-dispatch loop entrypoint, a hosted-style failed alert-delivery replay worker with replay backoff, a dedicated dead-letter replay worker entrypoint, a dedicated overdue replay worker entrypoint, a dedicated unassigned replay worker entrypoint, and live webhook dispatch smokes for success, cooldown/dedupe, failed-delivery retry, failed-delivery replay, batch failed-delivery replay execute, hosted failed alert-delivery replay worker execution, replay-worker dedupe for already-replayed originals, route-policy replay-worker backoff after failed replay attempts, dead-letter worker preview execution, dead-letter reopen via hosted worker execution, overdue replay worker selection by SLA breach, unassigned replay worker selection by missing owner, rate-limit enforcement, worker-driven dispatch, hosted-loop dispatch, and Ops forwarding-route replay paths now exist in API and Ops UI
 3. non-playbook compensators and deeper policy automation are still missing
 
 Scope:

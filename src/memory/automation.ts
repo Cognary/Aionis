@@ -2870,6 +2870,20 @@ export async function automationTelemetry(client: pg.PoolClient, body: unknown, 
         compensation_failure_budget_met: totalRuns > 0 ? compensationFailedRuns / totalRuns <= 0.02 : null,
       },
     },
+    alert_candidates: deriveAutomationAlertCandidates({
+      total_runs: totalRuns,
+      paused_runs: pausedRuns,
+      repair_paused_runs: repairPausedRuns,
+      compensation_failed_runs: compensationFailedRuns,
+      success_rate: terminalRuns > 0 ? Number((succeededRuns / terminalRuns).toFixed(4)) : null,
+      compensation_failure_rate: totalRuns > 0 ? Number((compensationFailedRuns / totalRuns).toFixed(4)) : null,
+      slo: {
+        success_rate_target: 0.95,
+        success_rate_met: terminalRuns > 0 ? succeededRuns / terminalRuns >= 0.95 : null,
+        compensation_failure_budget_target: 0.02,
+        compensation_failure_budget_met: totalRuns > 0 ? compensationFailedRuns / totalRuns <= 0.02 : null,
+      },
+    }),
     root_causes: rootCauses.map((row) => ({
       root_cause_code: row.root_cause_code,
       count: Number(row.count),
@@ -5000,6 +5014,68 @@ function deriveAutomationCompensationWorkflow(run: AutomationRunRow) {
     latest_action: jsonClone(latestAction ?? {}),
     history_count: history.length,
   };
+}
+
+function deriveAutomationAlertCandidates(summary: {
+  total_runs: number;
+  paused_runs: number;
+  repair_paused_runs: number;
+  compensation_failed_runs: number;
+  success_rate: number | null;
+  compensation_failure_rate: number | null;
+  slo?: {
+    success_rate_target?: number;
+    success_rate_met?: boolean | null;
+    compensation_failure_budget_target?: number;
+    compensation_failure_budget_met?: boolean | null;
+  };
+}) {
+  const items: Array<Record<string, unknown>> = [];
+  if (summary.slo?.success_rate_met === false) {
+    items.push({
+      code: "automation_success_rate_below_target",
+      severity: summary.success_rate != null && summary.success_rate < 0.8 ? "critical" : "warning",
+      summary: "Automation terminal success rate is below target.",
+      recommended_event_type: "automation.slo.success_rate",
+      threshold: summary.slo?.success_rate_target ?? 0.95,
+      current_value: summary.success_rate,
+      suggested_action: "Review recent root causes and paused/failed runs before broadening rollout.",
+    });
+  }
+  if (summary.slo?.compensation_failure_budget_met === false) {
+    items.push({
+      code: "automation_compensation_failure_budget_exceeded",
+      severity: summary.compensation_failure_rate != null && summary.compensation_failure_rate > 0.05 ? "critical" : "warning",
+      summary: "Compensation failures exceeded the configured budget.",
+      recommended_event_type: "automation.slo.compensation_failure",
+      threshold: summary.slo?.compensation_failure_budget_target ?? 0.02,
+      current_value: summary.compensation_failure_rate,
+      suggested_action: "Route affected runs into compensation triage and repair failing compensators.",
+    });
+  }
+  if (summary.repair_paused_runs >= 3) {
+    items.push({
+      code: "automation_repair_queue_pressure",
+      severity: summary.repair_paused_runs >= 5 ? "critical" : "warning",
+      summary: "Repair-required queue pressure is building.",
+      recommended_event_type: "automation.queue.repair",
+      threshold: 3,
+      current_value: summary.repair_paused_runs,
+      suggested_action: "Prioritize repair review and repaired-version approvals.",
+    });
+  }
+  if (summary.paused_runs >= 5) {
+    items.push({
+      code: "automation_paused_run_backlog",
+      severity: summary.paused_runs >= 10 ? "critical" : "warning",
+      summary: "Paused automation backlog exceeds the operational threshold.",
+      recommended_event_type: "automation.queue.paused",
+      threshold: 5,
+      current_value: summary.paused_runs,
+      suggested_action: "Check approval, repair, and compensation queues for stuck operator work.",
+    });
+  }
+  return items;
 }
 
 function latestNodeAttempts(nodes: AutomationRunNodeRow[]): AutomationRunNodeRow[] {

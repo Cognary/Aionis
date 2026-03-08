@@ -1,9 +1,13 @@
 import {
+  fetchOps,
   formatIso,
   formatNumber,
+  withQuery,
   postOps,
   readAutomationQuery
 } from "@/app/lib";
+import AutomationAlertControls from "@/app/components/automation-alert-controls";
+import AutomationAlertDeliveryControls from "@/app/components/automation-alert-delivery-controls";
 import AutomationGovernanceControls from "@/app/components/automation-governance-controls";
 import AutomationPromotionControls from "@/app/components/automation-promotion-controls";
 
@@ -110,6 +114,26 @@ function formatPercent(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function toneForAlertSeverity(severity) {
+  if (severity === "critical") return "err";
+  if (severity === "warning") return "skip";
+  return "skip";
+}
+
+function toneForAlertDeliveryStatus(status) {
+  if (status === "sent") return "ok";
+  if (status === "failed") return "err";
+  if (status === "skipped") return "skip";
+  return "skip";
+}
+
+function toneForAlertDeliveryBacklog(status) {
+  if (status === "resolved") return "ok";
+  if (status === "replay_backlog" || status === "at_risk") return "skip";
+  if (status === "breached" || status === "manual_review" || status === "dead_letter") return "err";
+  return "skip";
+}
+
 function stringifyJson(value) {
   return JSON.stringify(value, null, 2);
 }
@@ -123,6 +147,59 @@ function formatNodeEvidence(node) {
   if (node.approval_id) parts.push(`approval:${node.approval_id}`);
   if (node.compensation_run_id) parts.push(`comp:${node.compensation_run_id}`);
   return parts.length > 0 ? parts.join("\n") : "-";
+}
+
+function formatAlertRouteLabels(routes) {
+  if (!Array.isArray(routes) || routes.length === 0) return "-";
+  return routes
+    .map((route) => {
+      const label = String(route?.label || route?.id || "").trim();
+      const channel = String(route?.channel || "").trim();
+      const policy = route?.dispatch_policy && typeof route.dispatch_policy === "object" ? route.dispatch_policy : null;
+      const cooldown = policy?.cooldown_seconds != null ? `cd:${policy.cooldown_seconds}s` : "";
+      const retry = policy?.retry_max_attempts != null ? `retry:${policy.retry_max_attempts}` : "";
+      const replayBackoff = policy?.replay_backoff_seconds != null ? `replay:${policy.replay_backoff_seconds}s` : "";
+      const budget =
+        policy?.max_dispatches_per_window != null && policy?.window_seconds != null
+          ? `limit:${policy.max_dispatches_per_window}/${policy.window_seconds}s`
+          : "";
+      return [label || "unnamed", channel, cooldown, retry, replayBackoff, budget].filter(Boolean).join(" · ");
+    })
+    .join("\n");
+}
+
+function getAlertDeliveryWorkflow(item) {
+  const workflow = item?.metadata?.alert_workflow;
+  return workflow && typeof workflow === "object" ? workflow : {};
+}
+
+function computeAlertDeliveryBacklogState(item, replayedOriginalIds) {
+  if (!item || item?.metadata?.replay_of_delivery_id) return "replayed_row";
+  const deliveryId = String(item?.delivery_id || "").trim();
+  if (deliveryId && replayedOriginalIds.has(deliveryId)) return "resolved";
+  const workflowState = String(getAlertDeliveryWorkflow(item)?.state || "").trim();
+  if (workflowState === "dead_letter" || workflowState === "manual_review" || workflowState === "replay_backlog") {
+    return workflowState;
+  }
+  if (item?.metadata?.payload_snapshot != null && (item?.status === "failed" || item?.status === "skipped")) {
+    return "replay_backlog";
+  }
+  if (item?.status === "failed" || item?.status === "skipped") return "manual_review";
+  return "observe";
+}
+
+function computeAlertDeliverySlaStatus(item, replayedOriginalIds) {
+  const workflow = getAlertDeliveryWorkflow(item);
+  const target = String(workflow?.sla_target_at || "").trim();
+  const backlogState = computeAlertDeliveryBacklogState(item, replayedOriginalIds);
+  if (!target) return "unset";
+  const ts = Date.parse(target);
+  if (!Number.isFinite(ts)) return "unset";
+  if (backlogState === "resolved" || backlogState === "replayed_row") return "met";
+  const remaining = ts - Date.now();
+  if (remaining <= 0) return "breached";
+  if (remaining <= 60 * 60 * 1000) return "at_risk";
+  return "on_track";
 }
 
 function summarizeShadowEvidence(nodes) {
@@ -143,6 +220,34 @@ function buildActionSnippet(path, body) {
     `POST ${path}`,
     stringifyJson(body),
   ].join("\n\n");
+}
+
+function buildAlertDeliveryFocusHref(query, deliveryId, extra = {}) {
+  const params = new URLSearchParams();
+  const setIf = (key, value) => {
+    if (value === undefined || value === null || value === "") return;
+    params.set(key, String(value));
+  };
+  setIf("tenant_id", query.tenantId);
+  setIf("scope", query.scope || "");
+  setIf("reviewer", query.reviewer || "");
+  setIf("compensation_owner", query.compensationOwner || "");
+  setIf("escalation_owner", query.escalationOwner || "");
+  setIf("workflow_bucket", query.workflowBucket || "");
+  setIf("sla_status", query.slaStatus || "");
+  setIf("telemetry_window_hours", query.telemetryWindowHours);
+  setIf("alert_delivery_status", (extra.alertDeliveryStatus ?? query.alertDeliveryStatus) || "");
+  setIf("alert_replay_state", (extra.alertReplayState ?? query.alertReplayState) || "");
+  setIf("alert_delivery_owner", (extra.alertDeliveryOwner ?? query.alertDeliveryOwner) || "");
+  setIf("alert_delivery_escalation_owner", (extra.alertDeliveryEscalationOwner ?? query.alertDeliveryEscalationOwner) || "");
+  setIf("alert_delivery_sla_status", (extra.alertDeliverySlaStatus ?? query.alertDeliverySlaStatus) || "");
+  setIf("alert_delivery_backlog", (extra.alertDeliveryBacklog ?? query.alertDeliveryBacklog) || "");
+  setIf("automation_id", query.automationId || "");
+  setIf("run_id", query.runId || "");
+  setIf("queue_limit", query.queueLimit);
+  setIf("promotion_limit", query.promotionLimit);
+  setIf("focus_alert_delivery_id", deliveryId || "");
+  return `/automations?${params.toString()}`;
 }
 
 function deriveRunActions(query, run, nodes) {
@@ -308,6 +413,25 @@ export default async function AutomationGovernancePage({ searchParams }) {
     },
     { memoryAuth: true },
   );
+  const alertPreviewResult = await postOps(
+    "/v1/admin/control/automations/alerts/preview",
+    {
+      tenant_id: query.tenantId,
+      scope: query.scope || undefined,
+      automation_id: query.automationId || undefined,
+      window_hours: query.telemetryWindowHours,
+      incident_limit: 8,
+    },
+    { admin: true },
+  );
+  const alertDeliveriesResult = await fetchOps(
+    withQuery("/v1/admin/control/alerts/deliveries", {
+      tenant_id: query.tenantId,
+      event_type: "automation.slo.success_rate",
+      limit: Math.min(query.queueLimit * 5, 150),
+    }),
+    { admin: true },
+  );
   const promotionResult = await postOps(
     "/v1/automations/list",
     {
@@ -343,9 +467,45 @@ export default async function AutomationGovernancePage({ searchParams }) {
   const run = runResult.ok ? runResult.data?.run ?? null : null;
   const nodes = Array.isArray(runResult.data?.nodes) ? runResult.data.nodes : [];
   const queueRuns = Array.isArray(queueResult.data?.runs) ? queueResult.data.runs : [];
+  const approvalReviewerRuns = queueRuns.filter((item) => String(item?.pause_reason || "") === "approval_required");
+  const repairReviewerRuns = queueRuns.filter((item) => String(item?.pause_reason || "") === "repair_required");
   const compensationQueueRuns = Array.isArray(compensationQueueResult.data?.runs) ? compensationQueueResult.data.runs : [];
   const compensationPolicyMatrix = Array.isArray(compensationPolicyResult.data?.matrix) ? compensationPolicyResult.data.matrix : [];
   const telemetry = telemetryResult.ok ? telemetryResult.data ?? null : null;
+  const alertPreview = alertPreviewResult.ok ? alertPreviewResult.data ?? null : null;
+  const alertDeliveriesRaw = Array.isArray(alertDeliveriesResult.data?.deliveries) ? alertDeliveriesResult.data.deliveries : [];
+  const replayedOriginalIds = new Set(
+    alertDeliveriesRaw
+      .map((item) => String(item?.metadata?.replay_of_delivery_id || "").trim())
+      .filter(Boolean),
+  );
+  const alertDeliveries = alertDeliveriesRaw.filter((item) => {
+    if (query.scope && String(item?.metadata?.scope || "") !== query.scope) return false;
+    if (query.automationId && String(item?.metadata?.automation_id || "") !== query.automationId) return false;
+    if (query.alertDeliveryStatus && String(item?.status || "") !== query.alertDeliveryStatus) return false;
+    if (query.alertReplayState === "replayed" && !item?.metadata?.replay_of_delivery_id) return false;
+    if (query.alertReplayState === "original_only" && item?.metadata?.replay_of_delivery_id) return false;
+    if (query.alertReplayState === "replayable_only" && item?.metadata?.payload_snapshot == null) return false;
+    const workflow = getAlertDeliveryWorkflow(item);
+    if (query.alertDeliveryOwner && String(workflow?.owner || "") !== query.alertDeliveryOwner) return false;
+    if (query.alertDeliveryEscalationOwner && String(workflow?.escalation_owner || "") !== query.alertDeliveryEscalationOwner) return false;
+    if (query.alertDeliverySlaStatus && computeAlertDeliverySlaStatus(item, replayedOriginalIds) !== query.alertDeliverySlaStatus) return false;
+    if (query.alertDeliveryBacklog && computeAlertDeliveryBacklogState(item, replayedOriginalIds) !== query.alertDeliveryBacklog) return false;
+    return true;
+  });
+  const replayableAlertDeliveries = alertDeliveries.filter((item) => item?.metadata?.payload_snapshot != null);
+  const replayedAlertDeliveries = alertDeliveries.filter((item) => item?.metadata?.replay_of_delivery_id != null);
+  const originalAlertDeliveries = alertDeliveries.filter((item) => item?.metadata?.replay_of_delivery_id == null);
+  const replayBacklogDeliveries = originalAlertDeliveries.filter(
+    (item) => computeAlertDeliveryBacklogState(item, replayedOriginalIds) === "replay_backlog",
+  );
+  const deadLetterAlertDeliveries = originalAlertDeliveries.filter(
+    (item) => computeAlertDeliveryBacklogState(item, replayedOriginalIds) === "dead_letter",
+  );
+  const overdueAlertDeliveries = originalAlertDeliveries.filter(
+    (item) => computeAlertDeliverySlaStatus(item, replayedOriginalIds) === "breached",
+  );
+  const unassignedAlertDeliveries = originalAlertDeliveries.filter((item) => !String(getAlertDeliveryWorkflow(item)?.owner || "").trim());
   const retryableCompensationRuns = compensationQueueRuns.filter((run) => compensationWorkflowBucket(run.compensation_assessment) === "retry");
   const manualCleanupCompensationRuns = compensationQueueRuns.filter((run) => compensationWorkflowBucket(run.compensation_assessment) === "manual_cleanup");
   const escalateCompensationRuns = compensationQueueRuns.filter((run) => compensationWorkflowBucket(run.compensation_assessment) === "escalate");
@@ -454,6 +614,36 @@ export default async function AutomationGovernancePage({ searchParams }) {
             <label>
               telemetry window hours
               <input type="number" name="telemetry_window_hours" defaultValue={query.telemetryWindowHours} min={1} max={720} />
+            </label>
+            <label>
+              alert delivery status
+              <input type="text" name="alert_delivery_status" defaultValue={query.alertDeliveryStatus} maxLength={16} placeholder="failed/skipped/sent" />
+            </label>
+            <label>
+              alert replay state
+              <input type="text" name="alert_replay_state" defaultValue={query.alertReplayState} maxLength={24} placeholder="replayable_only/replayed" />
+            </label>
+            <label>
+              alert owner
+              <input type="text" name="alert_delivery_owner" defaultValue={query.alertDeliveryOwner} maxLength={256} placeholder="ops-oncall" />
+            </label>
+            <label>
+              alert escalation owner
+              <input
+                type="text"
+                name="alert_delivery_escalation_owner"
+                defaultValue={query.alertDeliveryEscalationOwner}
+                maxLength={256}
+                placeholder="engineering-oncall"
+              />
+            </label>
+            <label>
+              alert SLA status
+              <input type="text" name="alert_delivery_sla_status" defaultValue={query.alertDeliverySlaStatus} maxLength={24} placeholder="breached/on_track" />
+            </label>
+            <label>
+              alert backlog
+              <input type="text" name="alert_delivery_backlog" defaultValue={query.alertDeliveryBacklog} maxLength={24} placeholder="replay_backlog/dead_letter" />
             </label>
             <label>
               run_id (optional)
@@ -580,6 +770,43 @@ export default async function AutomationGovernancePage({ searchParams }) {
               </article>
               <article className="panel">
                 <div className="panel-head">
+                  <h2>Alert Candidates</h2>
+                  <StatusChip tone={Array.isArray(telemetry.alert_candidates) && telemetry.alert_candidates.length > 0 ? "err" : "ok"}>
+                    {formatNumber(Array.isArray(telemetry.alert_candidates) ? telemetry.alert_candidates.length : 0)}
+                  </StatusChip>
+                </div>
+                <div className="table-wrap" style={{ marginTop: "0.7rem" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>severity</th>
+                        <th>code</th>
+                        <th>event type</th>
+                        <th>threshold</th>
+                        <th>current</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.isArray(telemetry.alert_candidates) && telemetry.alert_candidates.length > 0 ? telemetry.alert_candidates.map((item) => (
+                        <tr key={`alert:${String(item.code)}`}>
+                          <td><StatusChip tone={toneForAlertSeverity(item.severity)}>{String(item.severity)}</StatusChip></td>
+                          <td className="mono">{String(item.code)}</td>
+                          <td className="mono">{String(item.recommended_event_type || "-")}</td>
+                          <td>{item.threshold == null ? "-" : String(item.threshold)}</td>
+                          <td>{item.current_value == null ? "-" : String(item.current_value)}</td>
+                        </tr>
+                      )) : (
+                        <tr><td colSpan={5} className="empty">No alert candidates in current telemetry window.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            </section>
+
+            <section className="grid-2">
+              <article className="panel">
+                <div className="panel-head">
                   <h2>Top Root Causes</h2>
                   <StatusChip tone="skip">{formatNumber(Array.isArray(telemetry.root_causes) ? telemetry.root_causes.length : 0)}</StatusChip>
                 </div>
@@ -604,6 +831,350 @@ export default async function AutomationGovernancePage({ searchParams }) {
                   </table>
                 </div>
               </article>
+              <article className="panel">
+                <div className="panel-head">
+                  <h2>Alert Route Coverage</h2>
+                  <StatusChip
+                    tone={
+                      alertPreviewResult.skipped
+                        ? "skip"
+                        : alertPreviewResult.ok &&
+                            Array.isArray(alertPreview?.alert_previews) &&
+                            alertPreview.alert_previews.some((item) => item.dispatch_ready === false)
+                          ? "err"
+                          : alertPreviewResult.ok
+                            ? "ok"
+                            : "err"
+                    }
+                  >
+                    {alertPreviewResult.skipped
+                      ? "Admin Token Required"
+                      : alertPreviewResult.ok
+                        ? `${formatNumber(Array.isArray(alertPreview?.alert_previews) ? alertPreview.alert_previews.length : 0)} previewed`
+                        : `ERR ${alertPreviewResult.status || 0}`}
+                  </StatusChip>
+                </div>
+                {alertPreviewResult.skipped ? (
+                  <p className="muted">Set `AIONIS_ADMIN_TOKEN` for the ops app to preview which active alert routes match current automation alert candidates.</p>
+                ) : alertPreview ? (
+                  <div className="table-wrap" style={{ marginTop: "0.7rem" }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>event type</th>
+                          <th>severity</th>
+                          <th>routes</th>
+                          <th>dispatch</th>
+                          <th>matched routes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.isArray(alertPreview.alert_previews) && alertPreview.alert_previews.length > 0 ? alertPreview.alert_previews.map((item) => (
+                          <tr key={`alert-preview:${String(item.code || item.recommended_event_type || "row")}`}>
+                            <td className="mono">{String(item.recommended_event_type || "-")}</td>
+                            <td><StatusChip tone={toneForAlertSeverity(item.severity)}>{String(item.severity || "-")}</StatusChip></td>
+                            <td>{formatNumber(item.route_count)}</td>
+                            <td><StatusChip tone={item.dispatch_ready ? "ok" : "err"}>{item.dispatch_ready ? "ready" : "missing_route"}</StatusChip></td>
+                            <td className="mono" style={{ whiteSpace: "pre-wrap" }}>{formatAlertRouteLabels(item.routes)}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan={5} className="empty">No alert candidates to preview against active control alert routes.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="muted">Admin alert-route preview failed. Check control-plane admin configuration.</p>
+                )}
+              </article>
+            </section>
+            <section className="grid-2">
+              <AutomationAlertControls
+                tenantId={query.tenantId}
+                scope={query.scope}
+                automationId={query.automationId}
+                windowHours={query.telemetryWindowHours}
+                alertPreview={alertPreview}
+              />
+              <article className="panel">
+                <div className="panel-head">
+                  <h2>Alert Guidance</h2>
+                  <StatusChip tone="skip">Pre-Route Signals</StatusChip>
+                </div>
+                <div className="kv">
+                  <p>route target</p>
+                  <p>Use existing control alert routes for the tenant when a candidate stays active across consecutive checks.</p>
+                  <p>critical</p>
+                  <p>Page or webhook immediately when the candidate severity is `critical`.</p>
+                  <p>warning</p>
+                  <p>Open triage inbox item and watch the next telemetry window before paging.</p>
+                  <p>recommended_event_type</p>
+                  <p className="mono">Candidate rows expose the future event type to bind onto alert routes.</p>
+                </div>
+              </article>
+            </section>
+            <section className="grid-2">
+              <article className="panel">
+                <div className="panel-head">
+                  <h2>Failed Alert Delivery Queue</h2>
+                  <StatusChip tone={alertDeliveriesResult.ok ? (alertDeliveries.length > 0 ? "err" : "ok") : "err"}>
+                    {alertDeliveriesResult.ok ? `${formatNumber(alertDeliveries.length)} rows` : `ERR ${alertDeliveriesResult.status || 0}`}
+                  </StatusChip>
+                </div>
+                <section className="grid-4" style={{ marginTop: "0.8rem" }}>
+                  <article className="panel stat">
+                    <p>replayable</p>
+                    <h3>{formatNumber(replayableAlertDeliveries.length)}</h3>
+                  </article>
+                  <article className="panel stat">
+                    <p>original failed</p>
+                    <h3>{formatNumber(originalAlertDeliveries.length)}</h3>
+                  </article>
+                  <article className="panel stat">
+                    <p>replayed rows</p>
+                    <h3>{formatNumber(replayedAlertDeliveries.length)}</h3>
+                  </article>
+                  <article className="panel stat">
+                    <p>status filter</p>
+                    <h3>{query.alertDeliveryStatus || "failed"}</h3>
+                  </article>
+                  <article className="panel stat">
+                    <p>replay backlog</p>
+                    <h3>{formatNumber(replayBacklogDeliveries.length)}</h3>
+                  </article>
+                  <article className="panel stat">
+                    <p>overdue SLA</p>
+                    <h3>{formatNumber(overdueAlertDeliveries.length)}</h3>
+                  </article>
+                  <article className="panel stat">
+                    <p>unassigned</p>
+                    <h3>{formatNumber(unassignedAlertDeliveries.length)}</h3>
+                  </article>
+                </section>
+              </article>
+              <article className="panel">
+                <div className="panel-head">
+                  <h2>Failed Alert Deliveries</h2>
+                  <StatusChip tone={alertDeliveriesResult.ok ? (alertDeliveries.length > 0 ? "err" : "ok") : "err"}>
+                    {alertDeliveriesResult.ok ? `${formatNumber(alertDeliveries.length)} failed` : `ERR ${alertDeliveriesResult.status || 0}`}
+                  </StatusChip>
+                </div>
+                <p className="muted">
+                  Failed automation alert deliveries with replayable payload snapshots. Filtered to the current tenant and
+                  optional scope/automation filters.
+                </p>
+                <div className="table-wrap" style={{ marginTop: "0.7rem" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>created_at</th>
+                        <th>delivery</th>
+                        <th>status</th>
+                        <th>automation</th>
+                        <th>route</th>
+                        <th>response</th>
+                        <th>owner</th>
+                        <th>SLA</th>
+                        <th>backlog</th>
+                        <th>replay</th>
+                        <th>payload</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {alertDeliveries.length > 0 ? alertDeliveries.map((item) => (
+                        <tr key={`alert-delivery:${String(item.delivery_id || item.id)}`}>
+                          <td>{formatIso(item.created_at)}</td>
+                          <td className="mono">{String(item.delivery_id || "-")}</td>
+                          <td><StatusChip tone={toneForAlertDeliveryStatus(item.status)}>{String(item.status || "-")}</StatusChip></td>
+                          <td className="mono">{String(item.metadata?.automation_id || "-")}</td>
+                          <td>{String(item.metadata?.route_snapshot?.label || item.route_id || "-")}</td>
+                          <td>{item.response_code == null ? String(item.error || "-") : String(item.response_code)}</td>
+                          <td>{String(getAlertDeliveryWorkflow(item)?.owner || "-")}</td>
+                          <td>
+                            <StatusChip tone={toneForSlaStatus(computeAlertDeliverySlaStatus(item, replayedOriginalIds))}>
+                              {computeAlertDeliverySlaStatus(item, replayedOriginalIds)}
+                            </StatusChip>
+                          </td>
+                          <td>
+                            <StatusChip tone={toneForAlertDeliveryBacklog(computeAlertDeliveryBacklogState(item, replayedOriginalIds))}>
+                              {computeAlertDeliveryBacklogState(item, replayedOriginalIds)}
+                            </StatusChip>
+                          </td>
+                          <td className="mono">{String(item.metadata?.replay_of_delivery_id || "-")}</td>
+                          <td>{item.metadata?.payload_snapshot != null ? "available" : "missing"}</td>
+                        </tr>
+                      )) : (
+                        <tr><td colSpan={11} className="empty">No alert deliveries in current filter.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+              <AutomationAlertDeliveryControls deliveries={alertDeliveries} />
+            </section>
+            <section className="grid-3">
+              <article className="panel">
+                <div className="panel-head">
+                  <h2>Replay Backlog</h2>
+                  <StatusChip tone={replayBacklogDeliveries.length > 0 ? "skip" : "ok"}>{formatNumber(replayBacklogDeliveries.length)}</StatusChip>
+                </div>
+                <div className="table-wrap" style={{ marginTop: "0.7rem" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>delivery</th>
+                        <th>owner</th>
+                        <th>SLA</th>
+                        <th>open</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {replayBacklogDeliveries.slice(0, 8).map((item) => (
+                        <tr key={`alert-replay-backlog:${String(item.delivery_id)}`}>
+                          <td className="mono">{String(item.delivery_id || "-")}</td>
+                          <td>{String(getAlertDeliveryWorkflow(item)?.owner || "-")}</td>
+                          <td>{computeAlertDeliverySlaStatus(item, replayedOriginalIds)}</td>
+                          <td>
+                            <a href={buildAlertDeliveryFocusHref(query, String(item.delivery_id || ""), { alertDeliveryBacklog: "replay_backlog", alertReplayState: "original_only" })}>
+                              Focus
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                      {replayBacklogDeliveries.length === 0 ? <tr><td colSpan={4} className="empty">No pending replay backlog.</td></tr> : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+              <article className="panel">
+                <div className="panel-head">
+                  <h2>Overdue Alert SLA</h2>
+                  <StatusChip tone={overdueAlertDeliveries.length > 0 ? "err" : "ok"}>{formatNumber(overdueAlertDeliveries.length)}</StatusChip>
+                </div>
+                <div className="table-wrap" style={{ marginTop: "0.7rem" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>delivery</th>
+                        <th>owner</th>
+                        <th>target</th>
+                        <th>open</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {overdueAlertDeliveries.slice(0, 8).map((item) => (
+                        <tr key={`alert-overdue:${String(item.delivery_id)}`}>
+                          <td className="mono">{String(item.delivery_id || "-")}</td>
+                          <td>{String(getAlertDeliveryWorkflow(item)?.owner || "-")}</td>
+                          <td>{formatIso(getAlertDeliveryWorkflow(item)?.sla_target_at || "")}</td>
+                          <td>
+                            <a href={buildAlertDeliveryFocusHref(query, String(item.delivery_id || ""), { alertDeliverySlaStatus: "breached", alertReplayState: "original_only" })}>
+                              Focus
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                      {overdueAlertDeliveries.length === 0 ? <tr><td colSpan={4} className="empty">No overdue alert delivery SLA.</td></tr> : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+              <article className="panel">
+                <div className="panel-head">
+                  <h2>Dead-Letter Queue</h2>
+                  <StatusChip tone={deadLetterAlertDeliveries.length > 0 ? "err" : "ok"}>{formatNumber(deadLetterAlertDeliveries.length)}</StatusChip>
+                </div>
+                <div className="table-wrap" style={{ marginTop: "0.7rem" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>delivery</th>
+                        <th>owner</th>
+                        <th>SLA</th>
+                        <th>open</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deadLetterAlertDeliveries.slice(0, 8).map((item) => (
+                        <tr key={`alert-dead-letter:${String(item.delivery_id)}`}>
+                          <td className="mono">{String(item.delivery_id || "-")}</td>
+                          <td>{String(getAlertDeliveryWorkflow(item)?.owner || "-")}</td>
+                          <td>{computeAlertDeliverySlaStatus(item, replayedOriginalIds)}</td>
+                          <td>
+                            <a href={buildAlertDeliveryFocusHref(query, String(item.delivery_id || ""), { alertDeliveryBacklog: "dead_letter", alertReplayState: "original_only" })}>
+                              Focus
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                      {deadLetterAlertDeliveries.length === 0 ? <tr><td colSpan={4} className="empty">No dead-letter alert deliveries.</td></tr> : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+              <article className="panel">
+                <div className="panel-head">
+                  <h2>Unassigned Alert Queue</h2>
+                  <StatusChip tone={unassignedAlertDeliveries.length > 0 ? "skip" : "ok"}>{formatNumber(unassignedAlertDeliveries.length)}</StatusChip>
+                </div>
+                <div className="table-wrap" style={{ marginTop: "0.7rem" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>delivery</th>
+                        <th>backlog</th>
+                        <th>response</th>
+                        <th>open</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unassignedAlertDeliveries.slice(0, 8).map((item) => (
+                        <tr key={`alert-unassigned:${String(item.delivery_id)}`}>
+                          <td className="mono">{String(item.delivery_id || "-")}</td>
+                          <td>{computeAlertDeliveryBacklogState(item, replayedOriginalIds)}</td>
+                          <td>{item.response_code == null ? String(item.error || "-") : String(item.response_code)}</td>
+                          <td>
+                            <a href={buildAlertDeliveryFocusHref(query, String(item.delivery_id || ""), { alertDeliveryOwner: "", alertReplayState: "original_only" })}>
+                              Focus
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                      {unassignedAlertDeliveries.length === 0 ? <tr><td colSpan={4} className="empty">No unassigned alert deliveries.</td></tr> : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            </section>
+            <section className="grid-3">
+              <AutomationAlertDeliveryControls
+                deliveries={replayBacklogDeliveries}
+                title="Replay Backlog Actions"
+                description="Queue-focused actions for replayable original failed deliveries. Use this panel to claim ownership, set SLA, preview the payload, and send the replay."
+                initialDeliveryId={query.focusAlertDeliveryId}
+                queueLabel="replay backlog"
+              />
+              <AutomationAlertDeliveryControls
+                deliveries={overdueAlertDeliveries}
+                title="Overdue SLA Actions"
+                description="Focused queue for replay items whose alert-delivery SLA is already breached. Use this panel to reassign ownership, escalate, and execute replay."
+                initialDeliveryId={query.focusAlertDeliveryId}
+                queueLabel="overdue SLA queue"
+              />
+              <AutomationAlertDeliveryControls
+                deliveries={deadLetterAlertDeliveries}
+                title="Dead-Letter Actions"
+                description="Focused queue for failed deliveries explicitly parked in dead-letter. Use this panel to assign ownership, document why the delivery is parked, or reopen it by setting workflow state back to replay_backlog."
+                initialDeliveryId={query.focusAlertDeliveryId}
+                queueLabel="dead-letter queue"
+              />
+              <AutomationAlertDeliveryControls
+                deliveries={unassignedAlertDeliveries}
+                title="Unassigned Queue Actions"
+                description="Focused queue for failed deliveries without an owner. Use this panel to assign ownership and record queue notes before replay."
+                initialDeliveryId={query.focusAlertDeliveryId}
+                queueLabel="unassigned queue"
+              />
             </section>
             <section className="panel">
               <div className="panel-head">
@@ -702,6 +1273,108 @@ export default async function AutomationGovernancePage({ searchParams }) {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="grid-3">
+        <article className="panel">
+          <div className="panel-head">
+            <h2>Approval Reviewer Inbox</h2>
+            <StatusChip tone={approvalReviewerRuns.length > 0 ? "warn" : "ok"}>{formatNumber(approvalReviewerRuns.length)}</StatusChip>
+          </div>
+          <div className="table-wrap" style={{ marginTop: "0.7rem" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>run</th>
+                  <th>reviewer</th>
+                  <th>status</th>
+                  <th>open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {approvalReviewerRuns.slice(0, 8).map((item) => (
+                  <tr key={`approval-reviewer:${item.run_id}`}>
+                    <td className="mono">{item.run_id}</td>
+                    <td>{item.review_assignment?.reviewer || "-"}</td>
+                    <td><StatusChip tone={toneForLifecycle(item)}>{item.status_summary}</StatusChip></td>
+                    <td>
+                      <a href={`/automations?tenant_id=${encodeURIComponent(query.tenantId)}&scope=${encodeURIComponent(query.scope || "")}&reviewer=${encodeURIComponent(query.reviewer || "")}&run_id=${encodeURIComponent(item.run_id)}&queue_limit=${encodeURIComponent(String(query.queueLimit))}&promotion_limit=${encodeURIComponent(String(query.promotionLimit))}`}>
+                        Inspect
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+                {approvalReviewerRuns.length === 0 ? <tr><td colSpan={4} className="empty">No approval-gated reviewer items.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </article>
+        <article className="panel">
+          <div className="panel-head">
+            <h2>Repair Reviewer Inbox</h2>
+            <StatusChip tone={repairReviewerRuns.length > 0 ? "err" : "ok"}>{formatNumber(repairReviewerRuns.length)}</StatusChip>
+          </div>
+          <div className="table-wrap" style={{ marginTop: "0.7rem" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>run</th>
+                  <th>reviewer</th>
+                  <th>status</th>
+                  <th>open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {repairReviewerRuns.slice(0, 8).map((item) => (
+                  <tr key={`repair-reviewer:${item.run_id}`}>
+                    <td className="mono">{item.run_id}</td>
+                    <td>{item.review_assignment?.reviewer || "-"}</td>
+                    <td><StatusChip tone={toneForLifecycle(item)}>{item.status_summary}</StatusChip></td>
+                    <td>
+                      <a href={`/automations?tenant_id=${encodeURIComponent(query.tenantId)}&scope=${encodeURIComponent(query.scope || "")}&reviewer=${encodeURIComponent(query.reviewer || "")}&run_id=${encodeURIComponent(item.run_id)}&queue_limit=${encodeURIComponent(String(query.queueLimit))}&promotion_limit=${encodeURIComponent(String(query.promotionLimit))}`}>
+                        Inspect
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+                {repairReviewerRuns.length === 0 ? <tr><td colSpan={4} className="empty">No repair-reviewer items.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </article>
+        <article className="panel">
+          <div className="panel-head">
+            <h2>Promotion Reviewer Inbox</h2>
+            <StatusChip tone={promotionAutomations.length > 0 ? "warn" : "ok"}>{formatNumber(promotionAutomations.length)}</StatusChip>
+          </div>
+          <div className="table-wrap" style={{ marginTop: "0.7rem" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>automation</th>
+                  <th>reviewer</th>
+                  <th>status</th>
+                  <th>open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {promotionAutomations.slice(0, 8).map((item) => (
+                  <tr key={`promotion-reviewer:${item.automation_id}:${item.version}`}>
+                    <td className="mono">{item.automation_id}@{item.version}</td>
+                    <td>{item.review_assignment?.reviewer || "-"}</td>
+                    <td>{item.status || "-"}</td>
+                    <td>
+                      <a href={`/automations?tenant_id=${encodeURIComponent(query.tenantId)}&scope=${encodeURIComponent(query.scope || "")}&reviewer=${encodeURIComponent(query.reviewer || "")}&automation_id=${encodeURIComponent(item.automation_id)}&version=${encodeURIComponent(String(item.version))}&promotion_limit=${encodeURIComponent(String(query.promotionLimit))}&queue_limit=${encodeURIComponent(String(query.queueLimit))}`}>
+                        Inspect
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+                {promotionAutomations.length === 0 ? <tr><td colSpan={4} className="empty">No promotion-review items.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </article>
       </section>
 
       <section className="panel">

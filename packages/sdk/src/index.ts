@@ -37,6 +37,8 @@ export {
   type AutomationRunView,
   type ControlAlertDeliveriesQuery,
   type ControlAlertDeliveriesResponse,
+  type ControlAlertDeliveryReplayInput,
+  type ControlAlertDeliveryReplayResponse,
   type ControlAlertRouteInput,
   type ControlAlertRouteResponse,
   type ControlAlertRoutesQuery,
