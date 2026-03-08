@@ -6,6 +6,7 @@ node_modules
 .next
 **/.next
 dist
+.aionis
 *.tsbuildinfo
 .eslintcache
 .pytest_cache

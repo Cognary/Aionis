@@ -118,7 +118,114 @@ export async function POST(request) {
         channel,
         target,
         label: payload.label == null ? null : String(payload.label),
-        events: sanitizeAlertEvents(payload.events)
+        events: sanitizeAlertEvents(payload.events),
+        metadata:
+          payload.cooldown_seconds != null ||
+          payload.max_dispatches_per_window != null ||
+          payload.retry_max_attempts != null ||
+          payload.retry_backoff_ms != null ||
+          payload.replay_backoff_seconds != null ||
+          payload.window_seconds != null
+            ? {
+                automation_dispatch_policy: {
+                  ...(payload.cooldown_seconds != null
+                    ? { cooldown_seconds: Math.max(0, Math.min(7 * 24 * 3600, Math.trunc(Number(payload.cooldown_seconds) || 0))) }
+                    : {}),
+                  ...(payload.max_dispatches_per_window != null
+                    ? { max_dispatches_per_window: Math.max(1, Math.min(1000, Math.trunc(Number(payload.max_dispatches_per_window) || 1))) }
+                    : {}),
+                  ...(payload.retry_max_attempts != null
+                    ? { retry_max_attempts: Math.max(1, Math.min(4, Math.trunc(Number(payload.retry_max_attempts) || 1))) }
+                    : {}),
+                  ...(payload.retry_backoff_ms != null
+                    ? { retry_backoff_ms: Math.max(0, Math.min(5000, Math.trunc(Number(payload.retry_backoff_ms) || 0))) }
+                    : {}),
+                  ...(payload.replay_backoff_seconds != null
+                    ? { replay_backoff_seconds: Math.max(0, Math.min(7 * 24 * 3600, Math.trunc(Number(payload.replay_backoff_seconds) || 0))) }
+                    : {}),
+                  ...(payload.window_seconds != null
+                    ? { window_seconds: Math.max(60, Math.min(7 * 24 * 3600, Math.trunc(Number(payload.window_seconds) || 60))) }
+                    : {}),
+                },
+              }
+            : undefined,
+      });
+      return json(out.status, withOpsMeta(out.data, out.requestId));
+    }
+
+    if (op === "automation_alert_dispatch") {
+      const dryRun = payload.dry_run !== false;
+      if (!dangerousActionsEnabled() && !dryRun) {
+        return blockDangerousAction("automation_alert_dispatch_non_dryrun");
+      }
+      const out = await forward("/v1/admin/control/automations/alerts/dispatch", "POST", {
+        tenant_id: payload.tenant_id == null ? undefined : String(payload.tenant_id || "").trim() || undefined,
+        scope: payload.scope == null ? undefined : String(payload.scope || "").trim() || undefined,
+        automation_id: payload.automation_id == null ? undefined : String(payload.automation_id || "").trim() || undefined,
+        window_hours: Math.max(1, Math.min(24 * 30, Number(payload.window_hours) || 168)),
+        incident_limit: Math.max(1, Math.min(100, Number(payload.incident_limit) || 8)),
+        candidate_codes: Array.isArray(payload.candidate_codes)
+          ? payload.candidate_codes.map((v) => String(v || "").trim()).filter(Boolean)
+          : undefined,
+        dry_run: dryRun,
+        dedupe_ttl_seconds: Math.max(60, Math.min(7 * 24 * 3600, Number(payload.dedupe_ttl_seconds) || 1800)),
+      });
+      return json(out.status, withOpsMeta(out.data, out.requestId));
+    }
+
+    if (op === "alert_delivery_replay") {
+      const dryRun = payload.dry_run === true;
+      if (!dangerousActionsEnabled() && !dryRun) {
+        return blockDangerousAction("alert_delivery_replay_non_dryrun");
+      }
+      const ids = Array.isArray(payload.ids) ? payload.ids.map((v) => String(v || "").trim()).filter(Boolean) : [];
+      if (ids.length === 0) {
+        return json(400, { error: "invalid_request", message: "ids is required" });
+      }
+      const out = await forward("/v1/admin/control/alerts/deliveries/replay", "POST", {
+        ids,
+        dry_run: dryRun,
+        dedupe_ttl_seconds:
+          payload.dedupe_ttl_seconds == null
+            ? undefined
+            : Math.max(60, Math.min(7 * 24 * 3600, Number(payload.dedupe_ttl_seconds) || 1800)),
+        allow_disabled_route: payload.allow_disabled_route === true,
+        override_target: payload.override_target == null ? undefined : String(payload.override_target || "").trim() || undefined,
+      });
+      return json(out.status, withOpsMeta(out.data, out.requestId));
+    }
+
+    if (op === "alert_delivery_assign") {
+      const ids = Array.isArray(payload.ids) ? payload.ids.map((v) => String(v || "").trim()).filter(Boolean) : [];
+      if (ids.length === 0) {
+        return json(400, { error: "invalid_request", message: "ids is required" });
+      }
+      const out = await forward("/v1/admin/control/alerts/deliveries/assign", "POST", {
+        ids,
+        owner:
+          payload.owner === undefined
+            ? undefined
+            : String(payload.owner || "").trim() || null,
+        escalation_owner:
+          payload.escalation_owner === undefined
+            ? undefined
+            : String(payload.escalation_owner || "").trim() || null,
+        sla_target_at:
+          payload.sla_target_at === undefined
+            ? undefined
+            : String(payload.sla_target_at || "").trim() || null,
+        workflow_state:
+          payload.workflow_state === undefined
+            ? undefined
+            : String(payload.workflow_state || "").trim() || null,
+        note:
+          payload.note === undefined
+            ? undefined
+            : String(payload.note || "").trim() || null,
+        actor:
+          payload.actor === undefined
+            ? undefined
+            : String(payload.actor || "").trim() || undefined,
       });
       return json(out.status, withOpsMeta(out.data, out.requestId));
     }

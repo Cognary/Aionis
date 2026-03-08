@@ -801,6 +801,339 @@ export const ReplayPlaybookRepairReviewRequest = z.object({
 
 export type ReplayPlaybookRepairReviewInput = z.infer<typeof ReplayPlaybookRepairReviewRequest>;
 
+export const AutomationDefStatus = z.enum(["draft", "shadow", "active", "disabled"]);
+export type AutomationDefStatusInput = z.infer<typeof AutomationDefStatus>;
+
+export const AutomationRunLifecycleState = z.enum(["queued", "running", "paused", "compensating", "terminal"]);
+export type AutomationRunLifecycleStateInput = z.infer<typeof AutomationRunLifecycleState>;
+
+export const AutomationRunPauseReason = z.enum(["approval_required", "repair_required", "dependency_wait", "operator_pause"]);
+export type AutomationRunPauseReasonInput = z.infer<typeof AutomationRunPauseReason>;
+
+export const AutomationRunTerminalOutcome = z.enum(["succeeded", "failed", "cancelled", "failed_compensated", "cancelled_compensated"]);
+export type AutomationRunTerminalOutcomeInput = z.infer<typeof AutomationRunTerminalOutcome>;
+
+export const AutomationNodeKind = z.enum(["playbook", "approval", "condition", "artifact_gate"]);
+export type AutomationNodeKindInput = z.infer<typeof AutomationNodeKind>;
+
+export const AutomationNodeLifecycleState = z.enum(["pending", "ready", "running", "paused", "retrying", "compensating", "terminal"]);
+export type AutomationNodeLifecycleStateInput = z.infer<typeof AutomationNodeLifecycleState>;
+
+export const AutomationNodePauseReason = z.enum(["approval_required", "repair_required"]);
+export type AutomationNodePauseReasonInput = z.infer<typeof AutomationNodePauseReason>;
+
+export const AutomationNodeTerminalOutcome = z.enum(["succeeded", "failed", "rejected", "skipped", "compensated"]);
+export type AutomationNodeTerminalOutcomeInput = z.infer<typeof AutomationNodeTerminalOutcome>;
+
+const AutomationPlaybookNode = z.object({
+  node_id: z.string().min(1).max(128),
+  kind: z.literal("playbook"),
+  name: z.string().min(1).max(200).optional(),
+  playbook_id: z.string().min(1),
+  version: z.number().int().positive().optional(),
+  mode: ReplayRunMode.optional(),
+  inputs: z.record(z.any()).optional(),
+  policy: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+const AutomationApprovalNode = z.object({
+  node_id: z.string().min(1).max(128),
+  kind: z.literal("approval"),
+  name: z.string().min(1).max(200).optional(),
+  approval_key: z.string().min(1).max(128).optional(),
+  inputs: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+const AutomationConditionNode = z.object({
+  node_id: z.string().min(1).max(128),
+  kind: z.literal("condition"),
+  name: z.string().min(1).max(200).optional(),
+  expression: z.any(),
+  inputs: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+const AutomationArtifactGateNode = z.object({
+  node_id: z.string().min(1).max(128),
+  kind: z.literal("artifact_gate"),
+  name: z.string().min(1).max(200).optional(),
+  required_artifacts: z.array(z.string().min(1)).max(200).default([]),
+  inputs: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export const AutomationGraphNode = z.discriminatedUnion("kind", [
+  AutomationPlaybookNode,
+  AutomationApprovalNode,
+  AutomationConditionNode,
+  AutomationArtifactGateNode,
+]);
+export type AutomationGraphNodeInput = z.infer<typeof AutomationGraphNode>;
+
+export const AutomationGraphEdge = z.object({
+  from: z.string().min(1).max(128),
+  to: z.string().min(1).max(128),
+  type: z.enum(["depends_on", "on_success", "on_failure"]).default("on_success"),
+  metadata: z.record(z.any()).optional(),
+});
+export type AutomationGraphEdgeInput = z.infer<typeof AutomationGraphEdge>;
+
+export const AutomationGraph = z.object({
+  nodes: z.array(AutomationGraphNode).min(1).max(200),
+  edges: z.array(AutomationGraphEdge).max(500).default([]),
+});
+export type AutomationGraphInput = z.infer<typeof AutomationGraph>;
+
+export const AutomationCreateRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128),
+  name: z.string().min(1).max(200),
+  status: AutomationDefStatus.default("draft"),
+  graph: AutomationGraph,
+  input_contract: z.record(z.any()).optional(),
+  output_contract: z.record(z.any()).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+export type AutomationCreateInput = z.infer<typeof AutomationCreateRequest>;
+
+export const AutomationValidateRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  graph: AutomationGraph,
+});
+export type AutomationValidateInput = z.infer<typeof AutomationValidateRequest>;
+
+export const AutomationTelemetryRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128).optional(),
+  window_hours: z.number().int().positive().max(24 * 30).default(24),
+  incident_limit: z.number().int().positive().max(100).default(10),
+});
+export type AutomationTelemetryInput = z.infer<typeof AutomationTelemetryRequest>;
+
+export const AutomationGetRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128),
+  version: z.number().int().positive().optional(),
+});
+export type AutomationGetInput = z.infer<typeof AutomationGetRequest>;
+
+export const AutomationShadowReportRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128),
+  shadow_version: z.number().int().positive().optional(),
+  active_version: z.number().int().positive().optional(),
+});
+export type AutomationShadowReportInput = z.infer<typeof AutomationShadowReportRequest>;
+
+export const AutomationShadowReviewVerdict = z.enum(["approved", "needs_changes", "rejected"]);
+
+export const AutomationShadowReviewRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128),
+  shadow_version: z.number().int().positive().optional(),
+  verdict: AutomationShadowReviewVerdict,
+  note: z.string().min(1).max(1000).optional(),
+});
+export type AutomationShadowReviewInput = z.infer<typeof AutomationShadowReviewRequest>;
+
+export const AutomationShadowValidateMode = z.enum(["enqueue", "inline"]);
+
+export const AutomationShadowValidateRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128),
+  shadow_version: z.number().int().positive().optional(),
+  mode: AutomationShadowValidateMode.default("enqueue"),
+  note: z.string().min(1).max(1000).optional(),
+  params: z.record(z.any()).optional(),
+});
+export type AutomationShadowValidateInput = z.infer<typeof AutomationShadowValidateRequest>;
+
+export const AutomationShadowValidateDispatchRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128).optional(),
+  limit: z.number().int().positive().max(100).default(10),
+  dry_run: z.boolean().default(false),
+});
+export type AutomationShadowValidateDispatchInput = z.infer<typeof AutomationShadowValidateDispatchRequest>;
+
+export const AutomationListRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  status: AutomationDefStatus.optional(),
+  promotion_only: z.boolean().default(false),
+  reviewer: z.string().min(1).max(256).optional(),
+  limit: z.number().int().positive().max(100).default(20),
+});
+export type AutomationListInput = z.infer<typeof AutomationListRequest>;
+
+export const AutomationAssignReviewerRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128),
+  reviewer: z.string().min(1).max(256),
+  note: z.string().min(1).max(1000).optional(),
+});
+export type AutomationAssignReviewerInput = z.infer<typeof AutomationAssignReviewerRequest>;
+
+export const AutomationPromoteRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128),
+  from_version: z.number().int().positive().optional(),
+  target_status: AutomationDefStatus,
+  note: z.string().min(1).max(1000).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+export type AutomationPromoteInput = z.infer<typeof AutomationPromoteRequest>;
+
+export const AutomationRunRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128),
+  version: z.number().int().positive().optional(),
+  params: z.record(z.any()).optional(),
+  options: z
+    .object({
+      execution_mode: z.enum(["default", "shadow"]).default("default"),
+      allow_local_exec: z.boolean().default(false),
+      record_run: z.boolean().default(true),
+      stop_on_failure: z.boolean().default(true),
+    })
+    .default({}),
+});
+export type AutomationRunInput = z.infer<typeof AutomationRunRequest>;
+
+export const AutomationRunGetRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  run_id: UUID,
+  include_nodes: z.boolean().default(true),
+});
+export type AutomationRunGetInput = z.infer<typeof AutomationRunGetRequest>;
+
+export const AutomationRunListRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  automation_id: z.string().min(1).max(128).optional(),
+  actionable_only: z.boolean().default(false),
+  compensation_only: z.boolean().default(false),
+  reviewer: z.string().min(1).max(256).optional(),
+  compensation_owner: z.string().min(1).max(256).optional(),
+  escalation_owner: z.string().min(1).max(256).optional(),
+  workflow_bucket: z.enum(["retry", "manual_cleanup", "escalate", "observe", "other"]).optional(),
+  sla_status: z.enum(["unset", "on_track", "at_risk", "breached", "met"]).optional(),
+  limit: z.number().int().positive().max(100).default(20),
+});
+export type AutomationRunListInput = z.infer<typeof AutomationRunListRequest>;
+
+export const AutomationRunAssignReviewerRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  reviewer: z.string().min(1).max(256),
+  note: z.string().min(1).max(1000).optional(),
+});
+export type AutomationRunAssignReviewerInput = z.infer<typeof AutomationRunAssignReviewerRequest>;
+
+export const AutomationRunCancelRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  reason: z.string().min(1).max(1000).optional(),
+});
+export type AutomationRunCancelInput = z.infer<typeof AutomationRunCancelRequest>;
+
+export const AutomationRunResumeRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  reason: z.string().min(1).max(1000).optional(),
+});
+export type AutomationRunResumeInput = z.infer<typeof AutomationRunResumeRequest>;
+
+export const AutomationRunRejectRepairRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  reason: z.string().min(1).max(1000).optional(),
+});
+export type AutomationRunRejectRepairInput = z.infer<typeof AutomationRunRejectRepairRequest>;
+
+export const AutomationRunApproveRepairRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  reason: z.string().min(1).max(1000).optional(),
+});
+export type AutomationRunApproveRepairInput = z.infer<typeof AutomationRunApproveRepairRequest>;
+
+export const AutomationRunCompensationRetryRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  reason: z.string().min(1).max(1000).optional(),
+});
+export type AutomationRunCompensationRetryInput = z.infer<typeof AutomationRunCompensationRetryRequest>;
+
+export const AutomationRunCompensationWorkflowAction = z.enum([
+  "manual_cleanup_started",
+  "manual_cleanup_completed",
+  "engineering_escalated",
+  "observation_noted",
+]);
+
+export const AutomationRunCompensationRecordActionRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  action: AutomationRunCompensationWorkflowAction,
+  note: z.string().min(1).max(1000).optional(),
+  external_ref: z.string().min(1).max(512).optional(),
+});
+export type AutomationRunCompensationRecordActionInput = z.infer<typeof AutomationRunCompensationRecordActionRequest>;
+
+export const AutomationRunCompensationAssignRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  run_id: UUID,
+  owner: z.string().min(1).max(256).optional(),
+  escalation_owner: z.string().min(1).max(256).optional(),
+  sla_target_at: z.string().min(1).max(64).optional(),
+  note: z.string().min(1).max(1000).optional(),
+});
+export type AutomationRunCompensationAssignInput = z.infer<typeof AutomationRunCompensationAssignRequest>;
+
+export const AutomationCompensationPolicyMatrixRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+});
+export type AutomationCompensationPolicyMatrixInput = z.infer<typeof AutomationCompensationPolicyMatrixRequest>;
+
 export const SandboxSessionCreateRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),

@@ -3980,11 +3980,39 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
   const paramsObj = asObject(parsed.params) ?? {};
   const mode = parsed.mode;
   const stepReports: Array<Record<string, unknown>> = [];
+  const recordRun = paramsObj.record_run !== false && Boolean(opts.writeOptions);
+  const requestedRunIdRaw = toStringOrNull(paramsObj.run_id);
+  const replayRunId = requestedRunIdRaw && UUID_V4_OR_VX.test(requestedRunIdRaw) ? requestedRunIdRaw : randomUUID();
 
   if (mode === "simulate") {
+    let runStartOut: Record<string, unknown> | null = null;
     let readySteps = 0;
     let blockedSteps = 0;
     let unknownSteps = 0;
+    if (recordRun) {
+      runStartOut = await replayRunStart(
+        client,
+        {
+          tenant_id: tenancy.tenant_id,
+          scope: tenancy.scope,
+          actor: parsed.actor ?? undefined,
+          run_id: replayRunId,
+          goal: `Replay playbook ${parsed.playbook_id} v${row.version_num} (simulate)`,
+          context_snapshot_ref: buildAionisUri({
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            type: row.type,
+            id: row.id,
+          }),
+          metadata: {
+            replay_mode: "simulate",
+            source_playbook_id: parsed.playbook_id,
+            source_playbook_version: row.version_num,
+          },
+        },
+        opts.writeOptions!,
+      ) as Record<string, unknown>;
+    }
     for (const step of stepsRaw) {
       const stepObj = asObject(step) ?? {};
       const stepIndex = Number(stepObj.step_index ?? 0) || null;
@@ -4009,6 +4037,63 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       } else {
         readiness = "ready";
         readySteps += 1;
+      }
+      let persistedStepId: string | null = null;
+      if (recordRun && stepIndex != null && toolName) {
+        const before = await replayStepBefore(
+          client,
+          {
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            actor: parsed.actor ?? undefined,
+            run_id: replayRunId,
+            step_index: stepIndex,
+            tool_name: toolName,
+            tool_input: stepObj.tool_input_template ?? stepObj.tool_input ?? {},
+            expected_output_signature: stepObj.expected_output_signature ?? null,
+            preconditions: Array.isArray(stepObj.preconditions) ? stepObj.preconditions : [],
+            retry_policy: asObject(stepObj.retry_policy) ?? undefined,
+            safety_level: (toStringOrNull(stepObj.safety_level) ?? "needs_confirm") as "auto_ok" | "needs_confirm" | "manual_only",
+            metadata: {
+              replay_mode: "simulate",
+              playbook_id: parsed.playbook_id,
+              playbook_version: row.version_num,
+            },
+          },
+          opts.writeOptions!,
+        ) as Record<string, unknown>;
+        persistedStepId = toStringOrNull(before.step_id);
+        await replayStepAfter(
+          client,
+          {
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            actor: parsed.actor ?? undefined,
+            run_id: replayRunId,
+            step_id: persistedStepId ?? undefined,
+            step_index: stepIndex,
+            status: readiness === "ready" ? "success" : "partial",
+            output_signature: {
+              readiness,
+              command: command || null,
+              argv,
+            },
+            postconditions: [],
+            artifact_refs: [],
+            repair_applied: false,
+            error:
+              readiness === "blocked"
+                ? "simulate_blocked"
+                : readiness === "unknown"
+                  ? "simulate_unknown"
+                  : undefined,
+            metadata: {
+              replay_mode: "simulate",
+              readiness,
+            },
+          },
+          opts.writeOptions!,
+        );
       }
       stepReports.push({
         step_index: stepIndex,
@@ -4035,6 +4120,36 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
               : ["Preconditions passed."],
       });
     }
+    const runStatus = blockedSteps > 0 || unknownSteps > 0 ? "partial" : "success";
+    let runEndOut: Record<string, unknown> | null = null;
+    if (recordRun) {
+      runEndOut = await replayRunEnd(
+        client,
+        {
+          tenant_id: tenancy.tenant_id,
+          scope: tenancy.scope,
+          actor: parsed.actor ?? undefined,
+          run_id: replayRunId,
+          status: runStatus,
+          summary:
+            runStatus === "success"
+              ? "simulate replay readiness passed"
+              : "simulate replay found blocked or unknown steps",
+          metrics: {
+            total_steps: stepsRaw.length,
+            ready_steps: readySteps,
+            blocked_steps: blockedSteps,
+            unknown_steps: unknownSteps,
+          },
+          metadata: {
+            replay_mode: "simulate",
+            source_playbook_id: parsed.playbook_id,
+            source_playbook_version: row.version_num,
+          },
+        },
+        opts.writeOptions!,
+      ) as Record<string, unknown>;
+    }
     return {
       tenant_id: tenancy.tenant_id,
       scope: tenancy.scope,
@@ -4051,6 +4166,17 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         }),
       },
       mode: "simulate",
+      run:
+        recordRun
+          ? {
+              run_id: replayRunId,
+              status: runStatus,
+              run_uri: toStringOrNull(runStartOut?.run_uri),
+              run_end_uri: toStringOrNull(runEndOut?.run_end_uri),
+              commit_id_start: toStringOrNull(runStartOut?.commit_id),
+              commit_id_end: toStringOrNull(runEndOut?.commit_id),
+            }
+          : null,
       execution_policy: {
         execution_backend: normalizeReplayExecutionBackend(toStringOrNull(paramsObj.execution_backend)),
         sensitive_review_mode: normalizeReplaySensitiveReviewMode(toStringOrNull(paramsObj.sensitive_review_mode)),
@@ -4170,10 +4296,6 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
   const workdir = toStringOrNull(paramsObj.workdir) ?? localExecutor?.workdir ?? process.cwd();
   const autoConfirm = paramsObj.auto_confirm === true;
   const stopOnFailure = paramsObj.stop_on_failure !== false;
-  const recordRun = paramsObj.record_run !== false;
-  const requestedRunIdRaw = toStringOrNull(paramsObj.run_id);
-  const replayRunId = requestedRunIdRaw && UUID_V4_OR_VX.test(requestedRunIdRaw) ? requestedRunIdRaw : randomUUID();
-
   if (executionBackend !== "local_process" && opts.sandboxBudgetGuard) {
     await opts.sandboxBudgetGuard({
       tenant_id: tenancy.tenant_id,

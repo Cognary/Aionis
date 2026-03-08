@@ -71,6 +71,27 @@ Memory 路由使用以下任一方式：
 10. `POST /v1/memory/replay/playbooks/repair/review`
 11. `POST /v1/memory/replay/playbooks/run`
 
+### Automation（Public Beta）
+
+1. `POST /v1/automations/create`
+2. `POST /v1/automations/get`
+3. `POST /v1/automations/list`
+4. `POST /v1/automations/validate`
+5. `POST /v1/automations/graph/validate`
+6. `POST /v1/automations/run`
+7. `POST /v1/automations/runs/get`
+8. `POST /v1/automations/runs/list`
+9. `POST /v1/automations/runs/cancel`
+10. `POST /v1/automations/runs/resume`
+11. `POST /v1/automations/runs/approve_repair`
+12. `POST /v1/automations/runs/reject_repair`
+13. `POST /v1/automations/runs/compensation/retry`
+14. `POST /v1/automations/promote`
+15. `POST /v1/automations/shadow/report`
+16. `POST /v1/automations/shadow/validate`
+17. `POST /v1/automations/shadow/validate/dispatch`
+18. `POST /v1/automations/telemetry`
+
 ### 图与回放工具
 
 1. `POST /v1/memory/find`
@@ -203,6 +224,7 @@ Memory 路由使用以下任一方式：
 ## 相关页面
 
 1. [API 合约](/public/zh/api/01-api-contract)
-2. [SDK 指南](/public/zh/reference/05-sdk)
-3. [SDK 兼容矩阵](/public/zh/reference/06-sdk-compatibility-matrix)
-4. [Sandbox API（实验）](/public/zh/reference/08-sandbox-api)
+2. [Automation API 参考](/public/zh/api-reference/01-automation-api-reference)
+3. [SDK 指南](/public/zh/reference/05-sdk)
+4. [SDK 兼容矩阵](/public/zh/reference/06-sdk-compatibility-matrix)
+5. [Sandbox API（实验）](/public/zh/reference/08-sandbox-api)

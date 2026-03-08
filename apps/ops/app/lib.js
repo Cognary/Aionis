@@ -81,6 +81,36 @@ export function readGovernanceQuery(searchParams) {
   };
 }
 
+export function readAutomationQuery(searchParams) {
+  const includeNodesRaw = firstValue(searchParams?.include_nodes);
+  return {
+    tenantId: normalizeText(searchParams?.tenant_id, "default"),
+    scope: normalizeText(searchParams?.scope, ""),
+    reviewer: normalizeText(searchParams?.reviewer, ""),
+    compensationOwner: normalizeText(searchParams?.compensation_owner, ""),
+    escalationOwner: normalizeText(searchParams?.escalation_owner, ""),
+    workflowBucket: normalizeText(searchParams?.workflow_bucket, ""),
+    slaStatus: normalizeText(searchParams?.sla_status, ""),
+    telemetryWindowHours: normalizeInt(searchParams?.telemetry_window_hours, 168, 1, 24 * 30),
+    alertDeliveryStatus: normalizeText(searchParams?.alert_delivery_status, "failed"),
+    alertReplayState: normalizeText(searchParams?.alert_replay_state, ""),
+    alertDeliveryOwner: normalizeText(searchParams?.alert_delivery_owner, ""),
+    alertDeliveryEscalationOwner: normalizeText(searchParams?.alert_delivery_escalation_owner, ""),
+    alertDeliverySlaStatus: normalizeText(searchParams?.alert_delivery_sla_status, ""),
+    alertDeliveryBacklog: normalizeText(searchParams?.alert_delivery_backlog, ""),
+    focusAlertDeliveryId: normalizeText(searchParams?.focus_alert_delivery_id, ""),
+    runId: normalizeText(searchParams?.run_id, ""),
+    automationId: normalizeText(searchParams?.automation_id, ""),
+    version: normalizeInt(searchParams?.version, 0, 0, 100000) || 0,
+    promotionLimit: normalizeInt(searchParams?.promotion_limit, 12, 1, 100),
+    queueLimit: normalizeInt(searchParams?.queue_limit, 20, 1, 100),
+    includeNodes:
+      includeNodesRaw === undefined || includeNodesRaw === null || String(includeNodesRaw).trim() === ""
+        ? true
+        : normalizeBool(includeNodesRaw, true)
+  };
+}
+
 export function withQuery(path, query = {}) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) {

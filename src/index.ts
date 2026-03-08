@@ -25,7 +25,10 @@ import {
   createApiKeyPrincipalResolver,
   createControlApiKey,
   createTenantQuotaResolver,
+  getControlAlertRouteById,
   deleteTenantQuotaProfile,
+  countRecentControlAlertDeliveriesByRoute,
+  findRecentControlAlertDeliveryByDedupe,
   getTenantQuotaProfile,
   getTenantApiKeyUsageReport,
   getTenantDashboardSummary,
@@ -35,6 +38,8 @@ import {
   getTenantRequestTimeseries,
   listControlApiKeys,
   listControlAlertDeliveries,
+  listControlAlertDeliveriesByIds,
+  listActiveAlertRoutesForEvent,
   listControlAlertRoutes,
   listControlAuditEvents,
   listControlIncidentPublishJobs,
@@ -42,10 +47,12 @@ import {
   listStaleControlApiKeys,
   listControlTenants,
   recordMemoryContextAssemblyTelemetry,
+  recordControlAlertDelivery,
   recordMemoryRequestTelemetry,
   recordControlAuditEvent,
   rotateControlApiKey,
   revokeControlApiKey,
+  updateControlAlertDeliveriesMetadata,
   updateControlAlertRouteStatus,
   upsertControlProject,
   upsertControlTenant,
@@ -66,6 +73,31 @@ import { selectTools } from "./memory/tools-select.js";
 import { getToolsDecisionById } from "./memory/tools-decision.js";
 import { getToolsRunLifecycle } from "./memory/tools-run.js";
 import { toolSelectionFeedback } from "./memory/tools-feedback.js";
+import {
+  automationCreate,
+  automationAssignReviewer,
+  automationCompensationPolicyMatrix,
+  automationGet,
+  automationList,
+  automationTelemetry,
+  automationShadowReport,
+  automationShadowReview,
+  automationShadowValidate,
+  automationShadowValidateDispatch,
+  automationPromote,
+  automationRun,
+  automationRunAssignReviewer,
+  automationRunCancel,
+  automationRunApproveRepair,
+  automationRunCompensationAssign,
+  automationRunCompensationRecordAction,
+  automationRunCompensationRetry,
+  automationRunGet,
+  automationRunList,
+  automationRunRejectRepair,
+  automationRunResume,
+  automationValidate,
+} from "./memory/automation.js";
 import {
   replayPlaybookCompileFromRun,
   replayPlaybookGet,
@@ -2025,6 +2057,35 @@ const ControlAlertRouteStatusSchema = z.object({
   status: z.enum(["active", "disabled"]),
 });
 
+const ControlAutomationAlertDispatchSchema = z.object({
+  tenant_id: z.string().min(1).max(128).optional(),
+  scope: z.string().min(1).max(256).optional(),
+  automation_id: z.string().min(1).max(256).optional(),
+  window_hours: z.number().int().min(1).max(24 * 30).optional(),
+  incident_limit: z.number().int().min(1).max(100).optional(),
+  candidate_codes: z.array(z.string().min(1).max(128)).max(32).optional(),
+  dry_run: z.boolean().optional(),
+  dedupe_ttl_seconds: z.number().int().min(60).max(7 * 24 * 3600).optional(),
+});
+
+const ControlAlertDeliveryReplaySchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
+  dry_run: z.boolean().optional(),
+  dedupe_ttl_seconds: z.number().int().min(60).max(7 * 24 * 3600).optional(),
+  allow_disabled_route: z.boolean().optional(),
+  override_target: z.string().min(1).max(2048).optional(),
+});
+
+const ControlAlertDeliveryAssignSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
+  owner: z.string().max(256).nullable().optional(),
+  escalation_owner: z.string().max(256).nullable().optional(),
+  sla_target_at: z.string().datetime().nullable().optional(),
+  workflow_state: z.enum(["replay_backlog", "manual_review", "dead_letter"]).nullable().optional(),
+  note: z.string().max(1000).nullable().optional(),
+  actor: z.string().min(1).max(256).optional(),
+});
+
 const ControlIncidentPublishJobSchema = z.object({
   tenant_id: z.string().min(1).max(128),
   run_id: z.string().min(1).max(256),
@@ -2239,6 +2300,722 @@ app.get("/v1/admin/control/alerts/deliveries", async (req, reply) => {
     offset: typeof q?.offset === "string" ? Number(q.offset) : undefined,
   });
   return reply.code(200).send({ ok: true, deliveries });
+});
+
+app.post("/v1/admin/control/alerts/deliveries/replay", async (req, reply) => {
+  requireAdminToken(req);
+  const body = ControlAlertDeliveryReplaySchema.parse(req.body ?? {});
+  const deliveries = await listControlAlertDeliveriesByIds(db, body.ids);
+  const byId = new Map(deliveries.map((row: any) => [String(row.delivery_id), row]));
+  const results = [];
+
+  for (const id of body.ids) {
+    const row = byId.get(String(id));
+    if (!row) {
+      results.push({ delivery_id: id, status: "skipped", skipped_reason: "delivery_not_found" });
+      continue;
+    }
+    if (row.status !== "failed" && row.status !== "skipped") {
+      results.push({ delivery_id: String(row.delivery_id), route_id: row.route_id ?? null, status: "skipped", skipped_reason: "delivery_not_replayable" });
+      continue;
+    }
+    const metadata = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : {};
+    const payloadSnapshot = metadata.payload_snapshot;
+    if (payloadSnapshot == null) {
+      results.push({ delivery_id: String(row.delivery_id), route_id: row.route_id ?? null, status: "skipped", skipped_reason: "payload_snapshot_missing" });
+      continue;
+    }
+
+    const route = await getControlAlertRouteById(db, String(row.route_id || ""));
+    if (!route) {
+      results.push({ delivery_id: String(row.delivery_id), route_id: row.route_id ?? null, status: "skipped", skipped_reason: "route_not_found" });
+      continue;
+    }
+    if (route.status !== "active" && body.allow_disabled_route !== true) {
+      results.push({ delivery_id: String(row.delivery_id), route_id: String(route.id), status: "skipped", skipped_reason: "route_disabled" });
+      continue;
+    }
+
+    const routeForDispatch =
+      body.override_target && String(body.override_target).trim()
+        ? { ...route, target: String(body.override_target).trim() }
+        : route;
+    const dedupeKey = typeof metadata.dedupe_key === "string" ? metadata.dedupe_key.trim() : "";
+    const eventType = String(row.event_type || "").trim();
+    const dispatchPolicy = asAutomationAlertDispatchPolicy(routeForDispatch, body.dedupe_ttl_seconds ?? 1800);
+    const resultBase = {
+      delivery_id: String(row.delivery_id),
+      route_id: String(route.id),
+      route_label: route.label ?? null,
+      channel: route.channel ?? null,
+      event_type: eventType,
+      code: typeof metadata.candidate_code === "string" ? metadata.candidate_code : null,
+      dedupe_key: dedupeKey || null,
+      dispatch_policy: dispatchPolicy,
+      replay_of_delivery_id: String(row.delivery_id),
+    };
+
+    const out = await dispatchControlAlertWithPayload({
+      route: routeForDispatch,
+      tenantId: String(row.tenant_id || ""),
+      eventType,
+      requestId: String(req.id ?? ""),
+      dedupeKey: dedupeKey || [String(row.tenant_id || ""), String(row.route_id || ""), eventType, "replay"].filter(Boolean).join(":"),
+      dispatchPolicy,
+      body: payloadSnapshot,
+      dryRun: body.dry_run === true,
+      resultBase,
+      deliveryMetadata: {
+        ...(metadata && typeof metadata === "object" ? metadata : {}),
+        replay_of_delivery_id: String(row.delivery_id),
+        replay_source_status: row.status ?? null,
+        replay_request: {
+          override_target: body.override_target ?? null,
+          allow_disabled_route: body.allow_disabled_route === true,
+        },
+      },
+    });
+    results.push(out);
+  }
+
+  await emitControlAudit(req, {
+    action: body.dry_run === true ? "alert_delivery.replay.preview" : "alert_delivery.replay",
+    resource_type: "alert_delivery",
+    resource_id: body.ids[0] ?? "batch",
+    tenant_id: deliveries[0]?.tenant_id == null ? "" : String(deliveries[0].tenant_id),
+    details: {
+      delivery_count: body.ids.length,
+      found_count: deliveries.length,
+      dry_run: body.dry_run === true,
+      allow_disabled_route: body.allow_disabled_route === true,
+      override_target: body.override_target ?? null,
+      replayed: results.filter((item: any) => item.status === "sent").length,
+      failed: results.filter((item: any) => item.status === "failed").length,
+      skipped: results.filter((item: any) => item.status === "skipped").length,
+      dry_run_rows: results.filter((item: any) => item.status === "dry_run").length,
+    },
+  });
+
+  return reply.code(200).send({
+    ok: true,
+    dry_run: body.dry_run === true,
+    found_deliveries: deliveries.length,
+    replayed: results.filter((item: any) => item.status === "sent").length,
+    failed: results.filter((item: any) => item.status === "failed").length,
+    skipped: results.filter((item: any) => item.status === "skipped").length,
+    dry_run_rows: results.filter((item: any) => item.status === "dry_run").length,
+    results,
+  });
+});
+
+app.post("/v1/admin/control/alerts/deliveries/assign", async (req, reply) => {
+  requireAdminToken(req);
+  const body = ControlAlertDeliveryAssignSchema.parse(req.body ?? {});
+  const actor = String(body.actor || "ops").trim();
+  const nowIso = new Date().toISOString();
+  const updated = await updateControlAlertDeliveriesMetadata(db, body.ids, (row) => {
+    const metadata =
+      row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? { ...(row.metadata as Record<string, unknown>) }
+        : {};
+    const workflow =
+      metadata.alert_workflow && typeof metadata.alert_workflow === "object" && !Array.isArray(metadata.alert_workflow)
+        ? { ...(metadata.alert_workflow as Record<string, unknown>) }
+        : {};
+    const history = Array.isArray(workflow.history) ? [...workflow.history] : [];
+    const nextWorkflow: Record<string, unknown> = {
+      ...workflow,
+      ...(body.owner !== undefined ? { owner: body.owner && String(body.owner).trim() ? String(body.owner).trim() : null } : {}),
+      ...(body.escalation_owner !== undefined
+        ? {
+            escalation_owner:
+              body.escalation_owner && String(body.escalation_owner).trim() ? String(body.escalation_owner).trim() : null,
+          }
+        : {}),
+      ...(body.sla_target_at !== undefined ? { sla_target_at: body.sla_target_at ?? null } : {}),
+      ...(body.workflow_state !== undefined ? { state: body.workflow_state ?? null } : {}),
+      ...(body.note !== undefined ? { note: body.note && String(body.note).trim() ? String(body.note).trim() : null } : {}),
+      updated_at: nowIso,
+      updated_by: actor,
+    };
+    history.push({
+      action: "assignment_updated",
+      at: nowIso,
+      actor,
+      owner: nextWorkflow.owner ?? workflow.owner ?? null,
+      escalation_owner: nextWorkflow.escalation_owner ?? workflow.escalation_owner ?? null,
+      sla_target_at: nextWorkflow.sla_target_at ?? workflow.sla_target_at ?? null,
+      workflow_state: nextWorkflow.state ?? workflow.state ?? null,
+      note: nextWorkflow.note ?? workflow.note ?? null,
+    });
+    nextWorkflow.history = history.slice(-20);
+    return {
+      ...metadata,
+      alert_workflow: nextWorkflow,
+    };
+  });
+
+  await emitControlAudit(req, {
+    action: "alert_delivery.assign",
+    resource_type: "alert_delivery",
+    resource_id: body.ids[0] ?? "batch",
+    tenant_id: updated[0]?.tenant_id == null ? "" : String(updated[0].tenant_id),
+    details: {
+      delivery_count: body.ids.length,
+      updated_count: updated.length,
+      actor,
+      owner: body.owner ?? null,
+      escalation_owner: body.escalation_owner ?? null,
+      sla_target_at: body.sla_target_at ?? null,
+      workflow_state: body.workflow_state ?? null,
+      note: body.note ?? null,
+    },
+  });
+
+  return reply.code(200).send({
+    ok: true,
+    updated: updated.length,
+    deliveries: updated,
+  });
+});
+
+app.post("/v1/admin/control/automations/alerts/preview", async (req, reply) => {
+  requireAdminToken(req);
+  const body = req.body ?? {};
+  const telemetry = await store.withClient((client) =>
+    automationTelemetry(client, body, {
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+    }),
+  );
+  const candidates = Array.isArray((telemetry as any)?.alert_candidates) ? (telemetry as any).alert_candidates : [];
+  const previews = [];
+  for (const candidate of candidates) {
+    const eventType = typeof candidate?.recommended_event_type === "string" ? candidate.recommended_event_type.trim() : "";
+    if (!eventType) {
+      previews.push({
+        ...candidate,
+        route_count: 0,
+        dispatch_ready: false,
+        routes: [],
+      });
+      continue;
+    }
+    const routes = await listActiveAlertRoutesForEvent(db, {
+      tenant_id: String((telemetry as any)?.tenant_id || ""),
+      event_type: eventType,
+      limit: 20,
+    });
+    previews.push({
+      ...candidate,
+      route_count: routes.length,
+      dispatch_ready: routes.length > 0,
+      routes: routes.map((route: any) => ({
+        id: String(route.id),
+        label: route.label ?? null,
+        channel: route.channel,
+        status: route.status,
+        target: route.target,
+        dispatch_policy: asAutomationAlertDispatchPolicy(route, 1800),
+      })),
+    });
+  }
+  return reply.code(200).send({
+    ok: true,
+    tenant_id: (telemetry as any)?.tenant_id ?? null,
+    scope: (telemetry as any)?.scope ?? null,
+    window_hours: (telemetry as any)?.window_hours ?? null,
+    automation_id: (telemetry as any)?.automation_id ?? null,
+    summary: (telemetry as any)?.summary ?? {},
+    alert_previews: previews,
+  });
+});
+
+function buildAutomationAlertDispatchEventPayload(args: {
+  telemetry: any;
+  candidate: any;
+  route: any;
+  requestId: string;
+  dedupeKey: string;
+}) {
+  const severity = String(args.candidate?.severity || "warning").trim() || "warning";
+  const eventType = String(args.candidate?.recommended_event_type || "").trim();
+  const tenantId = String(args.telemetry?.tenant_id || "").trim();
+  const scope = String(args.telemetry?.scope || "").trim();
+  const automationId = String(args.telemetry?.automation_id || "").trim();
+  const summary = String(args.candidate?.summary || eventType || "automation alert").trim();
+  const payload = {
+    source: "aionis_automation",
+    tenant_id: tenantId || null,
+    scope: scope || null,
+    automation_id: automationId || null,
+    event_type: eventType || null,
+    code: String(args.candidate?.code || "").trim() || null,
+    severity,
+    summary,
+    threshold: args.candidate?.threshold ?? null,
+    current_value: args.candidate?.current_value ?? null,
+    suggested_action: args.candidate?.suggested_action ?? null,
+    telemetry_summary: args.telemetry?.summary ?? {},
+    request_id: args.requestId || null,
+    dedupe_key: args.dedupeKey,
+    generated_at: new Date().toISOString(),
+  };
+
+  if (args.route?.channel === "slack_webhook") {
+    return {
+      text: `[${severity.toUpperCase()}] ${summary}`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*${summary}*\nseverity: \`${severity}\`\nevent: \`${eventType || "-"}\`\nautomation: \`${automationId || "-"}\``,
+          },
+        },
+      ],
+      metadata: payload,
+    };
+  }
+
+  if (args.route?.channel === "pagerduty_events") {
+    const routingKey = typeof args.route?.secret === "string" ? args.route.secret.trim() : "";
+    if (!routingKey) {
+      throw new HttpError(400, "invalid_alert_route_secret", "pagerduty_events route requires secret integration key");
+    }
+    return {
+      routing_key: routingKey,
+      event_action: "trigger",
+      dedup_key: args.dedupeKey,
+      payload: {
+        summary,
+        severity: severity === "critical" ? "critical" : "warning",
+        source: "aionis",
+        component: automationId || "automation",
+        group: tenantId || "default",
+        class: eventType || "automation_alert",
+        custom_details: payload,
+      },
+    };
+  }
+
+  return payload;
+}
+
+function asAutomationAlertDispatchPolicy(rawRoute: any, requestDedupeTtlSeconds: number) {
+  const metadata =
+    rawRoute?.metadata && typeof rawRoute.metadata === "object" && !Array.isArray(rawRoute.metadata)
+      ? rawRoute.metadata
+      : {};
+  const policyRaw =
+    metadata?.automation_dispatch_policy &&
+    typeof metadata.automation_dispatch_policy === "object" &&
+    !Array.isArray(metadata.automation_dispatch_policy)
+      ? metadata.automation_dispatch_policy
+      : {};
+  const cooldownRaw = Number(policyRaw.cooldown_seconds);
+  const retryMaxAttemptsRaw = Number(policyRaw.retry_max_attempts);
+  const retryBackoffMsRaw = Number(policyRaw.retry_backoff_ms);
+  const replayBackoffSecondsRaw = Number(policyRaw.replay_backoff_seconds);
+  const maxDispatchesPerWindowRaw = Number(policyRaw.max_dispatches_per_window);
+  const windowSecondsRaw = Number(policyRaw.window_seconds);
+  const retryOnHttp5xxRaw = policyRaw.retry_on_http_5xx;
+  const retryOnNetworkErrorRaw = policyRaw.retry_on_network_error;
+  const cooldownSeconds = Number.isFinite(cooldownRaw)
+    ? Math.max(0, Math.min(7 * 24 * 3600, Math.trunc(cooldownRaw)))
+    : Math.max(0, Math.min(7 * 24 * 3600, Math.trunc(requestDedupeTtlSeconds)));
+  const maxDispatchesPerWindow = Number.isFinite(maxDispatchesPerWindowRaw)
+    ? Math.max(1, Math.min(1000, Math.trunc(maxDispatchesPerWindowRaw)))
+    : null;
+  const windowSeconds =
+    maxDispatchesPerWindow != null
+      ? Number.isFinite(windowSecondsRaw)
+        ? Math.max(60, Math.min(7 * 24 * 3600, Math.trunc(windowSecondsRaw)))
+        : Math.max(60, cooldownSeconds || 300)
+      : null;
+
+  return {
+    cooldown_seconds: cooldownSeconds,
+    retry_max_attempts: Number.isFinite(retryMaxAttemptsRaw)
+      ? Math.max(1, Math.min(4, Math.trunc(retryMaxAttemptsRaw)))
+      : 1,
+    retry_backoff_ms: Number.isFinite(retryBackoffMsRaw)
+      ? Math.max(0, Math.min(5000, Math.trunc(retryBackoffMsRaw)))
+      : 250,
+    replay_backoff_seconds: Number.isFinite(replayBackoffSecondsRaw)
+      ? Math.max(0, Math.min(7 * 24 * 3600, Math.trunc(replayBackoffSecondsRaw)))
+      : 300,
+    retry_on_http_5xx: retryOnHttp5xxRaw === false ? false : true,
+    retry_on_network_error: retryOnNetworkErrorRaw === false ? false : true,
+    max_dispatches_per_window: maxDispatchesPerWindow,
+    window_seconds: windowSeconds,
+  };
+}
+
+async function dispatchControlAlertWithPayload(args: {
+  route: any;
+  tenantId: string;
+  eventType: string;
+  requestId: string;
+  dedupeKey: string;
+  dispatchPolicy: Record<string, unknown>;
+  body: unknown;
+  dryRun: boolean;
+  resultBase: Record<string, unknown>;
+  deliveryMetadata: Record<string, unknown>;
+}) {
+  if (args.dryRun) {
+    return {
+      ...args.resultBase,
+      status: "dry_run",
+      preview_body: args.body,
+      attempts: 0,
+    };
+  }
+
+  const routeHeaders =
+    args.route?.headers && typeof args.route.headers === "object" && !Array.isArray(args.route.headers)
+      ? Object.fromEntries(
+          Object.entries(args.route.headers).map(([k, v]) => [String(k), String(v)]),
+        )
+      : {};
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "user-agent": "aionis-control-alert/1.0",
+    "x-aionis-alert-event": args.eventType,
+    "x-aionis-dedupe-key": args.dedupeKey,
+    ...routeHeaders,
+  };
+  if (args.route?.channel === "webhook" && typeof args.route?.secret === "string" && args.route.secret.trim()) {
+    headers["x-aionis-route-secret"] = args.route.secret.trim();
+  }
+
+  const dispatchPolicy: any = args.dispatchPolicy ?? {};
+  let attempt = 0;
+  let lastStatus: number | null = null;
+  let lastResponseBody: string | null = null;
+  let lastError: string | null = null;
+  let finalState: "sent" | "failed" = "failed";
+  while (attempt < Number(dispatchPolicy.retry_max_attempts || 1)) {
+    attempt += 1;
+    const attemptController = new AbortController();
+    const attemptTimeout = setTimeout(() => attemptController.abort(), 8000);
+    try {
+      const response = await fetch(String(args.route?.target || ""), {
+        method: "POST",
+        headers,
+        body: JSON.stringify(args.body),
+        signal: attemptController.signal,
+      });
+      const responseBody = await response.text();
+      clearTimeout(attemptTimeout);
+      lastStatus = response.status;
+      lastResponseBody = responseBody.slice(0, 4000) || null;
+      lastError = response.ok ? null : `http_${response.status}`;
+      if (response.ok) {
+        finalState = "sent";
+        break;
+      }
+      const shouldRetryHttp = response.status >= 500 && dispatchPolicy.retry_on_http_5xx && attempt < dispatchPolicy.retry_max_attempts;
+      if (!shouldRetryHttp) break;
+    } catch (err: any) {
+      clearTimeout(attemptTimeout);
+      lastStatus = null;
+      lastResponseBody = null;
+      lastError = err instanceof Error ? err.message : "dispatch_failed";
+      const shouldRetryNetwork = dispatchPolicy.retry_on_network_error && attempt < dispatchPolicy.retry_max_attempts;
+      if (!shouldRetryNetwork) break;
+    }
+    const backoffMs = Number(dispatchPolicy.retry_backoff_ms || 0) * Math.max(1, attempt);
+    if (backoffMs > 0) await new Promise((resolve) => setTimeout(resolve, backoffMs));
+  }
+
+  await recordControlAlertDelivery(db, {
+    route_id: String(args.route?.id || "").trim(),
+    tenant_id: args.tenantId,
+    event_type: args.eventType,
+    status: finalState,
+    request_id: args.requestId,
+    response_code: lastStatus,
+    response_body: lastResponseBody,
+    error: finalState === "sent" ? null : lastError,
+    metadata: {
+      ...args.deliveryMetadata,
+      dispatch_policy: dispatchPolicy,
+      attempts: attempt,
+      payload_snapshot: args.body,
+      route_snapshot: {
+        id: String(args.route?.id || "").trim() || null,
+        label: args.route?.label ?? null,
+        channel: args.route?.channel ?? null,
+        status: args.route?.status ?? null,
+        target: args.route?.target ?? null,
+      },
+    },
+  });
+  return {
+    ...args.resultBase,
+    status: finalState,
+    response_code: lastStatus,
+    error: finalState === "sent" ? null : lastError,
+    attempts: attempt,
+  };
+}
+
+async function sendAutomationAlertRoute(args: {
+  route: any;
+  telemetry: any;
+  candidate: any;
+  dryRun: boolean;
+  dedupeTtlSeconds: number;
+  requestId: string;
+}) {
+  const routeId = String(args.route?.id || "").trim();
+  const tenantId = String(args.telemetry?.tenant_id || "").trim();
+  const eventType = String(args.candidate?.recommended_event_type || "").trim();
+  const code = String(args.candidate?.code || "").trim();
+  const automationId = String(args.telemetry?.automation_id || "").trim();
+  const scope = String(args.telemetry?.scope || "").trim();
+  const windowHours = Number(args.telemetry?.window_hours || 0) || null;
+  const dedupeKey = [tenantId, scope, automationId, eventType, code].filter(Boolean).join(":");
+  const dispatchPolicy = asAutomationAlertDispatchPolicy(args.route, args.dedupeTtlSeconds);
+  const resultBase = {
+    route_id: routeId,
+    route_label: args.route?.label ?? null,
+    channel: args.route?.channel ?? null,
+    event_type: eventType,
+    code: code || null,
+    severity: args.candidate?.severity ?? null,
+    dedupe_key: dedupeKey,
+    dispatch_policy: dispatchPolicy,
+  };
+
+  if (!routeId || !tenantId || !eventType) {
+    return {
+      ...resultBase,
+      status: "failed",
+      error: "invalid_dispatch_context",
+    };
+  }
+
+  if (!args.dryRun) {
+    const prior = await findRecentControlAlertDeliveryByDedupe(db, {
+      route_id: routeId,
+      dedupe_key: dedupeKey,
+      ttl_seconds: dispatchPolicy.cooldown_seconds,
+    });
+    if (prior) {
+      await recordControlAlertDelivery(db, {
+        route_id: routeId,
+        tenant_id: tenantId,
+        event_type: eventType,
+        status: "skipped",
+        request_id: args.requestId,
+        metadata: {
+          dedupe_key: dedupeKey,
+          reason: "recent_sent_delivery",
+          candidate_code: code || null,
+          prior_delivery_id: prior.delivery_id ?? prior.id ?? null,
+          automation_id: automationId || null,
+          scope: scope || null,
+          window_hours: windowHours,
+          dispatch_policy: dispatchPolicy,
+        },
+      });
+      return {
+        ...resultBase,
+        status: "skipped",
+        skipped_reason: "dedupe_recent_sent",
+        attempts: 0,
+      };
+    }
+
+    if (dispatchPolicy.max_dispatches_per_window != null && dispatchPolicy.window_seconds != null) {
+      const recentSentCount = await countRecentControlAlertDeliveriesByRoute(db, {
+        route_id: routeId,
+        ttl_seconds: dispatchPolicy.window_seconds,
+        status: "sent",
+      });
+      if (recentSentCount >= dispatchPolicy.max_dispatches_per_window) {
+        await recordControlAlertDelivery(db, {
+          route_id: routeId,
+          tenant_id: tenantId,
+          event_type: eventType,
+          status: "skipped",
+          request_id: args.requestId,
+          metadata: {
+            dedupe_key: dedupeKey,
+            reason: "dispatch_rate_limit_budget_exhausted",
+            candidate_code: code || null,
+            automation_id: automationId || null,
+            scope: scope || null,
+            window_hours: windowHours,
+            dispatch_policy: dispatchPolicy,
+            recent_sent_count: recentSentCount,
+          },
+        });
+        return {
+          ...resultBase,
+          status: "skipped",
+          skipped_reason: "rate_limit_budget_exhausted",
+          attempts: 0,
+          recent_sent_count: recentSentCount,
+        };
+      }
+    }
+  }
+
+  let body: unknown;
+  try {
+    body = buildAutomationAlertDispatchEventPayload({
+      telemetry: args.telemetry,
+      candidate: args.candidate,
+      route: args.route,
+      requestId: args.requestId,
+      dedupeKey,
+    });
+  } catch (err: any) {
+    if (!args.dryRun) {
+      await recordControlAlertDelivery(db, {
+        route_id: routeId,
+        tenant_id: tenantId,
+        event_type: eventType,
+        status: "failed",
+        request_id: args.requestId,
+        error: err instanceof Error ? err.message : "payload_build_failed",
+        metadata: {
+          dedupe_key: dedupeKey,
+          candidate_code: code || null,
+          automation_id: automationId || null,
+          scope: scope || null,
+          window_hours: windowHours,
+          dispatch_policy: dispatchPolicy,
+        },
+      });
+    }
+    return {
+      ...resultBase,
+      status: "failed",
+      error: err instanceof Error ? err.message : "payload_build_failed",
+      attempts: 0,
+    };
+  }
+
+  if (args.dryRun) {
+    return {
+      ...resultBase,
+      status: "dry_run",
+      preview_body: body,
+      attempts: 0,
+    };
+  }
+
+  return dispatchControlAlertWithPayload({
+    route: args.route,
+    tenantId,
+    eventType,
+    requestId: args.requestId,
+    dedupeKey,
+    dispatchPolicy,
+    body,
+    dryRun: args.dryRun,
+    resultBase,
+    deliveryMetadata: {
+      dedupe_key: dedupeKey,
+      candidate_code: code || null,
+      automation_id: automationId || null,
+      scope: scope || null,
+      window_hours: windowHours,
+    },
+  });
+}
+
+app.post("/v1/admin/control/automations/alerts/dispatch", async (req, reply) => {
+  requireAdminToken(req);
+  const body = ControlAutomationAlertDispatchSchema.parse(req.body ?? {});
+  const telemetry = await store.withClient((client) =>
+    automationTelemetry(client, body, {
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+    }),
+  );
+  const filterCodes = new Set((body.candidate_codes ?? []).map((v) => String(v).trim()).filter(Boolean));
+  const candidates = (Array.isArray((telemetry as any)?.alert_candidates) ? (telemetry as any).alert_candidates : []).filter((candidate: any) => {
+    if (filterCodes.size === 0) return true;
+    const code = typeof candidate?.code === "string" ? candidate.code.trim() : "";
+    return code ? filterCodes.has(code) : false;
+  });
+  const results = [];
+  for (const candidate of candidates) {
+    const eventType = typeof candidate?.recommended_event_type === "string" ? candidate.recommended_event_type.trim() : "";
+    if (!eventType) {
+      results.push({
+        code: candidate?.code ?? null,
+        severity: candidate?.severity ?? null,
+        event_type: null,
+        status: "skipped",
+        skipped_reason: "missing_event_type",
+      });
+      continue;
+    }
+    const routes = await listActiveAlertRoutesForEvent(db, {
+      tenant_id: String((telemetry as any)?.tenant_id || ""),
+      event_type: eventType,
+      limit: 20,
+    });
+    if (!routes.length) {
+      results.push({
+        code: candidate?.code ?? null,
+        severity: candidate?.severity ?? null,
+        event_type: eventType,
+        status: "skipped",
+        skipped_reason: "no_matching_route",
+      });
+      continue;
+    }
+    for (const route of routes) {
+      results.push(
+        await sendAutomationAlertRoute({
+          route,
+          telemetry,
+          candidate,
+          dryRun: body.dry_run !== false,
+          dedupeTtlSeconds: body.dedupe_ttl_seconds ?? 1800,
+          requestId: String(req.id ?? ""),
+        }),
+      );
+    }
+  }
+  await emitControlAudit(req, {
+    action: body.dry_run !== false ? "automation_alert.dispatch.preview" : "automation_alert.dispatch",
+    resource_type: "automation_alert_dispatch",
+    resource_id: String((telemetry as any)?.automation_id || "tenant_scope"),
+    tenant_id: String((telemetry as any)?.tenant_id || ""),
+    details: {
+      automation_id: (telemetry as any)?.automation_id ?? null,
+      scope: (telemetry as any)?.scope ?? null,
+      window_hours: (telemetry as any)?.window_hours ?? null,
+      candidate_count: candidates.length,
+      result_count: results.length,
+      dry_run: body.dry_run !== false,
+    },
+  });
+  return reply.code(200).send({
+    ok: true,
+    tenant_id: (telemetry as any)?.tenant_id ?? null,
+    scope: (telemetry as any)?.scope ?? null,
+    window_hours: (telemetry as any)?.window_hours ?? null,
+    automation_id: (telemetry as any)?.automation_id ?? null,
+    dry_run: body.dry_run !== false,
+    summary: (telemetry as any)?.summary ?? {},
+    candidates_considered: candidates.length,
+    matched_routes: results.filter((item: any) => item.route_id).length,
+    dispatched: results.filter((item: any) => item.status === "sent").length,
+    failed: results.filter((item: any) => item.status === "failed").length,
+    skipped: results.filter((item: any) => item.status === "skipped").length,
+    dry_run_rows: results.filter((item: any) => item.status === "dry_run").length,
+    results,
+  });
 });
 
 app.post("/v1/admin/control/incident-publish/jobs", async (req, reply) => {
@@ -4777,6 +5554,681 @@ app.post("/v1/memory/replay/playbooks/run", async (req, reply) => {
   return reply.code(200).send(out);
 });
 
+function buildAutomationReplayRunOptions(reply: any, source: string): Parameters<typeof replayPlaybookRun>[2] {
+  const localExecutorMode = env.SANDBOX_ENABLED && env.SANDBOX_EXECUTOR_MODE === "local_process"
+    ? "local_process" as const
+    : "disabled" as const;
+  return {
+    defaultScope: env.MEMORY_SCOPE,
+    defaultTenantId: env.MEMORY_TENANT_ID,
+    embeddedRuntime,
+    writeOptions: {
+      defaultScope: env.MEMORY_SCOPE,
+      defaultTenantId: env.MEMORY_TENANT_ID,
+      maxTextLen: env.MAX_TEXT_LEN,
+      piiRedaction: env.PII_REDACTION,
+      allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+      shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+      shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+      writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
+      embedder,
+      embeddedRuntime,
+    },
+    localExecutor: {
+      enabled: env.SANDBOX_ENABLED && env.SANDBOX_EXECUTOR_MODE === "local_process",
+      mode: localExecutorMode,
+      allowedCommands: sandboxAllowedCommands,
+      workdir: env.SANDBOX_EXECUTOR_WORKDIR,
+      timeoutMs: env.SANDBOX_EXECUTOR_TIMEOUT_MS,
+      stdioMaxBytes: env.SANDBOX_STDIO_MAX_BYTES,
+    },
+    guidedRepair: {
+      strategy: env.REPLAY_GUIDED_REPAIR_STRATEGY,
+      allowRequestBuiltinLlm: env.REPLAY_GUIDED_REPAIR_ALLOW_REQUEST_BUILTIN_LLM,
+      maxErrorChars: env.REPLAY_GUIDED_REPAIR_MAX_ERROR_CHARS,
+      httpEndpoint: env.REPLAY_GUIDED_REPAIR_HTTP_ENDPOINT,
+      httpTimeoutMs: env.REPLAY_GUIDED_REPAIR_HTTP_TIMEOUT_MS,
+      httpAuthToken: env.REPLAY_GUIDED_REPAIR_HTTP_AUTH_TOKEN,
+      llmBaseUrl: env.REPLAY_GUIDED_REPAIR_LLM_BASE_URL,
+      llmApiKey: env.REPLAY_GUIDED_REPAIR_LLM_API_KEY,
+      llmModel: env.REPLAY_GUIDED_REPAIR_LLM_MODEL,
+      llmTimeoutMs: env.REPLAY_GUIDED_REPAIR_LLM_TIMEOUT_MS,
+      llmMaxTokens: env.REPLAY_GUIDED_REPAIR_LLM_MAX_TOKENS,
+      llmTemperature: env.REPLAY_GUIDED_REPAIR_LLM_TEMPERATURE,
+    },
+    sandboxBudgetGuard: async (input: { tenant_id: string; scope: string; project_id: string | null }) => {
+      await enforceSandboxTenantBudget(reply, input.tenant_id, input.scope, input.project_id);
+    },
+    sandboxExecutor: async (input: {
+      tenant_id: string;
+      scope: string;
+      project_id: string | null;
+      argv: string[];
+      timeout_ms: number;
+      mode: "sync" | "async";
+      metadata?: Record<string, unknown>;
+    }) => {
+      if (!env.SANDBOX_ENABLED) {
+        return {
+          ok: false,
+          status: "failed",
+          stdout: "",
+          stderr: "",
+          exit_code: null,
+          error: "sandbox_disabled",
+          run_id: null,
+        };
+      }
+      const sandboxMode = input.mode === "async" ? "async" : "sync";
+      const sessionOut = await store.withTx((client) =>
+        createSandboxSession(
+          client,
+          {
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            actor: source,
+            profile: "restricted",
+            ttl_seconds: 900,
+            metadata: {
+              source,
+              ...(input.metadata ?? {}),
+            },
+          },
+          {
+            defaultScope: env.MEMORY_SCOPE,
+            defaultTenantId: env.MEMORY_TENANT_ID,
+          },
+        ),
+      );
+      const queued = await store.withTx((client) =>
+        enqueueSandboxRun(
+          client,
+          {
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            project_id: input.project_id ?? undefined,
+            actor: source,
+            session_id: sessionOut.session.session_id,
+            mode: sandboxMode,
+            timeout_ms: input.timeout_ms,
+            action: {
+              kind: "command",
+              argv: input.argv,
+            },
+            metadata: {
+              source,
+              ...(input.metadata ?? {}),
+            },
+          },
+          {
+            defaultScope: env.MEMORY_SCOPE,
+            defaultTenantId: env.MEMORY_TENANT_ID,
+            defaultTimeoutMs: env.SANDBOX_EXECUTOR_TIMEOUT_MS,
+          },
+        ),
+      );
+      if (sandboxMode === "async") {
+        sandboxExecutor.enqueue(queued.run.run_id);
+        return {
+          ok: false,
+          status: queued.run.status ?? "queued",
+          stdout: "",
+          stderr: "",
+          exit_code: null,
+          error: null,
+          run_id: queued.run.run_id,
+        };
+      }
+      await sandboxExecutor.executeSync(queued.run.run_id);
+      const final = await store.withClient((client) =>
+        getSandboxRun(
+          client,
+          {
+            tenant_id: input.tenant_id,
+            scope: input.scope,
+            run_id: queued.run.run_id,
+          },
+          {
+            defaultScope: env.MEMORY_SCOPE,
+            defaultTenantId: env.MEMORY_TENANT_ID,
+          },
+        ),
+      );
+      return {
+        ok: final.run.status === "succeeded",
+        status: final.run.status,
+        stdout: final.run.output?.stdout ?? "",
+        stderr: final.run.output?.stderr ?? "",
+        exit_code: Number.isFinite(final.run.exit_code ?? NaN) ? Number(final.run.exit_code) : null,
+        error: final.run.error ? String(final.run.error) : null,
+        run_id: final.run.run_id,
+      };
+    },
+  };
+}
+
+function buildAutomationTestHook() {
+  const raw = process.env.AUTOMATION_TEST_FAULT_INJECTION_JSON?.trim();
+  if (!raw) return undefined;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  const byAction = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  return async (input: { action: string; stage: string; run_id?: string | null; node_id?: string | null }) => {
+    const actionEntry = byAction[input.action];
+    if (!actionEntry || typeof actionEntry !== "object" || Array.isArray(actionEntry)) return;
+    const expectedStage = typeof (actionEntry as Record<string, unknown>).stage === "string"
+      ? String((actionEntry as Record<string, unknown>).stage)
+      : null;
+    if (expectedStage !== input.stage) return;
+    throw new HttpError(500, "automation_injected_db_failure", "automation test hook injected db failure", {
+      action: input.action,
+      stage: input.stage,
+      run_id: input.run_id ?? null,
+      node_id: input.node_id ?? null,
+    });
+  };
+}
+
+app.post("/v1/automations/create", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_create");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationCreate(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/get", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationGet(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/list", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationList(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/telemetry", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationTelemetry(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/compensation/policy_matrix", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationCompensationPolicyMatrix(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/shadow/report", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationShadowReport(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/shadow/review", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_promote");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationShadowReview(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/shadow/validate", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationShadowValidate(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_shadow_validate"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/shadow/validate/dispatch", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationShadowValidateDispatch(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_shadow_validate_dispatch"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/assign_reviewer", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_promote");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationAssignReviewer(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/promote", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_promote");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationPromote(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/validate", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_validate");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationValidate(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/graph/validate", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_validate");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationValidate(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/run", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRun(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/get", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunGet(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/list", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_get");
+  await enforceRateLimit(req, reply, "recall");
+  await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+  const gate = await acquireInflightSlot("recall");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunList(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/assign_reviewer", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_get");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunAssignReviewer(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/cancel", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_cancel");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunCancel(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run_cancel"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/resume", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_resume");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunResume(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run_resume"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/reject_repair", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_reject_repair");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunRejectRepair(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run_reject_repair"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/approve_repair", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_approve_repair");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunApproveRepair(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run_approve_repair"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/compensation/retry", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_compensation_retry");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withClient((client) =>
+      automationRunCompensationRetry(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        replayRunOptions: buildAutomationReplayRunOptions(reply, "automation_run_compensation_retry"),
+        testHook: buildAutomationTestHook(),
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/compensation/record_action", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_compensation_record_action");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationRunCompensationRecordAction(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
+app.post("/v1/automations/runs/compensation/assign", async (req, reply) => {
+  const principal = await requireMemoryPrincipal(req);
+  const body = withIdentityFromRequest(req, req.body, principal, "automation_run_compensation_record_action");
+  await enforceRateLimit(req, reply, "write");
+  await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
+  const gate = await acquireInflightSlot("write");
+  let out: any;
+  try {
+    out = await store.withTx((client) =>
+      automationRunCompensationAssign(client, body, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+      }),
+    );
+  } finally {
+    gate.release();
+  }
+  return reply.code(200).send(out);
+});
+
 function assertSandboxEnabled(req: any) {
   if (!env.SANDBOX_ENABLED) {
     throw new HttpError(400, "sandbox_disabled", "sandbox interface is disabled");
@@ -5175,6 +6627,18 @@ function withIdentityFromRequest(
     | "replay_playbook_repair"
     | "replay_playbook_repair_review"
     | "replay_playbook_run"
+    | "automation_create"
+    | "automation_get"
+    | "automation_promote"
+    | "automation_validate"
+    | "automation_run"
+    | "automation_run_get"
+    | "automation_run_cancel"
+    | "automation_run_resume"
+    | "automation_run_reject_repair"
+    | "automation_run_approve_repair"
+    | "automation_run_compensation_retry"
+    | "automation_run_compensation_record_action"
     | "sandbox_session_create"
     | "sandbox_execute"
     | "sandbox_run_get"

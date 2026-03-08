@@ -44,6 +44,38 @@ AIONIS_BASE_URL=http://localhost:${PORT:-3001} AIONIS_SCOPE=default node dist/mc
 npm run -s mcp:smoke
 ```
 
+## Codex Local Profile
+
+Use this when you want a productized local path for Codex instead of wiring MCP and local session scripts by hand.
+
+The profile combines:
+
+1. `Aionis Dev MCP` as the MCP tool surface
+2. standalone Docker as the local runtime
+3. `codex-aionis` as the tracked local launcher
+
+Recommended flow:
+
+```bash
+npm run -s mcp:aionis:dev:standalone:oneclick
+npm run -s aionis:setup:codex
+npm run -s aionis:install:codex-launcher
+codex-aionis-doctor
+```
+
+Then launch Codex through the tracked wrapper:
+
+```bash
+codex-aionis \
+  --root /path/to/workspace \
+  --title "Your task title" \
+  --goal "Your concrete goal" \
+  --query "Your natural language task description" \
+  -- codex
+```
+
+Use [Codex Local Profile](codex-local-profile) for the complete setup and operating model.
+
 ## Playground
 
 ```bash

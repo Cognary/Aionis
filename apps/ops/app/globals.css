@@ -649,6 +649,27 @@ tbody tr:hover td {
   gap: 0.5rem;
 }
 
+.action-stack {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.callout {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(246, 249, 255, 0.76);
+  padding: 0.86rem;
+}
+
+.callout h3 {
+  margin-bottom: 0.34rem;
+}
+
+.callout p {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+}
+
 @media (max-width: 1140px) {
   .hero,
   .priority-grid,

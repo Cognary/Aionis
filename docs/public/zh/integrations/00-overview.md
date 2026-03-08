@@ -12,6 +12,7 @@ Aionis 通过稳定 API 契约接入不同 Agent 运行时与编排框架。
 2. [OpenWork 集成](/public/zh/integrations/02-openwork)
 3. [LangGraph 集成](/public/zh/integrations/03-langgraph)
 4. [OpenClaw 集成](/public/zh/integrations/04-openclaw)
+5. [Codex 本地 Profile](/public/zh/integrations/05-codex-local)
 
 ## 推荐接入路径
 
@@ -40,9 +41,10 @@ Aionis 通过稳定 API 契约接入不同 Agent 运行时与编排框架。
 ## 下一步
 
 1. [MCP 集成](/public/zh/integrations/01-mcp)
-2. [OpenClaw 集成](/public/zh/integrations/04-openclaw)
-3. [API 参考](/public/zh/api-reference/00-api-reference)
-4. [SDK 指南](/public/zh/reference/05-sdk)
+2. [Codex 本地 Profile](/public/zh/integrations/05-codex-local)
+3. [OpenClaw 集成](/public/zh/integrations/04-openclaw)
+4. [API 参考](/public/zh/api-reference/00-api-reference)
+5. [SDK 指南](/public/zh/reference/05-sdk)
 
 ## 相关页面
 

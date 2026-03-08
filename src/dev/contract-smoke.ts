@@ -32,6 +32,7 @@ import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
 import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
+import { validateAutomationGraph } from "../memory/automation.js";
 import { memoryResolve } from "../memory/resolve.js";
 import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 import { applyMemoryWrite } from "../memory/write.js";
@@ -2403,6 +2404,149 @@ async function run() {
   assert.equal(apiKeyLookupQueries, 4);
   await resolver("k3"); // latest key should still be cached
   assert.equal(apiKeyLookupQueries, 4);
+
+  // Automation graph validation: valid DAG accepted, cycle rejected.
+  const validAutomation = {
+    nodes: [
+      { node_id: "install_env", kind: "playbook", playbook_id: "11111111-1111-1111-1111-111111111111" },
+      { node_id: "approval", kind: "approval" },
+      { node_id: "deploy", kind: "playbook", playbook_id: "22222222-2222-2222-2222-222222222222" },
+    ],
+    edges: [
+      { from: "install_env", to: "approval", type: "on_success" },
+      { from: "approval", to: "deploy", type: "on_success" },
+    ],
+  };
+  const validatedAutomation = validateAutomationGraph(validAutomation as any);
+  assert.deepEqual(validatedAutomation.start_node_ids, ["install_env"]);
+  assert.deepEqual(validatedAutomation.topological_order, ["install_env", "approval", "deploy"]);
+
+  await assert.rejects(
+    async () =>
+      validateAutomationGraph({
+        nodes: [
+          { node_id: "a", kind: "approval" },
+          { node_id: "b", kind: "approval" },
+        ],
+        edges: [
+          { from: "a", to: "b", type: "on_success" },
+          { from: "b", to: "a", type: "on_success" },
+        ],
+      } as any),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "automation_graph_invalid",
+  );
+
+  await assert.rejects(
+    async () =>
+      validateAutomationGraph({
+        nodes: [
+          { node_id: "a", kind: "approval" },
+          { node_id: "b", kind: "approval" },
+        ],
+        edges: [
+          { from: "a", to: "b", type: "on_failure" },
+        ],
+      } as any),
+    (err: any) => {
+      const details = err && typeof err === "object" ? (err.details as Record<string, unknown> | undefined) : undefined;
+      const issues = Array.isArray(details?.issues) ? details.issues : [];
+      return (
+        err instanceof HttpError
+        && err.statusCode === 400
+        && err.code === "automation_graph_invalid"
+        && issues.some((issue: any) => issue.code === "unsupported_edge_type")
+      );
+    },
+  );
+
+  await assert.rejects(
+    async () =>
+      validateAutomationGraph({
+        nodes: [
+          { node_id: "producer", kind: "approval" },
+          { node_id: "consumer", kind: "condition", expression: { exists: "$nodes.producer.output.value" } },
+        ],
+        edges: [],
+      } as any),
+    (err: any) => {
+      const details = err && typeof err === "object" ? (err.details as Record<string, unknown> | undefined) : undefined;
+      const issues = Array.isArray(details?.issues) ? details.issues : [];
+      return (
+        err instanceof HttpError
+        && err.statusCode === 400
+        && err.code === "automation_graph_invalid"
+        && issues.some((issue: any) => issue.code === "binding_dependency_missing")
+      );
+    },
+  );
+
+  await assert.rejects(
+    async () =>
+      validateAutomationGraph({
+        nodes: [
+          { node_id: "producer", kind: "approval" },
+          {
+            node_id: "consumer",
+            kind: "playbook",
+            playbook_id: "33333333-3333-3333-3333-333333333333",
+            inputs: { from_producer: "$nodes.producer.output.value" },
+          },
+        ],
+        edges: [],
+      } as any),
+    (err: any) => {
+      const details = err && typeof err === "object" ? (err.details as Record<string, unknown> | undefined) : undefined;
+      const issues = Array.isArray(details?.issues) ? details.issues : [];
+      return (
+        err instanceof HttpError
+        && err.statusCode === 400
+        && err.code === "automation_graph_invalid"
+        && issues.some((issue: any) => issue.code === "binding_dependency_missing")
+      );
+    },
+  );
+
+  await assert.rejects(
+    async () =>
+      validateAutomationGraph({
+        nodes: [
+          { node_id: "producer", kind: "playbook", playbook_id: "44444444-4444-4444-4444-444444444444" },
+          {
+            node_id: "gate",
+            kind: "artifact_gate",
+            required_artifacts: ["$nodes.producer.output.artifacts.bundle"],
+          },
+        ],
+        edges: [],
+      } as any),
+    (err: any) => {
+      const details = err && typeof err === "object" ? (err.details as Record<string, unknown> | undefined) : undefined;
+      const issues = Array.isArray(details?.issues) ? details.issues : [];
+      return (
+        err instanceof HttpError
+        && err.statusCode === 400
+        && err.code === "automation_graph_invalid"
+        && issues.some((issue: any) => issue.code === "binding_dependency_missing")
+      );
+    },
+  );
+
+  const transitiveBindingAutomation = validateAutomationGraph({
+    nodes: [
+      { node_id: "producer", kind: "approval" },
+      { node_id: "intermediate", kind: "approval" },
+      {
+        node_id: "consumer",
+        kind: "condition",
+        expression: { exists: "$nodes.producer.output.value" },
+      },
+    ],
+    edges: [
+      { from: "producer", to: "intermediate", type: "on_success" },
+      { from: "intermediate", to: "consumer", type: "on_success" },
+    ],
+  } as any);
+  assert.deepEqual(transitiveBindingAutomation.topological_order, ["producer", "intermediate", "consumer"]);
 }
 
 run()
