@@ -57,7 +57,7 @@ Main image push:
 export GHCR_USERNAME=<your_github_user>
 export GHCR_TOKEN=<your_ghcr_token>
 IMAGE_REPO=ghcr.io/<owner>/aionis \
-TAG=v0.2.17 \
+TAG=0.2.17 \
 PLATFORMS=linux/amd64,linux/arm64 \
 PUBLISH_LATEST=true \
 npm run docker:publish:ghcr
@@ -104,9 +104,9 @@ Credential behavior in both workflows:
 Main image:
 
 ```bash
-docker pull ghcr.io/cognary/aionis:v0.2.17
+docker pull ghcr.io/cognary/aionis:0.2.17
 docker pull ghcr.io/cognary/aionis:latest
-docker manifest inspect ghcr.io/cognary/aionis:v0.2.17 | head
+docker manifest inspect ghcr.io/cognary/aionis:0.2.17 | head
 ```
 
 Standalone image:
