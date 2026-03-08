@@ -4,6 +4,14 @@ All notable changes to Aionis core are documented in this file.
 
 The format is based on Keep a Changelog and this project follows SemVer for tagged core releases.
 
+## [0.2.17] - 2026-03-08
+
+### Changed
+
+1. Promoted the Automation public-beta runtime and governance surface to the release baseline, including reviewer inboxes, shadow validation loops, compensation workflow controls, alert recovery queues, and public automation API documentation.
+2. Added executed rollback-drill evidence and hosted shadow-validator failure tolerance to the public-beta release package.
+3. Aligned coordinated release metadata for core, npm, PyPI, Docker, and GitHub Release channels to `0.2.17`.
+
 ## [0.2.8] - 2026-03-05
 
 ### Fixed

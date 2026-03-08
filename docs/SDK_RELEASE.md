@@ -74,7 +74,7 @@ npm run sdk:py:publish
 
 Use `workflow_dispatch` on `SDK Publish` with:
 
-1. `tag`: optional (`sdk-v0.2.16`)
+1. `tag`: optional (`sdk-v0.2.17`)
 2. `dry_run`: `true`
 
 ## Secrets

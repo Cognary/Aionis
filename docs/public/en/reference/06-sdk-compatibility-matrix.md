@@ -4,7 +4,7 @@ title: "SDK Compatibility Matrix"
 
 # SDK Compatibility Matrix
 
-Last updated: `2026-03-05`
+Last updated: `2026-03-08`
 
 ## Versioning Policy
 

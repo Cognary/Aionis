@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.17] - 2026-03-08
+
+### Changed
+
+1. Aligned Python SDK release baseline from `0.2.16` to `0.2.17` for the coordinated public-beta channel release.
+2. No Python SDK API surface change in this patch release.
+
 ## [0.2.16] - 2026-03-05
 
 ### Changed

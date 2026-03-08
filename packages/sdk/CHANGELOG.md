@@ -6,6 +6,14 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.17] - 2026-03-08
+
+### Changed
+
+1. Added TypeScript SDK client and type coverage for Automation public-beta APIs, including shadow validation, review, governance queues, telemetry, and compensation controls.
+2. Added admin control-plane client coverage for automation alert preview, dispatch, failed-delivery replay, and failed-delivery assignment workflows.
+3. Aligned the TypeScript SDK release baseline from `0.2.16` to `0.2.17` for the coordinated public-beta channel release.
+
 ## [0.2.16] - 2026-03-06
 
 ### Changed
