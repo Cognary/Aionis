@@ -30,6 +30,8 @@ This section documents the public API surface for production integrations.
    use `POST /v1/memory/rules/evaluate` then `POST /v1/memory/tools/select`
 4. Reconstruct and inspect a failed run:
    use `POST /v1/memory/replay/runs/get` and `POST /v1/memory/resolve`
+5. Run bounded replay-backed automations:
+   use `POST /v1/automations/*` surfaces summarized in [Automation APIs](/api/automation)
 
 ## Common integration fields
 
@@ -68,6 +70,15 @@ Always persist these fields in logs and telemetry:
 > `POST /v1/memory/replay/runs/get`
 > `POST /v1/memory/replay/playbooks/run`
 
+### Automation
+
+> `POST /v1/automations/create`
+> `POST /v1/automations/run`
+> `POST /v1/automations/runs/get`
+> `POST /v1/automations/promote`
+> `POST /v1/automations/shadow/report`
+> `POST /v1/automations/telemetry`
+
 ## Endpoint schema pages
 
 1. [Endpoint Schemas Index](/api/endpoints/)
@@ -78,6 +89,7 @@ Always persist these fields in logs and telemetry:
 6. [POST /v1/memory/tools/select](/api/endpoints/tools-select)
 7. [POST /v1/memory/resolve](/api/endpoints/resolve)
 8. [POST /v1/memory/replay/runs/get](/api/endpoints/replay-runs-get)
+9. [Automation APIs](/api/automation)
 
 ## Suggested reading order
 
@@ -85,4 +97,5 @@ Always persist these fields in logs and telemetry:
 2. [Memory APIs](/api/memory)
 3. [Policy APIs](/api/policy)
 4. [Replay APIs](/api/replay)
-5. [Error Model](/api/errors)
+5. [Automation APIs](/api/automation)
+6. [Error Model](/api/errors)

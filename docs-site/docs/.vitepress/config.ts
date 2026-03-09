@@ -207,6 +207,7 @@ export default defineConfig({
             { text: 'Memory APIs', link: '/api/memory' },
             { text: 'Policy APIs', link: '/api/policy' },
             { text: 'Replay APIs', link: '/api/replay' },
+            { text: 'Automation APIs', link: '/api/automation' },
             { text: 'Sandbox APIs', link: '/api/sandbox' },
             { text: 'Error Model', link: '/api/errors' }
           ]

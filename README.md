@@ -86,6 +86,25 @@ By default:
 
 ---
 
+## Automation Public Beta
+
+Aionis now exposes a bounded automation layer above replay.
+
+- sequential automation DAG execution
+- repair approval and rejection controls
+- explicit shadow validation before activation
+- reverse-order compensation retry controls
+- telemetry, alerting, and operator recovery surfaces
+
+Automation remains a thin orchestrator, not a general-purpose workflow engine.
+
+See the public Automation API docs for the current surface:
+
+- English: `doc.aionisos.com/public/en/api-reference/01-automation-api-reference`
+- 中文: `doc.aionisos.com/public/zh/api-reference/01-automation-api-reference`
+
+---
+
 ## Benchmark
 
 Real workflow benchmark (100 runs):
