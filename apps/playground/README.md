@@ -17,4 +17,20 @@ npm --prefix apps/playground install
 npm --prefix apps/playground run dev
 ```
 
-Default local target is `http://127.0.0.1:3001` and can be overridden in the UI.
+Default memory target is `http://127.0.0.1:3001` and the default chat target is `https://api.openai.com/v1`.
+
+Server-side egress guard:
+
+- In non-production, loopback overrides such as `http://localhost:11434/v1` remain allowed for local development.
+- In production, Playground only forwards to the configured default base URL or an exact URL listed in:
+  - `PLAYGROUND_EXECUTE_ALLOWED_BASE_URLS` for `/api/playground/execute`
+  - `PLAYGROUND_CHAT_ALLOWED_BASE_URLS` for `/api/playground/chat`
+- Allowlist values can be either a comma-separated list or a JSON array of absolute `http(s)` base URLs.
+- URLs with embedded credentials, query strings, or fragments are rejected.
+
+Example:
+
+```bash
+PLAYGROUND_EXECUTE_ALLOWED_BASE_URLS='https://memory.example.com'
+PLAYGROUND_CHAT_ALLOWED_BASE_URLS='["https://api.openai.com/v1","https://gateway.example.com/v1"]'
+```

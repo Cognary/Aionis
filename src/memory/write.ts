@@ -139,6 +139,12 @@ type PreparedWrite = {
   requested_topic_cluster_async?: boolean;
 };
 
+type SeenPreparedNodeRef = {
+  index: number;
+  scope: string;
+  client_id?: string;
+};
+
 export type EffectiveWritePolicy = {
   trigger_topic_cluster: boolean;
   topic_cluster_async: boolean;
@@ -235,12 +241,27 @@ export async function prepareMemoryWrite(
 
   // Prepare ids deterministically so retries are idempotent.
   const clientIdToId = new Map<string, string>();
-  const nodes: PreparedNode[] = parsed.nodes.map((n) => {
+  const seenClientIds = new Map<string, SeenPreparedNodeRef>();
+  const seenNodeIds = new Map<string, SeenPreparedNodeRef>();
+  const nodes: PreparedNode[] = [];
+  for (const [index, n] of parsed.nodes.entries()) {
     const nodeScopePublic = resolveScope(n.scope, tenancy.scope);
     const nodeScope = toTenantScopeKey(nodeScopePublic, tenancy.tenant_id, defaultTenantId);
     const client_id = n.client_id?.trim();
     if (n.client_id && (!client_id || client_id.length === 0)) {
       throw new Error("client_id becomes empty after trimming; provide a non-whitespace client_id");
+    }
+    if (client_id) {
+      const prior = seenClientIds.get(client_id);
+      if (prior) {
+        badRequest("duplicate_client_id_in_batch", "write batch contains duplicate client_id", {
+          client_id,
+          first_index: prior.index,
+          duplicate_index: index,
+          first_scope_key: prior.scope,
+          duplicate_scope_key: nodeScope,
+        });
+      }
     }
 
     const expectedId = client_id ? stableNodeIdFromClientId(nodeScope, client_id) : null;
@@ -249,7 +270,23 @@ export async function prepareMemoryWrite(
     }
 
     const id = n.id ?? (expectedId ?? stableUuid(`${nodeScope}:node:${sha256Hex(stableStringify(n))}`));
-    if (client_id) clientIdToId.set(client_id, id);
+    const priorId = seenNodeIds.get(id);
+    if (priorId) {
+      badRequest("duplicate_node_id_in_batch", "write batch contains duplicate node id", {
+        node_id: id,
+        first_index: priorId.index,
+        duplicate_index: index,
+        first_scope_key: priorId.scope,
+        duplicate_scope_key: nodeScope,
+        first_client_id: priorId.client_id ?? null,
+        duplicate_client_id: client_id ?? null,
+      });
+    }
+    if (client_id) {
+      seenClientIds.set(client_id, { index, scope: nodeScope, client_id });
+      clientIdToId.set(client_id, id);
+    }
+    seenNodeIds.set(id, { index, scope: nodeScope, client_id });
 
     const title = normalizeMaybeRedact(n.title);
     const text_summary = normalizeMaybeRedact(n.text_summary);
@@ -266,7 +303,7 @@ export async function prepareMemoryWrite(
     const ownerAgentId = normalizeId(n.owner_agent_id) ?? defaultOwnerAgentId ?? producerAgentId;
     const ownerTeamId = normalizeId(n.owner_team_id) ?? defaultOwnerTeamId;
 
-    return {
+    nodes.push({
       ...n,
       client_id,
       id,
@@ -279,8 +316,8 @@ export async function prepareMemoryWrite(
       text_summary,
       embedding_model,
       slots,
-    };
-  });
+    });
+  }
 
   for (const n of nodes) {
     if (n.type !== "rule") continue;
