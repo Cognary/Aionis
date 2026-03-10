@@ -8,11 +8,11 @@
 [![GHCR](https://img.shields.io/badge/ghcr-ghcr.io%2Fcognary%2Faionis-2496ed?logo=docker&logoColor=white)](https://ghcr.io/cognary/aionis)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-## Replayable Execution Memory for Agents
+## Memory-Centered Runtime Kernel for Agents
 
-Aionis is a memory kernel that records agent execution traces and compiles them into replayable workflows.
+Aionis is a runtime kernel that turns agent execution into reusable, governable system behavior.
 
-Instead of asking the model to reason through the same task repeatedly, Aionis allows agents to reuse successful executions.
+It records execution memory, assembles bounded context, compiles successful runs into replayable playbooks, and wraps the loop with review, control, and operator surfaces.
 
 ---
 
@@ -30,21 +30,38 @@ Agents still re-reason every task.
 
 ---
 
-## The Aionis Approach
+## What Aionis Adds
 
-Aionis records execution history.
+Aionis centers the runtime around execution memory.
 
 ```text
-Agent Run
+Memory Write
 ↓
-Execution Trace
+Context Assembly
 ↓
-Compile Playbook
+Replayable Execution
 ↓
-Replay Execution
+Governed Repair / Review
 ```
 
-Once a workflow succeeds, it becomes reusable.
+That gives teams a single loop for:
+
+- memory and recall
+- context budgets and compaction
+- replay and playbook reuse
+- repair, review, and promotion
+- operator governance and control-plane visibility
+
+---
+
+## Why It Reduces Agent Cost
+
+Aionis does not compress model internals directly. It reduces:
+
+- repeated reasoning on tasks that already have successful execution history
+- context inflation through explicit budgeted recall and layered context assembly
+
+This is why Aionis is best understood as a runtime kernel, not only a retrieval layer.
 
 ---
 
@@ -130,6 +147,7 @@ Latency improvement:
 | Workflow replay | ✗ | ✓ |
 | Policy loop | ✗ | ✓ |
 | Governed repair | ✗ | ✓ |
+| Runtime governance | ✗ | ✓ |
 
 Most systems store information.
 
@@ -140,22 +158,25 @@ Aionis stores how work gets done.
 ## Architecture
 
 ```text
-LLM
+Agent / Planner
 ↓
-Agent Planner
-↓
-Aionis Memory Kernel
+Aionis Runtime Kernel
+├─ Memory
+├─ Context Assembly
+├─ Replay / Reuse
+├─ Governance
+└─ Automation / Sandbox
 ↓
 Tools / Environment
 ```
 
-Aionis acts as the execution memory layer of the agent stack.
+Aionis is a memory-centered runtime kernel inside the agent stack.
 
 ---
 
 ## In One Sentence
 
-Aionis turns successful agent runs into governed, replayable workflows.
+Aionis turns successful agent runs into replayable, governable runtime assets.
 
 ## 3-Minute Quickstart
 

@@ -4,7 +4,7 @@ title: "Aionis Public Docs"
 
 # Aionis Docs
 
-Aionis is a **Memory Kernel** for AI products: durable memory, policy-aware execution, and replayable operations in one system.
+Aionis is a **memory-centered runtime kernel** for agent systems: execution memory, layered context assembly, replay reuse, and governance-first controls in one product boundary.
 
 ## Start Here
 
@@ -18,18 +18,18 @@ Aionis is a **Memory Kernel** for AI products: durable memory, policy-aware exec
 
 1. Product overview: [Overview](/public/en/overview/01-overview)
 2. System model: [Core Concepts](/public/en/core-concepts/00-core-concepts)
-3. Architecture deep dive: [Architecture](/public/en/architecture/01-architecture)
-4. Context layering: [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
-5. Governed execution: [Policy & Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
+3. Runtime architecture: [Architecture](/public/en/architecture/01-architecture)
+4. Context budgets and layering: [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
+5. Governed runtime behavior: [Policy & Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
 6. Production operations: [Operate & Production](/public/en/operate-production/00-operate-production)
 7. API surface: [API Reference](/public/en/api-reference/00-api-reference)
 
 ## Why Teams Use Aionis
 
-1. Verifiable writes with commit lineage and replayable IDs.
-2. Context assembly with explicit layers and budgets.
-3. Policy loop that can influence routing and tool execution.
-4. Production-ready runbooks, diagnostics, and benchmark evidence.
+1. Execution memory that captures how work gets done, not just what was said.
+2. Context assembly with explicit layers, budgets, and compaction controls.
+3. Replay, playbooks, and repair flows that turn successful runs into reusable runtime assets.
+4. Governance, diagnostics, and production runbooks that keep agent systems operable after launch.
 
 ## Benchmarks and Integrations
 

@@ -4,8 +4,8 @@ title: "Aionis Docs"
 
 hero:
   name: "Aionis"
-  text: "Memory Kernel for Production Agents"
-  tagline: "Verifiable writes, policy-aware execution, and operable memory pipelines that move beyond retrieval-only memory."
+  text: "Memory-Centered Runtime Kernel for Agents"
+  tagline: "Execution memory, layered context assembly, replay reuse, and governance-first controls for production agent systems."
   actions:
     - theme: brand
       text: Start in 5 Minutes
@@ -21,12 +21,12 @@ hero:
       link: https://github.com/Cognary/Aionis
 
 features:
-  - title: "Verifiable by Design"
-    details: "Every write and decision path is replay-friendly with URI-addressable memory surfaces."
-  - title: "Memory -> Policy -> Action"
-    details: "Rules and feedback can influence execution behavior, not just augment prompt context."
-  - title: "Operable in Production"
-    details: "Runbooks, gates, diagnostics, and benchmark evidence are built into the operating model."
+  - title: "Execution Memory"
+    details: "Writes, runs, decisions, and feedback become reusable execution assets instead of disappearing into prompt history."
+  - title: "Runtime Reuse"
+    details: "Replay, playbooks, automation, and governed repair turn successful runs into stable operating paths."
+  - title: "Governable by Default"
+    details: "Runbooks, gates, diagnostics, control surfaces, and benchmark evidence are built into the product boundary."
 ---
 
 <div class="aionis-kpi-grid">
@@ -52,16 +52,16 @@ features:
 
 <div class="aionis-signal-grid">
   <article class="aionis-signal-card">
-    <h3>From Retrieval to Executable Memory</h3>
-    <p>Aionis supports full-loop memory behavior: context assembly, rule evaluation, tool decision, execution feedback, and replay.</p>
+    <h3>From Retrieval to Runtime Memory</h3>
+    <p>Aionis ties memory, context assembly, replay, repair, and governance into one runtime loop instead of stopping at retrieval.</p>
   </article>
   <article class="aionis-signal-card">
-    <h3>Reliability Under Real Workload</h3>
-    <p>Derived processing stays async so critical writes do not fail just because embedding or enrichment providers fluctuate.</p>
+    <h3>Lower Repeated Agent Cost</h3>
+    <p>Budgeted recall and replayable execution reduce repeated reasoning work and keep context growth inside explicit limits.</p>
   </article>
   <article class="aionis-signal-card">
-    <h3>Governable for Enterprise Teams</h3>
-    <p>Production gates, tenant isolation, and ops-facing runbooks make long-running memory systems manageable and auditable.</p>
+    <h3>Governable for Production Teams</h3>
+    <p>Production gates, tenant isolation, admin controls, and ops-facing runbooks make long-running agent systems manageable and auditable.</p>
   </article>
 </div>
 
@@ -74,9 +74,9 @@ features:
     <span>5-minute onboarding</span>
   </a>
   <a class="aionis-home-card" href="/public/en/guides/01-build-memory">
-    <h3>Build Memory Workflows</h3>
-    <p>Design session memory, context layers, and retrieval behavior for multi-turn agent systems.</p>
-    <span>Build guide</span>
+    <h3>Build Runtime Memory Flows</h3>
+    <p>Design write, recall, context, replay, and policy behavior as one production runtime loop.</p>
+    <span>Kernel workflow guide</span>
   </a>
   <a class="aionis-home-card" href="/public/en/operate-production/00-operate-production">
     <h3>Operate in Production</h3>
@@ -90,13 +90,18 @@ features:
 <div class="aionis-home-grid">
   <a class="aionis-home-card" href="/public/en/context-orchestration/00-context-orchestration">
     <h3>Context Orchestration</h3>
-    <p>Assemble layered context across facts, episodes, rules, decisions, tools, and citations.</p>
+    <p>Assemble bounded layered context across facts, episodes, rules, decisions, tools, and citations.</p>
     <span>Layer model and budgets</span>
   </a>
   <a class="aionis-home-card" href="/public/en/policy-execution/00-policy-execution-loop">
     <h3>Policy Execution Loop</h3>
-    <p>Connect memory to governed behavior through evaluation, selection, run lifecycle, and feedback.</p>
+    <p>Connect memory to governed runtime behavior through evaluation, selection, run lifecycle, and feedback.</p>
     <span>Control behavior</span>
+  </a>
+  <a class="aionis-home-card" href="/public/en/architecture/01-architecture">
+    <h3>Runtime Kernel Architecture</h3>
+    <p>See how memory, runtime services, and control surfaces fit together in the current architecture baseline.</p>
+    <span>Architecture model</span>
   </a>
   <a class="aionis-home-card" href="/public/en/reference/08-sandbox-api">
     <h3>Sandbox API (Experimental)</h3>

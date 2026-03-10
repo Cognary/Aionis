@@ -1,53 +1,38 @@
 ---
-title: "Public Docs (ZH)"
+title: "Aionis Public Docs (ZH)"
 ---
 
-# Public Docs (ZH)
+# Aionis 文档
 
-中文镜像骨架已建立，内容将按阶段与英文版同步。
+Aionis 是一个面向 Agent 系统的**以记忆为中心的运行时内核**：把执行记忆、分层上下文编排、Replay 复用和治理控制收进同一个产品边界。
 
-核心页面：
+## 从这里开始
 
-1. [快速开始](./getting-started/01-get-started.md)
-2. [5 分钟上手](./getting-started/02-onboarding-5min.md)
-3. [Embedding 配置](./getting-started/03-embedding-setup.md)
-4. [构建记忆](./guides/01-build-memory.md)
-5. [Playground](./guides/02-playground.md)
-6. [运维](./operations/00-operate.md)
-7. [Ops 控制台](./operations/01-ops-console.md)
-8. [集成概览](./integrations/00-overview.md)
-9. [MCP 集成](./integrations/01-mcp.md)
-10. [参考](./reference/01-reference.md)
-11. [API 合约](./api/01-api-contract.md)
-12. [控制与策略](./control/01-control-policy.md)
-13. [规则生命周期](./control/02-rule-lifecycle.md)
-14. [Planner 上下文](./reference/02-planner-context.md)
-15. [规则晋升治理](./reference/03-rule-promotion-governance.md)
-16. [规则冲突报告](./reference/04-rule-conflict-report.md)
-17. [SDK 指南](./reference/05-sdk.md)
-18. [SDK 兼容矩阵](./reference/06-sdk-compatibility-matrix.md)
-19. [运维手册](./operations/02-operator-runbook.md)
-20. [生产核心门禁](./operations/03-production-core-gate.md)
-21. [生产上线门禁](./operations/04-prod-go-live-gate.md)
-22. [E2E 回归](./operations/05-e2e-regression.md)
-23. [Standalone 到 HA 手册](./operations/06-standalone-to-ha-runbook.md)
-24. [HA 故障演练模板](./operations/07-ha-failure-drill-template.md)
-25. [HA 故障演练样例](./operations/08-ha-failure-drill-sample.md)
-26. [核心差异化](./about/01-core-differentiators.md)
-27. [基准测试](./benchmarks/01-benchmarks.md)
-28. [Benchmark Snapshot（对外）](./benchmarks/02-benchmark-snapshot-public.md)
-29. [差异化证据](./benchmarks/03-differentiation-evidence.md)
-30. [治理周报](./benchmarks/04-governance-weekly-report.md)
-31. [上下文编排](./concepts/01-context-orchestration.md)
-32. [架构](./concepts/02-architecture.md)
-33. [执行循环门禁](./control/03-execution-loop-gate.md)
-34. [策略适配门禁](./control/04-policy-adaptation-gate.md)
-35. [OpenWork 集成](./integrations/02-openwork.md)
-36. [LangGraph 集成](./integrations/03-langgraph.md)
-37. [OpenClaw 集成](./integrations/04-openclaw.md)
-38. [抽象策略运行手册](./operations/09-abstraction-policy-runbook.md)
-39. [合并回放运行手册](./operations/10-consolidation-replay-runbook.md)
-40. [性能基线](./benchmarks/05-performance-baseline.md)
-41. [AionisBench v0.1](./benchmarks/06-aionis-bench-v01.md)
-42. [URI 扩展计划](./reference/07-uri-expansion-plan.md)
-43. [Aionis 一页说明](./about/02-aionis-onepage.md)
+1. [5 分钟上手](/public/zh/getting-started/02-onboarding-5min)
+2. [Embedding 配置](/public/zh/getting-started/03-embedding-setup)
+3. [构建记忆工作流](/public/zh/guides/01-build-memory)
+4. [Playground](/public/zh/guides/02-playground)
+5. [文档导航图](/public/zh/overview/02-docs-navigation)
+
+## 按主题阅读
+
+1. 产品总览：[总览](/public/zh/overview/01-overview)
+2. 系统模型：[核心概念](/public/zh/core-concepts/00-core-concepts)
+3. 运行时架构：[架构](/public/zh/architecture/01-architecture)
+4. 上下文预算与分层：[上下文编排](/public/zh/context-orchestration/00-context-orchestration)
+5. 治理型执行闭环：[策略执行循环](/public/zh/policy-execution/00-policy-execution-loop)
+6. 生产运维：[运维与生产](/public/zh/operate-production/00-operate-production)
+7. API 与 SDK：[API 参考](/public/zh/api-reference/00-api-reference)
+
+## 为什么团队会选 Aionis
+
+1. 它记录的是“任务如何做成”，而不是只保存文本或向量。
+2. 它提供显式的上下文层、预算和压缩控制，避免上下文无限膨胀。
+3. 它把 Replay、playbook、repair/review 串成复用闭环，让成功执行变成可重复资产。
+4. 它内建治理、诊断、门禁和运维手册，适合真正上线后的 Agent 系统。
+
+## 基准与集成
+
+1. [基准测试](/public/zh/benchmarks/01-benchmarks)
+2. [集成概览](/public/zh/integrations/00-overview)
+3. [路线图](/public/zh/roadmap/00-roadmap)
