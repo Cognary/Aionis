@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ipAllowed, readIpAllowlist, readTrustedProxyCidrs, resolveClientIp, validateProxyConfig } from "./app/lib/ip-guard.mjs";
+import { safeEqualText } from "./app/lib/secret-compare.mjs";
 
 function normalizeBool(input, fallback = false) {
   const raw = String(input ?? "").trim().toLowerCase();
@@ -63,7 +64,7 @@ export function middleware(request) {
 
   const auth = decodeBasicCredentials(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
-  if (auth.user !== username || auth.pass !== password) return unauthorizedResponse();
+  if (!safeEqualText(auth.user, username) || !safeEqualText(auth.pass, password)) return unauthorizedResponse();
   return NextResponse.next();
 }
 

@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
+import {
+  PLAYGROUND_CHAT_ALLOWED_BASE_URLS_ENV,
+  resolvePlaygroundBaseUrl,
+} from "@/app/lib/egress-guard.mjs";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const TIMEOUT_MS = 45_000;
 
 function json(status, body) {
   return NextResponse.json(body, { status });
-}
-
-function normalizeBaseUrl(input) {
-  const raw = String(input || "").trim();
-  const url = raw || DEFAULT_BASE_URL;
-  return url.replace(/\/+$/, "");
 }
 
 function normalizeMessages(input) {
@@ -35,7 +33,21 @@ export async function POST(request) {
 
   const apiKey = String(config.api_key || "").trim();
   const model = String(config.model || "").trim();
-  const baseUrl = normalizeBaseUrl(config.base_url);
+  let baseUrl;
+  try {
+    baseUrl = resolvePlaygroundBaseUrl(config.base_url, {
+      defaultBaseUrl: process.env.PLAYGROUND_CHAT_DEFAULT_BASE_URL?.trim() || DEFAULT_BASE_URL,
+      allowedBaseUrlsEnv: process.env[PLAYGROUND_CHAT_ALLOWED_BASE_URLS_ENV] || "",
+      allowedBaseUrlsEnvName: PLAYGROUND_CHAT_ALLOWED_BASE_URLS_ENV,
+      label: "config.base_url",
+    });
+  } catch (error) {
+    return json(400, {
+      ok: false,
+      error: "blocked_base_url",
+      message: error instanceof Error ? error.message : "config.base_url is not allowed"
+    });
+  }
   const temperatureRaw = Number(config.temperature);
   const maxTokensRaw = Number(config.max_tokens);
   const temperature = Number.isFinite(temperatureRaw) ? Math.max(0, Math.min(2, temperatureRaw)) : 0.3;

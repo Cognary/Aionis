@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import { OPERATION_MAP } from "@/app/lib/operations";
+import {
+  PLAYGROUND_EXECUTE_ALLOWED_BASE_URLS_ENV,
+  resolvePlaygroundBaseUrl,
+} from "@/app/lib/egress-guard.mjs";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:3001";
 const TIMEOUT_MS = 30_000;
 
 function json(status, body) {
   return NextResponse.json(body, { status });
-}
-
-function normalizeBaseUrl(input) {
-  const raw = String(input || "").trim();
-  return raw ? raw.replace(/\/+$/, "") : DEFAULT_BASE_URL;
 }
 
 function normalizeBearer(input) {
@@ -51,7 +50,21 @@ export async function POST(request) {
   }
 
   const op = OPERATION_MAP[opKey];
-  const baseUrl = normalizeBaseUrl(connection.base_url);
+  let baseUrl;
+  try {
+    baseUrl = resolvePlaygroundBaseUrl(connection.base_url, {
+      defaultBaseUrl: process.env.AIONIS_BASE_URL?.trim() || DEFAULT_BASE_URL,
+      allowedBaseUrlsEnv: process.env[PLAYGROUND_EXECUTE_ALLOWED_BASE_URLS_ENV] || "",
+      allowedBaseUrlsEnvName: PLAYGROUND_EXECUTE_ALLOWED_BASE_URLS_ENV,
+      label: "connection.base_url",
+    });
+  } catch (error) {
+    return json(400, {
+      ok: false,
+      error: "blocked_base_url",
+      message: error instanceof Error ? error.message : "connection.base_url is not allowed"
+    });
+  }
   const apiKey = String(connection.api_key || "").trim();
   const bearer = normalizeBearer(connection.bearer_token);
   const adminToken = String(connection.admin_token || "").trim();
