@@ -717,6 +717,23 @@ export const ReplayPlaybookGetRequest = z.object({
 
 export type ReplayPlaybookGetInput = z.infer<typeof ReplayPlaybookGetRequest>;
 
+export const ReplayPlaybookCandidateRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  playbook_id: UUID,
+  version: z.number().int().positive().optional(),
+  deterministic_gate: z.object({
+    enabled: z.boolean().default(true),
+    prefer_deterministic_execution: z.boolean().default(true),
+    on_mismatch: z.enum(["fallback", "reject"]).default("fallback"),
+    required_statuses: z.array(ReplayPlaybookStatus).min(1).max(4).default(["shadow", "active"]),
+    matchers: z.record(z.any()).optional(),
+    policy_constraints: z.record(z.any()).optional(),
+  }).optional(),
+});
+
+export type ReplayPlaybookCandidateInput = z.infer<typeof ReplayPlaybookCandidateRequest>;
+
 export const ReplayPlaybookPromoteRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
@@ -738,11 +755,42 @@ export const ReplayPlaybookRunRequest = z.object({
   playbook_id: UUID,
   mode: ReplayRunMode.default("simulate"),
   version: z.number().int().positive().optional(),
+  deterministic_gate: z.object({
+    enabled: z.boolean().default(true),
+    prefer_deterministic_execution: z.boolean().default(true),
+    on_mismatch: z.enum(["fallback", "reject"]).default("fallback"),
+    required_statuses: z.array(ReplayPlaybookStatus).min(1).max(4).default(["shadow", "active"]),
+    matchers: z.record(z.any()).optional(),
+    policy_constraints: z.record(z.any()).optional(),
+  }).optional(),
   params: z.record(z.any()).optional(),
   max_steps: z.number().int().positive().max(500).default(200),
 });
 
 export type ReplayPlaybookRunInput = z.infer<typeof ReplayPlaybookRunRequest>;
+
+export const ReplayPlaybookDispatchRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  project_id: z.string().min(1).max(128).optional(),
+  actor: z.string().min(1).optional(),
+  playbook_id: UUID,
+  version: z.number().int().positive().optional(),
+  deterministic_gate: z.object({
+    enabled: z.boolean().default(true),
+    prefer_deterministic_execution: z.boolean().default(true),
+    on_mismatch: z.enum(["fallback", "reject"]).default("fallback"),
+    required_statuses: z.array(ReplayPlaybookStatus).min(1).max(4).default(["shadow", "active"]),
+    matchers: z.record(z.any()).optional(),
+    policy_constraints: z.record(z.any()).optional(),
+  }).optional(),
+  fallback_mode: ReplayRunMode.default("simulate"),
+  execute_fallback: z.boolean().default(true),
+  params: z.record(z.any()).optional(),
+  max_steps: z.number().int().positive().max(500).default(200),
+});
+
+export type ReplayPlaybookDispatchInput = z.infer<typeof ReplayPlaybookDispatchRequest>;
 
 export const ReplayPlaybookRepairRequest = z.object({
   tenant_id: z.string().min(1).optional(),

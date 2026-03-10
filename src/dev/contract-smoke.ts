@@ -9,9 +9,11 @@ import {
   MemoryPackExportRequest,
   MemoryPackImportRequest,
   MemoryRecallRequest,
+  ReplayPlaybookCandidateRequest,
   MemorySessionEventsListRequest,
   PlanningContextRequest,
   ReplayPlaybookCompileRequest,
+  ReplayPlaybookDispatchRequest,
   ReplayPlaybookPromoteRequest,
   ReplayRunEndRequest,
   ReplayRunGetRequest,
@@ -47,7 +49,9 @@ import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
 import { validateAutomationGraph } from "../memory/automation.js";
 import {
+  replayPlaybookCandidate,
   replayPlaybookCompileFromRun,
+  replayPlaybookDispatch,
   replayPlaybookGet,
   replayPlaybookPromote,
   replayPlaybookRepair,
@@ -2057,6 +2061,14 @@ async function run() {
   });
   assert.equal(replayRunDefaults.mode, "simulate");
   assert.equal(replayRunDefaults.max_steps, 200);
+  const replayRunDeterministicGateDefaults = ReplayPlaybookRunRequest.parse({
+    playbook_id: "55555555-5555-5555-5555-555555555555",
+    deterministic_gate: {},
+  });
+  assert.equal(replayRunDeterministicGateDefaults.deterministic_gate?.enabled, true);
+  assert.equal(replayRunDeterministicGateDefaults.deterministic_gate?.prefer_deterministic_execution, true);
+  assert.equal(replayRunDeterministicGateDefaults.deterministic_gate?.on_mismatch, "fallback");
+  assert.deepEqual(replayRunDeterministicGateDefaults.deterministic_gate?.required_statuses, ["shadow", "active"]);
   const replayRunStartDefaults = ReplayRunStartRequest.parse({
     goal: "deploy service",
   });
@@ -2091,6 +2103,15 @@ async function run() {
   assert.equal(replayCompileDefaults.version, 1);
   assert.equal(replayCompileDefaults.risk_profile, "medium");
   assert.equal(replayCompileDefaults.allow_partial, false);
+  const replayCandidateDefaults = ReplayPlaybookCandidateRequest.parse({
+    playbook_id: "55555555-5555-5555-5555-555555555555",
+  });
+  assert.equal(replayCandidateDefaults.version, undefined);
+  const replayDispatchDefaults = ReplayPlaybookDispatchRequest.parse({
+    playbook_id: "55555555-5555-5555-5555-555555555555",
+  });
+  assert.equal(replayDispatchDefaults.fallback_mode, "simulate");
+  assert.equal(replayDispatchDefaults.execute_fallback, true);
   const replayPromoteParsed = ReplayPlaybookPromoteRequest.parse({
     playbook_id: "55555555-5555-5555-5555-555555555555",
     target_status: "shadow",
@@ -2860,6 +2881,7 @@ async function run() {
         status: "draft",
         risk_profile: "medium",
         matchers: { workflow: "deploy" },
+        policy_constraints: { approval: "required" },
         success_criteria: { must_exit_zero: true },
         steps_template: [
           {
@@ -2895,7 +2917,17 @@ async function run() {
         playbook_id: replayPlaybookId,
         version: 1,
         status: "shadow",
-        steps_template: [],
+        matchers: { workflow: "deploy" },
+        policy_constraints: { approval: "required" },
+        steps_template: [
+          {
+            step_index: 1,
+            tool_name: "command",
+            tool_input_template: { argv: ["echo", "shadow-ok"] },
+            preconditions: [{ kind: "always", value: true }],
+            safety_level: "auto_ok",
+          },
+        ],
       },
       created_at: replayCreatedAt,
       updated_at: replayCreatedAt,
@@ -2919,6 +2951,134 @@ async function run() {
     (replayGetOut as any).playbook.uri,
     "aionis://default/default/procedure/55555555-5555-5555-5555-555555555556",
   );
+  const replayCandidateOut = await replayPlaybookCandidate(
+    replayClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: replayPlaybookId,
+      version: 1,
+      deterministic_gate: {
+        matchers: { workflow: "deploy" },
+        policy_constraints: { approval: "required" },
+      },
+    },
+    { defaultScope: "default", defaultTenantId: "default", embeddedRuntime: null },
+  );
+  assert.equal((replayCandidateOut as any).candidate.eligible_for_deterministic_replay, true);
+  assert.equal((replayCandidateOut as any).candidate.recommended_mode, "strict");
+  assert.equal((replayCandidateOut as any).candidate.next_action, "safe_to_skip_primary_inference");
+  assert.deepEqual((replayCandidateOut as any).candidate.mismatch_reasons, []);
+  assert.equal((replayCandidateOut as any).candidate.rejectable, false);
+  assert.equal((replayCandidateOut as any).deterministic_gate.matched, true);
+  const replayCandidateMismatchOut = await replayPlaybookCandidate(
+    replayClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: replayPlaybookId,
+      deterministic_gate: {
+        matchers: { workflow: "deploy" },
+        policy_constraints: { approval: "required" },
+      },
+    },
+    { defaultScope: "default", defaultTenantId: "default", embeddedRuntime: null },
+  );
+  assert.equal((replayCandidateMismatchOut as any).candidate.eligible_for_deterministic_replay, false);
+  assert.equal((replayCandidateMismatchOut as any).candidate.recommended_mode, "simulate");
+  assert.equal((replayCandidateMismatchOut as any).candidate.next_action, "promote_or_select_a_replayable_playbook_version");
+  assert.deepEqual((replayCandidateMismatchOut as any).candidate.mismatch_reasons, ["status_not_allowed_for_deterministic_replay"]);
+  assert.equal((replayCandidateMismatchOut as any).candidate.rejectable, false);
+  const replayDispatchCandidateOnlyOut = await replayPlaybookDispatch(
+    replayClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: replayPlaybookId,
+      deterministic_gate: {
+        matchers: { workflow: "deploy" },
+        policy_constraints: { approval: "required" },
+      },
+      execute_fallback: false,
+    },
+    { defaultScope: "default", defaultTenantId: "default", embeddedRuntime: null },
+  );
+  assert.equal((replayDispatchCandidateOnlyOut as any).dispatch.decision, "candidate_only");
+  assert.equal((replayDispatchCandidateOnlyOut as any).dispatch.primary_inference_skipped, false);
+  assert.equal((replayDispatchCandidateOnlyOut as any).replay, null);
+  const replayDispatchDeterministicOut = await replayPlaybookDispatch(
+    replayClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: replayPlaybookId,
+      version: 1,
+      deterministic_gate: {
+        matchers: { workflow: "deploy" },
+        policy_constraints: { approval: "required" },
+      },
+      params: {
+        record_run: false,
+        allow_local_exec: true,
+        execution_backend: "sandbox_sync",
+      },
+    },
+    {
+      defaultScope: "default",
+      defaultTenantId: "default",
+      embeddedRuntime: null,
+      writeOptions: {
+        defaultScope: "default",
+        defaultTenantId: "default",
+        maxTextLen: 8000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+        shadowDualWriteEnabled: false,
+        shadowDualWriteStrict: false,
+        writeAccessShadowMirrorV2: true,
+        embedder: null,
+        embeddedRuntime: null,
+      },
+      localExecutor: {
+        enabled: false,
+        mode: "disabled",
+        allowedCommands: new Set(["echo"]),
+        workdir: process.cwd(),
+        timeoutMs: 1000,
+        stdioMaxBytes: 4096,
+      },
+      sandboxExecutor: async () => ({
+        ok: true,
+        status: "succeeded",
+        stdout: "dispatch-ok\n",
+        stderr: "",
+        exit_code: 0,
+        error: null,
+        run_id: "88888888-8888-8888-8888-888888888888",
+      }),
+    },
+  );
+  assert.equal((replayDispatchDeterministicOut as any).dispatch.decision, "deterministic_replay_executed");
+  assert.equal((replayDispatchDeterministicOut as any).dispatch.primary_inference_skipped, true);
+  assert.equal((replayDispatchDeterministicOut as any).replay.mode, "strict");
+  const replayDispatchFallbackOut = await replayPlaybookDispatch(
+    replayClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: replayPlaybookId,
+      deterministic_gate: {
+        matchers: { workflow: "deploy" },
+        policy_constraints: { approval: "required" },
+      },
+      fallback_mode: "simulate",
+      params: { record_run: false },
+    },
+    { defaultScope: "default", defaultTenantId: "default", embeddedRuntime: null },
+  );
+  assert.equal((replayDispatchFallbackOut as any).dispatch.decision, "fallback_replay_executed");
+  assert.equal((replayDispatchFallbackOut as any).dispatch.primary_inference_skipped, false);
+  assert.equal((replayDispatchFallbackOut as any).replay.mode, "simulate");
 
   const replayRunOut = await replayPlaybookRun(
     replayClient as any,
@@ -2938,6 +3098,87 @@ async function run() {
   assert.equal((replayRunOut as any).summary.blocked_steps, 1);
   assert.equal((replayRunOut as any).summary.replay_readiness, "blocked");
   assert.equal((replayRunOut as any).steps[1].readiness, "blocked");
+  assert.equal((replayRunOut as any).deterministic_gate.matched, false);
+  assert.equal((replayRunOut as any).deterministic_gate.decision, "disabled");
+
+  const replayDeterministicFallbackOut = await replayPlaybookRun(
+    replayClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: replayPlaybookId,
+      mode: "simulate",
+      deterministic_gate: {
+        matchers: { workflow: "deploy" },
+        policy_constraints: { approval: "required" },
+      },
+      params: { record_run: false },
+    },
+    { defaultScope: "default", defaultTenantId: "default", embeddedRuntime: null },
+  );
+  assert.equal((replayDeterministicFallbackOut as any).mode, "simulate");
+  assert.equal((replayDeterministicFallbackOut as any).deterministic_gate.matched, false);
+  assert.equal((replayDeterministicFallbackOut as any).deterministic_gate.decision, "fallback_to_requested_mode");
+  assert.equal((replayDeterministicFallbackOut as any).execution.inference_skipped, false);
+
+  const replayDeterministicRunOut = await replayPlaybookRun(
+    replayClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: replayPlaybookId,
+      version: 1,
+      mode: "simulate",
+      deterministic_gate: {
+        matchers: { workflow: "deploy" },
+        policy_constraints: { approval: "required" },
+      },
+      params: {
+        record_run: false,
+        allow_local_exec: true,
+        execution_backend: "sandbox_sync",
+      },
+    },
+    {
+      defaultScope: "default",
+      defaultTenantId: "default",
+      embeddedRuntime: null,
+      writeOptions: {
+        defaultScope: "default",
+        defaultTenantId: "default",
+        maxTextLen: 8000,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+        shadowDualWriteEnabled: false,
+        shadowDualWriteStrict: false,
+        writeAccessShadowMirrorV2: true,
+        embedder: null,
+        embeddedRuntime: null,
+      },
+      localExecutor: {
+        enabled: false,
+        mode: "disabled",
+        allowedCommands: new Set(["echo"]),
+        workdir: process.cwd(),
+        timeoutMs: 1000,
+        stdioMaxBytes: 4096,
+      },
+      sandboxExecutor: async () => ({
+        ok: true,
+        status: "succeeded",
+        stdout: "shadow-ok\n",
+        stderr: "",
+        exit_code: 0,
+        error: null,
+        run_id: "77777777-7777-7777-7777-777777777777",
+      }),
+    },
+  );
+  assert.equal((replayDeterministicRunOut as any).mode, "strict");
+  assert.equal((replayDeterministicRunOut as any).deterministic_gate.matched, true);
+  assert.equal((replayDeterministicRunOut as any).deterministic_gate.decision, "promoted_to_strict");
+  assert.equal((replayDeterministicRunOut as any).execution.inference_skipped, true);
+  assert.equal((replayDeterministicRunOut as any).summary.failed_steps, 0);
 
   await assert.rejects(
     () =>

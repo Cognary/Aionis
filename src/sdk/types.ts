@@ -35,6 +35,10 @@ import type {
   MemoryPackImportInput,
   MemoryRecallInput,
   MemoryRecallTextInput,
+  ReplayPlaybookCandidateInput,
+  ReplayPlaybookDispatchInput,
+  ReplayPlaybookGetInput,
+  ReplayPlaybookRunInput,
   MemorySessionCreateInput,
   MemorySessionEventsListInput as MemorySessionEventsListSchemaInput,
   MemoryWriteInput,
@@ -82,6 +86,10 @@ export type {
   MemoryPackImportInput,
   MemoryRecallInput,
   MemoryRecallTextInput,
+  ReplayPlaybookCandidateInput,
+  ReplayPlaybookDispatchInput,
+  ReplayPlaybookGetInput,
+  ReplayPlaybookRunInput,
   MemorySessionCreateInput,
   MemoryWriteInput,
   RulesEvaluateInput,
@@ -900,6 +908,112 @@ export type MemoryPackImportResponse = {
   edges?: number;
   embedding_backfill?: { enqueued: true; pending_nodes: number } | null;
   planned?: { nodes: number; edges: number; commits_in_pack: number; decisions_in_pack?: number };
+  [k: string]: unknown;
+};
+
+export type ReplayDeterministicGateResult = {
+  enabled: boolean;
+  requested_mode: "simulate" | "strict" | "guided";
+  effective_mode: "simulate" | "strict" | "guided";
+  decision: "disabled" | "matched" | "promoted_to_strict" | "fallback_to_requested_mode" | "rejected";
+  mismatch_reasons?: string[];
+  inference_skipped: boolean;
+  playbook_status: string;
+  required_statuses: string[];
+  status_match: boolean;
+  matchers_match: boolean;
+  policy_constraints_match: boolean;
+  matched: boolean;
+  request_matcher_fingerprint?: string | null;
+  playbook_matcher_fingerprint?: string | null;
+  request_policy_fingerprint?: string | null;
+  playbook_policy_fingerprint?: string | null;
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookGetResponse = {
+  tenant_id?: string;
+  scope: string;
+  playbook: {
+    playbook_id: string;
+    name?: string | null;
+    text_summary?: string | null;
+    version: number;
+    status: string;
+    matchers?: Record<string, unknown>;
+    success_criteria?: Record<string, unknown>;
+    risk_profile?: string;
+    source_run_id?: string | null;
+    steps_template: Array<Record<string, unknown>>;
+    compile_summary?: Record<string, unknown>;
+    uri?: string;
+    node_id?: string;
+    commit_id?: string | null;
+    commit_uri?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookCandidateResponse = {
+  tenant_id?: string;
+  scope: string;
+  playbook: {
+    playbook_id: string;
+    version: number;
+    status: string;
+    name?: string | null;
+    uri?: string;
+    node_id?: string;
+    [k: string]: unknown;
+  };
+  candidate: {
+    eligible_for_deterministic_replay: boolean;
+    recommended_mode: "simulate" | "strict" | "guided";
+    next_action: string;
+    mismatch_reasons?: string[];
+    rejectable?: boolean;
+    [k: string]: unknown;
+  };
+  deterministic_gate: ReplayDeterministicGateResult;
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookRunResponse = {
+  tenant_id?: string;
+  scope: string;
+  playbook: {
+    playbook_id: string;
+    version: number;
+    status: string;
+    name?: string | null;
+    uri?: string;
+    [k: string]: unknown;
+  };
+  mode: "simulate" | "strict" | "guided";
+  deterministic_gate?: ReplayDeterministicGateResult;
+  run?: Record<string, unknown> | null;
+  summary?: Record<string, unknown>;
+  steps?: Array<Record<string, unknown>>;
+  execution?: Record<string, unknown>;
+  execution_policy?: Record<string, unknown>;
+  params_echo?: Record<string, unknown>;
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookDispatchResponse = {
+  tenant_id?: string;
+  scope: string;
+  dispatch: {
+    decision: "deterministic_replay_executed" | "fallback_replay_executed" | "candidate_only";
+    primary_inference_skipped: boolean;
+    fallback_executed: boolean;
+    [k: string]: unknown;
+  };
+  candidate: ReplayPlaybookCandidateResponse;
+  replay: ReplayPlaybookRunResponse | null;
   [k: string]: unknown;
 };
 

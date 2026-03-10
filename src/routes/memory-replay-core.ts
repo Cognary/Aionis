@@ -1,5 +1,6 @@
 import type { Env } from "../config.js";
 import {
+  replayPlaybookCandidate,
   replayPlaybookCompileFromRun,
   replayPlaybookGet,
   replayPlaybookPromote,
@@ -168,6 +169,27 @@ export function registerMemoryReplayCoreRoutes(args: {
     try {
       out = await store.withClient((client) =>
         replayPlaybookGet(client, body, {
+          defaultScope: env.MEMORY_SCOPE,
+          defaultTenantId: env.MEMORY_TENANT_ID,
+          embeddedRuntime,
+        }),
+      );
+    } finally {
+      gate.release();
+    }
+    return reply.code(200).send(out);
+  });
+
+  app.post("/v1/memory/replay/playbooks/candidate", async (req: any, reply: any) => {
+    const principal = await requireMemoryPrincipal(req);
+    const body = withIdentityFromRequest(req, req.body, principal, "replay_playbook_candidate");
+    await enforceRateLimit(req, reply, "recall");
+    await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+    const gate = await acquireInflightSlot("recall");
+    let out: any;
+    try {
+      out = await store.withClient((client) =>
+        replayPlaybookCandidate(client, body, {
           defaultScope: env.MEMORY_SCOPE,
           defaultTenantId: env.MEMORY_TENANT_ID,
           embeddedRuntime,

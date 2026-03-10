@@ -6,6 +6,7 @@ import type pg from "pg";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import { createPostgresWriteStoreAccess } from "../store/write-access.js";
+import { sha256Hex } from "../util/crypto.js";
 import { HttpError } from "../util/http.js";
 import {
   applyReplayLearningProjection,
@@ -14,6 +15,8 @@ import {
   type ReplayLearningProjectionResult,
 } from "./replay-learning.js";
 import {
+  ReplayPlaybookDispatchRequest,
+  ReplayPlaybookCandidateRequest,
   ReplayPlaybookCompileRequest,
   ReplayPlaybookGetRequest,
   ReplayPlaybookPromoteRequest,
@@ -25,6 +28,8 @@ import {
   ReplayRunStartRequest,
   ReplayStepAfterRequest,
   ReplayStepBeforeRequest,
+  type ReplayPlaybookDispatchInput,
+  type ReplayPlaybookCandidateInput,
   type ReplayPlaybookCompileInput,
   type ReplayPlaybookGetInput,
   type ReplayPlaybookPromoteInput,
@@ -143,6 +148,34 @@ type ReplayPlaybookReviewOptions = ReplayWriteOptions & {
   }>;
 };
 
+type ReplayDeterministicGateResolved = {
+  enabled: boolean;
+  preferDeterministicExecution: boolean;
+  onMismatch: "fallback" | "reject";
+  requiredStatuses: string[];
+  requestMatchers: Record<string, unknown> | null;
+  requestPolicyConstraints: Record<string, unknown> | null;
+};
+
+type ReplayDeterministicGateEvaluation = {
+  enabled: boolean;
+  requested_mode: "simulate" | "strict" | "guided";
+  effective_mode: "simulate" | "strict" | "guided";
+  decision: "disabled" | "matched" | "promoted_to_strict" | "fallback_to_requested_mode" | "rejected";
+  mismatch_reasons: string[];
+  inference_skipped: boolean;
+  playbook_status: string;
+  required_statuses: string[];
+  status_match: boolean;
+  matchers_match: boolean;
+  policy_constraints_match: boolean;
+  matched: boolean;
+  request_matcher_fingerprint: string | null;
+  playbook_matcher_fingerprint: string | null;
+  request_policy_fingerprint: string | null;
+  playbook_policy_fingerprint: string | null;
+};
+
 type ReplayNodeRow = {
   id: string;
   type: "event" | "entity" | "topic" | "rule" | "evidence" | "concept" | "procedure" | "self_model";
@@ -207,6 +240,14 @@ function parsePlaybookCompileInput(body: unknown): ReplayPlaybookCompileInput {
 
 function parsePlaybookGetInput(body: unknown): ReplayPlaybookGetInput {
   return ReplayPlaybookGetRequest.parse(body);
+}
+
+function parsePlaybookCandidateInput(body: unknown): ReplayPlaybookCandidateInput {
+  return ReplayPlaybookCandidateRequest.parse(body);
+}
+
+function parsePlaybookDispatchInput(body: unknown): ReplayPlaybookDispatchInput {
+  return ReplayPlaybookDispatchRequest.parse(body);
 }
 
 function parsePlaybookPromoteInput(body: unknown): ReplayPlaybookPromoteInput {
@@ -1885,6 +1926,104 @@ function stableJsonForFingerprint(input: unknown): string {
   }
 }
 
+function fingerprintHexForReplay(input: unknown): string {
+  return sha256Hex(stableJsonForFingerprint(input));
+}
+
+function resolveReplayDeterministicGate(input: unknown): ReplayDeterministicGateResolved {
+  const obj = asObject(input);
+  if (!obj) {
+    return {
+      enabled: false,
+      preferDeterministicExecution: false,
+      onMismatch: "fallback",
+      requiredStatuses: ["shadow", "active"],
+      requestMatchers: null,
+      requestPolicyConstraints: null,
+    };
+  }
+  const requiredStatusesRaw = Array.isArray(obj.required_statuses) ? obj.required_statuses : ["shadow", "active"];
+  const requiredStatuses = requiredStatusesRaw
+    .map((value) => toStringOrNull(value))
+    .filter((value): value is string => Boolean(value));
+  return {
+    enabled: obj.enabled !== false,
+    preferDeterministicExecution: obj.prefer_deterministic_execution !== false,
+    onMismatch: obj.on_mismatch === "reject" ? "reject" : "fallback",
+    requiredStatuses: requiredStatuses.length > 0 ? requiredStatuses : ["shadow", "active"],
+    requestMatchers: asObject(obj.matchers),
+    requestPolicyConstraints: asObject(obj.policy_constraints),
+  };
+}
+
+function evaluateReplayDeterministicGate(args: {
+  requestedMode: "simulate" | "strict" | "guided";
+  gateInput: unknown;
+  playbookStatus: string | null;
+  playbookSlots: Record<string, unknown>;
+}): ReplayDeterministicGateEvaluation {
+  const gate = resolveReplayDeterministicGate(args.gateInput);
+  const playbookStatus = args.playbookStatus ?? "draft";
+  const playbookMatchers = asObject(args.playbookSlots.matchers) ?? {};
+  const playbookPolicyConstraints = asObject(args.playbookSlots.policy_constraints) ?? {};
+  const requestMatcherFingerprint = gate.requestMatchers ? fingerprintHexForReplay(gate.requestMatchers) : null;
+  const playbookMatcherFingerprint = fingerprintHexForReplay(playbookMatchers);
+  const requestPolicyFingerprint = gate.requestPolicyConstraints ? fingerprintHexForReplay(gate.requestPolicyConstraints) : null;
+  const playbookPolicyFingerprint = fingerprintHexForReplay(playbookPolicyConstraints);
+  const statusMatch = gate.requiredStatuses.includes(playbookStatus);
+  const matchersMatch =
+    gate.requestMatchers == null || stableJsonForFingerprint(gate.requestMatchers) === stableJsonForFingerprint(playbookMatchers);
+  const policyConstraintsMatch =
+    gate.requestPolicyConstraints == null
+      || stableJsonForFingerprint(gate.requestPolicyConstraints) === stableJsonForFingerprint(playbookPolicyConstraints);
+  const matched = gate.enabled && statusMatch && matchersMatch && policyConstraintsMatch;
+  const mismatchReasons: string[] = [];
+  if (gate.enabled && !statusMatch) mismatchReasons.push("status_not_allowed_for_deterministic_replay");
+  if (gate.enabled && !matchersMatch) mismatchReasons.push("matcher_fingerprint_mismatch");
+  if (gate.enabled && !policyConstraintsMatch) mismatchReasons.push("policy_constraints_fingerprint_mismatch");
+  const effectiveMode =
+    matched && gate.preferDeterministicExecution && args.requestedMode === "simulate"
+      ? "strict"
+      : args.requestedMode;
+  return {
+    enabled: gate.enabled,
+    requested_mode: args.requestedMode,
+    effective_mode: effectiveMode,
+    decision:
+      !gate.enabled
+        ? "disabled"
+        : matched
+          ? effectiveMode === "strict" && args.requestedMode === "simulate"
+            ? "promoted_to_strict"
+            : "matched"
+          : gate.onMismatch === "reject"
+            ? "rejected"
+            : "fallback_to_requested_mode",
+    mismatch_reasons: mismatchReasons,
+    inference_skipped: matched && effectiveMode === "strict",
+    playbook_status: playbookStatus,
+    required_statuses: gate.requiredStatuses,
+    status_match: statusMatch,
+    matchers_match: matchersMatch,
+    policy_constraints_match: policyConstraintsMatch,
+    matched,
+    request_matcher_fingerprint: requestMatcherFingerprint,
+    playbook_matcher_fingerprint: playbookMatcherFingerprint,
+    request_policy_fingerprint: requestPolicyFingerprint,
+    playbook_policy_fingerprint: playbookPolicyFingerprint,
+  };
+}
+
+function nextActionForReplayDeterministicGate(evaluation: ReplayDeterministicGateEvaluation): string {
+  if (!evaluation.enabled) return "deterministic_gate_not_requested";
+  if (evaluation.matched) return "safe_to_skip_primary_inference";
+  if (evaluation.decision === "rejected") return "inspect_gate_mismatch_before_execution";
+  if (evaluation.mismatch_reasons.includes("status_not_allowed_for_deterministic_replay")) {
+    return "promote_or_select_a_replayable_playbook_version";
+  }
+  return "fallback_to_normal_planner_or_simulate";
+}
+
 function dedupeReplayCompileSteps(
   steps: Array<Record<string, unknown>>,
 ): {
@@ -3002,6 +3141,144 @@ export async function replayPlaybookGet(client: pg.PoolClient, body: unknown, op
   };
 }
 
+export async function replayPlaybookCandidate(client: pg.PoolClient, body: unknown, opts: ReplayReadOptions) {
+  requirePostgresReplayRead(opts);
+  const parsed = parsePlaybookCandidateInput(body);
+  const tenancy = resolveTenantScope(
+    { tenant_id: parsed.tenant_id, scope: parsed.scope },
+    { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
+  );
+  const row =
+    parsed.version != null
+      ? await getReplayPlaybookVersion(client, tenancy.scope_key, parsed.playbook_id, parsed.version)
+      : (await listReplayPlaybookVersions(client, tenancy.scope_key, parsed.playbook_id))[0] ?? null;
+  if (!row) {
+    throw new HttpError(404, "replay_playbook_not_found", "playbook was not found in this scope", {
+      playbook_id: parsed.playbook_id,
+      version: parsed.version ?? null,
+      scope: tenancy.scope,
+      tenant_id: tenancy.tenant_id,
+    });
+  }
+  const slotsObj = asObject(row.slots) ?? {};
+  const deterministicGate = evaluateReplayDeterministicGate({
+    requestedMode: "simulate",
+    gateInput: parsed.deterministic_gate,
+    playbookStatus: row.playbook_status,
+    playbookSlots: slotsObj,
+  });
+  return {
+    tenant_id: tenancy.tenant_id,
+    scope: tenancy.scope,
+    playbook: {
+      playbook_id: parsed.playbook_id,
+      version: row.version_num,
+      status: row.playbook_status ?? "draft",
+      name: row.title,
+      uri: buildAionisUri({
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        type: row.type,
+        id: row.id,
+      }),
+      node_id: row.id,
+    },
+    candidate: {
+      eligible_for_deterministic_replay: deterministicGate.matched,
+      recommended_mode: deterministicGate.effective_mode,
+      next_action: nextActionForReplayDeterministicGate(deterministicGate),
+      mismatch_reasons: deterministicGate.mismatch_reasons,
+      rejectable: deterministicGate.enabled && deterministicGate.decision === "rejected",
+    },
+    deterministic_gate: deterministicGate,
+  };
+}
+
+export async function replayPlaybookDispatch(client: pg.PoolClient, body: unknown, opts: ReplayPlaybookRunOptions) {
+  requirePostgresReplayRead(opts);
+  const parsed = parsePlaybookDispatchInput(body);
+  const candidate = await replayPlaybookCandidate(
+    client,
+    {
+      tenant_id: parsed.tenant_id,
+      scope: parsed.scope,
+      playbook_id: parsed.playbook_id,
+      version: parsed.version,
+      deterministic_gate: parsed.deterministic_gate,
+    },
+    opts,
+  );
+  const eligible = Boolean((candidate as any).candidate?.eligible_for_deterministic_replay);
+  if (eligible) {
+    const replay = await replayPlaybookRun(
+      client,
+      {
+        tenant_id: parsed.tenant_id,
+        scope: parsed.scope,
+        project_id: parsed.project_id,
+        actor: parsed.actor,
+        playbook_id: parsed.playbook_id,
+        version: parsed.version,
+        mode: "simulate",
+        deterministic_gate: parsed.deterministic_gate,
+        params: parsed.params,
+        max_steps: parsed.max_steps,
+      },
+      opts,
+    );
+    return {
+      tenant_id: (candidate as any).tenant_id,
+      scope: (candidate as any).scope,
+      dispatch: {
+        decision: "deterministic_replay_executed",
+        primary_inference_skipped: true,
+        fallback_executed: false,
+      },
+      candidate,
+      replay,
+    };
+  }
+  if (parsed.execute_fallback === false) {
+    return {
+      tenant_id: (candidate as any).tenant_id,
+      scope: (candidate as any).scope,
+      dispatch: {
+        decision: "candidate_only",
+        primary_inference_skipped: false,
+        fallback_executed: false,
+      },
+      candidate,
+      replay: null,
+    };
+  }
+  const replay = await replayPlaybookRun(
+    client,
+    {
+      tenant_id: parsed.tenant_id,
+      scope: parsed.scope,
+      project_id: parsed.project_id,
+      actor: parsed.actor,
+      playbook_id: parsed.playbook_id,
+      version: parsed.version,
+      mode: parsed.fallback_mode,
+      params: parsed.params,
+      max_steps: parsed.max_steps,
+    },
+    opts,
+  );
+  return {
+    tenant_id: (candidate as any).tenant_id,
+    scope: (candidate as any).scope,
+    dispatch: {
+      decision: "fallback_replay_executed",
+      primary_inference_skipped: false,
+      fallback_executed: true,
+    },
+    candidate,
+    replay,
+  };
+}
+
 export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown, opts: ReplayWriteOptions) {
   requirePostgresReplayRead({ defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId, embeddedRuntime: opts.embeddedRuntime });
   const parsed = parsePlaybookPromoteInput(body);
@@ -3978,7 +4255,34 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
   const slotsObj = asObject(row.slots) ?? {};
   const stepsRaw = Array.isArray(slotsObj.steps_template) ? slotsObj.steps_template.slice(0, parsed.max_steps) : [];
   const paramsObj = asObject(parsed.params) ?? {};
-  const mode = parsed.mode;
+  const deterministicGate = evaluateReplayDeterministicGate({
+    requestedMode: parsed.mode,
+    gateInput: parsed.deterministic_gate,
+    playbookStatus: row.playbook_status,
+    playbookSlots: slotsObj,
+  });
+  if (deterministicGate.enabled && !deterministicGate.matched && deterministicGate.decision === "rejected") {
+    throw new HttpError(
+      409,
+      "replay_deterministic_gate_mismatch",
+      "deterministic replay gate did not match the selected playbook version",
+      {
+        playbook_id: parsed.playbook_id,
+        version: row.version_num,
+        requested_mode: deterministicGate.requested_mode,
+        playbook_status: deterministicGate.playbook_status,
+        required_statuses: deterministicGate.required_statuses,
+        status_match: deterministicGate.status_match,
+        matchers_match: deterministicGate.matchers_match,
+        policy_constraints_match: deterministicGate.policy_constraints_match,
+        request_matcher_fingerprint: deterministicGate.request_matcher_fingerprint,
+        playbook_matcher_fingerprint: deterministicGate.playbook_matcher_fingerprint,
+        request_policy_fingerprint: deterministicGate.request_policy_fingerprint,
+        playbook_policy_fingerprint: deterministicGate.playbook_policy_fingerprint,
+      },
+    );
+  }
+  const mode = deterministicGate.effective_mode;
   const stepReports: Array<Record<string, unknown>> = [];
   const recordRun = paramsObj.record_run !== false && Boolean(opts.writeOptions);
   const requestedRunIdRaw = toStringOrNull(paramsObj.run_id);
@@ -4166,6 +4470,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         }),
       },
       mode: "simulate",
+      deterministic_gate: deterministicGate,
       run:
         recordRun
           ? {
@@ -4195,6 +4500,10 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
               : "Safe to run strict replay when execution backend policy is satisfied.",
       },
       steps: stepReports,
+      execution: {
+        inference_skipped: deterministicGate.inference_skipped,
+        deterministic_gate_matched: deterministicGate.matched,
+      },
       params_echo: parsed.params ?? {},
     };
   }
@@ -5144,6 +5453,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       }),
     },
     mode,
+    deterministic_gate: deterministicGate,
     run: {
       run_id: replayRunId,
       status: runStatus,
@@ -5174,6 +5484,8 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
     },
     steps: stepReports,
     execution: {
+      inference_skipped: deterministicGate.inference_skipped,
+      deterministic_gate_matched: deterministicGate.matched,
       execution_backend: executionBackend,
       local_executor_enabled: localExecutor?.enabled === true,
       sandbox_executor_available: typeof opts.sandboxExecutor === "function",

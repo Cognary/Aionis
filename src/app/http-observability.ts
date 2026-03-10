@@ -101,10 +101,12 @@ export function createHttpObservabilityHelpers(args: {
     ["/v1/memory/replay/runs/get", "recall"],
     ["/v1/memory/replay/playbooks/compile_from_run", "write"],
     ["/v1/memory/replay/playbooks/get", "recall"],
+    ["/v1/memory/replay/playbooks/candidate", "recall"],
     ["/v1/memory/replay/playbooks/promote", "write"],
     ["/v1/memory/replay/playbooks/repair", "write"],
     ["/v1/memory/replay/playbooks/repair/review", "write"],
     ["/v1/memory/replay/playbooks/run", "recall"],
+    ["/v1/memory/replay/playbooks/dispatch", "write"],
   ]);
 
   function resolveCorsAllowOrigin(origin: string | null, allowOrigins: string[]): string | null {

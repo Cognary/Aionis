@@ -255,6 +255,23 @@ const PlaybookGetArgs = z.object({
   playbook_id: Uuid,
 });
 
+const DeterministicGateArgs = z.object({
+  enabled: z.boolean().optional(),
+  prefer_deterministic_execution: z.boolean().optional(),
+  on_mismatch: z.enum(["fallback", "reject"]).optional(),
+  required_statuses: z.array(z.enum(["draft", "shadow", "active", "disabled"])).min(1).max(4).optional(),
+  matchers: JsonRecord.optional(),
+  policy_constraints: JsonRecord.optional(),
+});
+
+const PlaybookCandidateArgs = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  playbook_id: Uuid,
+  version: z.number().int().positive().optional(),
+  deterministic_gate: DeterministicGateArgs.optional(),
+});
+
 const PlaybookPromoteArgs = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
@@ -274,6 +291,21 @@ const PlaybookRunArgs = z.object({
   playbook_id: Uuid,
   mode: z.enum(["strict", "guided", "simulate"]).optional(),
   version: z.number().int().positive().optional(),
+  deterministic_gate: DeterministicGateArgs.optional(),
+  params: JsonRecord.optional(),
+  max_steps: z.number().int().positive().max(500).optional(),
+});
+
+const PlaybookDispatchArgs = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  project_id: z.string().min(1).max(128).optional(),
+  actor: z.string().min(1).optional(),
+  playbook_id: Uuid,
+  version: z.number().int().positive().optional(),
+  deterministic_gate: DeterministicGateArgs.optional(),
+  fallback_mode: z.enum(["strict", "guided", "simulate"]).optional(),
+  execute_fallback: z.boolean().optional(),
   params: JsonRecord.optional(),
   max_steps: z.number().int().positive().max(500).optional(),
 });
@@ -611,6 +643,20 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     inputSchema: schemaObject({ tenant_id: { type: "string" }, scope: { type: "string" }, playbook_id: { type: "string" } }, ["playbook_id"]),
   },
   {
+    name: "aionis_playbook_candidate",
+    title: "Aionis Playbook Candidate",
+    description: "Evaluate whether a playbook is eligible for deterministic replay before invoking the main planner path.",
+    path: "/v1/memory/replay/playbooks/candidate",
+    argsSchema: PlaybookCandidateArgs,
+    inputSchema: schemaObject({
+      tenant_id: { type: "string" },
+      scope: { type: "string" },
+      playbook_id: { type: "string" },
+      version: { type: "integer" },
+      deterministic_gate: { type: "object" },
+    }, ["playbook_id"]),
+  },
+  {
     name: "aionis_playbook_promote",
     title: "Aionis Playbook Promote",
     description: "Promote or disable a compiled playbook version.",
@@ -624,7 +670,27 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     description: "Execute a playbook in strict, guided, or simulate mode.",
     path: "/v1/memory/replay/playbooks/run",
     argsSchema: PlaybookRunArgs,
-    inputSchema: schemaObject({ tenant_id: { type: "string" }, scope: { type: "string" }, project_id: { type: "string" }, actor: { type: "string" }, playbook_id: { type: "string" }, mode: { type: "string", enum: ["strict", "guided", "simulate"] }, version: { type: "integer" }, params: { type: "object" }, max_steps: { type: "integer" } }, ["playbook_id"]),
+    inputSchema: schemaObject({ tenant_id: { type: "string" }, scope: { type: "string" }, project_id: { type: "string" }, actor: { type: "string" }, playbook_id: { type: "string" }, mode: { type: "string", enum: ["strict", "guided", "simulate"] }, version: { type: "integer" }, deterministic_gate: { type: "object" }, params: { type: "object" }, max_steps: { type: "integer" } }, ["playbook_id"]),
+  },
+  {
+    name: "aionis_playbook_dispatch",
+    title: "Aionis Playbook Dispatch",
+    description: "Run candidate lookup plus deterministic replay or fallback replay in one step.",
+    path: "/v1/memory/replay/playbooks/dispatch",
+    argsSchema: PlaybookDispatchArgs,
+    inputSchema: schemaObject({
+      tenant_id: { type: "string" },
+      scope: { type: "string" },
+      project_id: { type: "string" },
+      actor: { type: "string" },
+      playbook_id: { type: "string" },
+      version: { type: "integer" },
+      deterministic_gate: { type: "object" },
+      fallback_mode: { type: "string", enum: ["strict", "guided", "simulate"] },
+      execute_fallback: { type: "boolean" },
+      params: { type: "object" },
+      max_steps: { type: "integer" },
+    }, ["playbook_id"]),
   },
   {
     name: "aionis_sandbox_create_session",

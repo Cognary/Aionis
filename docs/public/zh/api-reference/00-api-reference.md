@@ -70,6 +70,8 @@ Memory 路由使用以下任一方式：
 9. `POST /v1/memory/replay/playbooks/repair`
 10. `POST /v1/memory/replay/playbooks/repair/review`
 11. `POST /v1/memory/replay/playbooks/run`
+12. `POST /v1/memory/replay/playbooks/candidate`
+13. `POST /v1/memory/replay/playbooks/dispatch`
 
 ### Automation（Public Beta）
 
@@ -125,26 +127,39 @@ Memory 路由使用以下任一方式：
 
 1. `playbooks/run` 支持 `simulate`、`strict`、`guided`。
 2. `strict` 与 `guided` 需要显式 `params.allow_local_exec=true`。
+3. `playbooks/candidate` 提供机器可读的 deterministic replay 候选判断：
+   - `candidate.eligible_for_deterministic_replay`
+   - `candidate.recommended_mode`
+   - `candidate.next_action`
+   - `candidate.mismatch_reasons`
+4. `playbooks/run` 支持可选 `deterministic_gate`：
+   - gate 命中时可把 `simulate` 安全提升成 `strict`
+   - 响应会带 `deterministic_gate` 与 `execution.inference_skipped`
+5. `playbooks/dispatch` 是推荐的自动分发表面：
+   - `dispatch.decision=deterministic_replay_executed`
+   - `dispatch.decision=fallback_replay_executed`
+   - `dispatch.decision=candidate_only`
+   - 可通过 `execute_fallback=false` 禁止回退执行
 3. 执行后端支持：
    - `params.execution_backend=local_process`（默认）
    - `params.execution_backend=sandbox_sync`（沙箱同步执行并校验结果）
    - `params.execution_backend=sandbox_async`（沙箱排队执行，返回 pending 证据）
-4. 命令执行受 allowlist 限制，当前仅支持命令类工具（`command|shell|exec|bash`）。
-5. 可选执行参数：
+6. 命令执行受 allowlist 限制，当前仅支持命令类工具（`command|shell|exec|bash`）。
+7. 可选执行参数：
    - 顶层 `project_id` 或 `params.project_id`（用于 sandbox budget 维度）
    - `params.sensitive_review_mode=block|warn`
    - `params.allow_sensitive_exec=true`（`block` 命中敏感命令时需要显式放行）
-6. `guided` 支持可配置修复策略：
+8. `guided` 支持可配置修复策略：
    - `deterministic_skip`（默认）：生成 remove-step 补丁作为回退。
    - `heuristic_patch`：优先给出命令替换/重试补丁，失败时回退 remove-step。
    - `http_synth`：调用外部修复合成端点（失败自动回退 heuristic）。
    - `builtin_llm`：内置 OpenAI 兼容修复合成（失败自动回退 heuristic）。
-7. 可选 guided 运行参数：
+9. 可选 guided 运行参数：
    - `params.guided_repair_strategy`
    - `params.command_alias_map`
    - `params.guided_repair_max_error_chars`
    - 安全默认：请求侧切换到 `builtin_llm` 默认被禁止，除非服务端显式放开。
-8. guided 修复服务端默认值：
+10. guided 修复服务端默认值：
    - `REPLAY_GUIDED_REPAIR_STRATEGY`
    - `REPLAY_GUIDED_REPAIR_ALLOW_REQUEST_BUILTIN_LLM`
    - `REPLAY_GUIDED_REPAIR_MAX_ERROR_CHARS`
@@ -157,18 +172,18 @@ Memory 路由使用以下任一方式：
    - `REPLAY_GUIDED_REPAIR_LLM_TIMEOUT_MS`
    - `REPLAY_GUIDED_REPAIR_LLM_MAX_TOKENS`
    - `REPLAY_GUIDED_REPAIR_LLM_TEMPERATURE`
-9. `playbooks/repair/review` 支持 `shadow_validation_mode=readiness|execute|execute_sandbox`。
-10. `shadow_validation_mode=execute_sandbox` 支持更深策略控制（`shadow_validation_params`）：
+11. `playbooks/repair/review` 支持 `shadow_validation_mode=readiness|execute|execute_sandbox`。
+12. `shadow_validation_mode=execute_sandbox` 支持更深策略控制（`shadow_validation_params`）：
    - `profile=fast|balanced|thorough`
    - `execution_mode=sync|async_queue`
    - `timeout_ms`、`stop_on_failure`
-11. shadow validation 执行默认值可由环境变量控制：
+13. shadow validation 执行默认值可由环境变量控制：
    - `REPLAY_SHADOW_VALIDATE_EXECUTE_TIMEOUT_MS`
    - `REPLAY_SHADOW_VALIDATE_EXECUTE_STOP_ON_FAILURE`
    - `REPLAY_SHADOW_VALIDATE_SANDBOX_TIMEOUT_MS`
    - `REPLAY_SHADOW_VALIDATE_SANDBOX_STOP_ON_FAILURE`
-12. `playbooks/repair/review` 可通过 `auto_promote_on_pass`、`auto_promote_target_status`、`auto_promote_gate` 做自动晋升。
-13. `playbooks/compile_from_run` 会在 `compile_summary` 输出编译质量信息：
+14. `playbooks/repair/review` 可通过 `auto_promote_on_pass`、`auto_promote_target_status`、`auto_promote_gate` 做自动晋升。
+15. `playbooks/compile_from_run` 会在 `compile_summary` 输出编译质量信息：
    - 重复步骤去重摘要（`steps_dedup_removed`、`dedup_removed_step_indexes`）
    - 参数化候选提取（`parameterization.variables`，以及每步 `template_variables`）
    - 每步质量分（`quality_score`、`quality_flags`）与汇总建议
@@ -176,29 +191,29 @@ Memory 路由使用以下任一方式：
      - 响应顶层 `usage`（`prompt_tokens`、`completion_tokens`、`total_tokens`）
      - `compile_summary.usage_estimate` 同步返回同一组数值
      - 当前来源为 `estimated_char_based_v1`（基于字符估算，不是模型计费账单值）
-14. 服务端可通过以下环境变量提供默认策略（请求显式参数优先）：
+16. 服务端可通过以下环境变量提供默认策略（请求显式参数优先）：
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_PROFILE`
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_DEFAULT`
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_TARGET_STATUS`
    - `REPLAY_REPAIR_REVIEW_GATE_*`
    - `REPLAY_REPAIR_REVIEW_POLICY_JSON`（支持 `endpoint` / `tenant_default` / `tenant_endpoint` / `tenant_scope_default` / `tenant_scope_endpoint`）
-15. `playbooks/repair/review` 响应包含 `auto_promote_policy_resolution`，用于查看命中来源与最终生效策略。
-16. `GET /v1/admin/control/diagnostics/tenant/:tenant_id` 的 `diagnostics.replay_policy` 会汇总策略命中与覆盖统计。
-17. `playbooks/repair/review` 支持可选闭环学习投影请求：
+17. `playbooks/repair/review` 响应包含 `auto_promote_policy_resolution`，用于查看命中来源与最终生效策略。
+18. `GET /v1/admin/control/diagnostics/tenant/:tenant_id` 的 `diagnostics.replay_policy` 会汇总策略命中与覆盖统计。
+19. `playbooks/repair/review` 支持可选闭环学习投影请求：
    - `learning_projection.enabled`
    - `learning_projection.mode=rule_and_episode|episode_only`
    - `learning_projection.delivery=async_outbox|sync_inline`
    - `learning_projection.target_rule_state=draft|shadow`
    - `learning_projection.min_total_steps`
    - `learning_projection.min_success_ratio`
-18. `playbooks/repair/review` 响应可包含 `learning_projection_result`：
+20. `playbooks/repair/review` 响应可包含 `learning_projection_result`：
    - `status=queued|applied|skipped|failed`
    - 产物 URI（`generated_rule_uri`、`generated_episode_uri`）
    - warning 代码：
      - `overlapping_rules_detected`
      - `duplicate_rule_fingerprint_skipped`
      - `episode_gc_policy_attached`
-19. 学习 episode 带有生命周期元数据并可被保留策略归档：
+21. 学习 episode 带有生命周期元数据并可被保留策略归档：
    - stage-1 recall 默认排除 archived 学习 episode
    - `find/resolve` 仍可查询 archived 对象用于审计/回放
 

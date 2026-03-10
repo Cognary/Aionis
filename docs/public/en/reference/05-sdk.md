@@ -86,6 +86,54 @@ print(write_res.get("commit_uri"), recall_res.get("request_id"))
 2. Context: `context_assemble`
 3. Graph: `find`, `resolve`
 4. Policy loop: `rules_evaluate`, `tools_select`, `tools_decision`, `tools_feedback`
+5. Replay: `replayPlaybookGet`, `replayPlaybookCandidate`, `replayPlaybookRun`, `replayPlaybookDispatch`
+
+## Replay Dispatch Quick Start (TypeScript)
+
+Use replay candidate lookup to decide whether a playbook can skip primary reasoning, then let dispatch execute deterministic replay or fallback automatically.
+
+```ts
+const candidate = await client.replayPlaybookCandidate({
+  playbook_uri: "aionis://memory/playbook/deploy-app",
+  deterministic_gate: {
+    preferred_execution_mode: "strict",
+    required_playbook_statuses: ["active", "shadow"],
+    matchers: { workflow: "deploy" },
+    policy_constraints: { approval: "required" },
+  },
+});
+
+if (candidate.candidate.eligible_for_deterministic_replay) {
+  console.log(candidate.candidate.next_action);
+}
+
+const dispatch = await client.replayPlaybookDispatch({
+  playbook_uri: "aionis://memory/playbook/deploy-app",
+  deterministic_gate: {
+    preferred_execution_mode: "strict",
+    required_playbook_statuses: ["active", "shadow"],
+    matchers: { workflow: "deploy" },
+    policy_constraints: { approval: "required" },
+  },
+  execute_fallback: true,
+  fallback_mode: "guided",
+  params: {
+    allow_local_exec: true,
+  },
+});
+
+console.log(dispatch.dispatch.decision, dispatch.dispatch.primary_inference_skipped);
+```
+
+## Replay Dispatch Notes
+
+1. `replayPlaybookCandidate` is read-only and returns deterministic replay eligibility plus mismatch reasons.
+2. `replayPlaybookRun` accepts optional `deterministic_gate`; a matching gate can promote `simulate` to `strict`.
+3. `replayPlaybookDispatch` is the recommended top-level entrypoint for agents that want deterministic replay first and planner fallback second.
+4. `dispatch.dispatch.decision` is one of:
+   - `deterministic_replay_executed`
+   - `fallback_replay_executed`
+   - `candidate_only`
 
 ## Error Handling Baseline
 

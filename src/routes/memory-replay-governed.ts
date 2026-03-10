@@ -1,5 +1,5 @@
-import { ReplayPlaybookRunRequest } from "../memory/schemas.js";
-import { replayPlaybookRepairReview, replayPlaybookRun } from "../memory/replay.js";
+import { ReplayPlaybookDispatchRequest, ReplayPlaybookRunRequest } from "../memory/schemas.js";
+import { replayPlaybookDispatch, replayPlaybookRepairReview, replayPlaybookRun } from "../memory/replay.js";
 
 type StoreLike = {
   withTx: <T>(fn: (client: any) => Promise<T>) => Promise<T>;
@@ -73,7 +73,12 @@ export function registerMemoryReplayGovernedRoutes(args: {
     const body = withIdentityFromRequest(req, req.body, principal, "replay_playbook_run");
     const parsedForMode = ReplayPlaybookRunRequest.safeParse(body);
     const replayMode = parsedForMode.success ? parsedForMode.data.mode : "simulate";
-    const rateKind = replayMode === "simulate" ? "recall" : "write";
+    const prefersDeterministicExecution =
+      parsedForMode.success
+      && replayMode === "simulate"
+      && parsedForMode.data.deterministic_gate?.enabled !== false
+      && parsedForMode.data.deterministic_gate?.prefer_deterministic_execution !== false;
+    const rateKind = replayMode === "simulate" && !prefersDeterministicExecution ? "recall" : "write";
     await enforceRateLimit(req, reply, rateKind);
     await enforceTenantQuota(req, reply, rateKind, tenantFromBody(body));
     const gate = await acquireInflightSlot(rateKind);
@@ -81,6 +86,30 @@ export function registerMemoryReplayGovernedRoutes(args: {
     try {
       out = await store.withClient((client) =>
         replayPlaybookRun(client, body, buildReplayPlaybookRunOptions(reply, "replay_playbook_run")),
+      );
+    } finally {
+      gate.release();
+    }
+    return reply.code(200).send(out);
+  });
+
+  app.post("/v1/memory/replay/playbooks/dispatch", async (req: any, reply: any) => {
+    const principal = await requireMemoryPrincipal(req);
+    const body = withIdentityFromRequest(req, req.body, principal, "replay_playbook_dispatch");
+    const parsed = ReplayPlaybookDispatchRequest.safeParse(body);
+    const deterministicPossible =
+      parsed.success
+      && parsed.data.deterministic_gate?.enabled !== false
+      && parsed.data.deterministic_gate?.prefer_deterministic_execution !== false;
+    const executeFallback = parsed.success ? parsed.data.execute_fallback !== false : true;
+    const rateKind = deterministicPossible || executeFallback ? "write" : "recall";
+    await enforceRateLimit(req, reply, rateKind);
+    await enforceTenantQuota(req, reply, rateKind, tenantFromBody(body));
+    const gate = await acquireInflightSlot(rateKind);
+    let out: any;
+    try {
+      out = await store.withClient((client) =>
+        replayPlaybookDispatch(client, body, buildReplayPlaybookRunOptions(reply, "replay_playbook_dispatch")),
       );
     } finally {
       gate.release();

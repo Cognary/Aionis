@@ -106,6 +106,14 @@ import type {
   MemoryRecallInput,
   MemoryRecallResponse,
   MemoryRecallTextInput,
+  ReplayPlaybookCandidateInput,
+  ReplayPlaybookCandidateResponse,
+  ReplayPlaybookDispatchInput,
+  ReplayPlaybookDispatchResponse,
+  ReplayPlaybookGetInput,
+  ReplayPlaybookGetResponse,
+  ReplayPlaybookRunInput,
+  ReplayPlaybookRunResponse,
   MemorySessionCreateInput,
   MemorySessionCreateResponse,
   MemorySessionEventsListInput,
@@ -355,6 +363,42 @@ export class AionisClient {
 
   async toolsFeedback(input: ToolsFeedbackInput, opts?: RequestOptions): Promise<AionisResponse<ToolsFeedbackResponse>> {
     return this.requestPost<ToolsFeedbackInput, ToolsFeedbackResponse>("/v1/memory/tools/feedback", input, opts);
+  }
+
+  async replayPlaybookGet(
+    input: ReplayPlaybookGetInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookGetResponse>> {
+    return this.requestPost<ReplayPlaybookGetInput, ReplayPlaybookGetResponse>("/v1/memory/replay/playbooks/get", input, opts);
+  }
+
+  async replayPlaybookCandidate(
+    input: ReplayPlaybookCandidateInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookCandidateResponse>> {
+    return this.requestPost<ReplayPlaybookCandidateInput, ReplayPlaybookCandidateResponse>(
+      "/v1/memory/replay/playbooks/candidate",
+      input,
+      opts,
+    );
+  }
+
+  async replayPlaybookRun(
+    input: ReplayPlaybookRunInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookRunResponse>> {
+    return this.requestPost<ReplayPlaybookRunInput, ReplayPlaybookRunResponse>("/v1/memory/replay/playbooks/run", input, opts);
+  }
+
+  async replayPlaybookDispatch(
+    input: ReplayPlaybookDispatchInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookDispatchResponse>> {
+    return this.requestPost<ReplayPlaybookDispatchInput, ReplayPlaybookDispatchResponse>(
+      "/v1/memory/replay/playbooks/dispatch",
+      input,
+      opts,
+    );
   }
 
   async automationCreate(input: AutomationCreateInput, opts?: RequestOptions): Promise<AionisResponse<AutomationCreateResponse>> {
