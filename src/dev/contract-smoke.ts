@@ -11,11 +11,21 @@ import {
   MemoryRecallRequest,
   MemorySessionEventsListRequest,
   PlanningContextRequest,
+  ReplayPlaybookCompileRequest,
+  ReplayPlaybookPromoteRequest,
+  ReplayRunEndRequest,
+  ReplayRunGetRequest,
+  ReplayPlaybookRepairRequest,
+  ReplayPlaybookRepairReviewRequest,
+  ReplayPlaybookRunRequest,
+  ReplayRunStartRequest,
+  ReplayStepAfterRequest,
+  ReplayStepBeforeRequest,
   ToolsFeedbackRequest,
   ToolsSelectRequest,
 } from "../memory/schemas.js";
 import { HttpError } from "../util/http.js";
-import { requireAdminTokenHeader } from "../util/admin_auth.js";
+import { requireAdminTokenHeader, secretTokensEqual } from "../util/admin_auth.js";
 import { resolveTenantScope } from "../memory/tenant.js";
 import { loadEnv } from "../config.js";
 import { CAPABILITY_CONTRACT, capabilityContract } from "../capability-contract.js";
@@ -36,9 +46,22 @@ import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
 import { validateAutomationGraph } from "../memory/automation.js";
+import {
+  replayPlaybookCompileFromRun,
+  replayPlaybookGet,
+  replayPlaybookPromote,
+  replayPlaybookRepair,
+  replayPlaybookRepairReview,
+  replayPlaybookRun,
+  replayRunEnd,
+  replayRunGet,
+  replayRunStart,
+  replayStepAfter,
+  replayStepBefore,
+} from "../memory/replay.js";
 import { memoryResolve } from "../memory/resolve.js";
 import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
-import { applyMemoryWrite } from "../memory/write.js";
+import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
 import { postJsonWithTls } from "../memory/sandbox.js";
 import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
@@ -313,6 +336,257 @@ class ResolveFixturePgClient {
     }
 
     throw new Error(`ResolveFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class ReplayPlaybookFixturePgClient {
+  private readonly playbooks: any[];
+
+  constructor(playbooks: any[]) {
+    this.playbooks = playbooks;
+  }
+
+  async query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+    if (s.includes("FROM memory_nodes") && s.includes("slots->>'replay_kind' = 'playbook'")) {
+      const playbookId = params?.[1];
+      const version = params?.[2];
+      const rows = this.playbooks
+        .filter((row) => row.playbook_id === playbookId)
+        .sort((a, b) => b.version_num - a.version_num);
+      const filtered = version == null ? rows : rows.filter((row) => row.version_num === version).slice(0, 1);
+      return { rows: filtered as T[], rowCount: filtered.length };
+    }
+    throw new Error(`ReplayPlaybookFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class ReplayLifecycleFixturePgClient {
+  private commitCounter = 0;
+  private readonly commits = new Map<string, { id: string; scope: string; commit_hash: string }>();
+  private readonly nodes = new Map<
+    string,
+    {
+      id: string;
+      scope: string;
+      client_id: string | null;
+      type: string;
+      title: string | null;
+      text_summary: string | null;
+      slots: Record<string, unknown>;
+      created_at: string;
+      updated_at: string;
+      commit_id: string | null;
+      embedding_status: string | null;
+      embedding_vector: string | null;
+    }
+  >();
+
+  async query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+
+    if (s.includes("SELECT id, scope FROM memory_nodes WHERE id = ANY($1::uuid[])")) {
+      const ids = Array.isArray(params?.[0]) ? params?.[0] : [];
+      const rows = ids
+        .map((id) => this.nodes.get(String(id)))
+        .filter((row): row is NonNullable<typeof row> => !!row)
+        .map((row) => ({ id: row.id, scope: row.scope }));
+      return { rows: rows as T[], rowCount: rows.length };
+    }
+
+    if (s.includes("SELECT commit_hash FROM memory_commits WHERE id = $1 AND scope = $2")) {
+      const commit = this.commits.get(String(params?.[0] ?? ""));
+      const scope = String(params?.[1] ?? "");
+      if (!commit || commit.scope !== scope) return { rows: [] as T[], rowCount: 0 };
+      return { rows: [{ commit_hash: commit.commit_hash } as any] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_commits") && s.includes("RETURNING id")) {
+      this.commitCounter += 1;
+      const suffix = String(this.commitCounter).padStart(12, "0");
+      const id = `77777777-7777-7777-7777-${suffix}`;
+      this.commits.set(id, {
+        id,
+        scope: String(params?.[0] ?? ""),
+        commit_hash: String(params?.[7] ?? ""),
+      });
+      return { rows: [{ id } as any] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_nodes") && s.includes("ON CONFLICT (id) DO NOTHING")) {
+      const id = String(params?.[0] ?? "");
+      if (!this.nodes.has(id)) {
+        const nowIso = new Date(Date.now() + this.nodes.size).toISOString();
+        this.nodes.set(id, {
+          id,
+          scope: String(params?.[1] ?? ""),
+          client_id: params?.[2] == null ? null : String(params?.[2]),
+          type: String(params?.[3] ?? ""),
+          title: params?.[5] == null ? null : String(params?.[5]),
+          text_summary: params?.[6] == null ? null : String(params?.[6]),
+          slots: JSON.parse(String(params?.[7] ?? "{}")),
+          created_at: nowIso,
+          updated_at: nowIso,
+          commit_id: params?.[22] == null ? null : String(params?.[22]),
+          embedding_status: params?.[16] == null ? null : String(params?.[16]),
+          embedding_vector: params?.[10] == null ? null : String(params?.[10]),
+        });
+      }
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_rule_defs")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_edges") && s.includes("ON CONFLICT (scope, type, src_id, dst_id) DO UPDATE")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("SELECT id FROM memory_nodes") && s.includes("embedding_status = 'ready'")) {
+      const scope = String(params?.[0] ?? "");
+      const ids = Array.isArray(params?.[1]) ? params?.[1].map((v) => String(v)) : [];
+      const rows = ids
+        .map((id) => this.nodes.get(id))
+        .filter(
+          (row): row is NonNullable<typeof row> =>
+            !!row && row.scope === scope && row.embedding_status === "ready" && row.embedding_vector != null,
+        )
+        .map((row) => ({ id: row.id }));
+      return { rows: rows as T[], rowCount: rows.length };
+    }
+
+    if (s.includes("INSERT INTO memory_outbox")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("UPDATE memory_outbox")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("SELECT") && s.includes("FROM memory_nodes") && s.includes("slots->>'replay_kind' = 'run'")) {
+      const scope = String(params?.[0] ?? "");
+      const runId = String(params?.[1] ?? "");
+      const rows = [...this.nodes.values()]
+        .filter((row) => row.scope === scope && row.slots.replay_kind === "run" && row.slots.run_id === runId)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, 1)
+        .map((row) => ({
+          id: row.id,
+          type: row.type,
+          title: row.title,
+          text_summary: row.text_summary,
+          slots: row.slots,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          commit_id: row.commit_id,
+        }));
+      return { rows: rows as T[], rowCount: rows.length };
+    }
+
+    if (s.includes("FROM memory_nodes") && s.includes("id = $2") && s.includes("slots->>'replay_kind' = 'step'")) {
+      const scope = String(params?.[0] ?? "");
+      const stepId = String(params?.[1] ?? "");
+      const row = this.nodes.get(stepId);
+      if (!row || row.scope !== scope || row.slots.replay_kind !== "step") return { rows: [] as T[], rowCount: 0 };
+      return {
+        rows: [
+          {
+            id: row.id,
+            type: row.type,
+            title: row.title,
+            text_summary: row.text_summary,
+            slots: row.slots,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            commit_id: row.commit_id,
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("FROM memory_nodes") && s.includes("slots->>'replay_kind' = 'step'") && s.includes("slots->>'step_index' = $3")) {
+      const scope = String(params?.[0] ?? "");
+      const runId = String(params?.[1] ?? "");
+      const stepIndex = String(params?.[2] ?? "");
+      const rows = [...this.nodes.values()]
+        .filter(
+          (row) =>
+            row.scope === scope
+            && row.slots.replay_kind === "step"
+            && row.slots.run_id === runId
+            && String(row.slots.step_index ?? "") === stepIndex,
+        )
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, 1)
+        .map((row) => ({
+          id: row.id,
+          type: row.type,
+          title: row.title,
+          text_summary: row.text_summary,
+          slots: row.slots,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          commit_id: row.commit_id,
+        }));
+      return { rows: rows as T[], rowCount: rows.length };
+    }
+
+    if (s.includes("FROM memory_nodes") && s.includes("slots ? 'replay_kind'") && s.includes("slots->>'run_id' = $2")) {
+      const scope = String(params?.[0] ?? "");
+      const runId = String(params?.[1] ?? "");
+      const rows = [...this.nodes.values()]
+        .filter((row) => row.scope === scope && row.slots.replay_kind != null && row.slots.run_id === runId)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .map((row) => ({
+          id: row.id,
+          type: row.type,
+          title: row.title,
+          text_summary: row.text_summary,
+          slots: row.slots,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          commit_id: row.commit_id,
+        }));
+      return { rows: rows as T[], rowCount: rows.length };
+    }
+
+    if (s.includes("FROM memory_nodes") && s.includes("slots->>'replay_kind' = 'playbook'")) {
+      const scope = String(params?.[0] ?? "");
+      const playbookId = String(params?.[1] ?? "");
+      const version = params?.[2] == null ? null : Number(params?.[2]);
+      const rows = [...this.nodes.values()]
+        .filter(
+          (row) =>
+            row.scope === scope
+            && row.slots.replay_kind === "playbook"
+            && row.slots.playbook_id === playbookId
+            && (version == null || Number(row.slots.version ?? 1) === version),
+        )
+        .sort((a, b) => {
+          const versionCmp = Number(b.slots.version ?? 1) - Number(a.slots.version ?? 1);
+          if (versionCmp !== 0) return versionCmp;
+          return b.created_at.localeCompare(a.created_at);
+        })
+        .slice(0, version == null ? undefined : 1)
+        .map((row) => ({
+          id: row.id,
+          type: row.type,
+          title: row.title,
+          text_summary: row.text_summary,
+          slots: row.slots,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          commit_id: row.commit_id,
+          version_num: Number(row.slots.version ?? 1),
+          playbook_status: typeof row.slots.status === "string" ? row.slots.status : null,
+          playbook_id: typeof row.slots.playbook_id === "string" ? row.slots.playbook_id : null,
+        }));
+      return { rows: rows as T[], rowCount: rows.length };
+    }
+
+    throw new Error(`ReplayLifecycleFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
   }
 }
 
@@ -1040,6 +1314,64 @@ async function run() {
       (err.details as any)?.request_scope === "default" &&
       (err.details as any)?.node_scope_key === "other",
   );
+  await assert.rejects(
+    () =>
+      prepareMemoryWrite(
+        {
+          tenant_id: "default",
+          scope: "default",
+          input_text: "duplicate client id test",
+          nodes: [
+            { client_id: "dup_client", type: "event", text_summary: "first node" },
+            { client_id: "dup_client", type: "event", text_summary: "second node" },
+          ],
+        },
+        "default",
+        "default",
+        { maxTextLen: 8000, piiRedaction: false, allowCrossScopeEdges: false },
+        null,
+      ),
+    (err: any) =>
+      err instanceof HttpError &&
+      err.statusCode === 400 &&
+      err.code === "duplicate_client_id_in_batch" &&
+      (err.details as any)?.client_id === "dup_client" &&
+      (err.details as any)?.first_index === 0 &&
+      (err.details as any)?.duplicate_index === 1,
+  );
+  await assert.rejects(
+    () =>
+      prepareMemoryWrite(
+        {
+          tenant_id: "default",
+          scope: "default",
+          input_text: "duplicate node id test",
+          nodes: [
+            {
+              id: "00000000-0000-0000-0000-00000000bb11",
+              type: "event",
+              text_summary: "first node",
+            },
+            {
+              id: "00000000-0000-0000-0000-00000000bb11",
+              type: "entity",
+              text_summary: "second node",
+            },
+          ],
+        },
+        "default",
+        "default",
+        { maxTextLen: 8000, piiRedaction: false, allowCrossScopeEdges: false },
+        null,
+      ),
+    (err: any) =>
+      err instanceof HttpError &&
+      err.statusCode === 400 &&
+      err.code === "duplicate_node_id_in_batch" &&
+      (err.details as any)?.node_id === "00000000-0000-0000-0000-00000000bb11" &&
+      (err.details as any)?.first_index === 0 &&
+      (err.details as any)?.duplicate_index === 1,
+  );
   const writeOutNoMirror = await applyMemoryWrite({} as any, preparedWriteMinimal as any, {
     maxTextLen: 8000,
     piiRedaction: false,
@@ -1720,6 +2052,63 @@ async function run() {
     },
   });
   assert.equal(packImportWithDecisions.pack.decisions.length, 1);
+  const replayRunDefaults = ReplayPlaybookRunRequest.parse({
+    playbook_id: "55555555-5555-5555-5555-555555555555",
+  });
+  assert.equal(replayRunDefaults.mode, "simulate");
+  assert.equal(replayRunDefaults.max_steps, 200);
+  const replayRunStartDefaults = ReplayRunStartRequest.parse({
+    goal: "deploy service",
+  });
+  assert.equal(replayRunStartDefaults.goal, "deploy service");
+  const replayStepBeforeDefaults = ReplayStepBeforeRequest.parse({
+    run_id: "55555555-5555-5555-5555-555555555551",
+    step_index: 1,
+    tool_name: "command",
+    tool_input: { argv: ["echo", "ok"] },
+  });
+  assert.equal(replayStepBeforeDefaults.preconditions.length, 0);
+  assert.equal(replayStepBeforeDefaults.safety_level, "needs_confirm");
+  const replayStepAfterDefaults = ReplayStepAfterRequest.parse({
+    run_id: "55555555-5555-5555-5555-555555555551",
+    status: "success",
+  });
+  assert.equal(replayStepAfterDefaults.postconditions.length, 0);
+  assert.equal(replayStepAfterDefaults.repair_applied, false);
+  const replayRunEndDefaults = ReplayRunEndRequest.parse({
+    run_id: "55555555-5555-5555-5555-555555555551",
+    status: "success",
+  });
+  assert.equal(replayRunEndDefaults.status, "success");
+  const replayRunGetDefaults = ReplayRunGetRequest.parse({
+    run_id: "55555555-5555-5555-5555-555555555551",
+  });
+  assert.equal(replayRunGetDefaults.include_steps, true);
+  assert.equal(replayRunGetDefaults.include_artifacts, true);
+  const replayCompileDefaults = ReplayPlaybookCompileRequest.parse({
+    run_id: "55555555-5555-5555-5555-555555555551",
+  });
+  assert.equal(replayCompileDefaults.version, 1);
+  assert.equal(replayCompileDefaults.risk_profile, "medium");
+  assert.equal(replayCompileDefaults.allow_partial, false);
+  const replayPromoteParsed = ReplayPlaybookPromoteRequest.parse({
+    playbook_id: "55555555-5555-5555-5555-555555555555",
+    target_status: "shadow",
+  });
+  assert.equal(replayPromoteParsed.target_status, "shadow");
+  const replayRepairDefaults = ReplayPlaybookRepairRequest.parse({
+    playbook_id: "55555555-5555-5555-5555-555555555555",
+    patch: { remove_step_indices: [2] },
+  });
+  assert.equal(replayRepairDefaults.review_required, true);
+  assert.equal(replayRepairDefaults.target_status, "draft");
+  const replayRepairReviewDefaults = ReplayPlaybookRepairReviewRequest.parse({
+    playbook_id: "55555555-5555-5555-5555-555555555555",
+    action: "approve",
+  });
+  assert.equal(replayRepairReviewDefaults.auto_shadow_validate, true);
+  assert.equal(replayRepairReviewDefaults.target_status_on_approve, "shadow");
+  assert.equal(replayRepairReviewDefaults.auto_promote_on_pass, false);
   assert.throws(
     () =>
       ToolsFeedbackRequest.parse({
@@ -2109,6 +2498,10 @@ async function run() {
     (err: any) => err instanceof HttpError && err.statusCode === 401 && err.code === "unauthorized_admin",
   );
   assert.doesNotThrow(() => requireAdminTokenHeader({ "x-admin-token": "admin-secret" }, "admin-secret"));
+  assert.equal(secretTokensEqual("admin-secret", "admin-secret"), true);
+  assert.equal(secretTokensEqual("admin-secret", "admin-secreu"), false);
+  assert.equal(secretTokensEqual("short", "much-longer"), false);
+  assert.equal(secretTokensEqual("", "admin-secret"), false);
 
   // Remote sandbox transport hardening:
   // 1) request can be pinned to an already-validated resolved IP (avoid DNS rebind window)
@@ -2451,6 +2844,351 @@ async function run() {
       ),
     (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "conflicting_filters",
   );
+
+  const replayPlaybookId = "55555555-5555-5555-5555-555555555555";
+  const replayCreatedAt = new Date().toISOString();
+  const replayFixtureRows = [
+    {
+      id: "55555555-5555-5555-5555-555555555556",
+      type: "procedure",
+      title: "Deploy API",
+      text_summary: "Replay playbook for deploy flow",
+      slots: {
+        replay_kind: "playbook",
+        playbook_id: replayPlaybookId,
+        version: 2,
+        status: "draft",
+        risk_profile: "medium",
+        matchers: { workflow: "deploy" },
+        success_criteria: { must_exit_zero: true },
+        steps_template: [
+          {
+            step_index: 1,
+            tool_name: "command",
+            tool_input_template: { argv: ["echo", "ok"] },
+            preconditions: [{ kind: "always", value: true }],
+            safety_level: "auto_ok",
+          },
+          {
+            step_index: 2,
+            tool_name: "command",
+            tool_input_template: { argv: ["echo", "blocked"] },
+            preconditions: [{ kind: "always", value: false }],
+            safety_level: "needs_confirm",
+          },
+        ],
+      },
+      created_at: replayCreatedAt,
+      updated_at: replayCreatedAt,
+      commit_id: "55555555-5555-5555-5555-555555555557",
+      version_num: 2,
+      playbook_status: "draft",
+      playbook_id: replayPlaybookId,
+    },
+    {
+      id: "55555555-5555-5555-5555-555555555558",
+      type: "procedure",
+      title: "Deploy API",
+      text_summary: "Older playbook version",
+      slots: {
+        replay_kind: "playbook",
+        playbook_id: replayPlaybookId,
+        version: 1,
+        status: "shadow",
+        steps_template: [],
+      },
+      created_at: replayCreatedAt,
+      updated_at: replayCreatedAt,
+      commit_id: "55555555-5555-5555-5555-555555555559",
+      version_num: 1,
+      playbook_status: "shadow",
+      playbook_id: replayPlaybookId,
+    },
+  ];
+  const replayClient = new ReplayPlaybookFixturePgClient(replayFixtureRows);
+  const replayGetOut = await replayPlaybookGet(
+    replayClient as any,
+    { tenant_id: "default", scope: "default", playbook_id: replayPlaybookId },
+    { defaultScope: "default", defaultTenantId: "default", embeddedRuntime: null },
+  );
+  assert.equal((replayGetOut as any).playbook.playbook_id, replayPlaybookId);
+  assert.equal((replayGetOut as any).playbook.version, 2);
+  assert.equal((replayGetOut as any).playbook.status, "draft");
+  assert.equal(Array.isArray((replayGetOut as any).playbook.steps_template), true);
+  assert.equal(
+    (replayGetOut as any).playbook.uri,
+    "aionis://default/default/procedure/55555555-5555-5555-5555-555555555556",
+  );
+
+  const replayRunOut = await replayPlaybookRun(
+    replayClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: replayPlaybookId,
+      mode: "simulate",
+      params: { record_run: false },
+    },
+    { defaultScope: "default", defaultTenantId: "default", embeddedRuntime: null },
+  );
+  assert.equal((replayRunOut as any).mode, "simulate");
+  assert.equal((replayRunOut as any).run, null);
+  assert.equal((replayRunOut as any).summary.total_steps, 2);
+  assert.equal((replayRunOut as any).summary.ready_steps, 1);
+  assert.equal((replayRunOut as any).summary.blocked_steps, 1);
+  assert.equal((replayRunOut as any).summary.replay_readiness, "blocked");
+  assert.equal((replayRunOut as any).steps[1].readiness, "blocked");
+
+  await assert.rejects(
+    () =>
+      replayPlaybookRepairReview(
+        replayClient as any,
+        {
+          tenant_id: "default",
+          scope: "default",
+          playbook_id: replayPlaybookId,
+          action: "approve",
+          auto_shadow_validate: false,
+        },
+        {
+          defaultScope: "default",
+          defaultTenantId: "default",
+          maxTextLen: 8000,
+          piiRedaction: false,
+          allowCrossScopeEdges: false,
+          shadowDualWriteEnabled: false,
+          shadowDualWriteStrict: false,
+          writeAccessShadowMirrorV2: true,
+          embedder: null,
+          embeddedRuntime: null,
+        },
+      ),
+    (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "replay_repair_patch_missing",
+  );
+
+  const replayReviewedClient = new ReplayPlaybookFixturePgClient([
+    {
+      ...replayFixtureRows[0],
+      slots: {
+        ...replayFixtureRows[0].slots,
+        repair_patch: { remove_step_indices: [2] },
+        repair_review: { state: "approved" },
+      },
+    },
+  ]);
+  await assert.rejects(
+    () =>
+      replayPlaybookRepairReview(
+        replayReviewedClient as any,
+        {
+          tenant_id: "default",
+          scope: "default",
+          playbook_id: replayPlaybookId,
+          action: "approve",
+          auto_shadow_validate: false,
+        },
+        {
+          defaultScope: "default",
+          defaultTenantId: "default",
+          maxTextLen: 8000,
+          piiRedaction: false,
+          allowCrossScopeEdges: false,
+          shadowDualWriteEnabled: false,
+          shadowDualWriteStrict: false,
+          writeAccessShadowMirrorV2: true,
+          embedder: null,
+          embeddedRuntime: null,
+        },
+    ),
+    (err: any) => err instanceof HttpError && err.statusCode === 409 && err.code === "replay_repair_not_pending_review",
+  );
+
+  const replayLifecycleClient = new ReplayLifecycleFixturePgClient();
+  const replayLifecycleRunId = "66666666-6666-4666-8666-666666666661";
+  const replayLifecycleStepId = "66666666-6666-4666-8666-666666666662";
+  const replayWriteOpts = {
+    defaultScope: "default",
+    defaultTenantId: "default",
+    maxTextLen: 8000,
+    piiRedaction: false,
+    allowCrossScopeEdges: false,
+    shadowDualWriteEnabled: false,
+    shadowDualWriteStrict: false,
+    writeAccessShadowMirrorV2: false,
+    embedder: null,
+    embeddedRuntime: null,
+  };
+  const runStartOut = await replayRunStart(
+    replayLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      run_id: replayLifecycleRunId,
+      goal: "deploy api",
+      metadata: { source: "contract_smoke" },
+    },
+    replayWriteOpts,
+  );
+  assert.equal((runStartOut as any).run_id, replayLifecycleRunId);
+  assert.equal((runStartOut as any).status, "started");
+  assert.equal(typeof (runStartOut as any).run_uri, "string");
+  assert.equal(String((runStartOut as any).run_uri).startsWith("aionis://default/default/event/"), true);
+
+  const stepBeforeOut = await replayStepBefore(
+    replayLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      run_id: replayLifecycleRunId,
+      step_id: replayLifecycleStepId,
+      step_index: 1,
+      tool_name: "command",
+      tool_input: { argv: ["echo", "ok"] },
+      expected_output_signature: { stdout_contains: "ok" },
+      preconditions: [{ kind: "always", value: true }],
+      safety_level: "auto_ok",
+    },
+    replayWriteOpts,
+  );
+  assert.equal((stepBeforeOut as any).step_id, replayLifecycleStepId);
+  assert.equal((stepBeforeOut as any).status, "pending");
+
+  const stepAfterOut = await replayStepAfter(
+    replayLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      run_id: replayLifecycleRunId,
+      step_id: replayLifecycleStepId,
+      status: "success",
+      output_signature: { stdout: "ok" },
+      postconditions: [{ kind: "always", value: true }],
+      artifact_refs: ["artifact://deploy/log"],
+    },
+    replayWriteOpts,
+  );
+  assert.equal((stepAfterOut as any).run_id, replayLifecycleRunId);
+  assert.equal((stepAfterOut as any).status, "success");
+
+  const runEndOut = await replayRunEnd(
+    replayLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      run_id: replayLifecycleRunId,
+      status: "success",
+      summary: "deploy replay finished",
+      metrics: { total_steps: 1, succeeded_steps: 1 },
+    },
+    replayWriteOpts,
+  );
+  assert.equal((runEndOut as any).run_id, replayLifecycleRunId);
+  assert.equal((runEndOut as any).status, "success");
+
+  const runGetOut = await replayRunGet(
+    replayLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      run_id: replayLifecycleRunId,
+      include_steps: true,
+      include_artifacts: true,
+    },
+    { defaultScope: "default", defaultTenantId: "default", embeddedRuntime: null },
+  );
+  assert.equal((runGetOut as any).run.run_id, replayLifecycleRunId);
+  assert.equal((runGetOut as any).run.status, "success");
+  assert.equal((runGetOut as any).run.goal, "deploy api");
+  assert.equal((runGetOut as any).steps.length, 1);
+  assert.equal((runGetOut as any).steps[0].step_id, replayLifecycleStepId);
+  assert.equal((runGetOut as any).steps[0].status, "success");
+  assert.deepEqual((runGetOut as any).artifacts, ["artifact://deploy/log"]);
+  assert.equal((runGetOut as any).timeline.length, 4);
+
+  const compiledPlaybookId = "66666666-6666-4666-8666-666666666663";
+  const compileOut = await replayPlaybookCompileFromRun(
+    replayLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      run_id: replayLifecycleRunId,
+      playbook_id: compiledPlaybookId,
+      name: "deploy_api_compiled",
+      metadata: { source: "contract_smoke" },
+    },
+    replayWriteOpts,
+  );
+  assert.equal((compileOut as any).playbook_id, compiledPlaybookId);
+  assert.equal((compileOut as any).version, 1);
+  assert.equal((compileOut as any).status, "draft");
+  assert.equal((compileOut as any).source_run_id, replayLifecycleRunId);
+  assert.equal((compileOut as any).compile_summary.source_run_status, "success");
+  assert.equal((compileOut as any).compile_summary.steps_total, 1);
+
+  const compiledGetOut = await replayPlaybookGet(
+    replayLifecycleClient as any,
+    { tenant_id: "default", scope: "default", playbook_id: compiledPlaybookId },
+    { defaultScope: "default", defaultTenantId: "default", embeddedRuntime: null },
+  );
+  assert.equal((compiledGetOut as any).playbook.version, 1);
+  assert.equal((compiledGetOut as any).playbook.status, "draft");
+  assert.equal((compiledGetOut as any).playbook.steps_template.length, 1);
+
+  const promoteOut = await replayPlaybookPromote(
+    replayLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: compiledPlaybookId,
+      target_status: "shadow",
+      note: "promote for validation",
+    },
+    replayWriteOpts,
+  );
+  assert.equal((promoteOut as any).playbook_id, compiledPlaybookId);
+  assert.equal((promoteOut as any).from_version, 1);
+  assert.equal((promoteOut as any).to_version, 2);
+  assert.equal((promoteOut as any).status, "shadow");
+
+  const promoteUnchangedOut = await replayPlaybookPromote(
+    replayLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: compiledPlaybookId,
+      target_status: "shadow",
+    },
+    replayWriteOpts,
+  );
+  assert.equal((promoteUnchangedOut as any).unchanged, true);
+  assert.equal((promoteUnchangedOut as any).reason, "already_target_status_on_latest");
+
+  const repairOut = await replayPlaybookRepair(
+    replayLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      playbook_id: compiledPlaybookId,
+      patch: { remove_step_indices: [1] },
+      note: "remove risky step",
+    },
+    replayWriteOpts,
+  );
+  assert.equal((repairOut as any).playbook_id, compiledPlaybookId);
+  assert.equal((repairOut as any).from_version, 2);
+  assert.equal((repairOut as any).to_version, 3);
+  assert.equal((repairOut as any).status, "draft");
+  assert.equal((repairOut as any).review_required, true);
+  assert.equal((repairOut as any).review_state, "pending_review");
+
+  const repairedGetOut = await replayPlaybookGet(
+    replayLifecycleClient as any,
+    { tenant_id: "default", scope: "default", playbook_id: compiledPlaybookId },
+    { defaultScope: "default", defaultTenantId: "default", embeddedRuntime: null },
+  );
+  assert.equal((repairedGetOut as any).playbook.version, 3);
+  assert.equal((repairedGetOut as any).playbook.status, "draft");
+  assert.equal((repairedGetOut as any).playbook.steps_template.length, 0);
 
   const ruleVisibilityRows = [
     {
