@@ -34,6 +34,15 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
 1. `POST /v1/memory/context/assemble`
 2. `POST /v1/memory/planning/context`
 
+Notes:
+
+1. Both endpoints support `return_layered_context=true`.
+2. `context_layers.forgetting_policy` controls injection-time forgetting, not store deletion:
+   - `allowed_tiers` defaults to `["hot", "warm"]`
+   - `exclude_archived` defaults to `true`
+   - `min_salience` can drop low-value recall items before they enter merged context
+3. Layered responses include `layered_context.forgetting` and per-layer `forgotten_count` so callers can see what was intentionally excluded.
+
 ### Policy and Execution Loop
 
 1. `POST /v1/memory/rules/evaluate`

@@ -41,6 +41,7 @@ import {
   upsertControlProject,
 } from "../control-plane.js";
 import { memoryRecallParsed, type RecallAuth } from "../memory/recall.js";
+import { assembleLayeredContext } from "../memory/context-orchestrator.js";
 import { ruleMatchesContext } from "../memory/rule-engine.js";
 import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
 import { evaluateRules, evaluateRulesAppliedOnly } from "../memory/rules-evaluate.js";
@@ -2021,12 +2022,20 @@ async function run() {
       char_budget_total: 3200,
       char_budget_by_layer: { facts: 1200, episodes: 1200, rules: 800 },
       max_items_by_layer: { facts: 16, episodes: 16, rules: 12 },
+      forgetting_policy: {
+        allowed_tiers: ["hot", "warm"],
+        exclude_archived: true,
+        min_salience: 0.2,
+      },
     },
   });
   assert.equal(assembleReq.include_rules, true);
   assert.equal(assembleReq.include_shadow, false);
   assert.equal(assembleReq.return_layered_context, true);
   assert.equal(assembleReq.tool_strict, true);
+  assert.deepEqual(assembleReq.context_layers?.forgetting_policy?.allowed_tiers, ["hot", "warm"]);
+  assert.equal(assembleReq.context_layers?.forgetting_policy?.exclude_archived, true);
+  assert.equal(assembleReq.context_layers?.forgetting_policy?.min_salience, 0.2);
   assert.throws(
     () =>
       ContextAssembleRequest.parse({
@@ -2035,6 +2044,41 @@ async function run() {
       }),
     /Invalid enum value/i,
   );
+  const layeredForgotten = assembleLayeredContext({
+    recall: {
+      context: {
+        items: [
+          { kind: "event", node_id: "evt_hot", summary: "hot event", tier: "hot", salience: 0.9, lifecycle_state: "active" },
+          { kind: "event", node_id: "evt_cold", summary: "cold event", tier: "cold", salience: 0.9, lifecycle_state: "active" },
+          { kind: "event", node_id: "evt_archived", summary: "archived event", tier: "warm", salience: 0.9, lifecycle_state: "archived" },
+          { kind: "entity", node_id: "ent_low", summary: "low entity", tier: "warm", salience: 0.1, lifecycle_state: "active" },
+        ],
+        citations: [
+          { node_id: "evt_hot", uri: "aionis://memory/event/evt_hot", tier: "hot", salience: 0.9, lifecycle_state: "active" },
+          { node_id: "evt_cold", uri: "aionis://memory/event/evt_cold", tier: "cold", salience: 0.9, lifecycle_state: "active" },
+        ],
+      },
+    },
+    rules: {},
+    tools: {},
+    config: {
+      enabled: ["facts", "episodes", "citations"],
+      forgetting_policy: {
+        allowed_tiers: ["hot", "warm"],
+        exclude_archived: true,
+        min_salience: 0.2,
+      },
+      include_merge_trace: true,
+    },
+  });
+  assert.match(layeredForgotten.merged_text, /hot event/);
+  assert.doesNotMatch(layeredForgotten.merged_text, /cold event/);
+  assert.doesNotMatch(layeredForgotten.merged_text, /archived event/);
+  assert.doesNotMatch(layeredForgotten.merged_text, /low entity/);
+  assert.equal(layeredForgotten.stats?.forgotten_items, 4);
+  assert.equal(layeredForgotten.forgetting?.dropped_by_reason?.tier, 2);
+  assert.equal(layeredForgotten.forgetting?.dropped_by_reason?.lifecycle, 1);
+  assert.equal(layeredForgotten.forgetting?.dropped_by_reason?.salience, 1);
   const packExportDefaults = MemoryPackExportRequest.parse({});
   assert.equal(packExportDefaults.include_decisions, false);
   const packImportWithDecisions = MemoryPackImportRequest.parse({

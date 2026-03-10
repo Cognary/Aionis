@@ -88,6 +88,32 @@ console.log(
 );
 ```
 
+## Context Forgetting（TypeScript）
+
+如果你希望 Aionis 在注入上下文时默认排除 `cold/archive` 或低 salience 记忆，可以直接在 layered context 上启用 forgetting policy。
+
+```ts
+const assembled = await client.contextAssemble({
+  query_text: "prepare deployment plan",
+  context: { intent: "deploy", approval: "required" },
+  return_layered_context: true,
+  context_layers: {
+    enabled: ["facts", "episodes", "rules", "citations"],
+    char_budget_total: 2400,
+    forgetting_policy: {
+      allowed_tiers: ["hot", "warm"],
+      exclude_archived: true,
+      min_salience: 0.2,
+    },
+  },
+});
+
+console.log(
+  assembled.layered_context?.forgetting,
+  assembled.layered_context?.layers?.episodes?.forgotten_count,
+);
+```
+
 ## 核心 SDK 方法
 
 1. Memory: `write`、`recall`、`recall_text`
@@ -103,6 +129,12 @@ console.log(
    - `deterministic_replay_executed`
    - `fallback_replay_executed`
    - `candidate_only`
+
+## Context Forgetting 说明
+
+1. forgetting policy 只影响 layered context 的注入结果。
+2. 它不会自己删除 memory graph，也不会直接归档节点。
+3. 默认策略是保守的：保留 `hot/warm`、排除 archived，只有显式配置 `min_salience` 才会做低 salience 过滤。
 
 ## 相关页面
 

@@ -1,4 +1,13 @@
 export type ContextLayerName = "facts" | "episodes" | "rules" | "decisions" | "tools" | "citations";
+type MemoryTier = "hot" | "warm" | "cold" | "archive";
+type ForgetReason = "tier" | "lifecycle" | "salience";
+
+export type ContextForgettingPolicyConfig = {
+  enabled?: boolean;
+  allowed_tiers?: MemoryTier[];
+  exclude_archived?: boolean;
+  min_salience?: number;
+};
 
 export type ContextLayerConfig = {
   enabled?: ContextLayerName[];
@@ -6,6 +15,7 @@ export type ContextLayerConfig = {
   char_budget_by_layer?: Record<string, number>;
   max_items_by_layer?: Record<string, number>;
   include_merge_trace?: boolean;
+  forgetting_policy?: ContextForgettingPolicyConfig;
 };
 
 const DEFAULT_LAYER_ORDER: ContextLayerName[] = ["facts", "episodes", "rules", "decisions", "tools", "citations"];
@@ -68,14 +78,31 @@ function trimLine(input: string, maxLen = 220): string {
   return `${s.slice(0, maxLen - 3)}...`;
 }
 
-function addLine(bucket: string[], line: string) {
-  const v = trimLine(line);
+type LayerCandidateLine = {
+  text: string;
+  tier: string | null;
+  salience: number | null;
+  lifecycle_state: string | null;
+};
+
+function pushCandidate(bucket: LayerCandidateLine[], text: string, meta?: Omit<LayerCandidateLine, "text">) {
+  const v = trimLine(text);
   if (!v) return;
-  bucket.push(v);
+  bucket.push({
+    text: v,
+    tier: meta?.tier ?? null,
+    salience: Number.isFinite(meta?.salience as number) ? Number(meta?.salience) : null,
+    lifecycle_state: meta?.lifecycle_state ?? null,
+  });
 }
 
-function collectLayerCandidates(recall: any, rules: any, tools: any): Record<ContextLayerName, string[]> {
-  const out: Record<ContextLayerName, string[]> = {
+function firstFiniteNumber(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function collectLayerCandidates(recall: any, rules: any, tools: any): Record<ContextLayerName, LayerCandidateLine[]> {
+  const out: Record<ContextLayerName, LayerCandidateLine[]> = {
     facts: [],
     episodes: [],
     rules: [],
@@ -92,10 +119,15 @@ function collectLayerCandidates(recall: any, rules: any, tools: any): Record<Con
     const uri = String((item as any)?.uri || "").trim();
     const summary = firstText(item);
     if (!summary) continue;
+    const meta = {
+      tier: String((item as any)?.tier || "").trim() || null,
+      salience: firstFiniteNumber((item as any)?.salience),
+      lifecycle_state: String((item as any)?.lifecycle_state || "").trim() || null,
+    };
     if (uri) {
-      addLine(out[layer], `${summary} (uri:${uri})`);
+      pushCandidate(out[layer], `${summary} (uri:${uri})`, meta);
     } else {
-      addLine(out[layer], nodeId ? `${summary} (node:${nodeId})` : summary);
+      pushCandidate(out[layer], nodeId ? `${summary} (node:${nodeId})` : summary, meta);
     }
   }
 
@@ -104,24 +136,24 @@ function collectLayerCandidates(recall: any, rules: any, tools: any): Record<Con
   for (const r of activeRules.slice(0, 24)) {
     const summary = firstText(r);
     const id = String((r as any)?.rule_node_id || "").trim();
-    addLine(out.rules, id ? `[active] ${summary || id} (${id})` : `[active] ${summary}`);
+    pushCandidate(out.rules, id ? `[active] ${summary || id} (${id})` : `[active] ${summary}`);
   }
   for (const r of shadowRules.slice(0, 16)) {
     const summary = firstText(r);
     const id = String((r as any)?.rule_node_id || "").trim();
-    addLine(out.rules, id ? `[shadow] ${summary || id} (${id})` : `[shadow] ${summary}`);
+    pushCandidate(out.rules, id ? `[shadow] ${summary || id} (${id})` : `[shadow] ${summary}`);
   }
 
   const selectedTool = String(tools?.selection?.selected || "").trim();
   const orderedTools = Array.isArray(tools?.selection?.ordered) ? tools.selection.ordered : [];
-  if (selectedTool) addLine(out.tools, `selected tool: ${selectedTool}`);
-  if (orderedTools.length > 0) addLine(out.tools, `tool ranking: ${orderedTools.join(", ")}`);
+  if (selectedTool) pushCandidate(out.tools, `selected tool: ${selectedTool}`);
+  if (orderedTools.length > 0) pushCandidate(out.tools, `tool ranking: ${orderedTools.join(", ")}`);
 
   const decisionId = String(tools?.decision?.decision_id || tools?.decision_id || "").trim();
   const runId = String(tools?.decision?.run_id || tools?.run_id || "").trim();
-  if (decisionId) addLine(out.decisions, `decision_id: ${decisionId}`);
-  if (runId) addLine(out.decisions, `run_id: ${runId}`);
-  if (selectedTool) addLine(out.decisions, `decision selected_tool: ${selectedTool}`);
+  if (decisionId) pushCandidate(out.decisions, `decision_id: ${decisionId}`);
+  if (runId) pushCandidate(out.decisions, `run_id: ${runId}`);
+  if (selectedTool) pushCandidate(out.decisions, `decision selected_tool: ${selectedTool}`);
 
   const citations = Array.isArray(recall?.context?.citations) ? recall.context.citations : [];
   for (const c of citations.slice(0, 64)) {
@@ -130,9 +162,14 @@ function collectLayerCandidates(recall: any, rules: any, tools: any): Record<Con
     const commitUri = String((c as any)?.commit_uri || "").trim();
     const commitId = String((c as any)?.commit_id || "").trim();
     if (!nodeId && !uri && !commitUri && !commitId) continue;
-    addLine(
+    pushCandidate(
       out.citations,
       `citation uri=${uri || "-"} node=${nodeId || "-"} commit=${commitId || "-"} commit_uri=${commitUri || "-"}`,
+      {
+        tier: String((c as any)?.tier || "").trim() || null,
+        salience: firstFiniteNumber((c as any)?.salience),
+        lifecycle_state: String((c as any)?.lifecycle_state || "").trim() || null,
+      },
     );
   }
 
@@ -154,6 +191,32 @@ function parseBoundedInt(input: unknown, fallback: number, min: number, max: num
   return Math.max(min, Math.min(max, Math.trunc(n)));
 }
 
+function resolveForgettingPolicy(config?: ContextLayerConfig | null) {
+  const raw = config?.forgetting_policy ?? null;
+  const enabled = raw?.enabled !== false;
+  const allowedTiers = Array.isArray(raw?.allowed_tiers) && raw?.allowed_tiers.length > 0
+    ? Array.from(new Set(raw.allowed_tiers.map((tier) => String(tier).trim()).filter(Boolean)))
+    : ["hot", "warm"];
+  const excludeArchived = raw?.exclude_archived !== false;
+  const minSalience = firstFiniteNumber(raw?.min_salience);
+  return {
+    enabled,
+    allowedTiers: new Set(allowedTiers),
+    excludeArchived,
+    minSalience,
+  };
+}
+
+function evaluateForgetting(policy: ReturnType<typeof resolveForgettingPolicy>, line: LayerCandidateLine): ForgetReason | null {
+  if (!policy.enabled) return null;
+  const lifecycle = String(line.lifecycle_state ?? "").trim().toLowerCase();
+  if (policy.excludeArchived && lifecycle === "archived") return "lifecycle";
+  const tier = String(line.tier ?? "").trim().toLowerCase();
+  if (tier && !policy.allowedTiers.has(tier)) return "tier";
+  if (policy.minSalience !== null && line.salience !== null && line.salience < policy.minSalience) return "salience";
+  return null;
+}
+
 export function assembleLayeredContext(args: {
   recall: any;
   rules: any;
@@ -163,6 +226,7 @@ export function assembleLayeredContext(args: {
   const cfg = args.config ?? {};
   const order = normalizeLayerOrder(cfg.enabled);
   const raw = collectLayerCandidates(args.recall, args.rules, args.tools);
+  const forgetting = resolveForgettingPolicy(cfg);
   const totalBudget = parseBoundedInt(cfg.char_budget_total, 4000, 200, 200000);
   const includeMergeTrace = cfg.include_merge_trace !== false;
 
@@ -175,25 +239,45 @@ export function assembleLayeredContext(args: {
   let totalItems = 0;
   let keptItems = 0;
   let droppedItems = 0;
+  let forgottenItems = 0;
+  const forgottenByReason: Record<ForgetReason, number> = {
+    tier: 0,
+    lifecycle: 0,
+    salience: 0,
+  };
 
   for (const layer of order) {
     const charBudget = parseBoundedInt(cfg.char_budget_by_layer?.[layer], DEFAULT_CHAR_BUDGET_BY_LAYER[layer], 80, 200000);
     const maxItems = parseBoundedInt(cfg.max_items_by_layer?.[layer], DEFAULT_MAX_ITEMS_BY_LAYER[layer], 1, 500);
     const source = raw[layer] ?? [];
     totalItems += source.length;
+    const eligible: LayerCandidateLine[] = [];
+    let forgottenByLayer = 0;
+    for (const candidate of source) {
+      const forgetReason = evaluateForgetting(forgetting, candidate);
+      if (forgetReason) {
+        forgottenByLayer += 1;
+        forgottenItems += 1;
+        droppedItems += 1;
+        forgottenByReason[forgetReason] += 1;
+        droppedReasons.push(`${layer}: forgetting policy dropped item (${forgetReason})`);
+        continue;
+      }
+      eligible.push(candidate);
+    }
     const kept: string[] = [];
     let used = 0;
     let droppedByLayer = 0;
 
-    for (const line of source) {
+    for (const candidate of eligible) {
       if (kept.length >= maxItems) {
         droppedByLayer += 1;
         droppedReasons.push(`${layer}: max_items limit reached`);
         continue;
       }
-      const candidate = `- ${line}`;
-      const projectedLayer = used + candidate.length + 1;
-      const projectedTotal = totalUsedChars + candidate.length + 1;
+      const line = `- ${candidate.text}`;
+      const projectedLayer = used + line.length + 1;
+      const projectedTotal = totalUsedChars + line.length + 1;
       if (projectedLayer > charBudget) {
         droppedByLayer += 1;
         droppedReasons.push(`${layer}: layer char budget exceeded`);
@@ -204,7 +288,7 @@ export function assembleLayeredContext(args: {
         droppedReasons.push(`${layer}: total char budget exceeded`);
         continue;
       }
-      kept.push(line);
+      kept.push(candidate.text);
       used = projectedLayer;
       totalUsedChars = projectedTotal;
     }
@@ -214,6 +298,7 @@ export function assembleLayeredContext(args: {
     layers[layer] = {
       items: kept,
       source_count: source.length,
+      forgotten_count: forgottenByLayer,
       kept_count: kept.length,
       dropped_count: droppedByLayer,
       budget_chars: charBudget,
@@ -230,6 +315,7 @@ export function assembleLayeredContext(args: {
       mergeTrace.push({
         layer,
         source_count: source.length,
+        forgotten_count: forgottenByLayer,
         kept_count: kept.length,
         dropped_count: droppedByLayer,
         budget_chars: charBudget,
@@ -251,11 +337,20 @@ export function assembleLayeredContext(args: {
       source_items: totalItems,
       kept_items: keptItems,
       dropped_items: droppedItems,
+      forgotten_items: forgottenItems,
       layers_with_content: order.filter((layer) => (layers[layer]?.kept_count ?? 0) > 0).length,
     },
     layers,
     merged_text: mergedParts.join("\n"),
     merge_trace: includeMergeTrace ? mergeTrace : undefined,
     dropped_reasons: droppedReasons.slice(0, 120),
+    forgetting: {
+      enabled: forgetting.enabled,
+      allowed_tiers: Array.from(forgetting.allowedTiers),
+      exclude_archived: forgetting.excludeArchived,
+      min_salience: forgetting.minSalience,
+      dropped_items: forgottenItems,
+      dropped_by_reason: forgottenByReason,
+    },
   };
 }

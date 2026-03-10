@@ -757,6 +757,7 @@ export type ContextAssembleResponse = {
       source_items?: number;
       kept_items?: number;
       dropped_items?: number;
+      forgotten_items?: number;
       layers_with_content?: number;
       [k: string]: unknown;
     };
@@ -765,6 +766,7 @@ export type ContextAssembleResponse = {
       {
         items?: Array<Record<string, unknown>>;
         source_count?: number;
+        forgotten_count?: number;
         kept_count?: number;
         dropped_count?: number;
         budget_chars?: number | null;
@@ -776,6 +778,15 @@ export type ContextAssembleResponse = {
     merged_text?: string;
     merge_trace?: Array<Record<string, unknown>>;
     dropped_reasons?: string[];
+    forgetting?: {
+      enabled?: boolean;
+      allowed_tiers?: string[];
+      exclude_archived?: boolean;
+      min_salience?: number | null;
+      dropped_items?: number;
+      dropped_by_reason?: Record<string, number>;
+      [k: string]: unknown;
+    };
     [k: string]: unknown;
   };
   [k: string]: unknown;

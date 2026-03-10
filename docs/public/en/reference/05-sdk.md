@@ -125,6 +125,29 @@ const dispatch = await client.replayPlaybookDispatch({
 console.log(dispatch.dispatch.decision, dispatch.dispatch.primary_inference_skipped);
 ```
 
+## Context Forgetting Policy (TypeScript)
+
+Use layered context assembly when you want Aionis to keep cold or archived memory out of the injected prompt by default.
+
+```ts
+const assembled = await client.contextAssemble({
+  query_text: "prepare deployment plan",
+  context: { intent: "deploy", approval: "required" },
+  return_layered_context: true,
+  context_layers: {
+    enabled: ["facts", "episodes", "rules", "citations"],
+    char_budget_total: 2400,
+    forgetting_policy: {
+      allowed_tiers: ["hot", "warm"],
+      exclude_archived: true,
+      min_salience: 0.2,
+    },
+  },
+});
+
+console.log(assembled.layered_context?.forgetting, assembled.layered_context?.layers?.episodes?.forgotten_count);
+```
+
 ## Replay Dispatch Notes
 
 1. `replayPlaybookCandidate` is read-only and returns deterministic replay eligibility plus mismatch reasons.
@@ -134,6 +157,12 @@ console.log(dispatch.dispatch.decision, dispatch.dispatch.primary_inference_skip
    - `deterministic_replay_executed`
    - `fallback_replay_executed`
    - `candidate_only`
+
+## Context Forgetting Notes
+
+1. Forgetting policy only affects injected layered context.
+2. It does not delete memory graph objects or archive them by itself.
+3. The default policy is intentionally conservative: keep `hot/warm`, exclude archived, and only apply salience filtering when you opt in.
 
 ## Error Handling Baseline
 

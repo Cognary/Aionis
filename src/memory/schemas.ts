@@ -171,6 +171,14 @@ export type MemoryRecallTextInput = z.infer<typeof MemoryRecallTextRequest>;
 export type MemoryWriteInput = z.infer<typeof MemoryWriteRequest>;
 
 export const ContextLayerName = z.enum(["facts", "episodes", "rules", "decisions", "tools", "citations"]);
+export const MemoryTier = z.enum(["hot", "warm", "cold", "archive"]);
+
+export const ContextForgettingPolicy = z.object({
+  enabled: z.boolean().default(true),
+  allowed_tiers: z.array(MemoryTier).min(1).max(4).default(["hot", "warm"]),
+  exclude_archived: z.boolean().default(true),
+  min_salience: z.number().min(0).max(1).optional(),
+});
 
 export const ContextLayerConfig = z.object({
   enabled: z.array(ContextLayerName).min(1).max(6).optional(),
@@ -178,6 +186,7 @@ export const ContextLayerConfig = z.object({
   char_budget_by_layer: z.record(z.string(), z.number().int().positive().max(200000)).optional(),
   max_items_by_layer: z.record(z.string(), z.number().int().positive().max(500)).optional(),
   include_merge_trace: z.boolean().default(true),
+  forgetting_policy: ContextForgettingPolicy.optional(),
 });
 
 export const PlanningContextRequest = z.object({

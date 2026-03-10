@@ -5,6 +5,7 @@ type RankedItem = { id: string; activation: number; score: number };
 type NodeRow = {
   id: string;
   type: string;
+  tier: string;
   title: string | null;
   text_summary: string | null;
   slots?: any;
@@ -30,8 +31,28 @@ type RuleDefRow = {
 };
 
 export type ContextItem =
-  | { kind: "topic" | "concept"; node_id: string; uri?: string; title?: string; summary?: string; commit_id?: string | null }
-  | { kind: "entity"; node_id: string; uri?: string; title?: string; summary?: string; commit_id?: string | null }
+  | {
+      kind: "topic" | "concept";
+      node_id: string;
+      uri?: string;
+      title?: string;
+      summary?: string;
+      commit_id?: string | null;
+      tier?: string;
+      salience?: number;
+      lifecycle_state?: string | null;
+    }
+  | {
+      kind: "entity";
+      node_id: string;
+      uri?: string;
+      title?: string;
+      summary?: string;
+      commit_id?: string | null;
+      tier?: string;
+      salience?: number;
+      lifecycle_state?: string | null;
+    }
   | {
       kind: "event" | "evidence";
       node_id: string;
@@ -40,6 +61,9 @@ export type ContextItem =
       raw_ref?: string | null;
       evidence_ref?: string | null;
       commit_id?: string | null;
+      tier?: string;
+      salience?: number;
+      lifecycle_state?: string | null;
     }
   | {
       kind: "rule";
@@ -55,6 +79,9 @@ export type ContextItem =
       exceptions_json?: any;
       stats?: { positive: number; negative: number };
       commit_id?: string | null;
+      tier?: string;
+      salience?: number;
+      lifecycle_state?: string | null;
     };
 
 export type ContextBuildOptions = {
@@ -72,6 +99,9 @@ type ContextCitation = {
   commit_uri?: string;
   raw_ref: string | null;
   evidence_ref: string | null;
+  tier?: string;
+  salience?: number;
+  lifecycle_state?: string | null;
 };
 
 type SectionId = "topics" | "entities" | "events" | "rules";
@@ -240,6 +270,9 @@ export function buildContext(
       ...(commitUri ? { commit_uri: commitUri } : {}),
       raw_ref: n.raw_ref ?? null,
       evidence_ref: n.evidence_ref ?? null,
+      tier: n.tier,
+      salience: n.salience,
+      lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
     });
   };
 
@@ -254,6 +287,9 @@ export function buildContext(
       title: n.title ?? undefined,
       summary: n.text_summary ?? undefined,
       commit_id: n.commit_id,
+      tier: n.tier,
+      salience: n.salience,
+      lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
     });
     pushCitation(n);
   }
@@ -268,6 +304,9 @@ export function buildContext(
       title: n.title ?? undefined,
       summary: n.text_summary ?? undefined,
       commit_id: n.commit_id,
+      tier: n.tier,
+      salience: n.salience,
+      lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
     });
     pushCitation(n);
   }
@@ -298,6 +337,9 @@ export function buildContext(
       raw_ref: n.raw_ref,
       evidence_ref: n.evidence_ref,
       commit_id: n.commit_id,
+      tier: n.tier,
+      salience: n.salience,
+      lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
     });
     pushCitation(n);
   }
@@ -320,6 +362,9 @@ export function buildContext(
       exceptions_json: d?.exceptions_json ?? (n.slots?.exceptions ?? undefined),
       stats: d ? { positive: d.positive_count, negative: d.negative_count } : undefined,
       commit_id: n.commit_id,
+      tier: n.tier,
+      salience: n.salience,
+      lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
     });
     pushCitation(n);
   }

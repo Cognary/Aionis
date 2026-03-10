@@ -70,6 +70,12 @@ export const CodexPlanningContextArgsSchema = z.object({
     char_budget_by_layer: z.record(z.number().int().positive().max(200_000)).optional(),
     max_items_by_layer: z.record(z.number().int().positive().max(500)).optional(),
     include_merge_trace: z.boolean().optional(),
+    forgetting_policy: z.object({
+      enabled: z.boolean().optional(),
+      allowed_tiers: z.array(z.enum(["hot", "warm", "cold", "archive"])).min(1).max(4).optional(),
+      exclude_archived: z.boolean().optional(),
+      min_salience: z.number().min(0).max(1).optional(),
+    }).optional(),
   }).optional(),
 });
 
