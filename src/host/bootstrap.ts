@@ -27,12 +27,16 @@ export function registerBootstrapLifecycle(args: {
   app: any;
   store: StoreLike;
   sandboxExecutor: { shutdown: () => void };
+  liteRecallStore?: { close: () => Promise<void> } | null;
   liteReplayStore?: { close: () => Promise<void> } | null;
+  liteWriteStore?: { close: () => Promise<void> } | null;
 }) {
-  const { app, store, sandboxExecutor, liteReplayStore } = args;
+  const { app, store, sandboxExecutor, liteRecallStore, liteReplayStore, liteWriteStore } = args;
   app.addHook("onClose", async () => {
     sandboxExecutor.shutdown();
+    if (liteRecallStore) await liteRecallStore.close();
     if (liteReplayStore) await liteReplayStore.close();
+    if (liteWriteStore) await liteWriteStore.close();
     await store.close();
   });
 }
@@ -42,13 +46,17 @@ export async function assertBootstrapStoreContracts(args: {
   recallAccessForClient: (client: any) => any;
   replayAccessForClient: (client: any) => any;
   writeAccessForClient: (client: any) => any;
+  liteWriteStore?: any;
 }) {
-  const { store, recallAccessForClient, replayAccessForClient, writeAccessForClient } = args;
+  const { store, recallAccessForClient, replayAccessForClient, writeAccessForClient, liteWriteStore } = args;
   await store.withClient(async (client) => {
     assertRecallStoreAccessContract(recallAccessForClient(client));
     assertReplayStoreAccessContract(replayAccessForClient(client));
     assertWriteStoreAccessContract(writeAccessForClient(client));
   });
+  if (liteWriteStore) {
+    assertWriteStoreAccessContract(liteWriteStore);
+  }
 }
 
 export async function listenHttpApp(app: any, env: Env) {

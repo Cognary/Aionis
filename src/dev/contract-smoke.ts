@@ -89,12 +89,14 @@ import {
   assertRecallStoreAccessContract,
   createPostgresRecallStoreAccess,
 } from "../store/recall-access.js";
+import { createLiteRecallStore } from "../store/lite-recall-store.js";
 import {
   REPLAY_STORE_ACCESS_CAPABILITY_VERSION,
   assertReplayStoreAccessContract,
   createPostgresReplayStoreAccess,
 } from "../store/replay-access.js";
 import { createLiteReplayStore } from "../store/lite-replay-store.js";
+import { createLiteWriteStore } from "../store/lite-write-store.js";
 import {
   WRITE_STORE_ACCESS_CAPABILITY_VERSION,
   assertWriteStoreAccessContract,
@@ -1307,6 +1309,7 @@ async function run() {
       MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT: "balanced",
       MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT: "aggressive",
       AIONIS_EDITION: "lite",
+      LITE_WRITE_SQLITE_PATH: ".tmp/custom-lite-write.sqlite",
       MEMORY_RECALL_PROFILE_POLICY_JSON: JSON.stringify({
         endpoint: { recall: "lite", recall_text: "strict_edges" },
         tenant_default: { tenant_lite: "lite" },
@@ -1323,6 +1326,7 @@ async function run() {
       assert.equal(env.MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT, "balanced");
       assert.equal(env.MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT, "aggressive");
       assert.equal(env.AIONIS_EDITION, "lite");
+      assert.equal(env.LITE_WRITE_SQLITE_PATH, ".tmp/custom-lite-write.sqlite");
     },
   );
   await withEnv(
@@ -1830,6 +1834,153 @@ async function run() {
   assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite-helper"))?.text_summary, "Replay run helper");
   await liteReplayStore.close();
   await fs.rm(liteReplayDir, { recursive: true, force: true });
+
+  const liteWriteDir = await fs.mkdtemp(path.join(os.tmpdir(), "aionis-lite-write-"));
+  const liteWritePath = path.join(liteWriteDir, "write.sqlite");
+  const liteWriteStore = createLiteWriteStore(liteWritePath);
+  assert.doesNotThrow(() => assertWriteStoreAccessContract(liteWriteStore));
+  assert.equal(liteWriteStore.capabilities.shadow_mirror_v2, false);
+  const liteCommitId = await liteWriteStore.insertCommit({
+    scope: "default",
+    parentCommitId: null,
+    inputSha256: "abc123",
+    diffJson: JSON.stringify({ nodes: [], edges: [] }),
+    actor: "contract_smoke",
+    modelVersion: null,
+    promptVersion: null,
+    commitHash: "lite-write-commit-hash",
+  });
+  await liteWriteStore.insertNode({
+    id: "00000000-0000-0000-0000-000000000c11",
+    scope: "default",
+    clientId: "lite_node",
+    type: "event",
+    tier: "hot",
+    title: "lite node",
+    textSummary: "lite node summary",
+    slotsJson: JSON.stringify({ k: 1 }),
+    rawRef: null,
+    evidenceRef: null,
+    embeddingVector: JSON.stringify(Array.from({ length: 1536 }, () => 0)),
+    embeddingModel: "client",
+    memoryLane: "shared",
+    producerAgentId: null,
+    ownerAgentId: null,
+    ownerTeamId: null,
+    embeddingStatus: "ready",
+    embeddingLastError: null,
+    salience: 0.6,
+    importance: 0.7,
+    confidence: 0.8,
+    redactionVersion: 1,
+    commitId: liteCommitId,
+  });
+  await liteWriteStore.insertRuleDef({
+    scope: "default",
+    ruleNodeId: "00000000-0000-0000-0000-000000000c12",
+    ifJson: JSON.stringify({ if: true }),
+    thenJson: JSON.stringify({ tool: "echo" }),
+    exceptionsJson: JSON.stringify([]),
+    ruleScope: "global",
+    targetAgentId: null,
+    targetTeamId: null,
+    commitId: liteCommitId,
+  });
+  await liteWriteStore.upsertEdge({
+    id: "00000000-0000-0000-0000-000000000ce1",
+    scope: "default",
+    type: "part_of",
+    srcId: "00000000-0000-0000-0000-000000000c11",
+    dstId: "00000000-0000-0000-0000-000000000c12",
+    weight: 0.5,
+    confidence: 0.5,
+    decayRate: 0.01,
+    commitId: liteCommitId,
+  });
+  await liteWriteStore.upsertEdge({
+    id: "00000000-0000-0000-0000-000000000ce2",
+    scope: "default",
+    type: "part_of",
+    srcId: "00000000-0000-0000-0000-000000000c11",
+    dstId: "00000000-0000-0000-0000-000000000c12",
+    weight: 0.9,
+    confidence: 0.8,
+    decayRate: 0.01,
+    commitId: liteCommitId,
+  });
+  await liteWriteStore.insertOutboxEvent({
+    scope: "default",
+    commitId: liteCommitId,
+    eventType: "embed_nodes",
+    jobKey: "lite-write-job",
+    payloadSha256: "payload-sha",
+    payloadJson: JSON.stringify({ nodes: [{ id: "00000000-0000-0000-0000-000000000c11" }] }),
+  });
+  await liteWriteStore.appendAfterTopicClusterEventIds(
+    "default",
+    liteCommitId,
+    JSON.stringify(["00000000-0000-0000-0000-000000000c11"]),
+  );
+  const liteNodeScopes = await liteWriteStore.nodeScopesByIds(["00000000-0000-0000-0000-000000000c11"]);
+  assert.equal(liteNodeScopes.get("00000000-0000-0000-0000-000000000c11"), "default");
+  assert.equal(await liteWriteStore.parentCommitHash("default", liteCommitId), "lite-write-commit-hash");
+  const liteReadyIds = await liteWriteStore.readyEmbeddingNodeIds("default", ["00000000-0000-0000-0000-000000000c11"]);
+  assert.ok(liteReadyIds.has("00000000-0000-0000-0000-000000000c11"));
+  let rolledBackCommitId = "";
+  await assert.rejects(
+    () => liteWriteStore.withTx(async () => {
+      rolledBackCommitId = await liteWriteStore.insertCommit({
+        scope: "default",
+        parentCommitId: null,
+        inputSha256: "rollback-sha",
+        diffJson: JSON.stringify({ nodes: [{ id: "rollback" }], edges: [] }),
+        actor: "contract_smoke",
+        modelVersion: null,
+        promptVersion: null,
+        commitHash: "lite-write-rollback-hash",
+      });
+      throw new Error("rollback me");
+    }),
+    /rollback me/i,
+  );
+  assert.equal(await liteWriteStore.parentCommitHash("default", rolledBackCommitId), null);
+  await assert.rejects(
+    () => liteWriteStore.mirrorCommitArtifactsToShadowV2("default", liteCommitId),
+    /write capability unsupported: shadow_mirror_v2/i,
+  );
+  const liteRecallStore = createLiteRecallStore(liteWritePath);
+  const liteRecallAccess = liteRecallStore.createRecallAccess();
+  assert.doesNotThrow(() => assertRecallStoreAccessContract(liteRecallAccess));
+  const liteRecallSeeds = await liteRecallAccess.stage1CandidatesAnn({
+    queryEmbedding: Array.from({ length: 1536 }, () => 0),
+    scope: "default",
+    oversample: 4,
+    limit: 2,
+    consumerAgentId: null,
+    consumerTeamId: null,
+  });
+  assert.ok(liteRecallSeeds.some((row) => row.id === "00000000-0000-0000-0000-000000000c11"));
+  const liteRecallNodes = await liteRecallAccess.stage2Nodes({
+    scope: "default",
+    nodeIds: ["00000000-0000-0000-0000-000000000c11"],
+    consumerAgentId: null,
+    consumerTeamId: null,
+    includeSlots: true,
+  });
+  assert.equal(liteRecallNodes.length, 1);
+  await liteRecallAccess.insertRecallAudit({
+    scope: "default",
+    endpoint: "recall",
+    consumerAgentId: null,
+    consumerTeamId: null,
+    querySha256: "audit-sha",
+    seedCount: 1,
+    nodeCount: 1,
+    edgeCount: 1,
+  });
+  await liteRecallStore.close();
+  await liteWriteStore.close();
+  await fs.rm(liteWriteDir, { recursive: true, force: true });
 
   const writeAccessFixture = new WriteAccessFixturePgClient({ throwEnsureScope: true });
   const writeAdapter = createPostgresWriteStoreAccess(writeAccessFixture as any);

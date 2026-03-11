@@ -34,8 +34,11 @@ const {
   store,
   db,
   embeddedRuntime,
+  liteRecallStore,
+  liteRecallAccess,
   liteReplayStore,
   liteReplayAccess,
+  liteWriteStore,
   embedder,
   sandboxExecutor,
   authResolver,
@@ -198,6 +201,8 @@ registerHealthRoute({
   env,
   healthDatabaseTargetHash,
   embeddedRuntime,
+  liteRecallStore,
+  liteWriteStore,
   recallStoreCapabilities,
   writeStoreCapabilities,
   storeFeatureCapabilities,
@@ -212,8 +217,11 @@ registerApplicationRoutes({
   store,
   embedder,
   embeddedRuntime,
+  liteRecallStore,
+  liteRecallAccess,
   liteReplayAccess,
   liteReplayStore,
+  liteWriteStore,
   recallTextEmbedBatcher,
   recallAccessForClient,
   writeStoreCapabilities,
@@ -266,7 +274,9 @@ registerBootstrapLifecycle({
   app,
   store,
   sandboxExecutor,
+  liteRecallStore,
   liteReplayStore,
+  liteWriteStore,
 });
 
 await assertBootstrapStoreContracts({
@@ -274,6 +284,7 @@ await assertBootstrapStoreContracts({
   recallAccessForClient,
   replayAccessForClient,
   writeAccessForClient,
+  liteWriteStore,
 });
 
 await listenHttpApp(app, env);

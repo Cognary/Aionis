@@ -13,6 +13,7 @@ import {
   createPostgresRecallStoreAccess,
   type RecallStoreCapabilities,
 } from "../store/recall-access.js";
+import { createLiteRecallStore } from "../store/lite-recall-store.js";
 import { createPostgresReplayStoreAccess } from "../store/replay-access.js";
 import { createLiteReplayStore } from "../store/lite-replay-store.js";
 import { createEmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
@@ -24,6 +25,7 @@ import {
   createPostgresWriteStoreAccess,
   type WriteStoreCapabilities,
 } from "../store/write-access.js";
+import { createLiteWriteStore } from "../store/lite-write-store.js";
 import { createAuthResolver } from "../util/auth.js";
 import { sha256Hex } from "../util/crypto.js";
 import { EmbedQueryBatcher } from "../util/embed_query_batcher.js";
@@ -155,6 +157,13 @@ export async function createRuntimeServices(env: Env) {
     ? createLiteReplayStore(env.LITE_REPLAY_SQLITE_PATH)
     : null;
   const liteReplayAccess = liteReplayStore?.createReplayAccess() ?? null;
+  const liteWriteStore = env.AIONIS_EDITION === "lite"
+    ? createLiteWriteStore(env.LITE_WRITE_SQLITE_PATH)
+    : null;
+  const liteRecallStore = env.AIONIS_EDITION === "lite"
+    ? createLiteRecallStore(env.LITE_WRITE_SQLITE_PATH)
+    : null;
+  const liteRecallAccess = liteRecallStore?.createRecallAccess() ?? null;
 
   const embedder = createEmbeddingProviderFromEnv(process.env);
   const sandboxExecutor = new SandboxExecutor(store, {
@@ -207,6 +216,7 @@ export async function createRuntimeServices(env: Env) {
   } as const;
 
   const recallAccessForClient = (client: any) => {
+    if (liteRecallAccess) return liteRecallAccess;
     if (embeddedRuntime) return embeddedRuntime.createRecallAccess();
     return createPostgresRecallStoreAccess(client, {
       capabilities: recallStoreCapabilities,
@@ -343,8 +353,11 @@ export async function createRuntimeServices(env: Env) {
     store,
     db,
     embeddedRuntime,
+    liteRecallStore,
+    liteRecallAccess,
     liteReplayStore,
     liteReplayAccess,
+    liteWriteStore,
     embedder,
     sandboxExecutor,
     authResolver,

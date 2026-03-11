@@ -1,9 +1,16 @@
 import type { Env } from "../config.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "../memory/write.js";
+import type { WriteStoreAccess } from "../store/write-access.js";
 import { HttpError } from "../util/http.js";
 
 type StoreLike = {
   withTx: <T>(fn: (client: any) => Promise<T>) => Promise<T>;
+};
+
+type LiteWriteStoreLike = WriteStoreAccess & {
+  withTx: <T>(fn: () => Promise<T>) => Promise<T>;
+  close?: () => Promise<void>;
+  healthSnapshot?: () => unknown;
 };
 
 type GateLike = {
@@ -17,6 +24,7 @@ export function registerMemoryWriteRoutes(args: {
   store: StoreLike;
   embedder: any;
   embeddedRuntime: any;
+  liteWriteStore?: LiteWriteStoreLike | null;
   writeAccessForClient: (client: any) => any;
   requireMemoryPrincipal: (req: any) => Promise<any>;
   withIdentityFromRequest: (req: any, body: unknown, principal: any, kind: any) => any;
@@ -32,6 +40,7 @@ export function registerMemoryWriteRoutes(args: {
     store,
     embedder,
     embeddedRuntime,
+    liteWriteStore,
     writeAccessForClient,
     requireMemoryPrincipal,
     withIdentityFromRequest,
@@ -80,42 +89,73 @@ export function registerMemoryWriteRoutes(args: {
         topicClusterAsyncOnWrite: env.TOPIC_CLUSTER_ASYNC_ON_WRITE,
       });
 
-      const out = await store.withTx(async (client) => {
-        (prepared as any).trigger_topic_cluster = policy.trigger_topic_cluster;
-        (prepared as any).topic_cluster_async = policy.topic_cluster_async;
+      const liteModeActive = env.AIONIS_EDITION === "lite" && !!liteWriteStore;
+      const forcedLiteTopicClusterAsync = liteModeActive && policy.trigger_topic_cluster && !policy.topic_cluster_async;
+      const out = liteModeActive
+        ? await (async () => {
+            (prepared as any).trigger_topic_cluster = policy.trigger_topic_cluster;
+            // Lite write path cannot safely run sync clustering inside the SQLite write transaction.
+            (prepared as any).topic_cluster_async = policy.trigger_topic_cluster
+              ? true
+              : policy.topic_cluster_async;
 
-        const writeRes = await applyMemoryWrite(client, prepared, {
-          maxTextLen: env.MAX_TEXT_LEN,
-          piiRedaction: env.PII_REDACTION,
-          allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
-          shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
-          shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
-          write_access: writeAccessForClient(client),
-        });
-
-        if (policy.trigger_topic_cluster && !policy.topic_cluster_async) {
-          const eventIds = prepared.nodes.filter((n) => n.type === "event").map((n) => n.id);
-          if (eventIds.length > 0) {
-            const clusterRes = await runTopicClusterForEventIds(client, {
-              scope: prepared.scope,
-              eventIds,
-              simThreshold: env.TOPIC_SIM_THRESHOLD,
-              minEventsPerTopic: env.TOPIC_MIN_EVENTS_PER_TOPIC,
-              maxCandidatesPerEvent: env.TOPIC_MAX_CANDIDATES_PER_EVENT,
+            return liteWriteStore.withTx(() => applyMemoryWrite({} as any, prepared, {
               maxTextLen: env.MAX_TEXT_LEN,
               piiRedaction: env.PII_REDACTION,
-              strategy: env.TOPIC_CLUSTER_STRATEGY,
-            });
-            if (clusterRes.processed_events > 0) {
-              writeRes.topic_cluster = clusterRes;
-            }
-          }
-        }
+              allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+              shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+              shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+              write_access: liteWriteStore,
+            }));
+          })()
+        : await store.withTx(async (client) => {
+            (prepared as any).trigger_topic_cluster = policy.trigger_topic_cluster;
+            (prepared as any).topic_cluster_async = policy.topic_cluster_async;
 
-        return writeRes;
-      });
+            const writeRes = await applyMemoryWrite(client, prepared, {
+              maxTextLen: env.MAX_TEXT_LEN,
+              piiRedaction: env.PII_REDACTION,
+              allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+              shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+              shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+              write_access: writeAccessForClient(client),
+            });
+
+            if (policy.trigger_topic_cluster && !policy.topic_cluster_async) {
+              const eventIds = prepared.nodes.filter((n) => n.type === "event").map((n) => n.id);
+              if (eventIds.length > 0) {
+                const clusterRes = await runTopicClusterForEventIds(client, {
+                  scope: prepared.scope,
+                  eventIds,
+                  simThreshold: env.TOPIC_SIM_THRESHOLD,
+                  minEventsPerTopic: env.TOPIC_MIN_EVENTS_PER_TOPIC,
+                  maxCandidatesPerEvent: env.TOPIC_MAX_CANDIDATES_PER_EVENT,
+                  maxTextLen: env.MAX_TEXT_LEN,
+                  piiRedaction: env.PII_REDACTION,
+                  strategy: env.TOPIC_CLUSTER_STRATEGY,
+                });
+                if (clusterRes.processed_events > 0) {
+                  writeRes.topic_cluster = clusterRes;
+                }
+              }
+            }
+
+            return writeRes;
+          });
 
       const warnings: Array<{ code: string; message: string; details?: Record<string, unknown> }> = [];
+      if (forcedLiteTopicClusterAsync) {
+        warnings.push({
+          code: "lite_topic_cluster_forced_async",
+          message: "lite edition forces topic clustering to async mode during memory write",
+          details: {
+            scope: out.scope ?? prepared.scope_public ?? env.MEMORY_SCOPE,
+            tenant_id: out.tenant_id ?? prepared.tenant_id ?? env.MEMORY_TENANT_ID,
+            requested_async: false,
+            applied_async: true,
+          },
+        });
+      }
       if ((out.nodes?.length ?? 0) === 0) {
         warnings.push({
           code: "write_no_nodes",

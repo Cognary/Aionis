@@ -57,124 +57,58 @@ function runSnippet(source) {
   return lines[lines.length - 1] ?? "";
 }
 
-test("lite write route works with custom write access boundary", () => {
+test("lite write route uses sqlite write store without pg transaction path", () => {
   const out = runSnippet(`
-    import { createHash } from "node:crypto";
+    import { DatabaseSync } from "node:sqlite";
+    import { mkdtempSync, rmSync } from "node:fs";
+    import os from "node:os";
+    import path from "node:path";
     import { createHttpApp } from "./src/host/bootstrap.ts";
     import { registerHostErrorHandler } from "./src/host/http-host.ts";
     import { registerMemoryWriteRoutes } from "./src/routes/memory-write.ts";
     import { createEmbeddedMemoryRuntime } from "./src/store/embedded-memory-runtime.ts";
-
-    class InMemoryWriteAccess {
-      capability_version = 2;
-      capabilities = { shadow_mirror_v2: false };
-      commits = new Map();
-      nodes = new Map();
-      edges = new Map();
-      outbox = [];
-      ruleDefs = [];
-      nextCommit = 1;
-
-      async nodeScopesByIds(ids) {
-        const out = new Map();
-        for (const id of ids) {
-          const row = this.nodes.get(id);
-          if (row) out.set(id, row.scope);
-        }
-        return out;
-      }
-
-      async parentCommitHash(scope, parentCommitId) {
-        const row = this.commits.get(parentCommitId);
-        return row && row.scope === scope ? row.commit_hash : null;
-      }
-
-      async insertCommit(args) {
-        const existing = [...this.commits.entries()].find(([, row]) => row.commit_hash === args.commitHash)?.[0];
-        if (existing) return existing;
-        const id = \`20000000-0000-0000-0000-\${String(this.nextCommit).padStart(12, "0")}\`;
-        this.nextCommit += 1;
-        this.commits.set(id, { scope: args.scope, commit_hash: args.commitHash, diff_json: args.diffJson });
-        return id;
-      }
-
-      async insertNode(args) {
-        if (this.nodes.has(args.id)) return;
-        this.nodes.set(args.id, { scope: args.scope, ...args });
-      }
-
-      async insertRuleDef(args) {
-        this.ruleDefs.push(args);
-      }
-
-      async upsertEdge(args) {
-        const key = \`\${args.scope}:\${args.type}:\${args.srcId}:\${args.dstId}\`;
-        const prev = this.edges.get(key);
-        this.edges.set(key, prev ? {
-          ...prev,
-          weight: Math.max(prev.weight, args.weight),
-          confidence: Math.max(prev.confidence, args.confidence),
-          commitId: args.commitId,
-        } : { ...args });
-      }
-
-      async readyEmbeddingNodeIds(_scope, ids) {
-        const out = new Set();
-        for (const id of ids) {
-          const row = this.nodes.get(id);
-          if (row?.embeddingStatus === "ready" && row.embeddingVector) out.add(id);
-        }
-        return out;
-      }
-
-      async insertOutboxEvent(args) {
-        this.outbox.push(args);
-      }
-
-      async appendAfterTopicClusterEventIds(_scope, _commitId, _eventIdsJson) {}
-
-      async mirrorCommitArtifactsToShadowV2() {
-        throw new Error("shadow mirror unsupported in lite write smoke");
-      }
-    }
+    import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
 
     const main = async () => {
+      const tmpDir = mkdtempSync(path.join(os.tmpdir(), "aionis-lite-write-"));
+      const sqlitePath = path.join(tmpDir, "write.sqlite");
       const embeddedRuntime = createEmbeddedMemoryRuntime();
-      const writeAccess = new InMemoryWriteAccess();
+      const writeAccess = createLiteWriteStore(sqlitePath);
       const app = createHttpApp({ TRUST_PROXY: false });
       registerHostErrorHandler(app);
-      registerMemoryWriteRoutes({
-        app,
-        env: {
-          MEMORY_SCOPE: "default",
-          MEMORY_TENANT_ID: "default",
-          MAX_TEXT_LEN: 4096,
-          PII_REDACTION: false,
-          ALLOW_CROSS_SCOPE_EDGES: false,
-          MEMORY_WRITE_REQUIRE_NODES: false,
-          AUTO_TOPIC_CLUSTER_ON_WRITE: false,
-          TOPIC_CLUSTER_ASYNC_ON_WRITE: false,
-          MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
-          MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
-          TOPIC_SIM_THRESHOLD: 0.72,
-          TOPIC_MIN_EVENTS_PER_TOPIC: 2,
-          TOPIC_MAX_CANDIDATES_PER_EVENT: 32,
-          TOPIC_CLUSTER_STRATEGY: "online_knn",
-        },
-        store: { withTx: async (fn) => await fn({}) },
-        embedder: null,
-        embeddedRuntime,
-        writeAccessForClient: () => writeAccess,
-        requireMemoryPrincipal: async () => ({ sub: "tester" }),
-        withIdentityFromRequest: (_req, body) => body,
-        enforceRateLimit: async () => {},
-        enforceTenantQuota: async () => {},
-        tenantFromBody: () => "default",
-        acquireInflightSlot: async () => ({ release() {}, wait_ms: 0 }),
-        runTopicClusterForEventIds: async () => ({ processed_events: 0 }),
-      });
-
       try {
+        registerMemoryWriteRoutes({
+          app,
+          env: {
+            AIONIS_EDITION: "lite",
+            MEMORY_SCOPE: "default",
+            MEMORY_TENANT_ID: "default",
+            MAX_TEXT_LEN: 4096,
+            PII_REDACTION: false,
+            ALLOW_CROSS_SCOPE_EDGES: false,
+            MEMORY_WRITE_REQUIRE_NODES: false,
+            AUTO_TOPIC_CLUSTER_ON_WRITE: false,
+            TOPIC_CLUSTER_ASYNC_ON_WRITE: false,
+            MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+            MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+            TOPIC_SIM_THRESHOLD: 0.72,
+            TOPIC_MIN_EVENTS_PER_TOPIC: 2,
+            TOPIC_MAX_CANDIDATES_PER_EVENT: 32,
+            TOPIC_CLUSTER_STRATEGY: "online_knn",
+          },
+          store: { withTx: async () => { throw new Error("lite write should not use store.withTx"); } },
+          embedder: null,
+          embeddedRuntime,
+          liteWriteStore: writeAccess,
+          writeAccessForClient: () => { throw new Error("lite write should not use postgres write access"); },
+          requireMemoryPrincipal: async () => ({ sub: "tester" }),
+          withIdentityFromRequest: (_req, body) => body,
+          enforceRateLimit: async () => {},
+          enforceTenantQuota: async () => {},
+          tenantFromBody: () => "default",
+          acquireInflightSlot: async () => ({ release() {}, wait_ms: 0 }),
+          runTopicClusterForEventIds: async () => ({ processed_events: 0 }),
+        });
         const res = await app.inject({
           method: "POST",
           url: "/v1/memory/write",
@@ -224,17 +158,24 @@ test("lite write route works with custom write access boundary", () => {
           consumerAgentId: null,
           consumerTeamId: null,
         });
+        const db = new DatabaseSync(sqlitePath);
+        const commitCount = (db.prepare("SELECT COUNT(*) AS count FROM lite_memory_commits").get()).count;
+        const nodeCount = (db.prepare("SELECT COUNT(*) AS count FROM lite_memory_nodes").get()).count;
+        const edgeCount = (db.prepare("SELECT COUNT(*) AS count FROM lite_memory_edges").get()).count;
+        db.close();
         process.stdout.write("__RESULT__" + JSON.stringify({
           status: res.statusCode,
           body: parsed,
-          commitCount: writeAccess.commits.size,
-          nodeCount: writeAccess.nodes.size,
-          edgeCount: writeAccess.edges.size,
+          commitCount,
+          nodeCount,
+          edgeCount,
           recallSeedCount: recallSeeds.length,
           recallSeedIds: recallSeeds.map((row) => row.id),
         }));
       } finally {
         await app.close();
+        await writeAccess.close();
+        rmSync(tmpDir, { recursive: true, force: true });
       }
     };
 

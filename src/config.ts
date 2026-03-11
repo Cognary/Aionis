@@ -188,6 +188,7 @@ const EnvSchema = z.object({
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
   LITE_REPLAY_SQLITE_PATH: z.string().default(".tmp/aionis-lite-replay.sqlite"),
+  LITE_WRITE_SQLITE_PATH: z.string().default(".tmp/aionis-lite-write.sqlite"),
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).default(30),
   DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   DB_POOL_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),

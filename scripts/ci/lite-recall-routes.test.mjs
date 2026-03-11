@@ -57,70 +57,99 @@ function runSnippet(source) {
   return lines[lines.length - 1] ?? "";
 }
 
-test("lite recall routes round-trip through embedded recall access", () => {
+test("lite recall routes round-trip through sqlite recall access", () => {
   const out = runSnippet(`
+    import { mkdtempSync, rmSync } from "node:fs";
+    import os from "node:os";
+    import path from "node:path";
     import { createHttpApp } from "./src/host/bootstrap.ts";
     import { registerHostErrorHandler } from "./src/host/http-host.ts";
     import { registerMemoryRecallRoutes } from "./src/routes/memory-recall.ts";
-    import { createEmbeddedMemoryRuntime } from "./src/store/embedded-memory-runtime.ts";
+    import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
+    import { createLiteRecallStore } from "./src/store/lite-recall-store.ts";
     import { createRecallPolicy } from "./src/app/recall-policy.ts";
 
     const main = async () => {
-      const embeddedRuntime = createEmbeddedMemoryRuntime();
-      await embeddedRuntime.applyWrite(
-        {
+      const tmpDir = mkdtempSync(path.join(os.tmpdir(), "aionis-lite-recall-"));
+      const sqlitePath = path.join(tmpDir, "memory.sqlite");
+      const liteWriteStore = createLiteWriteStore(sqlitePath);
+      const liteRecallStore = createLiteRecallStore(sqlitePath);
+      await liteWriteStore.withTx(async () => {
+        const commitId = await liteWriteStore.insertCommit({
           scope: "default",
-          auto_embed_effective: false,
-          nodes: [
-            {
-              id: "10000000-0000-0000-0000-000000000001",
-              scope: "default",
-              type: "event",
-              tier: "hot",
-              memory_lane: "shared",
-              title: "deploy incident summary",
-              text_summary: "deployment incident and rollback context",
-              slots: {},
-              embedding: Array.from({ length: 1536 }, () => 0),
-              embedding_model: "client",
-              salience: 0.9,
-              confidence: 0.9,
-            },
-            {
-              id: "10000000-0000-0000-0000-000000000002",
-              scope: "default",
-              type: "topic",
-              tier: "hot",
-              memory_lane: "shared",
-              title: "deploy topology",
-              text_summary: "service dependency graph and rollback playbook",
-              slots: { topic_state: "active" },
-              embedding: Array.from({ length: 1536 }, () => 0),
-              embedding_model: "client",
-              salience: 0.8,
-              confidence: 0.85,
-            },
-          ],
-          edges: [
-            {
-              id: "10000000-0000-0000-0000-0000000000e1",
-              scope: "default",
-              type: "part_of",
-              src_id: "10000000-0000-0000-0000-000000000001",
-              dst_id: "10000000-0000-0000-0000-000000000002",
-              weight: 0.95,
-              confidence: 0.95,
-              decay_rate: 0.01,
-            },
-          ],
-        },
-        {
-          commit_id: "10000000-0000-0000-0000-0000000000c1",
-          commit_hash: "lite-recall-smoke",
-        },
-      );
+          parentCommitId: null,
+          inputSha256: "lite-recall-sha",
+          diffJson: JSON.stringify({ nodes: [], edges: [] }),
+          actor: "lite-recall-test",
+          modelVersion: null,
+          promptVersion: null,
+          commitHash: "lite-recall-smoke",
+        });
+        await liteWriteStore.insertNode({
+          id: "10000000-0000-0000-0000-000000000001",
+          scope: "default",
+          clientId: "deploy_event",
+          type: "event",
+          tier: "hot",
+          title: "deploy incident summary",
+          textSummary: "deployment incident and rollback context",
+          slotsJson: JSON.stringify({}),
+          rawRef: null,
+          evidenceRef: null,
+          embeddingVector: JSON.stringify(Array.from({ length: 1536 }, () => 0)),
+          embeddingModel: "client",
+          memoryLane: "shared",
+          producerAgentId: null,
+          ownerAgentId: null,
+          ownerTeamId: null,
+          embeddingStatus: "ready",
+          embeddingLastError: null,
+          salience: 0.9,
+          importance: 0.8,
+          confidence: 0.9,
+          redactionVersion: 1,
+          commitId,
+        });
+        await liteWriteStore.insertNode({
+          id: "10000000-0000-0000-0000-000000000002",
+          scope: "default",
+          clientId: "deploy_topic",
+          type: "topic",
+          tier: "hot",
+          title: "deploy topology",
+          textSummary: "service dependency graph and rollback playbook",
+          slotsJson: JSON.stringify({ topic_state: "active" }),
+          rawRef: null,
+          evidenceRef: null,
+          embeddingVector: JSON.stringify(Array.from({ length: 1536 }, () => 0)),
+          embeddingModel: "client",
+          memoryLane: "shared",
+          producerAgentId: null,
+          ownerAgentId: null,
+          ownerTeamId: null,
+          embeddingStatus: "ready",
+          embeddingLastError: null,
+          salience: 0.8,
+          importance: 0.8,
+          confidence: 0.85,
+          redactionVersion: 1,
+          commitId,
+        });
+        await liteWriteStore.upsertEdge({
+          id: "10000000-0000-0000-0000-0000000000e1",
+          scope: "default",
+          type: "part_of",
+          srcId: "10000000-0000-0000-0000-000000000001",
+          dstId: "10000000-0000-0000-0000-000000000002",
+          weight: 0.95,
+          confidence: 0.95,
+          decayRate: 0.01,
+          commitId,
+        });
+      });
 
       const env = {
+        AIONIS_EDITION: "lite",
         MEMORY_SCOPE: "default",
         MEMORY_TENANT_ID: "default",
         MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY: true,
@@ -147,8 +176,8 @@ test("lite recall routes round-trip through embedded recall access", () => {
         app,
         env,
         store: { withClient: async (fn) => await fn({}) },
-        embeddedRuntime,
-        recallAccessForClient: () => embeddedRuntime.createRecallAccess(),
+        embeddedRuntime: null,
+        recallAccessForClient: () => liteRecallStore.createRecallAccess(),
         requireMemoryPrincipal: async () => ({ sub: "tester" }),
         withIdentityFromRequest: (_req, body) => body,
         enforceRateLimit: async () => {},
@@ -185,6 +214,9 @@ test("lite recall routes round-trip through embedded recall access", () => {
         }));
       } finally {
         await app.close();
+        await liteRecallStore.close();
+        await liteWriteStore.close();
+        rmSync(tmpDir, { recursive: true, force: true });
       }
     };
 

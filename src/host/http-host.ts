@@ -255,6 +255,8 @@ export function registerHealthRoute(args: {
   env: Env;
   healthDatabaseTargetHash: string | null;
   embeddedRuntime: any;
+  liteRecallStore?: { healthSnapshot: () => unknown } | null;
+  liteWriteStore?: { healthSnapshot: () => unknown } | null;
   recallStoreCapabilities: any;
   writeStoreCapabilities: any;
   storeFeatureCapabilities: any;
@@ -267,6 +269,8 @@ export function registerHealthRoute(args: {
     env,
     healthDatabaseTargetHash,
     embeddedRuntime,
+    liteRecallStore,
+    liteWriteStore,
     recallStoreCapabilities,
     writeStoreCapabilities,
     storeFeatureCapabilities,
@@ -305,6 +309,8 @@ export function registerHealthRoute(args: {
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     replay_store_access_capability_version: REPLAY_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
+    lite_recall_store: liteRecallStore ? liteRecallStore.healthSnapshot() : null,
+    lite_write_store: liteWriteStore ? liteWriteStore.healthSnapshot() : null,
     sandbox: sandboxExecutor.healthSnapshot(),
     sandbox_tenant_budget_window_hours: env.SANDBOX_TENANT_BUDGET_WINDOW_HOURS,
     sandbox_tenant_budget_tenant_count: sandboxTenantBudgetPolicy.size,
@@ -325,6 +331,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     embeddedRuntime,
     liteReplayAccess,
     liteReplayStore,
+    liteWriteStore,
     recallTextEmbedBatcher,
     recallAccessForClient,
     writeStoreCapabilities,
@@ -422,6 +429,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     store,
     embedder,
     embeddedRuntime,
+    liteWriteStore,
     writeAccessForClient,
     requireMemoryPrincipal,
     withIdentityFromRequest,
@@ -449,6 +457,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     store,
     embedder,
     embeddedRuntime,
+    liteWriteStore,
     writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
     requireAdminToken,
     requireStoreFeatureCapability,

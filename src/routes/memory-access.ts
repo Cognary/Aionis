@@ -19,6 +19,7 @@ export function registerMemoryAccessRoutes(args: {
   store: StoreLike;
   embedder: any;
   embeddedRuntime: any;
+  liteWriteStore?: any;
   writeAccessShadowMirrorV2: boolean;
   requireAdminToken: (req: any) => void;
   requireStoreFeatureCapability: (capability: "sessions_graph" | "packs_export" | "packs_import") => void;
@@ -35,6 +36,7 @@ export function registerMemoryAccessRoutes(args: {
     store,
     embedder,
     embeddedRuntime,
+    liteWriteStore,
     writeAccessShadowMirrorV2,
     requireAdminToken,
     requireStoreFeatureCapability,
@@ -54,10 +56,11 @@ export function registerMemoryAccessRoutes(args: {
     allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
     shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
     shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
-    writeAccessShadowMirrorV2,
-    embedder,
-    embeddedRuntime,
-  };
+      writeAccessShadowMirrorV2,
+      embedder,
+      embeddedRuntime,
+      liteWriteStore,
+    };
 
   app.post("/v1/memory/sessions", async (req: any, reply: any) => {
     requireStoreFeatureCapability("sessions_graph");
@@ -68,7 +71,9 @@ export function registerMemoryAccessRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) => createSession(client, body, writeDefaults));
+      out = liteWriteStore
+        ? await createSession({} as any, body, writeDefaults)
+        : await store.withTx((client) => createSession(client, body, writeDefaults));
     } finally {
       gate.release();
     }
@@ -84,7 +89,9 @@ export function registerMemoryAccessRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) => writeSessionEvent(client, body, writeDefaults));
+      out = liteWriteStore
+        ? await writeSessionEvent({} as any, body, writeDefaults)
+        : await store.withTx((client) => writeSessionEvent(client, body, writeDefaults));
     } finally {
       gate.release();
     }
@@ -110,13 +117,21 @@ export function registerMemoryAccessRoutes(args: {
     const gate = await acquireInflightSlot("recall");
     let out: any;
     try {
-      out = await store.withClient((client) =>
-        listSessionEvents(client, input, {
-          defaultScope: env.MEMORY_SCOPE,
-          defaultTenantId: env.MEMORY_TENANT_ID,
-          embeddedRuntime,
-        }),
-      );
+      out = liteWriteStore
+        ? await listSessionEvents({} as any, input, {
+            defaultScope: env.MEMORY_SCOPE,
+            defaultTenantId: env.MEMORY_TENANT_ID,
+            embeddedRuntime,
+            liteWriteStore,
+          })
+        : await store.withClient((client) =>
+            listSessionEvents(client, input, {
+              defaultScope: env.MEMORY_SCOPE,
+              defaultTenantId: env.MEMORY_TENANT_ID,
+              embeddedRuntime,
+              liteWriteStore,
+            }),
+          );
     } finally {
       gate.release();
     }

@@ -14,6 +14,7 @@ import { resolveTenantScope } from "./tenant.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 import { createPostgresWriteStoreAccess } from "../store/write-access.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { buildAionisUri } from "./uri.js";
 
 type SessionWriteOptions = {
@@ -27,12 +28,14 @@ type SessionWriteOptions = {
   writeAccessShadowMirrorV2: boolean;
   embedder: EmbeddingProvider | null;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
+  liteWriteStore?: LiteWriteStore | null;
 };
 
 type SessionEventListOptions = {
   defaultScope: string;
   defaultTenantId: string;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
+  liteWriteStore?: LiteWriteStore | null;
 };
 
 type EventRow = {
@@ -177,16 +180,25 @@ export async function createSession(client: pg.PoolClient, body: unknown, opts: 
     },
     opts.embedder,
   );
-  const out = await applyMemoryWrite(client, prepared, {
-    maxTextLen: opts.maxTextLen,
-    piiRedaction: opts.piiRedaction,
-    allowCrossScopeEdges: opts.allowCrossScopeEdges,
-    shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
-    shadowDualWriteStrict: opts.shadowDualWriteStrict,
-    write_access: createPostgresWriteStoreAccess(client, {
-      capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
-    }),
-  });
+  const out = opts.liteWriteStore
+    ? await opts.liteWriteStore.withTx(() => applyMemoryWrite({} as any, prepared, {
+        maxTextLen: opts.maxTextLen,
+        piiRedaction: opts.piiRedaction,
+        allowCrossScopeEdges: opts.allowCrossScopeEdges,
+        shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
+        shadowDualWriteStrict: opts.shadowDualWriteStrict,
+        write_access: opts.liteWriteStore as any,
+      }))
+    : await applyMemoryWrite(client, prepared, {
+        maxTextLen: opts.maxTextLen,
+        piiRedaction: opts.piiRedaction,
+        allowCrossScopeEdges: opts.allowCrossScopeEdges,
+        shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
+        shadowDualWriteStrict: opts.shadowDualWriteStrict,
+        write_access: createPostgresWriteStoreAccess(client, {
+          capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
+        }),
+      });
   if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
 
   const node = out.nodes.find((n) => n.client_id === sessionCid) ?? out.nodes[0] ?? null;
@@ -235,25 +247,26 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
     owner_team_id: parsed.owner_team_id,
     producer_agent_id: parsed.producer_agent_id,
   });
-  const existingSessionRes = await client.query<SessionRow>(
-    `
-    SELECT
-      id,
-      title,
-      text_summary,
-      memory_lane::text AS memory_lane,
-      owner_agent_id,
-      owner_team_id
-    FROM memory_nodes
-    WHERE scope = $1
-      AND type = 'topic'::memory_node_type
-      AND client_id = $2
-    ORDER BY created_at DESC
-    LIMIT 1
-    `,
-    [tenancy.scope_key, sessionCid],
-  );
-  const existingSession = existingSessionRes.rows[0] ?? null;
+  const existingSession = opts.liteWriteStore
+    ? await opts.liteWriteStore.findLatestNodeByClientId(tenancy.scope_key, "topic", sessionCid)
+    : (await client.query<SessionRow>(
+        `
+        SELECT
+          id,
+          title,
+          text_summary,
+          memory_lane::text AS memory_lane,
+          owner_agent_id,
+          owner_team_id
+        FROM memory_nodes
+        WHERE scope = $1
+          AND type = 'topic'::memory_node_type
+          AND client_id = $2
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [tenancy.scope_key, sessionCid],
+      )).rows[0] ?? null;
   if (existingSession) {
     assertSessionWriteAllowed(existingSession, writerIdentity);
   }
@@ -322,16 +335,25 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
     },
     opts.embedder,
   );
-  const out = await applyMemoryWrite(client, prepared, {
-    maxTextLen: opts.maxTextLen,
-    piiRedaction: opts.piiRedaction,
-    allowCrossScopeEdges: opts.allowCrossScopeEdges,
-    shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
-    shadowDualWriteStrict: opts.shadowDualWriteStrict,
-    write_access: createPostgresWriteStoreAccess(client, {
-      capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
-    }),
-  });
+  const out = opts.liteWriteStore
+    ? await opts.liteWriteStore.withTx(() => applyMemoryWrite({} as any, prepared, {
+        maxTextLen: opts.maxTextLen,
+        piiRedaction: opts.piiRedaction,
+        allowCrossScopeEdges: opts.allowCrossScopeEdges,
+        shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
+        shadowDualWriteStrict: opts.shadowDualWriteStrict,
+        write_access: opts.liteWriteStore as any,
+      }))
+    : await applyMemoryWrite(client, prepared, {
+        maxTextLen: opts.maxTextLen,
+        piiRedaction: opts.piiRedaction,
+        allowCrossScopeEdges: opts.allowCrossScopeEdges,
+        shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
+        shadowDualWriteStrict: opts.shadowDualWriteStrict,
+        write_access: createPostgresWriteStoreAccess(client, {
+          capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
+        }),
+      });
   if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
 
   const eventNode = out.nodes.find((n) => n.client_id === eventCid) ?? null;
@@ -468,6 +490,92 @@ export async function listSessionEvents(client: pg.PoolClient, input: unknown, o
         offset: parsed.offset,
         returned: events.length,
         has_more: embedded.has_more,
+      },
+    };
+  }
+  if (opts.liteWriteStore) {
+    const lite = await opts.liteWriteStore.listSessionEvents({
+      scope: tenancy.scope_key,
+      sessionClientId: sessionCid,
+      consumerAgentId: parsed.consumer_agent_id ?? null,
+      consumerTeamId: parsed.consumer_team_id ?? null,
+      limit: parsed.limit,
+      offset: parsed.offset,
+    });
+    if (!lite.session) {
+      return {
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        session: null,
+        events: [],
+        page: {
+          limit: parsed.limit,
+          offset: parsed.offset,
+          returned: 0,
+          has_more: false,
+        },
+      };
+    }
+    const events = lite.events.map((row) => {
+      const out: Record<string, unknown> = {
+        uri: buildAionisUri({
+          tenant_id: tenancy.tenant_id,
+          scope: tenancy.scope,
+          type: "event",
+          id: row.id,
+        }),
+        id: row.id,
+        client_id: row.client_id,
+        event_id: typeof row.slots?.event_id === "string" ? row.slots.event_id : null,
+        type: row.type,
+        title: row.title,
+        text_summary: row.text_summary,
+        edge_weight: row.edge_weight,
+        edge_confidence: row.edge_confidence,
+      };
+      if (parsed.include_slots) out.slots = row.slots;
+      else if (parsed.include_slots_preview) out.slots_preview = pickSlotsPreview(row.slots, parsed.slots_preview_keys);
+      if (parsed.include_meta) {
+        out.memory_lane = row.memory_lane;
+        out.producer_agent_id = row.producer_agent_id;
+        out.owner_agent_id = row.owner_agent_id;
+        out.owner_team_id = row.owner_team_id;
+        out.embedding_status = row.embedding_status;
+        out.embedding_model = row.embedding_model;
+        out.raw_ref = row.raw_ref;
+        out.evidence_ref = row.evidence_ref;
+        out.created_at = row.created_at;
+        out.updated_at = row.updated_at;
+        out.last_activated = row.last_activated;
+        out.salience = row.salience;
+        out.importance = row.importance;
+        out.confidence = row.confidence;
+        out.commit_id = row.commit_id;
+      }
+      return out;
+    });
+
+    return {
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      session: {
+        session_id: sid,
+        node_id: lite.session.id,
+        title: lite.session.title,
+        text_summary: lite.session.text_summary,
+        uri: buildAionisUri({
+          tenant_id: tenancy.tenant_id,
+          scope: tenancy.scope,
+          type: "topic",
+          id: lite.session.id,
+        }),
+      },
+      events,
+      page: {
+        limit: parsed.limit,
+        offset: parsed.offset,
+        returned: events.length,
+        has_more: lite.has_more,
       },
     };
   }
