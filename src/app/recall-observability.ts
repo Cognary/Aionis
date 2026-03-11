@@ -96,6 +96,13 @@ export function collectRecallTrajectoryUriLinks(args: { recall: any; tools?: any
 export function buildRecallObservability(args: {
   timings: Record<string, number>;
   inflight_wait_ms: number;
+  explicit_mode?: {
+    mode?: string | null;
+    profile?: string;
+    applied?: boolean;
+    reason?: string;
+    source?: string;
+  } | null;
   adaptive_profile: { profile: string; applied: boolean; reason: string };
   adaptive_hard_cap: { applied: boolean; reason: string };
   class_aware?: {
@@ -131,6 +138,15 @@ export function buildRecallObservability(args: {
     stage_timings_ms: stageTimings,
     inflight_wait_ms: args.inflight_wait_ms,
     adaptive: {
+      explicit_mode: args.explicit_mode
+        ? {
+            mode: args.explicit_mode.mode ?? null,
+            profile: args.explicit_mode.profile ?? null,
+            applied: args.explicit_mode.applied ?? false,
+            reason: args.explicit_mode.reason ?? "unknown",
+            source: args.explicit_mode.source ?? "unknown",
+          }
+        : null,
       class_aware: args.class_aware
         ? {
             workload_class: args.class_aware.workload_class ?? null,

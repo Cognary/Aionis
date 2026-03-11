@@ -38,6 +38,7 @@ type BenchmarkJson = {
       static_blocks_selected?: { mean: number; p50: number; p95: number };
       within_token_budget_ratio?: number;
       optimization_profile_applied_ratio?: number;
+      optimization_profile_source_frequency?: Record<string, number>;
       latency_ms?: { baseline_p95: number; optimized_p95: number; delta_p95: number };
     };
     latency_breakdown_ms?: {
@@ -474,6 +475,13 @@ async function main() {
         optimizationLines.push(
           `  - within_token_budget_ratio=${round(Number(optimization.summary.within_token_budget_ratio) * 100, 2)}%; optimization_profile_applied_ratio=${round(Number(optimization.summary.optimization_profile_applied_ratio ?? 0) * 100, 2)}%`,
         );
+      }
+      const optimizationSources = Object.entries(optimization.summary?.optimization_profile_source_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      if (optimizationSources) {
+        optimizationLines.push(`  - optimization_profile_sources: ${optimizationSources}`);
       }
       if (latency) {
         optimizationLines.push(

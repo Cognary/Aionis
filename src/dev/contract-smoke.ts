@@ -9,6 +9,7 @@ import {
   MemoryPackExportRequest,
   MemoryPackImportRequest,
   MemoryRecallRequest,
+  MemoryRecallTextRequest,
   MemoryWriteRequest,
   ReplayPlaybookCandidateRequest,
   MemorySessionEventsListRequest,
@@ -969,6 +970,8 @@ async function run() {
       MEMORY_RECALL_PROFILE: "lite",
       MEMORY_RECALL_CLASS_AWARE_ENABLED: "true",
       MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: "lite",
+      MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT: "balanced",
+      MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT: "aggressive",
       MEMORY_RECALL_PROFILE_POLICY_JSON: JSON.stringify({
         endpoint: { recall: "lite", recall_text: "strict_edges" },
         tenant_default: { tenant_lite: "lite" },
@@ -982,6 +985,8 @@ async function run() {
       assert.equal(env.MEMORY_RECALL_PROFILE, "lite");
       assert.equal(env.MEMORY_RECALL_CLASS_AWARE_ENABLED, true);
       assert.equal(env.MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE, "lite");
+      assert.equal(env.MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT, "balanced");
+      assert.equal(env.MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT, "aggressive");
     },
   );
   await withEnv(
@@ -1123,6 +1128,33 @@ async function run() {
       assert.equal(requestDisabled.enabled, false);
       assert.equal(requestDisabled.source, "request_override");
       assert.equal(requestDisabled.applied, false);
+
+      const explicitMode = recallPolicy.resolveExplicitRecallMode(
+        { query_text: "dense edge relationship recall", recall_mode: "dense_edge" },
+        "strict_edges",
+        false,
+      );
+      assert.equal(explicitMode.mode, "dense_edge");
+      assert.equal(explicitMode.profile, "quality_first");
+      assert.equal(explicitMode.applied, true);
+
+      const explicitModeWithKnobs = recallPolicy.resolveExplicitRecallMode(
+        { query_text: "dense edge relationship recall", recall_mode: "dense_edge", limit: 12 },
+        "strict_edges",
+        true,
+      );
+      assert.equal(explicitModeWithKnobs.mode, "dense_edge");
+      assert.equal(explicitModeWithKnobs.reason, "explicit_knobs");
+      assert.equal(explicitModeWithKnobs.applied, false);
+
+      const classAwareBlockedByMode = recallPolicy.resolveClassAwareRecallProfile(
+        "recall_text",
+        { query_text: "dense edge relationship recall", recall_mode: "dense_edge", recall_class_aware: true },
+        "quality_first",
+        false,
+      );
+      assert.equal(classAwareBlockedByMode.reason, "explicit_mode");
+      assert.equal(classAwareBlockedByMode.applied, false);
     },
   );
   await withEnv(
@@ -2221,13 +2253,20 @@ async function run() {
   assert.equal(planningReq.rules_limit, 50);
   assert.equal(planningReq.tool_strict, true);
   assert.equal(planningReq.limit, 30);
+  const recallTextDenseModeReq = MemoryRecallTextRequest.parse({
+    query_text: "relationship topology",
+    recall_mode: "dense_edge",
+  });
+  assert.equal(recallTextDenseModeReq.recall_mode, "dense_edge");
   const planningOptimizedReq = PlanningContextRequest.parse({
     query_text: "deploy api",
     context: { intent: "deploy" },
     tool_candidates: ["kubectl"],
     context_optimization_profile: "aggressive",
+    recall_mode: "dense_edge",
   });
   assert.equal(planningOptimizedReq.context_optimization_profile, "aggressive");
+  assert.equal(planningOptimizedReq.recall_mode, "dense_edge");
   const assembleReq = ContextAssembleRequest.parse({
     query_text: "memory graph",
     context: { run: { id: "run_2" }, agent: { id: "agent_b", team_id: "team_b" } },
@@ -2270,8 +2309,10 @@ async function run() {
   const assembleOptimizedReq = ContextAssembleRequest.parse({
     query_text: "deploy production",
     context_optimization_profile: "balanced",
+    recall_mode: "dense_edge",
   });
   assert.equal(assembleOptimizedReq.context_optimization_profile, "balanced");
+  assert.equal(assembleOptimizedReq.recall_mode, "dense_edge");
   assert.throws(
     () =>
       ContextAssembleRequest.parse({
@@ -2291,6 +2332,15 @@ async function run() {
   assert.deepEqual((aggressiveOptimization.parsed as any).context_layers.forgetting_policy.allowed_tiers, ["hot"]);
   assert.equal((aggressiveOptimization.parsed as any).context_layers.forgetting_policy.min_salience, 0.35);
   assert.equal((aggressiveOptimization.parsed as any).static_injection.min_score, 80);
+  const endpointDefaultOptimization = applyContextOptimizationProfile(
+    ContextAssembleRequest.parse({
+      query_text: "x",
+    }) as any,
+    "balanced",
+  );
+  assert.equal(endpointDefaultOptimization.optimization_profile.requested, "balanced");
+  assert.equal(endpointDefaultOptimization.optimization_profile.source, "endpoint_default");
+  assert.equal((endpointDefaultOptimization.parsed as any).context_compaction_profile, "balanced");
   const manualOptimization = applyContextOptimizationProfile(
     ContextAssembleRequest.parse({
       query_text: "x",
@@ -2301,6 +2351,7 @@ async function run() {
     }) as any,
   );
   assert.equal(manualOptimization.optimization_profile.applied, false);
+  assert.equal(manualOptimization.optimization_profile.source, "request_override");
   assert.equal(manualOptimization.optimization_profile.forgetting_policy_applied, false);
   assert.equal(manualOptimization.optimization_profile.static_injection_applied, false);
   assert.equal((manualOptimization.parsed as any).context_compaction_profile, "aggressive");

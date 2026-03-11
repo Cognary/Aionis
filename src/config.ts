@@ -325,6 +325,8 @@ const EnvSchema = z.object({
     .transform((v) => v === "true"),
   // Optional default compaction budget for recall_text context output. 0 disables.
   MEMORY_RECALL_TEXT_CONTEXT_TOKEN_BUDGET_DEFAULT: z.coerce.number().int().min(0).max(256000).default(0),
+  MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT: z.enum(["off", "balanced", "aggressive"]).default("off"),
+  MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT: z.enum(["off", "balanced", "aggressive"]).default("off"),
   PII_REDACTION: z
     .string()
     .optional()

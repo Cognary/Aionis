@@ -48,6 +48,9 @@ First single-process selector artifacts:
 4. median aggregate for conservative mapping:
    - [/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_COMPARE_AGGREGATE_V3_20260311.md](/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_COMPARE_AGGREGATE_V3_20260311.md)
    - [/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_COMPARE_AGGREGATE_V3_20260311.json](/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_COMPARE_AGGREGATE_V3_20260311.json)
+5. rollout gate artifact:
+   - [/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_ROLLOUT_GATE_V1_20260311.md](/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_ROLLOUT_GATE_V1_20260311.md)
+   - [/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_ROLLOUT_GATE_V1_20260311.json](/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_ROLLOUT_GATE_V1_20260311.json)
 
 ## Current Reading
 
@@ -102,6 +105,24 @@ It should be:
 
 1. keep selector behind experiment gates
 2. do not enable it by default yet
-3. if we continue this line, the next design question is narrower:
-   - whether `dense_edge -> quality_first` should become an explicit opt-in policy mode
-   - rather than a global hidden selector
+3. treat `dense_edge -> quality_first` as an explicit opt-in policy mode first
+4. only reconsider selector-by-default after repeated-run median evidence improves
+
+## New Rollout Decision
+
+That narrower design question is now resolved for `v1`.
+
+Current rollout decision:
+
+1. `dense_edge -> quality_first` should be exposed as explicit `recall_mode="dense_edge"`
+2. automatic class-aware selector should remain experimental
+3. selector evidence should continue to be judged with repeated-run median artifacts, not one-off winners
+
+The new rollout gate now makes that decision machine-checkable.
+
+Current gate reading:
+
+1. sample gate: pass
+2. overall latency gate: fail
+3. active class failure: `dense_edge`
+4. final verdict: selector should remain experimental

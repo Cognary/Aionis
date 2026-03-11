@@ -538,8 +538,28 @@ npm run job:perf-benchmark -- \
   --mode recall \
   --optimization-check true \
   --optimization-profile aggressive \
+  --optimization-request-mode explicit \
   --optimization-samples 12
 ```
+
+To benchmark endpoint-default rollout instead of request-level opt-in, omit the optimized request field and let the server apply its configured default:
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --optimization-check true \
+  --optimization-profile aggressive \
+  --optimization-request-mode inherit_default \
+  --optimization-samples 12
+```
+
+This mode is intended for API processes started with:
+
+1. `MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT=balanced|aggressive`
+2. `MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT=balanced|aggressive`
 
 Optional replay-dispatch evidence sampling (collects deterministic replay eligibility, dispatch decisions, and `result_summary` coverage for one existing playbook):
 
@@ -630,6 +650,46 @@ Aggregate multiple selector-compare runs into one median summary:
 npm run job:perf-selector-aggregate -- \
   --dirs-json '["/path/to/ann_selector_compare_v1","/path/to/ann_selector_compare_v2","/path/to/ann_selector_compare_v3"]'
 ```
+
+Evaluate whether the repeated selector evidence is strong enough for default rollout:
+
+```bash
+npm run job:perf-selector-rollout-gate -- \
+  --aggregate-json /path/to/SELECTOR_COMPARE_AGGREGATE.json
+```
+
+This gate intentionally exits non-zero when the selector should remain experimental. The current intended use is:
+
+1. aggregate repeated selector runs first
+2. run the rollout gate on the aggregate
+3. only consider default enablement if the gate passes
+4. otherwise keep selector experimental and prefer explicit opt-in modes such as `recall_mode="dense_edge"`
+
+Evaluate whether endpoint-default context optimization rollout is strong enough from multiple benchmark artifacts:
+
+```bash
+npm run job:perf-context-rollout-gate -- \
+  --benchmark-files-json '["/path/to/context_opt_default_a/benchmark_1.json","/path/to/context_opt_default_b/benchmark_1.json"]'
+```
+
+This gate is intended for context-side rollout only:
+
+1. use `optimization_request_mode=inherit_default` artifacts
+2. require `endpoint_default` as the recorded optimization source
+3. require token-reduction and latency thresholds to hold across all supplied artifacts
+4. use it to justify endpoint-default rollout, not wider mode-level defaults
+
+Apply the corresponding env profile to `.env`:
+
+```bash
+npm run -s env:context-optimization:aggressive-endpoint-defaults
+```
+
+Current recommendation:
+
+1. use `aggressive_endpoint_defaults` only for `planning/context` and `context/assemble`
+2. keep recall-policy defaults separate from this rollout
+3. use `off` to revert quickly if environment-specific regressions appear
 
 Auth handling:
 

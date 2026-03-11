@@ -40,6 +40,28 @@ The main principle is:
 
 > Aionis should reduce cost primarily by making the primary model participate less, not only by compressing more text.
 
+## Rollout Rule
+
+Once a new optimization policy exists, Aionis should not promote it to a default solely from single-run benchmark wins.
+
+Default-policy rollout should require:
+
+1. canonical benchmark fixture coverage
+2. repeated-run median comparison
+3. class-level evidence when the policy is workload-sensitive
+4. an explicit opt-in mode first if the evidence is strong for one class but not strong enough for a global default
+
+For lower-risk context-side optimizations, the preferred rollout path is:
+
+1. request-level opt-in first
+2. endpoint default next
+3. only later consider wider mode-level defaults
+
+Current evidence update:
+
+1. selector-by-default still fails rollout-gate evidence and should remain experimental
+2. endpoint-default rollout for `context_optimization_profile=aggressive` now has two seeded query-class artifacts and a passing context rollout gate
+
 ## Current Baseline
 
 Aionis already has partial building blocks for this roadmap:

@@ -826,6 +826,7 @@ export type ContextAssembleResponse = {
     };
     optimization_profile?: {
       requested?: "balanced" | "aggressive" | null;
+      source?: "request_override" | "endpoint_default" | "none";
       applied?: boolean;
       context_compaction_profile?: "balanced" | "aggressive" | null;
       forgetting_policy_applied?: boolean;

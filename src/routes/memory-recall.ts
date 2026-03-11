@@ -28,6 +28,7 @@ export function registerMemoryRecallRoutes(args: {
   acquireInflightSlot: (kind: "recall") => Promise<GateLike>;
   hasExplicitRecallKnobs: (body: unknown) => boolean;
   resolveRecallProfile: (endpoint: "recall", tenantId: string) => any;
+  resolveExplicitRecallMode: (body: unknown, baseProfile: any, explicitRecallKnobs: boolean) => any;
   withRecallProfileDefaults: (body: unknown, defaults: any) => any;
   resolveRecallStrategy: (body: unknown, explicitRecallKnobs: boolean) => any;
   resolveAdaptiveRecallProfile: (profile: any, waitMs: number, explicitRecallKnobs: boolean) => any;
@@ -50,6 +51,7 @@ export function registerMemoryRecallRoutes(args: {
     acquireInflightSlot,
     hasExplicitRecallKnobs,
     resolveRecallProfile,
+    resolveExplicitRecallMode,
     withRecallProfileDefaults,
     resolveRecallStrategy,
     resolveAdaptiveRecallProfile,
@@ -66,8 +68,9 @@ export function registerMemoryRecallRoutes(args: {
     const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall");
     const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
     const baseProfile = resolveRecallProfile("recall", tenantFromBody(bodyRaw));
-    let body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
-    const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs);
+    const explicitMode = resolveExplicitRecallMode(bodyRaw, baseProfile.profile, explicitRecallKnobs);
+    let body = withRecallProfileDefaults(bodyRaw, explicitMode.defaults);
+    const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs || explicitMode.mode !== null);
     if (strategyResolution.applied) {
       body = {
         ...body,
@@ -84,7 +87,7 @@ export function registerMemoryRecallRoutes(args: {
       await enforceTenantQuota(req, reply, "debug_embeddings", parsed.tenant_id ?? env.MEMORY_TENANT_ID);
     }
     const gate = await acquireInflightSlot("recall");
-    const adaptiveProfile = resolveAdaptiveRecallProfile(baseProfile.profile, gate.wait_ms, explicitRecallKnobs);
+    const adaptiveProfile = resolveAdaptiveRecallProfile(explicitMode.profile, gate.wait_ms, explicitRecallKnobs || explicitMode.mode !== null);
     if (adaptiveProfile.applied) {
       parsed = MemoryRecallRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
     }
@@ -188,6 +191,11 @@ export function registerMemoryRecallRoutes(args: {
           stage1_exact_fallback_ms: timings["stage1_candidates_exact_fallback"] ?? null,
           profile: adaptiveProfile.profile,
           profile_source: baseProfile.source,
+          recall_mode: explicitMode.mode,
+          recall_mode_profile: explicitMode.profile,
+          recall_mode_applied: explicitMode.applied,
+          recall_mode_reason: explicitMode.reason,
+          recall_mode_source: explicitMode.source,
           adaptive_profile_applied: adaptiveProfile.applied,
           adaptive_profile_reason: adaptiveProfile.reason,
           adaptive_hard_cap_applied: adaptiveHardCap.applied,
@@ -231,6 +239,13 @@ export function registerMemoryRecallRoutes(args: {
     const observability = buildRecallObservability({
       timings,
       inflight_wait_ms: gate.wait_ms,
+      explicit_mode: {
+        mode: explicitMode.mode,
+        profile: explicitMode.profile,
+        applied: explicitMode.applied,
+        reason: explicitMode.reason,
+        source: explicitMode.source,
+      },
       adaptive_profile: {
         profile: adaptiveProfile.profile,
         applied: adaptiveProfile.applied,

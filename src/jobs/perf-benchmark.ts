@@ -112,6 +112,7 @@ type OptimizationAggregate = {
   enabled: boolean;
   params: {
     profile: "balanced" | "aggressive";
+    request_mode: "explicit" | "inherit_default";
     token_budget: number;
     char_budget_total: number;
     samples: number;
@@ -132,6 +133,7 @@ type OptimizationAggregate = {
     static_blocks_selected: { mean: number; p50: number; p95: number };
     within_token_budget_ratio: number;
     optimization_profile_applied_ratio: number;
+    optimization_profile_source_frequency?: Record<string, number>;
     latency_ms: { baseline_p95: number; optimized_p95: number; delta_p95: number };
   };
   latency_breakdown_ms: {
@@ -574,6 +576,9 @@ async function main() {
   const optimizationCharBudget = clampInt(Number(argValue("--optimization-char-budget") ?? "1800"), 200, 200000);
   const optimizationProfileRaw = (argValue("--optimization-profile") ?? "aggressive").trim().toLowerCase();
   const optimizationProfile: "balanced" | "aggressive" = optimizationProfileRaw === "balanced" ? "balanced" : "aggressive";
+  const optimizationRequestModeRaw = (argValue("--optimization-request-mode") ?? "explicit").trim().toLowerCase();
+  const optimizationRequestMode: "explicit" | "inherit_default" =
+    optimizationRequestModeRaw === "inherit_default" ? "inherit_default" : "explicit";
   const optimizationQueryText = (argValue("--optimization-query-text") ?? "prepare production deploy context").trim();
   const replayCheckRaw = (argValue("--replay-check") ?? "false").trim().toLowerCase();
   const replayCheck = replayCheckRaw === "true";
@@ -843,6 +848,7 @@ async function main() {
   if (optimizationCheck) {
     const optimizationByStatus: Record<string, number> = {};
     const optimizationLeversFrequency: Record<string, number> = {};
+    const optimizationProfileSourceFrequency: Record<string, number> = {};
     const baselineTokens: number[] = [];
     const optimizedTokens: number[] = [];
     const tokenReductionRatios: number[] = [];
@@ -933,7 +939,7 @@ async function main() {
 
       const optimized = await timedRequestJson("/v1/memory/context/assemble", {
         ...baseAssemblePayload(),
-        context_optimization_profile: optimizationProfile,
+        ...(optimizationRequestMode === "explicit" ? { context_optimization_profile: optimizationProfile } : {}),
         context_layers: {
           enabled: ["facts", "episodes", "static", "tools", "citations"],
           char_budget_total: optimizationCharBudget,
@@ -978,6 +984,13 @@ async function main() {
 
       if (optimizedCost?.within_token_budget === true) withinTokenBudgetCount += 1;
       if (optimized.body?.layered_context?.optimization_profile?.applied === true) optimizationProfileAppliedCount += 1;
+      const optimizationProfileSource = String(
+        optimized.body?.layered_context?.optimization_profile?.source ?? "unknown",
+      ).trim();
+      if (optimizationProfileSource) {
+        optimizationProfileSourceFrequency[optimizationProfileSource] =
+          (optimizationProfileSourceFrequency[optimizationProfileSource] ?? 0) + 1;
+      }
       const levers = Array.isArray(optimizedCost?.primary_savings_levers) ? optimizedCost.primary_savings_levers : [];
       for (const lever of levers) {
         const key = String(lever || "").trim();
@@ -1005,6 +1018,7 @@ async function main() {
       enabled: true,
       params: {
         profile: optimizationProfile,
+        request_mode: optimizationRequestMode,
         token_budget: optimizationTokenBudget,
         char_budget_total: optimizationCharBudget,
         samples: optimizationSamples,
@@ -1041,6 +1055,7 @@ async function main() {
         },
         within_token_budget_ratio: okPairs > 0 ? round(withinTokenBudgetCount / okPairs, 6) : 0,
         optimization_profile_applied_ratio: okPairs > 0 ? round(optimizationProfileAppliedCount / okPairs, 6) : 0,
+        optimization_profile_source_frequency: optimizationProfileSourceFrequency,
         latency_ms: {
           baseline_p95: baselineLatencySummary.p95,
           optimized_p95: optimizedLatencySummary.p95,

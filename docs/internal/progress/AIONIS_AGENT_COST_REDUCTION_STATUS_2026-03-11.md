@@ -9,6 +9,8 @@ Status: `in_progress`
 
 Related roadmap: [/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_AGENT_COST_REDUCTION_ROADMAP.md](/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_AGENT_COST_REDUCTION_ROADMAP.md)
 
+Latest default-rollout evidence: [/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_CONTEXT_OPTIMIZATION_DEFAULT_ROLLOUT_2026-03-11.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_CONTEXT_OPTIMIZATION_DEFAULT_ROLLOUT_2026-03-11.md)
+
 ## Executive Summary
 
 Aionis has moved past the roadmap-definition stage and is now in active delivery.
@@ -202,6 +204,13 @@ Current assessment:
 12. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
 13. selector-vs-static comparison is now implemented as a first-class benchmark slice, and a dedicated aggregate job now exists for median reads across repeated selector runs
 14. after repeated selector compares, the current safe reading is still: do not default-enable class-aware recall selector yet
+15. the first safe productization step is now explicit `recall_mode="dense_edge"` for wider graph recall, while keeping automatic selector rollout experimental
+16. selector evidence now also has a machine-checkable rollout gate artifact, and the first gate result confirms: do not default-enable selector yet
+17. `planning/context` and `context/assemble` now support server-side default `context_optimization_profile` rollout, so stable cost-saving presets can be promoted without requiring request-by-request adoption
+18. the first endpoint-default benchmark for `context_optimization_profile=aggressive` now shows the seeded workload still delivers `28.04%` estimated token reduction with `endpoint_default` as the actual optimization source and no p95 context-assembly regression in that run
+19. a second endpoint-default benchmark on a `dense_edge` query class shows the same `28.04%` estimated token reduction with `endpoint_default` as the actual optimization source and a `-37.06ms` context-assembly p95 delta in that run
+20. endpoint-default context rollout now also has a dedicated machine gate so rollout decisions no longer depend only on reading raw benchmark reports
+21. the first context-optimization rollout gate now passes on two endpoint-default artifacts, so endpoint-default rollout is evidence-backed for the evaluated context endpoints and benchmarked query classes
 
 ## Overall Stage Assessment
 
@@ -211,22 +220,22 @@ That means:
 
 1. the cost-reduction architecture is no longer hypothetical
 2. most high-value control surfaces now exist in production code
-3. several features are still opt-in or consumer-driven rather than default-on
-4. the remaining work is more about expansion, defaulting, and measurement than about inventing entirely new primitives
+3. several features are still opt-in or consumer-driven rather than default-on, but endpoint-default rollout now has evidence across more than one benchmarked query class
+4. the remaining work is more about expansion, careful defaulting, and measurement than about inventing entirely new primitives
 
 ## Next-Stage Priorities
 
 Recommended order:
 
 1. expand tool-result summarization beyond sandbox-centric execution paths
-2. converge these features into more opinionated default runtime behavior
+2. converge these features into more opinionated default runtime behavior, starting with endpoint defaults that already have repeated artifact support
 3. expand explicit cost telemetry and benchmark comparisons beyond the first context-optimization slice
 4. improve distillation quality while keeping raw evidence retrievable
 5. connect deterministic replay hit-rate, forgetting, and static injection into one measurable optimization profile
 
 ## What Should Not Happen Next
 
-1. do not add many new cost-related endpoints before improving default behavior
+1. do not add many new cost-related endpoints before improving default behavior and rollout evidence
 2. do not replace raw output or raw evidence storage entirely; keep audit and repair paths intact
 3. do not treat "prompt compression" as the primary north star; model non-participation is the bigger lever
 

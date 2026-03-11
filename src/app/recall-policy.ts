@@ -15,6 +15,7 @@ export type RecallEndpoint = "recall" | "recall_text";
 export type RecallTextEndpoint = "recall_text" | "planning_context" | "context_assemble";
 export type RecallStrategyName = "local" | "balanced" | "global";
 export type RecallWorkloadClass = "dense_edge" | "workflow_path" | "broad_semantic" | "sparse_hit";
+export type RecallModeName = "dense_edge";
 
 type RecallProfilePolicy = {
   endpoint: Partial<Record<RecallEndpoint, RecallProfileName>>;
@@ -48,6 +49,15 @@ type RecallHardCapResolution = {
   reason: "disabled" | "explicit_knobs" | "wait_below_threshold" | "already_capped" | "queue_pressure_hard_cap";
 };
 
+type ExplicitRecallModeResolution = {
+  mode: RecallModeName | null;
+  profile: RecallProfileName;
+  defaults: RecallProfileDefaults;
+  applied: boolean;
+  reason: "no_mode" | "explicit_knobs" | "already_target_profile" | "applied";
+  source: "request_override" | "none";
+};
+
 type RecallClassAwareResolution = {
   profile: RecallProfileName;
   defaults: RecallProfileDefaults;
@@ -55,6 +65,7 @@ type RecallClassAwareResolution = {
   reason:
     | "disabled"
     | "request_disabled"
+    | "explicit_mode"
     | "explicit_knobs"
     | "explicit_strategy"
     | "no_query_text"
@@ -137,6 +148,10 @@ const RECALL_CLASS_PROFILE_DEFAULTS: Record<RecallWorkloadClass, RecallProfileNa
   sparse_hit: "strict_edges",
 };
 
+const RECALL_MODE_PROFILE_DEFAULTS: Record<RecallModeName, RecallProfileName> = {
+  dense_edge: "quality_first",
+};
+
 const WORKFLOW_KEYWORDS = [
   "deploy",
   "rollback",
@@ -167,6 +182,12 @@ function readRecallClassAwareOverride(body: unknown): boolean | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const raw = (body as Record<string, unknown>).recall_class_aware;
   return typeof raw === "boolean" ? raw : null;
+}
+
+function readRecallMode(body: unknown): RecallModeName | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const raw = (body as Record<string, unknown>).recall_mode;
+  return raw === "dense_edge" ? raw : null;
 }
 
 function parseRecallProfilePolicy(raw: string): RecallProfilePolicy {
@@ -291,6 +312,7 @@ export function createRecallPolicy(env: Env) {
     baseProfile: RecallProfileName,
     hasExplicitKnobs: boolean,
   ): RecallClassAwareResolution => {
+    const explicitMode = readRecallMode(body);
     const classAwareOverride = readRecallClassAwareOverride(body);
     const classAwareEnabled = classAwareOverride ?? env.MEMORY_RECALL_CLASS_AWARE_ENABLED;
     const classAwareSource = classAwareOverride === null ? "env_default" : "request_override";
@@ -312,6 +334,18 @@ export function createRecallPolicy(env: Env) {
         defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
         applied: false,
         reason: "explicit_knobs",
+        workload_class: null,
+        signals: [],
+        enabled: classAwareEnabled,
+        source: classAwareSource,
+      };
+    }
+    if (explicitMode) {
+      return {
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: "explicit_mode",
         workload_class: null,
         signals: [],
         enabled: classAwareEnabled,
@@ -440,6 +474,53 @@ export function createRecallPolicy(env: Env) {
       return { profile: baseProfile, defaults: RECALL_PROFILE_DEFAULTS[baseProfile], applied: false, reason: "already_target_profile" };
     }
     return { profile: target, defaults: RECALL_PROFILE_DEFAULTS[target], applied: true, reason: "queue_pressure" };
+  };
+
+  const resolveExplicitRecallMode = (
+    body: unknown,
+    baseProfile: RecallProfileName,
+    hasExplicitKnobs: boolean,
+  ): ExplicitRecallModeResolution => {
+    const mode = readRecallMode(body);
+    if (!mode) {
+      return {
+        mode: null,
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: "no_mode",
+        source: "none",
+      };
+    }
+    if (hasExplicitKnobs) {
+      return {
+        mode,
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: "explicit_knobs",
+        source: "request_override",
+      };
+    }
+    const targetProfile = RECALL_MODE_PROFILE_DEFAULTS[mode];
+    if (targetProfile === baseProfile) {
+      return {
+        mode,
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: "already_target_profile",
+        source: "request_override",
+      };
+    }
+    return {
+      mode,
+      profile: targetProfile,
+      defaults: RECALL_PROFILE_DEFAULTS[targetProfile],
+      applied: true,
+      reason: "applied",
+      source: "request_override",
+    };
   };
 
   const resolveAdaptiveRecallHardCap = (
@@ -619,6 +700,7 @@ export function createRecallPolicy(env: Env) {
     recallProfilePolicy,
     withRecallProfileDefaults,
     resolveRecallProfile,
+    resolveExplicitRecallMode,
     resolveClassAwareRecallProfile,
     hasExplicitRecallKnobs,
     resolveRecallStrategy,

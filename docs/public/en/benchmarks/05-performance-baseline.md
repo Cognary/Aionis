@@ -70,8 +70,25 @@ npm run job:perf-benchmark -- \
   --mode recall \
   --optimization-check true \
   --optimization-profile aggressive \
+  --optimization-request-mode explicit \
   --optimization-samples 12
 ```
+
+To benchmark endpoint-default rollout instead of request-level opt-in:
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url "http://localhost:${PORT:-3001}" \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --optimization-check true \
+  --optimization-profile aggressive \
+  --optimization-request-mode inherit_default \
+  --optimization-samples 12
+```
+
+Use this against an API process started with endpoint defaults such as `MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT` or `MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT`.
 
 Add replay optimization evidence to the benchmark artifact:
 
@@ -162,6 +179,32 @@ Aggregate repeated selector-compare runs:
 npm run job:perf-selector-aggregate -- \
   --dirs-json '["/path/to/ann_selector_compare_v1","/path/to/ann_selector_compare_v2","/path/to/ann_selector_compare_v3"]'
 ```
+
+Evaluate whether repeated selector evidence is strong enough for default rollout:
+
+```bash
+npm run job:perf-selector-rollout-gate -- \
+  --aggregate-json /path/to/SELECTOR_COMPARE_AGGREGATE.json
+```
+
+If this gate fails, keep automatic selector rollout experimental and prefer explicit opt-in policy modes for the classes that still have evidence-backed upside.
+
+Evaluate whether endpoint-default context optimization rollout is strong enough from multiple artifacts:
+
+```bash
+npm run job:perf-context-rollout-gate -- \
+  --benchmark-files-json '["/path/to/context_opt_default_a/benchmark_1.json","/path/to/context_opt_default_b/benchmark_1.json"]'
+```
+
+Use this gate only for endpoint-default context rollout. It expects `optimization_request_mode=inherit_default` evidence and checks that `endpoint_default` was the actual optimization source.
+
+If the gate passes, the corresponding local env helper is:
+
+```bash
+npm run -s env:context-optimization:aggressive-endpoint-defaults
+```
+
+This rollout recommendation is intentionally narrower than a global runtime default. It only covers endpoint-default context optimization on the evaluated endpoints.
 
 ## Output Fields
 

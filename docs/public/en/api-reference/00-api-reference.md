@@ -48,6 +48,8 @@ Notes:
    - `layered_context.static_injection`
    so callers can see what was intentionally excluded or selected.
 5. `recall_text`, `planning/context`, and `context/assemble` also accept experimental `recall_class_aware=true|false` so callers can explicitly enable or disable the class-aware recall selector per request while evaluating policy changes.
+6. `recall`, `recall_text`, `planning/context`, and `context/assemble` also accept `recall_mode="dense_edge"` as an explicit opt-in for wider graph recall. This mode currently maps to the `quality_first` recall profile and is intended for callers that prefer broader relationship coverage over lower latency.
+7. `planning/context` and `context/assemble` can also inherit server-side default `context_optimization_profile` presets when operators enable them; explicit request fields still win.
 
 ### Policy and Execution Loop
 

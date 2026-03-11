@@ -1,4 +1,5 @@
 export type ContextOptimizationProfileName = "balanced" | "aggressive";
+export type ContextOptimizationProfileSource = "request_override" | "endpoint_default" | "none";
 
 type ContextOptimizationProfileInput = {
   context_optimization_profile?: unknown;
@@ -9,6 +10,7 @@ type ContextOptimizationProfileInput = {
 
 type ContextOptimizationProfileResult = {
   requested: ContextOptimizationProfileName | null;
+  source: ContextOptimizationProfileSource;
   applied: boolean;
   context_compaction_profile: ContextOptimizationProfileName | null;
   forgetting_policy_applied: boolean;
@@ -25,14 +27,22 @@ function normalizeProfileName(value: unknown): ContextOptimizationProfileName | 
 
 export function applyContextOptimizationProfile<T extends ContextOptimizationProfileInput>(
   parsed: T,
+  defaultProfile: ContextOptimizationProfileName | null = null,
 ): { parsed: T; optimization_profile: ContextOptimizationProfileResult } {
-  const requested = normalizeProfileName(parsed.context_optimization_profile);
+  const explicitRequested = normalizeProfileName(parsed.context_optimization_profile);
+  const requested = explicitRequested ?? defaultProfile;
+  const source: ContextOptimizationProfileSource = explicitRequested
+    ? "request_override"
+    : defaultProfile
+      ? "endpoint_default"
+      : "none";
   const existingCompaction = normalizeProfileName(parsed.context_compaction_profile);
   if (!requested) {
     return {
       parsed,
       optimization_profile: {
         requested: null,
+        source,
         applied: false,
         context_compaction_profile: existingCompaction,
         forgetting_policy_applied: false,
@@ -95,6 +105,7 @@ export function applyContextOptimizationProfile<T extends ContextOptimizationPro
     parsed: next as T,
     optimization_profile: {
       requested,
+      source,
       applied,
       context_compaction_profile: normalizeProfileName(next.context_compaction_profile) ?? requested,
       forgetting_policy_applied: forgettingPolicyApplied,

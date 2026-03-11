@@ -36,6 +36,9 @@ Planner context is the normalized runtime input used by Aionis policy and tool-s
 6. If you use `static_context_blocks`, keep `intent`, `agent`, `tool`, and request metadata normalized so static block selection can match on stable signals instead of free-form prompt text.
 7. If you use `context_optimization_profile`, keep `intent`, `tool`, and request metadata stable so Aionis can apply deterministic forgetting and static-injection presets instead of falling back to broader context assembly.
 8. If you evaluate workload-aware recall policy, use `recall_class_aware=true|false` on `planning/context` or `context/assemble` to compare selector behavior against the static default without changing server-wide config.
+9. If you explicitly need denser graph coverage, pass `recall_mode="dense_edge"` on `planning/context` or `context/assemble` instead of relying on experimental selector rollout. This is the preferred opt-in path for broader recall while automatic class-aware defaults remain under evaluation.
+10. Operators can also set endpoint defaults for `context_optimization_profile` on `planning/context` and `context/assemble`, so stable cost-saving presets can roll out without requiring every caller to pass the field explicitly.
+11. If you roll out endpoint defaults operationally, prefer managed env presets instead of ad hoc edits so rollback stays one command away.
 
 ## Minimal Example
 
@@ -61,3 +64,4 @@ Planner context is the normalized runtime input used by Aionis policy and tool-s
 1. [Control and Policy](/public/en/control/01-control-policy)
 2. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
 3. [API Contract](/public/en/api/01-api-contract)
+4. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)

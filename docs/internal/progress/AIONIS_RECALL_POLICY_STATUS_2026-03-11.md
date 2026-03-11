@@ -152,6 +152,21 @@ After three conservative-mapping selector compare runs, the safest current readi
 3. `dense_edge -> quality_first` is still the only mapping with a clear breadth upside
 4. that upside currently comes with a measurable latency cost
 
+The next rollout shape is therefore narrower:
+
+1. keep automatic class-aware selector behind experiment gates
+2. expose `recall_mode="dense_edge"` as the explicit opt-in path for callers that want wider graph recall
+3. require repeated-run median evidence before reconsidering any selector-by-default rollout
+
+That rollout rule is now machine-enforced for selector evidence as well.
+
+The first rollout-gate artifact currently says:
+
+1. repeated-run sample count is sufficient
+2. selector-by-default still fails the overall latency gate
+3. `dense_edge` still fails the active-class gate for default rollout
+4. the correct current policy is still: explicit opt-in mode, not default selector enablement
+
 It is a safe first implementation because:
 
 1. it can be disabled globally

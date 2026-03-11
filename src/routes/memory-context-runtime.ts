@@ -39,6 +39,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
   acquireInflightSlot: (kind: "recall") => Promise<GateLike>;
   hasExplicitRecallKnobs: (body: unknown) => boolean;
   resolveRecallProfile: (endpoint: "recall_text", tenantId: string) => any;
+  resolveExplicitRecallMode: (body: unknown, baseProfile: any, explicitRecallKnobs: boolean) => any;
   resolveClassAwareRecallProfile: (endpoint: "recall_text" | "planning_context" | "context_assemble", body: unknown, baseProfile: any, explicitRecallKnobs: boolean) => any;
   withRecallProfileDefaults: (body: unknown, defaults: any) => any;
   resolveRecallStrategy: (body: unknown, explicitRecallKnobs: boolean) => any;
@@ -89,6 +90,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     acquireInflightSlot,
     hasExplicitRecallKnobs,
     resolveRecallProfile,
+    resolveExplicitRecallMode,
     resolveClassAwareRecallProfile,
     withRecallProfileDefaults,
     resolveRecallStrategy,
@@ -112,9 +114,10 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall_text");
     const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
     const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
-    const classAwareProfile = resolveClassAwareRecallProfile("recall_text", bodyRaw, baseProfile.profile, explicitRecallKnobs);
+    const explicitMode = resolveExplicitRecallMode(bodyRaw, baseProfile.profile, explicitRecallKnobs);
+    const classAwareProfile = resolveClassAwareRecallProfile("recall_text", bodyRaw, explicitMode.profile, explicitRecallKnobs);
     let body = withRecallProfileDefaults(bodyRaw, classAwareProfile.defaults);
-    const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs);
+    const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs || explicitMode.mode !== null);
     if (strategyResolution.applied) {
       body = {
         ...body,
@@ -153,7 +156,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     let embedBatchSize = 1;
     let recallParsed: any;
     const gate = await acquireInflightSlot("recall");
-    const adaptiveProfile = resolveAdaptiveRecallProfile(classAwareProfile.profile, gate.wait_ms, explicitRecallKnobs);
+    const adaptiveProfile = resolveAdaptiveRecallProfile(classAwareProfile.profile, gate.wait_ms, explicitRecallKnobs || explicitMode.mode !== null);
     if (adaptiveProfile.applied) {
       parsed = MemoryRecallTextRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
     }
@@ -321,6 +324,11 @@ export function registerMemoryContextRuntimeRoutes(args: {
           stage1_exact_fallback_ms: timings["stage1_candidates_exact_fallback"] ?? null,
           profile: adaptiveProfile.profile,
           profile_source: baseProfile.source,
+          recall_mode: explicitMode.mode,
+          recall_mode_profile: explicitMode.profile,
+          recall_mode_applied: explicitMode.applied,
+          recall_mode_reason: explicitMode.reason,
+          recall_mode_source: explicitMode.source,
           class_aware_profile: classAwareProfile.profile,
           class_aware_enabled: classAwareProfile.enabled,
           class_aware_applied: classAwareProfile.applied,
@@ -371,6 +379,13 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const observability = buildRecallObservability({
       timings,
       inflight_wait_ms: gate.wait_ms,
+      explicit_mode: {
+        mode: explicitMode.mode,
+        profile: explicitMode.profile,
+        applied: explicitMode.applied,
+        reason: explicitMode.reason,
+        source: explicitMode.source,
+      },
       adaptive_profile: {
         profile: adaptiveProfile.profile,
         applied: adaptiveProfile.applied,
@@ -406,9 +421,10 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const bodyRaw = withIdentityFromRequest(req, req.body, principal, "planning_context");
     const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
     const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
-    const classAwareProfile = resolveClassAwareRecallProfile("planning_context", bodyRaw, baseProfile.profile, explicitRecallKnobs);
+    const explicitMode = resolveExplicitRecallMode(bodyRaw, baseProfile.profile, explicitRecallKnobs);
+    const classAwareProfile = resolveClassAwareRecallProfile("planning_context", bodyRaw, explicitMode.profile, explicitRecallKnobs);
     let body = withRecallProfileDefaults(bodyRaw, classAwareProfile.defaults);
-    const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs);
+    const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs || explicitMode.mode !== null);
     if (strategyResolution.applied) {
       body = {
         ...body,
@@ -448,7 +464,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     let embedBatchSize = 1;
     let recallParsed: any;
     const gate = await acquireInflightSlot("recall");
-    const adaptiveProfile = resolveAdaptiveRecallProfile(classAwareProfile.profile, gate.wait_ms, explicitRecallKnobs);
+    const adaptiveProfile = resolveAdaptiveRecallProfile(classAwareProfile.profile, gate.wait_ms, explicitRecallKnobs || explicitMode.mode !== null);
     if (adaptiveProfile.applied) {
       parsed = PlanningContextRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
     }
@@ -468,7 +484,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
     if (adaptiveHardCap.applied) {
       parsed = PlanningContextRequest.parse({ ...(parsed as any), ...adaptiveHardCap.defaults });
     }
-    const planningOptimization = applyContextOptimizationProfile(parsed);
+    const planningOptimization = applyContextOptimizationProfile(
+      parsed,
+      env.MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT === "off"
+        ? null
+        : env.MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT,
+    );
     parsed = PlanningContextRequest.parse(planningOptimization.parsed);
 
     let out: any;
@@ -623,6 +644,13 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const observability = buildRecallObservability({
       timings,
       inflight_wait_ms: gate.wait_ms,
+      explicit_mode: {
+        mode: explicitMode.mode,
+        profile: explicitMode.profile,
+        applied: explicitMode.applied,
+        reason: explicitMode.reason,
+        source: explicitMode.source,
+      },
       adaptive_profile: {
         profile: adaptiveProfile.profile,
         applied: adaptiveProfile.applied,
@@ -662,10 +690,16 @@ export function registerMemoryContextRuntimeRoutes(args: {
           context_token_budget: recallParsed.context_token_budget ?? null,
           context_char_budget: recallParsed.context_char_budget ?? null,
           context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
-          context_optimization_profile: parsed.context_optimization_profile ?? null,
+          context_optimization_profile: planningOptimization.optimization_profile.requested,
+          context_optimization_profile_source: planningOptimization.optimization_profile.source,
           context_budget_default_applied: contextBudgetDefaultApplied,
           profile: adaptiveProfile.profile,
           profile_source: baseProfile.source,
+          recall_mode: explicitMode.mode,
+          recall_mode_profile: explicitMode.profile,
+          recall_mode_applied: explicitMode.applied,
+          recall_mode_reason: explicitMode.reason,
+          recall_mode_source: explicitMode.source,
           class_aware_profile: classAwareProfile.profile,
           class_aware_enabled: classAwareProfile.enabled,
           class_aware_applied: classAwareProfile.applied,
@@ -706,7 +740,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       context_token_budget: recallParsed.context_token_budget ?? null,
       context_char_budget: recallParsed.context_char_budget ?? null,
       context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
-      context_optimization_profile: parsed.context_optimization_profile ?? null,
+      context_optimization_profile: planningOptimization.optimization_profile.requested,
     });
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     try {
@@ -750,9 +784,10 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const bodyRaw = withIdentityFromRequest(req, req.body, principal, "context_assemble");
     const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
     const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
-    const classAwareProfile = resolveClassAwareRecallProfile("context_assemble", bodyRaw, baseProfile.profile, explicitRecallKnobs);
+    const explicitMode = resolveExplicitRecallMode(bodyRaw, baseProfile.profile, explicitRecallKnobs);
+    const classAwareProfile = resolveClassAwareRecallProfile("context_assemble", bodyRaw, explicitMode.profile, explicitRecallKnobs);
     let body = withRecallProfileDefaults(bodyRaw, classAwareProfile.defaults);
-    const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs);
+    const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs || explicitMode.mode !== null);
     if (strategyResolution.applied) {
       body = {
         ...body,
@@ -792,7 +827,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     let embedBatchSize = 1;
     let recallParsed: any;
     const gate = await acquireInflightSlot("recall");
-    const adaptiveProfile = resolveAdaptiveRecallProfile(classAwareProfile.profile, gate.wait_ms, explicitRecallKnobs);
+    const adaptiveProfile = resolveAdaptiveRecallProfile(classAwareProfile.profile, gate.wait_ms, explicitRecallKnobs || explicitMode.mode !== null);
     if (adaptiveProfile.applied) {
       parsed = ContextAssembleRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
     }
@@ -812,7 +847,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
     if (adaptiveHardCap.applied) {
       parsed = ContextAssembleRequest.parse({ ...(parsed as any), ...adaptiveHardCap.defaults });
     }
-    const assembleOptimization = applyContextOptimizationProfile(parsed);
+    const assembleOptimization = applyContextOptimizationProfile(
+      parsed,
+      env.MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT === "off"
+        ? null
+        : env.MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT,
+    );
     parsed = ContextAssembleRequest.parse(assembleOptimization.parsed);
 
     let out: any;
@@ -971,6 +1011,13 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const observability = buildRecallObservability({
       timings,
       inflight_wait_ms: gate.wait_ms,
+      explicit_mode: {
+        mode: explicitMode.mode,
+        profile: explicitMode.profile,
+        applied: explicitMode.applied,
+        reason: explicitMode.reason,
+        source: explicitMode.source,
+      },
       adaptive_profile: {
         profile: adaptiveProfile.profile,
         applied: adaptiveProfile.applied,
@@ -1015,7 +1062,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       context_token_budget: recallParsed.context_token_budget ?? null,
       context_char_budget: recallParsed.context_char_budget ?? null,
       context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
-      context_optimization_profile: parsed.context_optimization_profile ?? null,
+      context_optimization_profile: assembleOptimization.optimization_profile.requested,
     });
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     try {
@@ -1053,10 +1100,16 @@ export function registerMemoryContextRuntimeRoutes(args: {
           context_token_budget: recallParsed.context_token_budget ?? null,
           context_char_budget: recallParsed.context_char_budget ?? null,
           context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
-          context_optimization_profile: parsed.context_optimization_profile ?? null,
+          context_optimization_profile: assembleOptimization.optimization_profile.requested,
+          context_optimization_profile_source: assembleOptimization.optimization_profile.source,
           context_budget_default_applied: contextBudgetDefaultApplied,
           profile: adaptiveProfile.profile,
           profile_source: baseProfile.source,
+          recall_mode: explicitMode.mode,
+          recall_mode_profile: explicitMode.profile,
+          recall_mode_applied: explicitMode.applied,
+          recall_mode_reason: explicitMode.reason,
+          recall_mode_source: explicitMode.source,
           class_aware_profile: classAwareProfile.profile,
           class_aware_enabled: classAwareProfile.enabled,
           class_aware_applied: classAwareProfile.applied,
