@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { randomUUID } from "node:crypto";
 import type { Env } from "../config.js";
 import { assertRecallStoreAccessContract } from "../store/recall-access.js";
+import { assertReplayStoreAccessContract } from "../store/replay-access.js";
 import { assertWriteStoreAccessContract } from "../store/write-access.js";
 
 type StoreLike = {
@@ -26,10 +27,12 @@ export function registerBootstrapLifecycle(args: {
   app: any;
   store: StoreLike;
   sandboxExecutor: { shutdown: () => void };
+  liteReplayStore?: { close: () => Promise<void> } | null;
 }) {
-  const { app, store, sandboxExecutor } = args;
+  const { app, store, sandboxExecutor, liteReplayStore } = args;
   app.addHook("onClose", async () => {
     sandboxExecutor.shutdown();
+    if (liteReplayStore) await liteReplayStore.close();
     await store.close();
   });
 }
@@ -37,11 +40,13 @@ export function registerBootstrapLifecycle(args: {
 export async function assertBootstrapStoreContracts(args: {
   store: StoreLike;
   recallAccessForClient: (client: any) => any;
+  replayAccessForClient: (client: any) => any;
   writeAccessForClient: (client: any) => any;
 }) {
-  const { store, recallAccessForClient, writeAccessForClient } = args;
+  const { store, recallAccessForClient, replayAccessForClient, writeAccessForClient } = args;
   await store.withClient(async (client) => {
     assertRecallStoreAccessContract(recallAccessForClient(client));
+    assertReplayStoreAccessContract(replayAccessForClient(client));
     assertWriteStoreAccessContract(writeAccessForClient(client));
   });
 }

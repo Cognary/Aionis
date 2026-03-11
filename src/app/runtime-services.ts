@@ -13,6 +13,8 @@ import {
   createPostgresRecallStoreAccess,
   type RecallStoreCapabilities,
 } from "../store/recall-access.js";
+import { createPostgresReplayStoreAccess } from "../store/replay-access.js";
+import { createLiteReplayStore } from "../store/lite-replay-store.js";
 import { createEmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import {
   asPostgresMemoryStore,
@@ -149,6 +151,10 @@ export async function createRuntimeServices(env: Env) {
   if (embeddedRuntime) {
     await embeddedRuntime.loadSnapshot();
   }
+  const liteReplayStore = env.AIONIS_EDITION === "lite"
+    ? createLiteReplayStore(env.LITE_REPLAY_SQLITE_PATH)
+    : null;
+  const liteReplayAccess = liteReplayStore?.createReplayAccess() ?? null;
 
   const embedder = createEmbeddingProviderFromEnv(process.env);
   const sandboxExecutor = new SandboxExecutor(store, {
@@ -210,6 +216,10 @@ export async function createRuntimeServices(env: Env) {
     return createPostgresWriteStoreAccess(client, {
       capabilities: writeStoreCapabilities,
     });
+  };
+  const replayAccessForClient = (client: any) => {
+    if (liteReplayAccess) return liteReplayAccess;
+    return createPostgresReplayStoreAccess(client);
   };
   const requireStoreFeatureCapability = (capability: keyof typeof storeFeatureCapabilities): void => {
     if (storeFeatureCapabilities[capability]) return;
@@ -333,6 +343,8 @@ export async function createRuntimeServices(env: Env) {
     store,
     db,
     embeddedRuntime,
+    liteReplayStore,
+    liteReplayAccess,
     embedder,
     sandboxExecutor,
     authResolver,
@@ -341,6 +353,7 @@ export async function createRuntimeServices(env: Env) {
     writeStoreCapabilities,
     storeFeatureCapabilities,
     recallAccessForClient,
+    replayAccessForClient,
     writeAccessForClient,
     requireStoreFeatureCapability,
     recallLimiter,

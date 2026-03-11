@@ -633,11 +633,26 @@ export type MemoryWriteResponse = {
 
 export type HealthResponse = {
   ok: boolean;
+  aionis_edition?: "server" | "lite";
+  recall_store_access_capability_version?: number;
+  replay_store_access_capability_version?: number;
+  write_store_access_capability_version?: number;
   memory_store_backend?: string;
   memory_store_recall_capabilities?: Record<string, boolean>;
   memory_store_write_capabilities?: Record<string, boolean>;
   memory_store_feature_capabilities?: Record<string, boolean>;
   memory_store_capability_contract?: Record<string, CapabilityContractSpec>;
+  lite_route_matrix?: {
+    kernel_required_routes?: string[];
+    optional_routes?: string[];
+    server_only_route_groups?: Array<{
+      group: string;
+      prefixes: string[];
+      reason: string;
+      [k: string]: unknown;
+    }>;
+    [k: string]: unknown;
+  } | null;
   [k: string]: unknown;
 };
 

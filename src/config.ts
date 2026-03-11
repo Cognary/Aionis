@@ -2,6 +2,7 @@ import { isIP } from "node:net";
 import { z } from "zod";
 
 const RuntimeModeSchema = z.enum(["local", "service", "cloud"]);
+const EditionSchema = z.enum(["server", "lite"]);
 const AbstractionPolicyProfileSchema = z.enum(["conservative", "balanced", "aggressive"]);
 
 function sandboxRemoteHostAllowed(hostname: string, allowlist: string[]): boolean {
@@ -112,6 +113,7 @@ function parseSandboxAllowedCommandsJson(raw: string): string[] {
 
 const EnvSchema = z.object({
   AIONIS_MODE: RuntimeModeSchema.default("local"),
+  AIONIS_EDITION: EditionSchema.default("server"),
   APP_ENV: z.enum(["dev", "ci", "prod"]).default("dev"),
   TRUST_PROXY: z
     .string()
@@ -185,6 +187,7 @@ const EnvSchema = z.object({
     .transform((v) => (v ?? "true").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  LITE_REPLAY_SQLITE_PATH: z.string().default(".tmp/aionis-lite-replay.sqlite"),
   DB_POOL_MAX: z.coerce.number().int().positive().max(200).default(30),
   DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   DB_POOL_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),

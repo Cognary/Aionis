@@ -90,12 +90,19 @@ import {
   createPostgresRecallStoreAccess,
 } from "../store/recall-access.js";
 import {
+  REPLAY_STORE_ACCESS_CAPABILITY_VERSION,
+  assertReplayStoreAccessContract,
+  createPostgresReplayStoreAccess,
+} from "../store/replay-access.js";
+import { createLiteReplayStore } from "../store/lite-replay-store.js";
+import {
   WRITE_STORE_ACCESS_CAPABILITY_VERSION,
   assertWriteStoreAccessContract,
   createPostgresWriteStoreAccess,
 } from "../store/write-access.js";
 import { asPostgresMemoryStore, createMemoryStore } from "../store/memory-store.js";
 import { createEmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import { applyReplayMemoryWrite } from "../memory/replay-write.js";
 
 type QueryResult<T> = { rows: T[]; rowCount: number };
 
@@ -888,6 +895,120 @@ class RecallAccessFixturePgClient {
   }
 }
 
+class ReplayAccessFixturePgClient {
+  readonly queries: Array<{ sql: string; params: any[] | undefined }> = [];
+
+  async query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+    this.queries.push({ sql: s, params });
+
+    if (s.includes("slots->>'replay_kind' = 'run'") && s.includes("slots->>'run_id' = $2")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000000a01",
+            type: "event",
+            title: "run",
+            text_summary: "run",
+            slots: { replay_kind: "run", run_id: "run-1" },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-000000000ac1",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("AND id = $2") && s.includes("slots->>'replay_kind' = 'step'")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000000a02",
+            type: "procedure",
+            title: "step",
+            text_summary: "step",
+            slots: { replay_kind: "step", step_id: "step-1" },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-000000000ac2",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("slots->>'run_id' = $2") && s.includes("slots->>'step_index' = $3")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000000a03",
+            type: "procedure",
+            title: "step-index",
+            text_summary: "step-index",
+            slots: { replay_kind: "step", step_id: "step-2", step_index: 2 },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-000000000ac3",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("slots ? 'replay_kind'") && s.includes("slots->>'run_id' = $2")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000000a01",
+            type: "event",
+            title: "run",
+            text_summary: "run",
+            slots: { replay_kind: "run", run_id: "run-1" },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-000000000ac1",
+          } as any,
+          {
+            id: "00000000-0000-0000-0000-000000000a02",
+            type: "procedure",
+            title: "step",
+            text_summary: "step",
+            slots: { replay_kind: "step", run_id: "run-1", step_id: "step-1" },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-000000000ac2",
+          } as any,
+        ] as T[],
+        rowCount: 2,
+      };
+    }
+
+    if (s.includes("slots->>'replay_kind' = 'playbook'") && s.includes("slots->>'playbook_id' = $2")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-000000000a04",
+            type: "procedure",
+            title: "playbook",
+            text_summary: "playbook",
+            slots: { replay_kind: "playbook", playbook_id: "pb-1", version: 2, status: "active" },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            commit_id: "00000000-0000-0000-0000-000000000ac4",
+            version_num: 2,
+            playbook_status: "active",
+            playbook_id: "pb-1",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    throw new Error(`ReplayAccessFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
 class WriteAccessFixturePgClient {
   readonly queries: Array<{ sql: string; params: any[] | undefined }> = [];
   private readonly throwEnsureScope: boolean;
@@ -1185,6 +1306,7 @@ async function run() {
       MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: "lite",
       MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT: "balanced",
       MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT: "aggressive",
+      AIONIS_EDITION: "lite",
       MEMORY_RECALL_PROFILE_POLICY_JSON: JSON.stringify({
         endpoint: { recall: "lite", recall_text: "strict_edges" },
         tenant_default: { tenant_lite: "lite" },
@@ -1200,6 +1322,7 @@ async function run() {
       assert.equal(env.MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE, "lite");
       assert.equal(env.MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT, "balanced");
       assert.equal(env.MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT, "aggressive");
+      assert.equal(env.AIONIS_EDITION, "lite");
     },
   );
   await withEnv(
@@ -1444,6 +1567,29 @@ async function run() {
     /audit_insert must be boolean/,
   );
 
+  const replayAccessOk = {
+    capability_version: REPLAY_STORE_ACCESS_CAPABILITY_VERSION,
+    findRunNodeByRunId: async () => null,
+    findStepNodeById: async () => null,
+    findLatestStepNodeByIndex: async () => null,
+    listReplayNodesByRunId: async () => [],
+    listReplayPlaybookVersions: async () => [],
+    getReplayPlaybookVersion: async () => null,
+  };
+  assert.doesNotThrow(() => assertReplayStoreAccessContract(replayAccessOk as any));
+  assert.throws(
+    () =>
+      assertReplayStoreAccessContract({
+        ...replayAccessOk,
+        capability_version: REPLAY_STORE_ACCESS_CAPABILITY_VERSION + 1,
+      } as any),
+    /capability version mismatch/,
+  );
+  assert.throws(
+    () => assertReplayStoreAccessContract({ capability_version: REPLAY_STORE_ACCESS_CAPABILITY_VERSION } as any),
+    /missing required method/,
+  );
+
   const writeAccessOk = {
     capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     capabilities: { shadow_mirror_v2: true },
@@ -1586,6 +1732,104 @@ async function run() {
     recallAccessFixture.queries.some((q) => q.sql.includes("INSERT INTO memory_recall_audit")),
     "recall adapter should execute audit insert query",
   );
+
+  const replayAccessFixture = new ReplayAccessFixturePgClient();
+  const replayAdapter = createPostgresReplayStoreAccess(replayAccessFixture as any);
+  assert.doesNotThrow(() => assertReplayStoreAccessContract(replayAdapter));
+  assert.equal((await replayAdapter.findRunNodeByRunId("default", "run-1"))?.id, "00000000-0000-0000-0000-000000000a01");
+  assert.equal((await replayAdapter.findStepNodeById("default", "step-1"))?.id, "00000000-0000-0000-0000-000000000a02");
+  assert.equal((await replayAdapter.findLatestStepNodeByIndex("default", "run-1", 2))?.id, "00000000-0000-0000-0000-000000000a03");
+  assert.equal((await replayAdapter.listReplayNodesByRunId("default", "run-1")).length, 2);
+  assert.equal((await replayAdapter.listReplayPlaybookVersions("default", "pb-1"))[0]?.version_num, 2);
+  assert.equal((await replayAdapter.getReplayPlaybookVersion("default", "pb-1", 2))?.playbook_status, "active");
+
+  const liteReplayDir = await fs.mkdtemp(path.join(os.tmpdir(), "aionis-lite-replay-"));
+  const liteReplayPath = path.join(liteReplayDir, "replay.sqlite");
+  const liteReplayStore = createLiteReplayStore(liteReplayPath);
+  const liteReplayAccess = liteReplayStore.createReplayAccess();
+  assert.doesNotThrow(() => assertReplayStoreAccessContract(liteReplayAccess));
+  await liteReplayStore.upsertReplayNodes([
+    {
+      node_id: "00000000-0000-0000-0000-000000000b01",
+      scope: "default",
+      replay_kind: "run",
+      run_id: "run-lite",
+      step_id: null,
+      step_index: null,
+      playbook_id: null,
+      version_num: null,
+      playbook_status: null,
+      node_type: "event",
+      title: "lite run",
+      text_summary: "lite run",
+      slots_json: JSON.stringify({ replay_kind: "run", run_id: "run-lite", goal: "demo" }),
+      created_at: "2026-03-11T00:00:00.000Z",
+      updated_at: "2026-03-11T00:00:00.000Z",
+      commit_id: "00000000-0000-0000-0000-000000000bc1",
+    },
+    {
+      node_id: "00000000-0000-0000-0000-000000000b02",
+      scope: "default",
+      replay_kind: "playbook",
+      run_id: null,
+      step_id: null,
+      step_index: null,
+      playbook_id: "pb-lite",
+      version_num: 3,
+      playbook_status: "active",
+      node_type: "procedure",
+      title: "lite playbook",
+      text_summary: "lite playbook",
+      slots_json: JSON.stringify({ replay_kind: "playbook", playbook_id: "pb-lite", version: 3, status: "active" }),
+      created_at: "2026-03-11T00:00:01.000Z",
+      updated_at: "2026-03-11T00:00:01.000Z",
+      commit_id: "00000000-0000-0000-0000-000000000bc2",
+    },
+  ]);
+  assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite"))?.title, "lite run");
+  assert.equal((await liteReplayAccess.listReplayPlaybookVersions("default", "pb-lite"))[0]?.version_num, 3);
+
+  const replayWriteFixture = new WriteAccessFixturePgClient();
+  await applyReplayMemoryWrite(
+    replayWriteFixture as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      actor: "tester",
+      input_text: "start replay run",
+      auto_embed: false,
+      nodes: [
+        {
+          client_id: "replay:run:run-lite-helper",
+          type: "event",
+          title: "Replay Run",
+          text_summary: "Replay run helper",
+          slots: {
+            replay_kind: "run",
+            run_id: "run-lite-helper",
+            goal: "helper",
+            status: "started",
+          },
+        },
+      ],
+      edges: [],
+    },
+    {
+      defaultScope: "default",
+      defaultTenantId: "default",
+      maxTextLen: 4096,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      writeAccessShadowMirrorV2: true,
+      embedder: null,
+      replayMirror: liteReplayStore,
+    },
+  );
+  assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite-helper"))?.text_summary, "Replay run helper");
+  await liteReplayStore.close();
+  await fs.rm(liteReplayDir, { recursive: true, force: true });
 
   const writeAccessFixture = new WriteAccessFixturePgClient({ throwEnsureScope: true });
   const writeAdapter = createPostgresWriteStoreAccess(writeAccessFixture as any);

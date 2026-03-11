@@ -133,6 +133,8 @@ export function createReplayRuntimeOptionBuilders(args: {
   store: StoreLike;
   embedder: any;
   embeddedRuntime: any;
+  liteReplayAccess?: any;
+  liteReplayStore?: any;
   sandboxAllowedCommands: any;
   sandboxExecutor: SandboxExecutorLike;
   writeAccessShadowMirrorV2: boolean;
@@ -143,6 +145,8 @@ export function createReplayRuntimeOptionBuilders(args: {
     store,
     embedder,
     embeddedRuntime,
+    liteReplayAccess,
+    liteReplayStore,
     sandboxAllowedCommands,
     sandboxExecutor,
     writeAccessShadowMirrorV2,
@@ -161,6 +165,8 @@ export function createReplayRuntimeOptionBuilders(args: {
       writeAccessShadowMirrorV2,
       embedder,
       embeddedRuntime,
+      replayAccess: liteReplayAccess,
+      replayMirror: liteReplayStore,
       localExecutor: {
         enabled: env.SANDBOX_ENABLED && env.SANDBOX_EXECUTOR_MODE === "local_process",
         mode: env.SANDBOX_ENABLED && env.SANDBOX_EXECUTOR_MODE === "local_process" ? "local_process" : "disabled",
@@ -203,6 +209,7 @@ export function createReplayRuntimeOptionBuilders(args: {
       defaultScope: env.MEMORY_SCOPE,
       defaultTenantId: env.MEMORY_TENANT_ID,
       embeddedRuntime,
+      replayAccess: liteReplayAccess,
       writeOptions: {
         defaultScope: env.MEMORY_SCOPE,
         defaultTenantId: env.MEMORY_TENANT_ID,
@@ -214,6 +221,8 @@ export function createReplayRuntimeOptionBuilders(args: {
         writeAccessShadowMirrorV2,
         embedder,
         embeddedRuntime,
+        replayAccess: liteReplayAccess,
+        replayMirror: liteReplayStore,
       },
       localExecutor: {
         enabled: env.SANDBOX_ENABLED && env.SANDBOX_EXECUTOR_MODE === "local_process",

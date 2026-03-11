@@ -27,6 +27,8 @@ export function registerMemoryReplayCoreRoutes(args: {
   store: StoreLike;
   embedder: any;
   embeddedRuntime: any;
+  liteReplayAccess?: any;
+  liteReplayStore?: any;
   writeAccessShadowMirrorV2: boolean;
   requireMemoryPrincipal: (req: any) => Promise<any>;
   withIdentityFromRequest: (req: any, body: unknown, principal: any, kind: any) => any;
@@ -41,6 +43,8 @@ export function registerMemoryReplayCoreRoutes(args: {
     store,
     embedder,
     embeddedRuntime,
+    liteReplayAccess,
+    liteReplayStore,
     writeAccessShadowMirrorV2,
     requireMemoryPrincipal,
     withIdentityFromRequest,
@@ -61,6 +65,8 @@ export function registerMemoryReplayCoreRoutes(args: {
     writeAccessShadowMirrorV2,
     embedder,
     embeddedRuntime,
+    replayAccess: liteReplayAccess ?? null,
+    replayMirror: liteReplayStore ?? null,
   };
 
   app.post("/v1/memory/replay/run/start", async (req: any, reply: any) => {
@@ -136,6 +142,7 @@ export function registerMemoryReplayCoreRoutes(args: {
           defaultScope: env.MEMORY_SCOPE,
           defaultTenantId: env.MEMORY_TENANT_ID,
           embeddedRuntime,
+          replayAccess: liteReplayAccess ?? null,
         }),
       );
     } finally {
@@ -172,6 +179,7 @@ export function registerMemoryReplayCoreRoutes(args: {
           defaultScope: env.MEMORY_SCOPE,
           defaultTenantId: env.MEMORY_TENANT_ID,
           embeddedRuntime,
+          replayAccess: liteReplayAccess ?? null,
         }),
       );
     } finally {
@@ -193,6 +201,7 @@ export function registerMemoryReplayCoreRoutes(args: {
           defaultScope: env.MEMORY_SCOPE,
           defaultTenantId: env.MEMORY_TENANT_ID,
           embeddedRuntime,
+          replayAccess: liteReplayAccess ?? null,
         }),
       );
     } finally {

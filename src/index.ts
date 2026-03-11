@@ -34,6 +34,8 @@ const {
   store,
   db,
   embeddedRuntime,
+  liteReplayStore,
+  liteReplayAccess,
   embedder,
   sandboxExecutor,
   authResolver,
@@ -42,6 +44,7 @@ const {
   writeStoreCapabilities,
   storeFeatureCapabilities,
   recallAccessForClient,
+  replayAccessForClient,
   writeAccessForClient,
   requireStoreFeatureCapability,
   recallLimiter,
@@ -134,6 +137,8 @@ const {
   store,
   embedder,
   embeddedRuntime,
+  liteReplayAccess,
+  liteReplayStore,
   sandboxAllowedCommands,
   sandboxExecutor,
   writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
@@ -207,6 +212,8 @@ registerApplicationRoutes({
   store,
   embedder,
   embeddedRuntime,
+  liteReplayAccess,
+  liteReplayStore,
   recallTextEmbedBatcher,
   recallAccessForClient,
   writeStoreCapabilities,
@@ -259,11 +266,13 @@ registerBootstrapLifecycle({
   app,
   store,
   sandboxExecutor,
+  liteReplayStore,
 });
 
 await assertBootstrapStoreContracts({
   store,
   recallAccessForClient,
+  replayAccessForClient,
   writeAccessForClient,
 });
 

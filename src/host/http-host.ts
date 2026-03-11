@@ -6,6 +6,9 @@ import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
 } from "../store/recall-access.js";
 import {
+  REPLAY_STORE_ACCESS_CAPABILITY_VERSION,
+} from "../store/replay-access.js";
+import {
   WRITE_STORE_ACCESS_CAPABILITY_VERSION,
 } from "../store/write-access.js";
 import { registerAdminControlAlertRoutes } from "../routes/admin-control-alerts.js";
@@ -22,6 +25,7 @@ import { registerMemoryReplayCoreRoutes } from "../routes/memory-replay-core.js"
 import { registerMemoryReplayGovernedRoutes } from "../routes/memory-replay-governed.js";
 import { registerMemorySandboxRoutes } from "../routes/memory-sandbox.js";
 import { registerMemoryWriteRoutes } from "../routes/memory-write.js";
+import { buildLiteRouteMatrix, registerLiteServerOnlyRoutes } from "./lite-edition.js";
 import { HttpError } from "../util/http.js";
 
 export function registerHostErrorHandler(app: any) {
@@ -74,6 +78,7 @@ export function logMemoryApiConfig(args: {
   app.log.info(
     {
       aionis_mode: env.AIONIS_MODE,
+      aionis_edition: env.AIONIS_EDITION,
       app_env: env.APP_ENV,
       embedding_provider: embedder?.name ?? "none",
       embedding_dim: embedder?.dim ?? null,
@@ -102,6 +107,7 @@ export function logMemoryApiConfig(args: {
       memory_store_feature_capabilities: storeFeatureCapabilities,
       memory_store_capability_contract: CAPABILITY_CONTRACT,
       recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
+      replay_store_access_capability_version: REPLAY_STORE_ACCESS_CAPABILITY_VERSION,
       write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
       trust_proxy: env.TRUST_PROXY,
       cors_memory_allow_origins: process.env.CORS_ALLOW_ORIGINS ?? (env.APP_ENV === "prod" ? "" : "*"),
@@ -271,6 +277,7 @@ export function registerHealthRoute(args: {
 
   app.get("/health", async () => ({
     ok: true,
+    aionis_edition: env.AIONIS_EDITION,
     database_target_hash: healthDatabaseTargetHash,
     memory_store_backend: env.MEMORY_STORE_BACKEND,
     memory_store_embedded_experimental_enabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
@@ -296,6 +303,7 @@ export function registerHealthRoute(args: {
     memory_store_feature_capabilities: storeFeatureCapabilities,
     memory_store_capability_contract: CAPABILITY_CONTRACT,
     recall_store_access_capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
+    replay_store_access_capability_version: REPLAY_STORE_ACCESS_CAPABILITY_VERSION,
     write_store_access_capability_version: WRITE_STORE_ACCESS_CAPABILITY_VERSION,
     sandbox: sandboxExecutor.healthSnapshot(),
     sandbox_tenant_budget_window_hours: env.SANDBOX_TENANT_BUDGET_WINDOW_HOURS,
@@ -303,6 +311,7 @@ export function registerHealthRoute(args: {
     sandbox_remote_egress_cidr_count: sandboxRemoteAllowedCidrs.size,
     sandbox_remote_deny_private_ips: env.SANDBOX_REMOTE_EXECUTOR_EGRESS_DENY_PRIVATE_IPS,
     sandbox_artifact_object_store_base_uri_configured: !!env.SANDBOX_ARTIFACT_OBJECT_STORE_BASE_URI.trim(),
+    lite_route_matrix: env.AIONIS_EDITION === "lite" ? buildLiteRouteMatrix() : null,
   }));
 }
 
@@ -314,6 +323,8 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     store,
     embedder,
     embeddedRuntime,
+    liteReplayAccess,
+    liteReplayStore,
     recallTextEmbedBatcher,
     recallAccessForClient,
     writeStoreCapabilities,
@@ -362,44 +373,48 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     deleteSandboxProjectBudgetProfile,
   } = args;
 
-  registerAdminControlEntityRoutes({
-    app,
-    db,
-    requireAdminToken,
-    emitControlAudit,
-  });
+  if (env.AIONIS_EDITION === "lite") {
+    registerLiteServerOnlyRoutes(app);
+  } else {
+    registerAdminControlEntityRoutes({
+      app,
+      db,
+      requireAdminToken,
+      emitControlAudit,
+    });
 
-  registerAdminControlAlertRoutes({
-    app,
-    db,
-    env,
-    store,
-    requireAdminToken,
-    emitControlAudit,
-  });
+    registerAdminControlAlertRoutes({
+      app,
+      db,
+      env,
+      store,
+      requireAdminToken,
+      emitControlAudit,
+    });
 
-  registerAdminControlConfigRoutes({
-    app,
-    db,
-    requireAdminToken,
-    emitControlAudit,
-    tenantQuotaResolver,
-    listSandboxBudgetProfiles,
-    getSandboxBudgetProfile,
-    upsertSandboxBudgetProfile,
-    deleteSandboxBudgetProfile,
-    listSandboxProjectBudgetProfiles,
-    getSandboxProjectBudgetProfile,
-    upsertSandboxProjectBudgetProfile,
-    deleteSandboxProjectBudgetProfile,
-  });
+    registerAdminControlConfigRoutes({
+      app,
+      db,
+      requireAdminToken,
+      emitControlAudit,
+      tenantQuotaResolver,
+      listSandboxBudgetProfiles,
+      getSandboxBudgetProfile,
+      upsertSandboxBudgetProfile,
+      deleteSandboxBudgetProfile,
+      listSandboxProjectBudgetProfiles,
+      getSandboxProjectBudgetProfile,
+      upsertSandboxProjectBudgetProfile,
+      deleteSandboxProjectBudgetProfile,
+    });
 
-  registerAdminControlDashboardRoutes({
-    app,
-    db,
-    env,
-    requireAdminToken,
-  });
+    registerAdminControlDashboardRoutes({
+      app,
+      db,
+      env,
+      requireAdminToken,
+    });
+  }
 
   registerMemoryWriteRoutes({
     app,
@@ -519,6 +534,8 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     store,
     embedder,
     embeddedRuntime,
+    liteReplayAccess,
+    liteReplayStore,
     writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
     requireMemoryPrincipal,
     withIdentityFromRequest,
@@ -542,19 +559,21 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     buildReplayPlaybookRunOptions: buildAutomationReplayRunOptions,
   });
 
-  registerAutomationRoutes({
-    app,
-    env,
-    store,
-    requireMemoryPrincipal,
-    withIdentityFromRequest,
-    enforceRateLimit,
-    enforceTenantQuota,
-    tenantFromBody,
-    acquireInflightSlot,
-    buildAutomationReplayRunOptions,
-    buildAutomationTestHook,
-  });
+  if (env.AIONIS_EDITION !== "lite") {
+    registerAutomationRoutes({
+      app,
+      env,
+      store,
+      requireMemoryPrincipal,
+      withIdentityFromRequest,
+      enforceRateLimit,
+      enforceTenantQuota,
+      tenantFromBody,
+      acquireInflightSlot,
+      buildAutomationReplayRunOptions,
+      buildAutomationTestHook,
+    });
+  }
 
   registerMemorySandboxRoutes({
     app,
