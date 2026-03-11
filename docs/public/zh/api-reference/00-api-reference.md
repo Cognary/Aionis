@@ -47,6 +47,7 @@ Memory 路由使用以下任一方式：
    - 每层 `forgotten_count`
    - `layered_context.static_injection`
    方便调用方知道哪些内容被主动排除、哪些静态块被选中。
+5. `recall_text`、`planning/context` 和 `context/assemble` 还支持实验性 `recall_class_aware=true|false`，方便调用方按请求显式打开或关闭 class-aware recall selector，做策略评估时不必起两套服务。
 
 ### 策略与执行闭环
 

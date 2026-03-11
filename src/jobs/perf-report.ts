@@ -142,6 +142,50 @@ type BenchmarkJson = {
         }
       >
     >;
+    selector_compare?: {
+      enabled: boolean;
+      params?: {
+        samples_per_query?: number;
+        query_texts?: string[];
+        query_classes?: string[];
+        modes?: string[];
+      };
+      overall_modes?: Record<
+        string,
+        {
+          samples: number;
+          transport_error_count: number;
+          status_counts: Record<string, number>;
+          recall_latency_ms: { mean: number; p50: number; p95: number; min: number; max: number };
+          stage1_candidates_ann_ms: { mean: number; p50: number; p95: number; min: number; max: number };
+          ann_seed_count: { mean: number; p50: number; p95: number; min: number; max: number };
+          final_seed_count: { mean: number; p50: number; p95: number; min: number; max: number };
+          result_nodes: { mean: number; p50: number; p95: number; min: number; max: number };
+          result_edges: { mean: number; p50: number; p95: number; min: number; max: number };
+          selected_profile_frequency?: Record<string, number>;
+          class_aware_applied_ratio?: number;
+        }
+      >;
+      per_class_modes?: Record<
+        string,
+        Record<
+          string,
+          {
+            samples: number;
+            transport_error_count: number;
+            status_counts: Record<string, number>;
+            recall_latency_ms: { mean: number; p50: number; p95: number; min: number; max: number };
+            stage1_candidates_ann_ms: { mean: number; p50: number; p95: number; min: number; max: number };
+            ann_seed_count: { mean: number; p50: number; p95: number; min: number; max: number };
+            final_seed_count: { mean: number; p50: number; p95: number; min: number; max: number };
+            result_nodes: { mean: number; p50: number; p95: number; min: number; max: number };
+            result_edges: { mean: number; p50: number; p95: number; min: number; max: number };
+            selected_profile_frequency?: Record<string, number>;
+            class_aware_applied_ratio?: number;
+          }
+        >
+      >;
+    };
   } | null;
 };
 
@@ -527,6 +571,30 @@ async function main() {
           annLines.push(
             `    - ${profile}: recall p95=${round(profileOut.recall_latency_ms.p95)} ms; stage1_ann p95=${round(profileOut.stage1_candidates_ann_ms.p95)} ms; ann_seed_count p95=${round(profileOut.ann_seed_count.p95, 3)}; final_seed_count p95=${round(profileOut.final_seed_count.p95, 3)}; result_nodes mean=${round(profileOut.result_nodes.mean, 3)}; result_edges mean=${round(profileOut.result_edges.mean, 3)}`,
           );
+        }
+      }
+      if (ann.selector_compare?.enabled) {
+        annLines.push("  - selector_compare");
+        for (const [mode, modeOut] of Object.entries(ann.selector_compare.overall_modes ?? {}).sort((a, b) => a[0].localeCompare(b[0]))) {
+          const selectedProfiles = Object.entries(modeOut.selected_profile_frequency ?? {})
+            .sort((a, b) => b[1] - a[1])
+            .map(([profile, count]) => `${profile}:${count}`)
+            .join(", ");
+          annLines.push(
+            `    - ${mode}: recall p95=${round(modeOut.recall_latency_ms.p95)} ms; stage1_ann p95=${round(modeOut.stage1_candidates_ann_ms.p95)} ms; ann_seed_count p95=${round(modeOut.ann_seed_count.p95, 3)}; final_seed_count p95=${round(modeOut.final_seed_count.p95, 3)}; result_nodes mean=${round(modeOut.result_nodes.mean, 3)}; result_edges mean=${round(modeOut.result_edges.mean, 3)}; applied_ratio=${round(Number(modeOut.class_aware_applied_ratio ?? 0), 3)}; selected_profiles=${selectedProfiles || "none"}`,
+          );
+        }
+        for (const [queryClass, modes] of Object.entries(ann.selector_compare.per_class_modes ?? {}).sort((a, b) => a[0].localeCompare(b[0]))) {
+          annLines.push(`    - selector_class=\`${queryClass}\``);
+          for (const [mode, modeOut] of Object.entries(modes).sort((a, b) => a[0].localeCompare(b[0]))) {
+            const selectedProfiles = Object.entries(modeOut.selected_profile_frequency ?? {})
+              .sort((a, b) => b[1] - a[1])
+              .map(([profile, count]) => `${profile}:${count}`)
+              .join(", ");
+            annLines.push(
+              `      - ${mode}: recall p95=${round(modeOut.recall_latency_ms.p95)} ms; stage1_ann p95=${round(modeOut.stage1_candidates_ann_ms.p95)} ms; ann_seed_count p95=${round(modeOut.ann_seed_count.p95, 3)}; final_seed_count p95=${round(modeOut.final_seed_count.p95, 3)}; result_nodes mean=${round(modeOut.result_nodes.mean, 3)}; result_edges mean=${round(modeOut.result_edges.mean, 3)}; applied_ratio=${round(Number(modeOut.class_aware_applied_ratio ?? 0), 3)}; selected_profiles=${selectedProfiles || "none"}`,
+            );
+          }
         }
       }
     }

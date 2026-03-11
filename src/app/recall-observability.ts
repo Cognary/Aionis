@@ -98,6 +98,15 @@ export function buildRecallObservability(args: {
   inflight_wait_ms: number;
   adaptive_profile: { profile: string; applied: boolean; reason: string };
   adaptive_hard_cap: { applied: boolean; reason: string };
+  class_aware?: {
+    workload_class?: string | null;
+    profile?: string;
+    applied?: boolean;
+    reason?: string;
+    signals?: string[];
+    enabled?: boolean;
+    source?: string;
+  } | null;
   stage1?: {
     mode?: "ann" | "exact_fallback";
     ann_seed_count?: number;
@@ -122,6 +131,17 @@ export function buildRecallObservability(args: {
     stage_timings_ms: stageTimings,
     inflight_wait_ms: args.inflight_wait_ms,
     adaptive: {
+      class_aware: args.class_aware
+        ? {
+            workload_class: args.class_aware.workload_class ?? null,
+            profile: args.class_aware.profile ?? null,
+            applied: args.class_aware.applied ?? false,
+            reason: args.class_aware.reason ?? "unknown",
+            signals: Array.isArray(args.class_aware.signals) ? args.class_aware.signals : [],
+            enabled: args.class_aware.enabled ?? false,
+            source: args.class_aware.source ?? "unknown",
+          }
+        : null,
       profile: {
         profile: args.adaptive_profile.profile,
         applied: args.adaptive_profile.applied,

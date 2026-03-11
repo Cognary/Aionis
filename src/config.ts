@@ -285,6 +285,13 @@ const EnvSchema = z.object({
   MEMORY_RECALL_PROFILE: z.enum(["legacy", "strict_edges", "quality_first", "lite"]).default("strict_edges"),
   // Layered recall profile policy (global -> endpoint -> tenant -> tenant+endpoint), JSON object.
   MEMORY_RECALL_PROFILE_POLICY_JSON: z.string().default("{}"),
+  // Optional class-aware recall selector for text-driven recall endpoints.
+  MEMORY_RECALL_CLASS_AWARE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
   // Adaptive profile downgrade on recall queue pressure.
   MEMORY_RECALL_ADAPTIVE_DOWNGRADE_ENABLED: z
     .string()

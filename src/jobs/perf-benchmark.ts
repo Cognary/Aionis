@@ -228,6 +228,31 @@ type AnnOptimizationAggregate = {
   profiles: Record<string, AnnProfileAggregate>;
   per_query_profiles: Record<string, Record<string, AnnProfileAggregate>>;
   per_class_profiles: Record<string, Record<string, AnnProfileAggregate>>;
+  selector_compare?: AnnSelectorCompareAggregate;
+};
+
+type AnnSelectorMode = "static" | "class_aware";
+
+type AnnSelectorAggregate = AnnProfileAggregate & {
+  selected_profile_frequency: Record<string, number>;
+  class_aware_applied_ratio: number;
+};
+
+type SelectorAccumulator = AnnAccumulator & {
+  selected_profile_frequency: Record<string, number>;
+  class_aware_applied_count: number;
+};
+
+type AnnSelectorCompareAggregate = {
+  enabled: boolean;
+  params: {
+    samples_per_query: number;
+    query_texts: string[];
+    query_classes: string[];
+    modes: AnnSelectorMode[];
+  };
+  overall_modes: Record<AnnSelectorMode, AnnSelectorAggregate>;
+  per_class_modes: Record<string, Record<AnnSelectorMode, AnnSelectorAggregate>>;
 };
 
 type AnnAccumulator = {
@@ -241,6 +266,22 @@ type AnnAccumulator = {
   transport_error_count: number;
   sample_count: number;
 };
+
+function emptySelectorAccumulator(): SelectorAccumulator {
+  return {
+    status_counts: {},
+    recall_latency: [],
+    ann_stage1_latency: [],
+    ann_seed_count: [],
+    final_seed_count: [],
+    result_nodes: [],
+    result_edges: [],
+    transport_error_count: 0,
+    sample_count: 0,
+    selected_profile_frequency: {},
+    class_aware_applied_count: 0,
+  };
+}
 
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);
@@ -391,6 +432,14 @@ function summarizeAnnAccumulator(acc: AnnAccumulator): AnnProfileAggregate {
     final_seed_count: summarizeSeries(acc.final_seed_count),
     result_nodes: summarizeSeries(acc.result_nodes),
     result_edges: summarizeSeries(acc.result_edges),
+  };
+}
+
+function summarizeSelectorAccumulator(acc: SelectorAccumulator): AnnSelectorAggregate {
+  return {
+    ...summarizeAnnAccumulator(acc),
+    selected_profile_frequency: acc.selected_profile_frequency,
+    class_aware_applied_ratio: acc.sample_count > 0 ? round(acc.class_aware_applied_count / acc.sample_count, 6) : 0,
   };
 }
 
@@ -546,6 +595,8 @@ async function main() {
   const sandboxTimeout = sandboxTimeoutMs ? clampInt(Number(sandboxTimeoutMs), 1, 600000) : null;
   const annCheckRaw = (argValue("--ann-check") ?? "false").trim().toLowerCase();
   const annCheck = annCheckRaw === "true";
+  const annSelectorCheckRaw = (argValue("--ann-selector-check") ?? "false").trim().toLowerCase();
+  const annSelectorCheck = annSelectorCheckRaw === "true";
   const annSamples = clampInt(Number(argValue("--ann-samples") ?? "8"), 1, 2000);
   const annQueryTextsFallback = [
     "memory graph perf",
@@ -619,6 +670,18 @@ async function main() {
     scope,
     query_text: queryText,
     ...(recallProfileDefaults ?? {}),
+    ...(extras ?? {}),
+  });
+
+  const selectorPayload = (
+    queryText: string,
+    recallClassAware: boolean,
+    extras?: Record<string, unknown>,
+  ): Record<string, unknown> => ({
+    tenant_id: tenantId,
+    scope,
+    query_text: queryText,
+    recall_class_aware: recallClassAware,
     ...(extras ?? {}),
   });
 
@@ -1262,126 +1325,212 @@ async function main() {
   }
 
   let ann: AnnOptimizationAggregate | null = null;
-  if (annCheck) {
+  if (annCheck || annSelectorCheck) {
     const annProfilesOut: Record<string, AnnProfileAggregate> = {};
     const annPerQueryProfilesOut: Record<string, Record<string, AnnProfileAggregate>> = {};
     const annPerClassProfilesOut: Record<string, Record<string, AnnProfileAggregate>> = {};
     const annPerClassAccumulators: Record<string, Record<string, AnnAccumulator>> = {};
-    for (const profile of annProfiles) {
-      const profileDefaults = RECALL_PROFILE_DEFAULTS[profile];
-      const statusCounts: Record<string, number> = {};
-      const recallLatency: number[] = [];
-      const annStage1Latency: number[] = [];
-      const annSeedCount: number[] = [];
-      const finalSeedCount: number[] = [];
-      const resultNodes: number[] = [];
-      const resultEdges: number[] = [];
-      let transportErrorCount = 0;
-      let sampleCount = 0;
+    if (annCheck) {
+      for (const profile of annProfiles) {
+        const profileDefaults = RECALL_PROFILE_DEFAULTS[profile];
+        const statusCounts: Record<string, number> = {};
+        const recallLatency: number[] = [];
+        const annStage1Latency: number[] = [];
+        const annSeedCount: number[] = [];
+        const finalSeedCount: number[] = [];
+        const resultNodes: number[] = [];
+        const resultEdges: number[] = [];
+        let transportErrorCount = 0;
+        let sampleCount = 0;
 
-      for (const querySpec of annQuerySpecs) {
-        const queryText = querySpec.text;
-        const queryClass = querySpec.class;
-        const queryStatusCounts: Record<string, number> = {};
-        const queryRecallLatency: number[] = [];
-        const queryAnnStage1Latency: number[] = [];
-        const queryAnnSeedCount: number[] = [];
-        const queryFinalSeedCount: number[] = [];
-        const queryResultNodes: number[] = [];
-        const queryResultEdges: number[] = [];
-        let queryTransportErrorCount = 0;
-        let querySampleCount = 0;
-        for (let i = 0; i < annSamples; i += 1) {
-          if (paceMs > 0) await sleepMs(paceMs);
-          const out = await timedRequestJson(
-            "/v1/memory/recall_text",
-            recallPayload(queryText, {
-              ...profileDefaults,
-              limit: profileDefaults.limit,
-              return_debug: true,
-            }),
-          );
-          const statusKey = out.error ? `error:${out.error}` : String(out.status);
-          statusCounts[statusKey] = (statusCounts[statusKey] ?? 0) + 1;
-          queryStatusCounts[statusKey] = (queryStatusCounts[statusKey] ?? 0) + 1;
-          if (out.error) transportErrorCount += 1;
-          if (out.error) queryTransportErrorCount += 1;
-          if (!out.ok) continue;
+        for (const querySpec of annQuerySpecs) {
+          const queryText = querySpec.text;
+          const queryClass = querySpec.class;
+          const queryStatusCounts: Record<string, number> = {};
+          const queryRecallLatency: number[] = [];
+          const queryAnnStage1Latency: number[] = [];
+          const queryAnnSeedCount: number[] = [];
+          const queryFinalSeedCount: number[] = [];
+          const queryResultNodes: number[] = [];
+          const queryResultEdges: number[] = [];
+          let queryTransportErrorCount = 0;
+          let querySampleCount = 0;
+          for (let i = 0; i < annSamples; i += 1) {
+            if (paceMs > 0) await sleepMs(paceMs);
+            const out = await timedRequestJson(
+              "/v1/memory/recall_text",
+              recallPayload(queryText, {
+                ...profileDefaults,
+                limit: profileDefaults.limit,
+                return_debug: true,
+              }),
+            );
+            const statusKey = out.error ? `error:${out.error}` : String(out.status);
+            statusCounts[statusKey] = (statusCounts[statusKey] ?? 0) + 1;
+            queryStatusCounts[statusKey] = (queryStatusCounts[statusKey] ?? 0) + 1;
+            if (out.error) transportErrorCount += 1;
+            if (out.error) queryTransportErrorCount += 1;
+            if (!out.ok) continue;
 
-          sampleCount += 1;
-          querySampleCount += 1;
-          const observability = out.body?.observability ?? {};
-          const stage1 = observability.stage1 ?? {};
-          recallLatency.push(out.ms);
-          queryRecallLatency.push(out.ms);
-          annStage1Latency.push(Number(observability.stage_timings_ms?.stage1_candidates_ann_ms ?? 0));
-          queryAnnStage1Latency.push(Number(observability.stage_timings_ms?.stage1_candidates_ann_ms ?? 0));
-          annSeedCount.push(Number(stage1.ann_seed_count ?? 0));
-          queryAnnSeedCount.push(Number(stage1.ann_seed_count ?? 0));
-          finalSeedCount.push(Number(stage1.final_seed_count ?? 0));
-          queryFinalSeedCount.push(Number(stage1.final_seed_count ?? 0));
-          const nodeCount = Array.isArray(out.body?.subgraph?.nodes) ? out.body.subgraph.nodes.length : 0;
-          const edgeCount = Array.isArray(out.body?.subgraph?.edges) ? out.body.subgraph.edges.length : 0;
-          resultNodes.push(nodeCount);
-          queryResultNodes.push(nodeCount);
-          resultEdges.push(edgeCount);
-          queryResultEdges.push(edgeCount);
+            sampleCount += 1;
+            querySampleCount += 1;
+            const observability = out.body?.observability ?? {};
+            const stage1 = observability.stage1 ?? {};
+            recallLatency.push(out.ms);
+            queryRecallLatency.push(out.ms);
+            annStage1Latency.push(Number(observability.stage_timings_ms?.stage1_candidates_ann_ms ?? 0));
+            queryAnnStage1Latency.push(Number(observability.stage_timings_ms?.stage1_candidates_ann_ms ?? 0));
+            annSeedCount.push(Number(stage1.ann_seed_count ?? 0));
+            queryAnnSeedCount.push(Number(stage1.ann_seed_count ?? 0));
+            finalSeedCount.push(Number(stage1.final_seed_count ?? 0));
+            queryFinalSeedCount.push(Number(stage1.final_seed_count ?? 0));
+            const nodeCount = Array.isArray(out.body?.subgraph?.nodes) ? out.body.subgraph.nodes.length : 0;
+            const edgeCount = Array.isArray(out.body?.subgraph?.edges) ? out.body.subgraph.edges.length : 0;
+            resultNodes.push(nodeCount);
+            queryResultNodes.push(nodeCount);
+            resultEdges.push(edgeCount);
+            queryResultEdges.push(edgeCount);
+          }
+          const queryAggregate = summarizeAnnAccumulator({
+            status_counts: queryStatusCounts,
+            recall_latency: queryRecallLatency,
+            ann_stage1_latency: queryAnnStage1Latency,
+            ann_seed_count: queryAnnSeedCount,
+            final_seed_count: queryFinalSeedCount,
+            result_nodes: queryResultNodes,
+            result_edges: queryResultEdges,
+            transport_error_count: queryTransportErrorCount,
+            sample_count: querySampleCount,
+          });
+          (annPerQueryProfilesOut[queryText] ??= {})[profile] = queryAggregate;
+          const classProfileBucket = (annPerClassAccumulators[queryClass] ??= {});
+          const classAcc = (classProfileBucket[profile] ??= {
+            status_counts: {},
+            recall_latency: [],
+            ann_stage1_latency: [],
+            ann_seed_count: [],
+            final_seed_count: [],
+            result_nodes: [],
+            result_edges: [],
+            transport_error_count: 0,
+            sample_count: 0,
+          });
+          for (const [key, value] of Object.entries(queryStatusCounts)) {
+            classAcc.status_counts[key] = Number(classAcc.status_counts[key] ?? 0) + Number(value);
+          }
+          classAcc.recall_latency.push(...queryRecallLatency);
+          classAcc.ann_stage1_latency.push(...queryAnnStage1Latency);
+          classAcc.ann_seed_count.push(...queryAnnSeedCount);
+          classAcc.final_seed_count.push(...queryFinalSeedCount);
+          classAcc.result_nodes.push(...queryResultNodes);
+          classAcc.result_edges.push(...queryResultEdges);
+          classAcc.transport_error_count += queryTransportErrorCount;
+          classAcc.sample_count += querySampleCount;
         }
-        const queryAggregate = summarizeAnnAccumulator({
-          status_counts: queryStatusCounts,
-          recall_latency: queryRecallLatency,
-          ann_stage1_latency: queryAnnStage1Latency,
-          ann_seed_count: queryAnnSeedCount,
-          final_seed_count: queryFinalSeedCount,
-          result_nodes: queryResultNodes,
-          result_edges: queryResultEdges,
-          transport_error_count: queryTransportErrorCount,
-          sample_count: querySampleCount,
-        });
-        (annPerQueryProfilesOut[queryText] ??= {})[profile] = queryAggregate;
-        const classProfileBucket = (annPerClassAccumulators[queryClass] ??= {});
-        const classAcc = (classProfileBucket[profile] ??= {
-          status_counts: {},
-          recall_latency: [],
-          ann_stage1_latency: [],
-          ann_seed_count: [],
-          final_seed_count: [],
-          result_nodes: [],
-          result_edges: [],
-          transport_error_count: 0,
-          sample_count: 0,
-        });
-        for (const [key, value] of Object.entries(queryStatusCounts)) {
-          classAcc.status_counts[key] = Number(classAcc.status_counts[key] ?? 0) + Number(value);
-        }
-        classAcc.recall_latency.push(...queryRecallLatency);
-        classAcc.ann_stage1_latency.push(...queryAnnStage1Latency);
-        classAcc.ann_seed_count.push(...queryAnnSeedCount);
-        classAcc.final_seed_count.push(...queryFinalSeedCount);
-        classAcc.result_nodes.push(...queryResultNodes);
-        classAcc.result_edges.push(...queryResultEdges);
-        classAcc.transport_error_count += queryTransportErrorCount;
-        classAcc.sample_count += querySampleCount;
+
+        annProfilesOut[profile] = {
+          samples: sampleCount,
+          transport_error_count: transportErrorCount,
+          status_counts: statusCounts,
+          recall_latency_ms: summarizeSeries(recallLatency),
+          stage1_candidates_ann_ms: summarizeSeries(annStage1Latency),
+          ann_seed_count: summarizeSeries(annSeedCount),
+          final_seed_count: summarizeSeries(finalSeedCount),
+          result_nodes: summarizeSeries(resultNodes),
+          result_edges: summarizeSeries(resultEdges),
+        };
       }
-
-      annProfilesOut[profile] = {
-        samples: sampleCount,
-        transport_error_count: transportErrorCount,
-        status_counts: statusCounts,
-        recall_latency_ms: summarizeSeries(recallLatency),
-        stage1_candidates_ann_ms: summarizeSeries(annStage1Latency),
-        ann_seed_count: summarizeSeries(annSeedCount),
-        final_seed_count: summarizeSeries(finalSeedCount),
-        result_nodes: summarizeSeries(resultNodes),
-        result_edges: summarizeSeries(resultEdges),
-      };
+      for (const [queryClass, profiles] of Object.entries(annPerClassAccumulators)) {
+        const outProfiles: Record<string, AnnProfileAggregate> = {};
+        for (const [profile, acc] of Object.entries(profiles)) {
+          outProfiles[profile] = summarizeAnnAccumulator(acc);
+        }
+        annPerClassProfilesOut[queryClass] = outProfiles;
+      }
     }
-    for (const [queryClass, profiles] of Object.entries(annPerClassAccumulators)) {
-      const outProfiles: Record<string, AnnProfileAggregate> = {};
-      for (const [profile, acc] of Object.entries(profiles)) {
-        outProfiles[profile] = summarizeAnnAccumulator(acc);
+    let selectorCompare: AnnSelectorCompareAggregate | undefined;
+    if (annSelectorCheck) {
+      const modes: AnnSelectorMode[] = ["static", "class_aware"];
+      const overallAccumulators: Record<AnnSelectorMode, SelectorAccumulator> = {
+        static: emptySelectorAccumulator(),
+        class_aware: emptySelectorAccumulator(),
+      };
+      const perClassAccumulators: Record<string, Record<AnnSelectorMode, SelectorAccumulator>> = {};
+      for (const querySpec of annQuerySpecs) {
+        for (const mode of modes) {
+          const classBucket = (perClassAccumulators[querySpec.class] ??= {
+            static: emptySelectorAccumulator(),
+            class_aware: emptySelectorAccumulator(),
+          });
+          const queryAcc = emptySelectorAccumulator();
+          for (let i = 0; i < annSamples; i += 1) {
+            if (paceMs > 0) await sleepMs(paceMs);
+            const out = await timedRequestJson(
+              "/v1/memory/recall_text",
+              selectorPayload(querySpec.text, mode === "class_aware", {
+                return_debug: true,
+              }),
+            );
+            const statusKey = out.error ? `error:${out.error}` : String(out.status);
+            queryAcc.status_counts[statusKey] = (queryAcc.status_counts[statusKey] ?? 0) + 1;
+            if (out.error) queryAcc.transport_error_count += 1;
+            if (!out.ok) continue;
+            queryAcc.sample_count += 1;
+            const observability = out.body?.observability ?? {};
+            const stage1 = observability.stage1 ?? {};
+            const classAware = observability.adaptive?.class_aware ?? {};
+            queryAcc.recall_latency.push(out.ms);
+            queryAcc.ann_stage1_latency.push(Number(observability.stage_timings_ms?.stage1_candidates_ann_ms ?? 0));
+            queryAcc.ann_seed_count.push(Number(stage1.ann_seed_count ?? 0));
+            queryAcc.final_seed_count.push(Number(stage1.final_seed_count ?? 0));
+            queryAcc.result_nodes.push(Array.isArray(out.body?.subgraph?.nodes) ? out.body.subgraph.nodes.length : 0);
+            queryAcc.result_edges.push(Array.isArray(out.body?.subgraph?.edges) ? out.body.subgraph.edges.length : 0);
+            const selectedProfile = typeof classAware.profile === "string" && classAware.profile.trim().length > 0 ? classAware.profile.trim() : "unknown";
+            queryAcc.selected_profile_frequency[selectedProfile] = (queryAcc.selected_profile_frequency[selectedProfile] ?? 0) + 1;
+            if (classAware.applied === true) queryAcc.class_aware_applied_count += 1;
+          }
+          const sinks = [overallAccumulators[mode], classBucket[mode]];
+          for (const sink of sinks) {
+            for (const [key, value] of Object.entries(queryAcc.status_counts)) {
+              sink.status_counts[key] = (sink.status_counts[key] ?? 0) + value;
+            }
+            sink.recall_latency.push(...queryAcc.recall_latency);
+            sink.ann_stage1_latency.push(...queryAcc.ann_stage1_latency);
+            sink.ann_seed_count.push(...queryAcc.ann_seed_count);
+            sink.final_seed_count.push(...queryAcc.final_seed_count);
+            sink.result_nodes.push(...queryAcc.result_nodes);
+            sink.result_edges.push(...queryAcc.result_edges);
+            sink.transport_error_count += queryAcc.transport_error_count;
+            sink.sample_count += queryAcc.sample_count;
+            sink.class_aware_applied_count += queryAcc.class_aware_applied_count;
+            for (const [key, value] of Object.entries(queryAcc.selected_profile_frequency)) {
+              sink.selected_profile_frequency[key] = (sink.selected_profile_frequency[key] ?? 0) + value;
+            }
+          }
+        }
       }
-      annPerClassProfilesOut[queryClass] = outProfiles;
+      selectorCompare = {
+        enabled: true,
+        params: {
+          samples_per_query: annSamples,
+          query_texts: annQuerySpecs.map((item) => item.text),
+          query_classes: Array.from(new Set(annQuerySpecs.map((item) => item.class))).sort((a, b) => a.localeCompare(b)),
+          modes,
+        },
+        overall_modes: {
+          static: summarizeSelectorAccumulator(overallAccumulators.static),
+          class_aware: summarizeSelectorAccumulator(overallAccumulators.class_aware),
+        },
+        per_class_modes: Object.fromEntries(
+          Object.entries(perClassAccumulators).map(([queryClass, modeAccumulators]) => [
+            queryClass,
+            {
+              static: summarizeSelectorAccumulator(modeAccumulators.static),
+              class_aware: summarizeSelectorAccumulator(modeAccumulators.class_aware),
+            },
+          ]),
+        ),
+      };
     }
     ann = {
       enabled: true,
@@ -1394,6 +1543,7 @@ async function main() {
       profiles: annProfilesOut,
       per_query_profiles: annPerQueryProfilesOut,
       per_class_profiles: annPerClassProfilesOut,
+      selector_compare: selectorCompare,
     };
   }
 
@@ -1455,6 +1605,7 @@ async function main() {
           sandbox_argv: sandboxArgv,
           sandbox_timeout_ms: sandboxTimeout,
           ann_check: annCheck,
+          ann_selector_check: annSelectorCheck,
           ann_samples: annSamples,
           ann_profiles: annProfiles,
         },

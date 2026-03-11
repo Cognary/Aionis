@@ -611,6 +611,19 @@ npm run job:perf-benchmark -- \
   --ann-samples 6
 ```
 
+Selector-vs-static ANN comparison in a single API process (uses `recall_class_aware` request override instead of two separate servers):
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --ann-selector-check true \
+  --ann-query-spec-file /Users/lucio/Desktop/Aionis/src/jobs/fixtures/ann-query-taxonomy-v1.json \
+  --ann-samples 6
+```
+
 Auth handling:
 
 - for `MEMORY_AUTH_MODE=api_key` or `api_key_or_jwt`, script auto-picks the first key from `MEMORY_API_KEYS_JSON`

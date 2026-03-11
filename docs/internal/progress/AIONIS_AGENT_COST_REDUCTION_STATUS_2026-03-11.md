@@ -197,8 +197,10 @@ Current assessment:
 7. `strict_edges` remains a balanced candidate, but the current evidence is not strong enough to promote it to the default profile
 8. the ANN benchmark pipeline now supports query-classified comparison and has a first taxonomy smoke artifact
 9. the canonical ANN taxonomy fixture now exists and has a first reusable classed artifact
-10. the next gap is broader benchmark coverage across additional tool surfaces beyond sandbox and a fuller class-aware recall-policy proposal
-11. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
+10. class-aware recall policy selector v1 is now implemented behind `MEMORY_RECALL_CLASS_AWARE_ENABLED`
+11. the next gap is broader benchmark coverage across additional tool surfaces beyond sandbox and a selector-vs-static benchmark comparison
+12. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
+13. selector-vs-static comparison is now implemented as a first-class benchmark slice, but the current selector policy is still experimental and should not be enabled by default yet
 
 ## Overall Stage Assessment
 

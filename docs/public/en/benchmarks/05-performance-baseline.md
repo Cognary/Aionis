@@ -143,6 +143,19 @@ npm run job:perf-benchmark -- \
   --ann-samples 6
 ```
 
+Compare static recall against request-level class-aware selection inside one API process:
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url "http://localhost:${PORT:-3001}" \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --ann-selector-check true \
+  --ann-query-spec-file /Users/lucio/Desktop/Aionis/src/jobs/fixtures/ann-query-taxonomy-v1.json \
+  --ann-samples 6
+```
+
 ## Output Fields
 
 1. `latency_ms.p50/p95/p99`
@@ -152,7 +165,7 @@ npm run job:perf-benchmark -- \
 5. optional `optimization.summary.*` for estimated token reduction, forgotten items, static-block selection, and `context/assemble` p95 delta
 6. optional `replay.*` for deterministic eligibility ratio, dispatch decision mix, primary-inference-skipped ratio, and `result_summary` coverage
 7. optional `sandbox.*` for `result_summary` coverage across `execute/get/logs/artifact` and endpoint latency percentiles
-8. optional `ann.*` for `stage1_candidates_ann_ms`, ANN seed counts, final seed counts, and recall latency by recall profile, query, and workload class
+8. optional `ann.*` for `stage1_candidates_ann_ms`, ANN seed counts, final seed counts, recall latency by recall profile, query, and workload class, plus selector-vs-static aggregates under `ann.selector_compare`
 
 ## Starter SLO Guidance
 

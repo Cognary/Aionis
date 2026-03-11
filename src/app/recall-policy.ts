@@ -12,7 +12,9 @@ export type RecallProfileDefaults = {
 
 export type RecallProfileName = "legacy" | "strict_edges" | "quality_first" | "lite";
 export type RecallEndpoint = "recall" | "recall_text";
+export type RecallTextEndpoint = "recall_text" | "planning_context" | "context_assemble";
 export type RecallStrategyName = "local" | "balanced" | "global";
+export type RecallWorkloadClass = "dense_edge" | "workflow_path" | "broad_semantic" | "sparse_hit";
 
 type RecallProfilePolicy = {
   endpoint: Partial<Record<RecallEndpoint, RecallProfileName>>;
@@ -44,6 +46,25 @@ type RecallHardCapResolution = {
   defaults: RecallProfileDefaults;
   applied: boolean;
   reason: "disabled" | "explicit_knobs" | "wait_below_threshold" | "already_capped" | "queue_pressure_hard_cap";
+};
+
+type RecallClassAwareResolution = {
+  profile: RecallProfileName;
+  defaults: RecallProfileDefaults;
+  applied: boolean;
+  reason:
+    | "disabled"
+    | "request_disabled"
+    | "explicit_knobs"
+    | "explicit_strategy"
+    | "no_query_text"
+    | "no_match"
+    | "already_target_profile"
+    | "classified_v1";
+  workload_class: RecallWorkloadClass | null;
+  signals: string[];
+  enabled: boolean;
+  source: "env_default" | "request_override";
 };
 
 const RECALL_PROFILE_DEFAULTS: Record<RecallProfileName, RecallProfileDefaults> = {
@@ -108,6 +129,45 @@ const RECALL_KNOB_KEYS: Array<keyof RecallProfileDefaults> = [
   "min_edge_weight",
   "min_edge_confidence",
 ];
+
+const RECALL_CLASS_PROFILE_DEFAULTS: Record<RecallWorkloadClass, RecallProfileName> = {
+  dense_edge: "quality_first",
+  workflow_path: "strict_edges",
+  broad_semantic: "legacy",
+  sparse_hit: "strict_edges",
+};
+
+const WORKFLOW_KEYWORDS = [
+  "deploy",
+  "rollback",
+  "runbook",
+  "workflow",
+  "playbook",
+  "procedure",
+  "incident",
+  "step",
+  "steps",
+  "kubectl",
+];
+const DENSE_EDGE_KEYWORDS = ["graph", "relationship", "relationships", "dependency", "dependencies", "cluster", "clusters", "lineage", "topology"];
+const SPARSE_HIT_KEYWORDS = ["one-off", "one off", "unique phrase", "exact", "sparse", "unrelated", "lookup", "uuid", "ticket", "hash"];
+const BROAD_SEMANTIC_KEYWORDS = ["overview", "background", "prepare", "semantic", "memory context", "what should i know", "what do i need to know"];
+
+function hasSubstringAny(text: string, keywords: string[]): string[] {
+  return keywords.filter((keyword) => text.includes(keyword));
+}
+
+function hasExplicitRecallStrategy(body: unknown): boolean {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const raw = (body as Record<string, unknown>).recall_strategy;
+  return raw === "local" || raw === "balanced" || raw === "global";
+}
+
+function readRecallClassAwareOverride(body: unknown): boolean | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const raw = (body as Record<string, unknown>).recall_class_aware;
+  return typeof raw === "boolean" ? raw : null;
+}
 
 function parseRecallProfilePolicy(raw: string): RecallProfilePolicy {
   const out: RecallProfilePolicy = {
@@ -223,6 +283,142 @@ export function createRecallPolicy(env: Env) {
       return { strategy, defaults: RECALL_STRATEGY_DEFAULTS[strategy], applied: false, reason: "explicit_knobs" };
     }
     return { strategy, defaults: RECALL_STRATEGY_DEFAULTS[strategy], applied: true, reason: "applied" };
+  };
+
+  const resolveClassAwareRecallProfile = (
+    endpoint: RecallTextEndpoint,
+    body: unknown,
+    baseProfile: RecallProfileName,
+    hasExplicitKnobs: boolean,
+  ): RecallClassAwareResolution => {
+    const classAwareOverride = readRecallClassAwareOverride(body);
+    const classAwareEnabled = classAwareOverride ?? env.MEMORY_RECALL_CLASS_AWARE_ENABLED;
+    const classAwareSource = classAwareOverride === null ? "env_default" : "request_override";
+    if (!classAwareEnabled) {
+      return {
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: classAwareOverride === false ? "request_disabled" : "disabled",
+        workload_class: null,
+        signals: [],
+        enabled: classAwareEnabled,
+        source: classAwareSource,
+      };
+    }
+    if (hasExplicitKnobs) {
+      return {
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: "explicit_knobs",
+        workload_class: null,
+        signals: [],
+        enabled: classAwareEnabled,
+        source: classAwareSource,
+      };
+    }
+    if (hasExplicitRecallStrategy(body)) {
+      return {
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: "explicit_strategy",
+        workload_class: null,
+        signals: [],
+        enabled: classAwareEnabled,
+        source: classAwareSource,
+      };
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return {
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: "no_query_text",
+        workload_class: null,
+        signals: [],
+        enabled: classAwareEnabled,
+        source: classAwareSource,
+      };
+    }
+    const obj = body as Record<string, unknown>;
+    const queryText = typeof obj.query_text === "string" ? obj.query_text.trim().toLowerCase() : "";
+    if (!queryText) {
+      return {
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: "no_query_text",
+        workload_class: null,
+        signals: [],
+        enabled: classAwareEnabled,
+        source: classAwareSource,
+      };
+    }
+
+    const signals: string[] = [];
+    const toolCandidates =
+      Array.isArray(obj.tool_candidates) ? obj.tool_candidates.filter((item) => typeof item === "string" && item.trim().length > 0) : [];
+    if (toolCandidates.length > 0) signals.push(`tool_candidates:${toolCandidates.length}`);
+    if (typeof obj.run_id === "string" && obj.run_id.trim().length > 0) signals.push("run_id");
+
+    const workflowMatches = hasSubstringAny(queryText, WORKFLOW_KEYWORDS);
+    const denseMatches = hasSubstringAny(queryText, DENSE_EDGE_KEYWORDS);
+    const sparseMatches = hasSubstringAny(queryText, SPARSE_HIT_KEYWORDS);
+    const broadMatches = hasSubstringAny(queryText, BROAD_SEMANTIC_KEYWORDS);
+
+    let workloadClass: RecallWorkloadClass | null = null;
+    if (toolCandidates.length > 0 || typeof obj.run_id === "string" || workflowMatches.length > 0 || endpoint === "planning_context") {
+      workloadClass = "workflow_path";
+      signals.push(...workflowMatches.map((item) => `keyword:${item}`));
+    } else if (denseMatches.length > 0) {
+      workloadClass = "dense_edge";
+      signals.push(...denseMatches.map((item) => `keyword:${item}`));
+    } else if (sparseMatches.length > 0) {
+      workloadClass = "sparse_hit";
+      signals.push(...sparseMatches.map((item) => `keyword:${item}`));
+    } else if (broadMatches.length > 0 || endpoint === "context_assemble") {
+      workloadClass = "broad_semantic";
+      signals.push(...broadMatches.map((item) => `keyword:${item}`));
+    }
+
+    if (!workloadClass) {
+      return {
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: "no_match",
+        workload_class: null,
+        signals: [],
+        enabled: classAwareEnabled,
+        source: classAwareSource,
+      };
+    }
+
+    const targetProfile = RECALL_CLASS_PROFILE_DEFAULTS[workloadClass];
+    if (targetProfile === baseProfile) {
+      return {
+        profile: baseProfile,
+        defaults: RECALL_PROFILE_DEFAULTS[baseProfile],
+        applied: false,
+        reason: "already_target_profile",
+        workload_class: workloadClass,
+        signals,
+        enabled: classAwareEnabled,
+        source: classAwareSource,
+      };
+    }
+    return {
+      profile: targetProfile,
+      defaults: RECALL_PROFILE_DEFAULTS[targetProfile],
+      applied: true,
+      reason: "classified_v1",
+      workload_class: workloadClass,
+      signals,
+      enabled: classAwareEnabled,
+      source: classAwareSource,
+    };
   };
 
   const resolveAdaptiveRecallProfile = (
@@ -423,6 +619,7 @@ export function createRecallPolicy(env: Env) {
     recallProfilePolicy,
     withRecallProfileDefaults,
     resolveRecallProfile,
+    resolveClassAwareRecallProfile,
     hasExplicitRecallKnobs,
     resolveRecallStrategy,
     resolveAdaptiveRecallProfile,

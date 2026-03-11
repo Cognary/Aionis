@@ -11,7 +11,8 @@ Related documents:
 
 1. [/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_AGENT_COST_REDUCTION_STATUS_2026-03-11.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_AGENT_COST_REDUCTION_STATUS_2026-03-11.md)
 2. [/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_ANN_STAGE1_PROFILE_COMPARE_2026-03-11.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_ANN_STAGE1_PROFILE_COMPARE_2026-03-11.md)
-3. [/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_AGENT_COST_REDUCTION_ROADMAP.md](/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_AGENT_COST_REDUCTION_ROADMAP.md)
+3. [/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_SELECTOR_COMPARE_STATUS_2026-03-11.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_SELECTOR_COMPARE_STATUS_2026-03-11.md)
+4. [/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_AGENT_COST_REDUCTION_ROADMAP.md](/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_AGENT_COST_REDUCTION_ROADMAP.md)
 
 ## Executive Summary
 
@@ -116,6 +117,41 @@ The safest current interpretation is:
 
 So Aionis is now in a policy-selection phase, not a mechanism-invention phase.
 
+## Implementation Progress
+
+The first class-aware selector is now implemented in production code.
+
+Current status:
+
+1. selector type: rule-based `v1`
+2. enablement: gated by `MEMORY_RECALL_CLASS_AWARE_ENABLED`
+3. current rollout scope:
+   - `POST /v1/memory/recall_text`
+   - `POST /v1/memory/planning/context`
+   - `POST /v1/memory/context/assemble`
+4. current observability:
+   - `observability.adaptive.class_aware`
+   - request logs include selected class/profile and selector reason
+5. current experiment support:
+   - request-level `recall_class_aware=true|false`
+   - `job:perf-benchmark -- --ann-selector-check true`
+
+Current class mapping:
+
+1. `dense_edge` -> `quality_first`
+2. `workflow_path` -> `strict_edges`
+3. `broad_semantic` -> `legacy`
+4. `sparse_hit` -> `strict_edges`
+
+This is intentionally not the final policy.
+
+It is a safe first implementation because:
+
+1. it can be disabled globally
+2. explicit recall knobs still win
+3. explicit `recall_strategy` still wins
+4. non-text `/v1/memory/recall` is not affected
+
 ## Main Risk
 
 The main near-term risk is narrative overreach.
@@ -128,20 +164,16 @@ The technically correct message is narrower:
 
 ## Recommended Next Step
 
-The next step should not be another arbitrary profile sweep.
+The next step is no longer taxonomy setup.
 
-It should be a query-taxonomy benchmark phase:
+That is already done.
 
-1. classify benchmark queries into:
-   - sparse-hit
-   - broad semantic
-   - dense-edge
-   - workflow path
-2. freeze a small canonical query set for each class
-3. rerun ANN profile comparison per class
-4. only then propose:
-   - a global default
-   - or a workload-aware policy selector
+The next step is selector confidence:
+
+1. run multiple `selector-vs-static` artifacts against the canonical taxonomy
+2. aggregate median deltas by class
+3. decide class-by-class whether `v1` mappings are safe enough to recommend
+4. keep selector behind an experiment gate until that evidence stabilizes
 
 ## Working Conclusion
 

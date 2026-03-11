@@ -152,6 +152,7 @@ export const MemoryRecallTextRequest = z.object({
   scope: z.string().min(1).optional(),
   query_text: z.string().min(1),
   recall_strategy: z.enum(["local", "balanced", "global"]).optional(),
+  recall_class_aware: z.boolean().optional(),
   consumer_agent_id: z.string().min(1).optional(),
   consumer_team_id: z.string().min(1).optional(),
   limit: z.number().int().positive().max(200).default(30),
@@ -226,6 +227,7 @@ export const PlanningContextRequest = z.object({
   scope: z.string().min(1).optional(),
   query_text: z.string().min(1),
   recall_strategy: z.enum(["local", "balanced", "global"]).optional(),
+  recall_class_aware: z.boolean().optional(),
   consumer_agent_id: z.string().min(1).optional(),
   consumer_team_id: z.string().min(1).optional(),
   // Planner/runtime execution context used by rules + tool selection.
@@ -267,6 +269,7 @@ export const ContextAssembleRequest = z.object({
   scope: z.string().min(1).optional(),
   query_text: z.string().min(1),
   recall_strategy: z.enum(["local", "balanced", "global"]).optional(),
+  recall_class_aware: z.boolean().optional(),
   consumer_agent_id: z.string().min(1).optional(),
   consumer_team_id: z.string().min(1).optional(),
   context: z.any().optional(),

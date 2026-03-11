@@ -39,6 +39,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
   acquireInflightSlot: (kind: "recall") => Promise<GateLike>;
   hasExplicitRecallKnobs: (body: unknown) => boolean;
   resolveRecallProfile: (endpoint: "recall_text", tenantId: string) => any;
+  resolveClassAwareRecallProfile: (endpoint: "recall_text" | "planning_context" | "context_assemble", body: unknown, baseProfile: any, explicitRecallKnobs: boolean) => any;
   withRecallProfileDefaults: (body: unknown, defaults: any) => any;
   resolveRecallStrategy: (body: unknown, explicitRecallKnobs: boolean) => any;
   resolveAdaptiveRecallProfile: (profile: any, waitMs: number, explicitRecallKnobs: boolean) => any;
@@ -88,6 +89,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     acquireInflightSlot,
     hasExplicitRecallKnobs,
     resolveRecallProfile,
+    resolveClassAwareRecallProfile,
     withRecallProfileDefaults,
     resolveRecallStrategy,
     resolveAdaptiveRecallProfile,
@@ -110,7 +112,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const bodyRaw = withIdentityFromRequest(req, req.body, principal, "recall_text");
     const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
     const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
-    let body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
+    const classAwareProfile = resolveClassAwareRecallProfile("recall_text", bodyRaw, baseProfile.profile, explicitRecallKnobs);
+    let body = withRecallProfileDefaults(bodyRaw, classAwareProfile.defaults);
     const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs);
     if (strategyResolution.applied) {
       body = {
@@ -150,7 +153,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     let embedBatchSize = 1;
     let recallParsed: any;
     const gate = await acquireInflightSlot("recall");
-    const adaptiveProfile = resolveAdaptiveRecallProfile(baseProfile.profile, gate.wait_ms, explicitRecallKnobs);
+    const adaptiveProfile = resolveAdaptiveRecallProfile(classAwareProfile.profile, gate.wait_ms, explicitRecallKnobs);
     if (adaptiveProfile.applied) {
       parsed = MemoryRecallTextRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
     }
@@ -318,6 +321,13 @@ export function registerMemoryContextRuntimeRoutes(args: {
           stage1_exact_fallback_ms: timings["stage1_candidates_exact_fallback"] ?? null,
           profile: adaptiveProfile.profile,
           profile_source: baseProfile.source,
+          class_aware_profile: classAwareProfile.profile,
+          class_aware_enabled: classAwareProfile.enabled,
+          class_aware_applied: classAwareProfile.applied,
+          class_aware_reason: classAwareProfile.reason,
+          class_aware_source: classAwareProfile.source,
+          class_aware_workload_class: classAwareProfile.workload_class,
+          class_aware_signals: classAwareProfile.signals,
           adaptive_profile_applied: adaptiveProfile.applied,
           adaptive_profile_reason: adaptiveProfile.reason,
           adaptive_hard_cap_applied: adaptiveHardCap.applied,
@@ -366,6 +376,15 @@ export function registerMemoryContextRuntimeRoutes(args: {
         applied: adaptiveProfile.applied,
         reason: adaptiveProfile.reason,
       },
+      class_aware: {
+        workload_class: classAwareProfile.workload_class,
+        profile: classAwareProfile.profile,
+        enabled: classAwareProfile.enabled,
+        applied: classAwareProfile.applied,
+        reason: classAwareProfile.reason,
+        source: classAwareProfile.source,
+        signals: classAwareProfile.signals,
+      },
       adaptive_hard_cap: {
         applied: adaptiveHardCap.applied,
         reason: adaptiveHardCap.reason,
@@ -387,7 +406,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const bodyRaw = withIdentityFromRequest(req, req.body, principal, "planning_context");
     const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
     const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
-    let body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
+    const classAwareProfile = resolveClassAwareRecallProfile("planning_context", bodyRaw, baseProfile.profile, explicitRecallKnobs);
+    let body = withRecallProfileDefaults(bodyRaw, classAwareProfile.defaults);
     const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs);
     if (strategyResolution.applied) {
       body = {
@@ -428,7 +448,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     let embedBatchSize = 1;
     let recallParsed: any;
     const gate = await acquireInflightSlot("recall");
-    const adaptiveProfile = resolveAdaptiveRecallProfile(baseProfile.profile, gate.wait_ms, explicitRecallKnobs);
+    const adaptiveProfile = resolveAdaptiveRecallProfile(classAwareProfile.profile, gate.wait_ms, explicitRecallKnobs);
     if (adaptiveProfile.applied) {
       parsed = PlanningContextRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
     }
@@ -608,6 +628,13 @@ export function registerMemoryContextRuntimeRoutes(args: {
         applied: adaptiveProfile.applied,
         reason: adaptiveProfile.reason,
       },
+      class_aware: {
+        workload_class: classAwareProfile.workload_class,
+        profile: classAwareProfile.profile,
+        applied: classAwareProfile.applied,
+        reason: classAwareProfile.reason,
+        signals: classAwareProfile.signals,
+      },
       adaptive_hard_cap: {
         applied: adaptiveHardCap.applied,
         reason: adaptiveHardCap.reason,
@@ -637,6 +664,15 @@ export function registerMemoryContextRuntimeRoutes(args: {
           context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
           context_optimization_profile: parsed.context_optimization_profile ?? null,
           context_budget_default_applied: contextBudgetDefaultApplied,
+          profile: adaptiveProfile.profile,
+          profile_source: baseProfile.source,
+          class_aware_profile: classAwareProfile.profile,
+          class_aware_enabled: classAwareProfile.enabled,
+          class_aware_applied: classAwareProfile.applied,
+          class_aware_reason: classAwareProfile.reason,
+          class_aware_source: classAwareProfile.source,
+          class_aware_workload_class: classAwareProfile.workload_class,
+          class_aware_signals: classAwareProfile.signals,
           rules_considered: out.rules?.considered ?? 0,
           rules_matched: out.rules?.matched ?? 0,
           tools_selected: out.tools?.selection?.selected ?? null,
@@ -714,7 +750,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const bodyRaw = withIdentityFromRequest(req, req.body, principal, "context_assemble");
     const explicitRecallKnobs = hasExplicitRecallKnobs(bodyRaw);
     const baseProfile = resolveRecallProfile("recall_text", tenantFromBody(bodyRaw));
-    let body = withRecallProfileDefaults(bodyRaw, baseProfile.defaults);
+    const classAwareProfile = resolveClassAwareRecallProfile("context_assemble", bodyRaw, baseProfile.profile, explicitRecallKnobs);
+    let body = withRecallProfileDefaults(bodyRaw, classAwareProfile.defaults);
     const strategyResolution = resolveRecallStrategy(bodyRaw, explicitRecallKnobs);
     if (strategyResolution.applied) {
       body = {
@@ -755,7 +792,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     let embedBatchSize = 1;
     let recallParsed: any;
     const gate = await acquireInflightSlot("recall");
-    const adaptiveProfile = resolveAdaptiveRecallProfile(baseProfile.profile, gate.wait_ms, explicitRecallKnobs);
+    const adaptiveProfile = resolveAdaptiveRecallProfile(classAwareProfile.profile, gate.wait_ms, explicitRecallKnobs);
     if (adaptiveProfile.applied) {
       parsed = ContextAssembleRequest.parse({ ...(parsed as any), ...adaptiveProfile.defaults });
     }
@@ -939,6 +976,15 @@ export function registerMemoryContextRuntimeRoutes(args: {
         applied: adaptiveProfile.applied,
         reason: adaptiveProfile.reason,
       },
+      class_aware: {
+        workload_class: classAwareProfile.workload_class,
+        profile: classAwareProfile.profile,
+        enabled: classAwareProfile.enabled,
+        applied: classAwareProfile.applied,
+        reason: classAwareProfile.reason,
+        source: classAwareProfile.source,
+        signals: classAwareProfile.signals,
+      },
       adaptive_hard_cap: {
         applied: adaptiveHardCap.applied,
         reason: adaptiveHardCap.reason,
@@ -1009,6 +1055,15 @@ export function registerMemoryContextRuntimeRoutes(args: {
           context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
           context_optimization_profile: parsed.context_optimization_profile ?? null,
           context_budget_default_applied: contextBudgetDefaultApplied,
+          profile: adaptiveProfile.profile,
+          profile_source: baseProfile.source,
+          class_aware_profile: classAwareProfile.profile,
+          class_aware_enabled: classAwareProfile.enabled,
+          class_aware_applied: classAwareProfile.applied,
+          class_aware_reason: classAwareProfile.reason,
+          class_aware_source: classAwareProfile.source,
+          class_aware_workload_class: classAwareProfile.workload_class,
+          class_aware_signals: classAwareProfile.signals,
           rules_considered: out.rules?.considered ?? 0,
           rules_matched: out.rules?.matched ?? 0,
           tools_selected: out.tools?.selection?.selected ?? null,

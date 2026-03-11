@@ -47,6 +47,7 @@ Notes:
    - per-layer `forgotten_count`
    - `layered_context.static_injection`
    so callers can see what was intentionally excluded or selected.
+5. `recall_text`, `planning/context`, and `context/assemble` also accept experimental `recall_class_aware=true|false` so callers can explicitly enable or disable the class-aware recall selector per request while evaluating policy changes.
 
 ### Policy and Execution Loop
 

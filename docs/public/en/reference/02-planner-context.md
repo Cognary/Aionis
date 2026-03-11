@@ -35,6 +35,7 @@ Planner context is the normalized runtime input used by Aionis policy and tool-s
 5. Keep `run.id` stable from `tools/select` to `tools/feedback` and `tools/run`.
 6. If you use `static_context_blocks`, keep `intent`, `agent`, `tool`, and request metadata normalized so static block selection can match on stable signals instead of free-form prompt text.
 7. If you use `context_optimization_profile`, keep `intent`, `tool`, and request metadata stable so Aionis can apply deterministic forgetting and static-injection presets instead of falling back to broader context assembly.
+8. If you evaluate workload-aware recall policy, use `recall_class_aware=true|false` on `planning/context` or `context/assemble` to compare selector behavior against the static default without changing server-wide config.
 
 ## Minimal Example
 

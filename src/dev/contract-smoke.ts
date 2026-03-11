@@ -50,6 +50,7 @@ import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
 import { applyContextOptimizationProfile } from "../app/context-optimization-profile.js";
+import { createRecallPolicy } from "../app/recall-policy.js";
 import { validateAutomationGraph } from "../memory/automation.js";
 import {
   replayPlaybookCandidate,
@@ -966,6 +967,7 @@ async function run() {
       MEMORY_STORE_BACKEND: "postgres",
       MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: "false",
       MEMORY_RECALL_PROFILE: "lite",
+      MEMORY_RECALL_CLASS_AWARE_ENABLED: "true",
       MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: "lite",
       MEMORY_RECALL_PROFILE_POLICY_JSON: JSON.stringify({
         endpoint: { recall: "lite", recall_text: "strict_edges" },
@@ -978,6 +980,7 @@ async function run() {
       assert.equal(env.MEMORY_STORE_BACKEND, "postgres");
       assert.equal(env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED, false);
       assert.equal(env.MEMORY_RECALL_PROFILE, "lite");
+      assert.equal(env.MEMORY_RECALL_CLASS_AWARE_ENABLED, true);
       assert.equal(env.MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE, "lite");
     },
   );
@@ -1037,6 +1040,104 @@ async function run() {
       assert.equal(env.MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED, false);
       assert.equal(env.MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED, false);
       assert.equal(env.MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED, false);
+    },
+  );
+  await withEnv(
+    {
+      APP_ENV: "dev",
+      DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+      MEMORY_RECALL_CLASS_AWARE_ENABLED: "true",
+      MEMORY_RECALL_PROFILE: "strict_edges",
+      MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: "strict_edges",
+    },
+    async () => {
+      const env = loadEnv();
+      const recallPolicy = createRecallPolicy(env);
+
+      const dense = recallPolicy.resolveClassAwareRecallProfile(
+        "recall_text",
+        { query_text: "dense edge relationship recall" },
+        "strict_edges",
+        false,
+      );
+      assert.equal(dense.workload_class, "dense_edge");
+      assert.equal(dense.profile, "quality_first");
+      assert.equal(dense.applied, true);
+
+      const workflow = recallPolicy.resolveClassAwareRecallProfile(
+        "planning_context",
+        { query_text: "incident dependency graph chain", tool_candidates: ["kubectl", "pagerduty"] },
+        "legacy",
+        false,
+      );
+      assert.equal(workflow.workload_class, "workflow_path");
+      assert.equal(workflow.profile, "strict_edges");
+      assert.equal(workflow.applied, true);
+
+      const broad = recallPolicy.resolveClassAwareRecallProfile(
+        "context_assemble",
+        { query_text: "prepare production deploy context" },
+        "strict_edges",
+        false,
+      );
+      assert.equal(broad.workload_class, "workflow_path");
+      assert.equal(broad.profile, "strict_edges");
+      assert.equal(broad.applied, false);
+
+      const sparse = recallPolicy.resolveClassAwareRecallProfile(
+        "recall_text",
+        { query_text: "lookup exact uuid hash for sparse ticket" },
+        "legacy",
+        false,
+      );
+      assert.equal(sparse.workload_class, "sparse_hit");
+      assert.equal(sparse.profile, "strict_edges");
+      assert.equal(sparse.applied, true);
+
+      const explicit = recallPolicy.resolveClassAwareRecallProfile(
+        "recall_text",
+        { query_text: "dense edge relationship recall", limit: 12 },
+        "strict_edges",
+        true,
+      );
+      assert.equal(explicit.reason, "explicit_knobs");
+      assert.equal(explicit.applied, false);
+
+      const requestDisabled = recallPolicy.resolveClassAwareRecallProfile(
+        "recall_text",
+        { query_text: "dense edge relationship recall", recall_class_aware: false },
+        "strict_edges",
+        false,
+      );
+      assert.equal(requestDisabled.reason, "request_disabled");
+      assert.equal(requestDisabled.enabled, false);
+      assert.equal(requestDisabled.source, "request_override");
+      assert.equal(requestDisabled.applied, false);
+    },
+  );
+  await withEnv(
+    {
+      APP_ENV: "dev",
+      DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+      MEMORY_RECALL_CLASS_AWARE_ENABLED: "false",
+      MEMORY_RECALL_PROFILE: "strict_edges",
+      MEMORY_RECALL_ADAPTIVE_TARGET_PROFILE: "strict_edges",
+    },
+    async () => {
+      const env = loadEnv();
+      const recallPolicy = createRecallPolicy(env);
+
+      const requestEnabled = recallPolicy.resolveClassAwareRecallProfile(
+        "recall_text",
+        { query_text: "dense edge relationship recall", recall_class_aware: true },
+        "strict_edges",
+        false,
+      );
+      assert.equal(requestEnabled.workload_class, "dense_edge");
+      assert.equal(requestEnabled.profile, "quality_first");
+      assert.equal(requestEnabled.enabled, true);
+      assert.equal(requestEnabled.source, "request_override");
+      assert.equal(requestEnabled.applied, true);
     },
   );
   await withEnv(
