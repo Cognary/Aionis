@@ -583,6 +583,34 @@ npm run job:perf-benchmark -- \
   --ann-samples 8
 ```
 
+Optional ANN taxonomy sampling (pins each query to a workload class and emits per-class profile aggregates):
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --ann-check true \
+  --ann-profiles legacy,strict_edges,quality_first,lite \
+  --ann-query-spec-json '[{"text":"dense edge relationship recall","class":"dense_edge"},{"text":"broad semantic memory context","class":"broad_semantic"},{"text":"one-off unique phrase no match","class":"sparse_hit"},{"text":"edge-heavy deployment rollback path","class":"workflow_path"}]' \
+  --ann-samples 6
+```
+
+Or load the canonical taxonomy fixture from the repo:
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --ann-check true \
+  --ann-profiles legacy,strict_edges,quality_first,lite \
+  --ann-query-spec-file /Users/lucio/Desktop/Aionis/src/jobs/fixtures/ann-query-taxonomy-v1.json \
+  --ann-samples 6
+```
+
 Auth handling:
 
 - for `MEMORY_AUTH_MODE=api_key` or `api_key_or_jwt`, script auto-picks the first key from `MEMORY_API_KEYS_JSON`

@@ -195,8 +195,10 @@ Current assessment:
 5. the wider clean ANN sweep shows `lite` is currently the raw ANN latency floor and `quality_first` remains the broad-recall reference
 6. the follow-up extreme-query sweep shows profile ranking is highly workload-sensitive, so no universal default should be picked yet
 7. `strict_edges` remains a balanced candidate, but the current evidence is not strong enough to promote it to the default profile
-8. the next gap is broader benchmark coverage across additional tool surfaces beyond sandbox and a query-classified ANN matrix
-9. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
+8. the ANN benchmark pipeline now supports query-classified comparison and has a first taxonomy smoke artifact
+9. the canonical ANN taxonomy fixture now exists and has a first reusable classed artifact
+10. the next gap is broader benchmark coverage across additional tool surfaces beyond sandbox and a fuller class-aware recall-policy proposal
+11. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
 
 ## Overall Stage Assessment
 

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { readFile } from "node:fs/promises";
 import { loadEnv } from "../config.js";
 
 type CaseName = "recall_text" | "write";
@@ -211,15 +212,34 @@ type AnnProfileAggregate = {
   result_edges: { mean: number; p50: number; p95: number; min: number; max: number };
 };
 
+type AnnQuerySpec = {
+  text: string;
+  class: string;
+};
+
 type AnnOptimizationAggregate = {
   enabled: boolean;
   params: {
     samples_per_query: number;
     query_texts: string[];
+    query_classes: string[];
     profiles: RecallProfileName[];
   };
   profiles: Record<string, AnnProfileAggregate>;
   per_query_profiles: Record<string, Record<string, AnnProfileAggregate>>;
+  per_class_profiles: Record<string, Record<string, AnnProfileAggregate>>;
+};
+
+type AnnAccumulator = {
+  status_counts: Record<string, number>;
+  recall_latency: number[];
+  ann_stage1_latency: number[];
+  ann_seed_count: number[];
+  final_seed_count: number[];
+  result_nodes: number[];
+  result_edges: number[];
+  transport_error_count: number;
+  sample_count: number;
 };
 
 function argValue(flag: string): string | null {
@@ -274,6 +294,67 @@ function parseJsonStringArrayArg(flag: string, fallback: string[]): string[] {
   }
 }
 
+function parseAnnQuerySpecArg(flag: string, fallback: string[]): AnnQuerySpec[] {
+  const raw = argValue(flag);
+  if (!raw) {
+    return fallback.map((text) => ({ text, class: "uncategorized" }));
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      !Array.isArray(parsed) ||
+      parsed.some(
+        (item) =>
+          !item ||
+          typeof item !== "object" ||
+          Array.isArray(item) ||
+          typeof (item as any).text !== "string" ||
+          (item as any).text.trim().length === 0 ||
+          typeof (item as any).class !== "string" ||
+          (item as any).class.trim().length === 0,
+      )
+    ) {
+      throw new Error(`${flag} must be a JSON array of {text,class}`);
+    }
+    return parsed.map((item) => ({
+      text: String((item as any).text),
+      class: String((item as any).class).trim(),
+    }));
+  } catch (err: any) {
+    throw new Error(`invalid ${flag}: ${String(err?.message ?? err)}`);
+  }
+}
+
+async function parseAnnQuerySpecFile(flag: string): Promise<AnnQuerySpec[] | null> {
+  const file = argValue(flag);
+  if (!file) return null;
+  try {
+    const raw = await readFile(file, "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      !Array.isArray(parsed) ||
+      parsed.some(
+        (item) =>
+          !item ||
+          typeof item !== "object" ||
+          Array.isArray(item) ||
+          typeof (item as any).text !== "string" ||
+          (item as any).text.trim().length === 0 ||
+          typeof (item as any).class !== "string" ||
+          (item as any).class.trim().length === 0,
+      )
+    ) {
+      throw new Error(`${flag} must contain a JSON array of {text,class}`);
+    }
+    return parsed.map((item) => ({
+      text: String((item as any).text),
+      class: String((item as any).class).trim(),
+    }));
+  } catch (err: any) {
+    throw new Error(`invalid ${flag}: ${String(err?.message ?? err)}`);
+  }
+}
+
 function parseCsvRecallProfiles(flag: string, fallback: RecallProfileName[]): RecallProfileName[] {
   const raw = argValue(flag);
   if (!raw) return fallback;
@@ -296,6 +377,20 @@ function summarizeSeries(values: number[]): { mean: number; p50: number; p95: nu
     p95: round(quantile(sorted, 0.95), 6),
     min: round(sorted[0], 6),
     max: round(sorted[sorted.length - 1], 6),
+  };
+}
+
+function summarizeAnnAccumulator(acc: AnnAccumulator): AnnProfileAggregate {
+  return {
+    samples: acc.sample_count,
+    transport_error_count: acc.transport_error_count,
+    status_counts: acc.status_counts,
+    recall_latency_ms: summarizeSeries(acc.recall_latency),
+    stage1_candidates_ann_ms: summarizeSeries(acc.ann_stage1_latency),
+    ann_seed_count: summarizeSeries(acc.ann_seed_count),
+    final_seed_count: summarizeSeries(acc.final_seed_count),
+    result_nodes: summarizeSeries(acc.result_nodes),
+    result_edges: summarizeSeries(acc.result_edges),
   };
 }
 
@@ -452,11 +547,14 @@ async function main() {
   const annCheckRaw = (argValue("--ann-check") ?? "false").trim().toLowerCase();
   const annCheck = annCheckRaw === "true";
   const annSamples = clampInt(Number(argValue("--ann-samples") ?? "8"), 1, 2000);
-  const annQueryTexts = parseJsonStringArrayArg("--ann-query-texts-json", [
+  const annQueryTextsFallback = [
     "memory graph perf",
     "prepare production deploy context",
     "rollback production deploy health verification",
-  ]);
+  ];
+  const annQueryTexts = parseJsonStringArrayArg("--ann-query-texts-json", annQueryTextsFallback);
+  const annQuerySpecs =
+    (await parseAnnQuerySpecFile("--ann-query-spec-file")) ?? parseAnnQuerySpecArg("--ann-query-spec-json", annQueryTexts);
   const annProfiles = parseCsvRecallProfiles("--ann-profiles", ["strict_edges", "quality_first", "lite"]);
   const recallProfileRaw = (argValue("--recall-profile") ?? "").trim().toLowerCase();
   const recallProfile = parseRecallProfile(recallProfileRaw);
@@ -1167,6 +1265,8 @@ async function main() {
   if (annCheck) {
     const annProfilesOut: Record<string, AnnProfileAggregate> = {};
     const annPerQueryProfilesOut: Record<string, Record<string, AnnProfileAggregate>> = {};
+    const annPerClassProfilesOut: Record<string, Record<string, AnnProfileAggregate>> = {};
+    const annPerClassAccumulators: Record<string, Record<string, AnnAccumulator>> = {};
     for (const profile of annProfiles) {
       const profileDefaults = RECALL_PROFILE_DEFAULTS[profile];
       const statusCounts: Record<string, number> = {};
@@ -1179,7 +1279,9 @@ async function main() {
       let transportErrorCount = 0;
       let sampleCount = 0;
 
-      for (const queryText of annQueryTexts) {
+      for (const querySpec of annQuerySpecs) {
+        const queryText = querySpec.text;
+        const queryClass = querySpec.class;
         const queryStatusCounts: Record<string, number> = {};
         const queryRecallLatency: number[] = [];
         const queryAnnStage1Latency: number[] = [];
@@ -1225,17 +1327,41 @@ async function main() {
           resultEdges.push(edgeCount);
           queryResultEdges.push(edgeCount);
         }
-        (annPerQueryProfilesOut[queryText] ??= {})[profile] = {
-          samples: querySampleCount,
-          transport_error_count: queryTransportErrorCount,
+        const queryAggregate = summarizeAnnAccumulator({
           status_counts: queryStatusCounts,
-          recall_latency_ms: summarizeSeries(queryRecallLatency),
-          stage1_candidates_ann_ms: summarizeSeries(queryAnnStage1Latency),
-          ann_seed_count: summarizeSeries(queryAnnSeedCount),
-          final_seed_count: summarizeSeries(queryFinalSeedCount),
-          result_nodes: summarizeSeries(queryResultNodes),
-          result_edges: summarizeSeries(queryResultEdges),
-        };
+          recall_latency: queryRecallLatency,
+          ann_stage1_latency: queryAnnStage1Latency,
+          ann_seed_count: queryAnnSeedCount,
+          final_seed_count: queryFinalSeedCount,
+          result_nodes: queryResultNodes,
+          result_edges: queryResultEdges,
+          transport_error_count: queryTransportErrorCount,
+          sample_count: querySampleCount,
+        });
+        (annPerQueryProfilesOut[queryText] ??= {})[profile] = queryAggregate;
+        const classProfileBucket = (annPerClassAccumulators[queryClass] ??= {});
+        const classAcc = (classProfileBucket[profile] ??= {
+          status_counts: {},
+          recall_latency: [],
+          ann_stage1_latency: [],
+          ann_seed_count: [],
+          final_seed_count: [],
+          result_nodes: [],
+          result_edges: [],
+          transport_error_count: 0,
+          sample_count: 0,
+        });
+        for (const [key, value] of Object.entries(queryStatusCounts)) {
+          classAcc.status_counts[key] = Number(classAcc.status_counts[key] ?? 0) + Number(value);
+        }
+        classAcc.recall_latency.push(...queryRecallLatency);
+        classAcc.ann_stage1_latency.push(...queryAnnStage1Latency);
+        classAcc.ann_seed_count.push(...queryAnnSeedCount);
+        classAcc.final_seed_count.push(...queryFinalSeedCount);
+        classAcc.result_nodes.push(...queryResultNodes);
+        classAcc.result_edges.push(...queryResultEdges);
+        classAcc.transport_error_count += queryTransportErrorCount;
+        classAcc.sample_count += querySampleCount;
       }
 
       annProfilesOut[profile] = {
@@ -1250,15 +1376,24 @@ async function main() {
         result_edges: summarizeSeries(resultEdges),
       };
     }
+    for (const [queryClass, profiles] of Object.entries(annPerClassAccumulators)) {
+      const outProfiles: Record<string, AnnProfileAggregate> = {};
+      for (const [profile, acc] of Object.entries(profiles)) {
+        outProfiles[profile] = summarizeAnnAccumulator(acc);
+      }
+      annPerClassProfilesOut[queryClass] = outProfiles;
+    }
     ann = {
       enabled: true,
       params: {
         samples_per_query: annSamples,
-        query_texts: annQueryTexts,
+        query_texts: annQuerySpecs.map((item) => item.text),
+        query_classes: Array.from(new Set(annQuerySpecs.map((item) => item.class))).sort((a, b) => a.localeCompare(b)),
         profiles: annProfiles,
       },
       profiles: annProfilesOut,
       per_query_profiles: annPerQueryProfilesOut,
+      per_class_profiles: annPerClassProfilesOut,
     };
   }
 

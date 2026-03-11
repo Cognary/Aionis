@@ -91,6 +91,7 @@ type BenchmarkJson = {
     params?: {
       samples_per_query?: number;
       query_texts?: string[];
+      query_classes?: string[];
       profiles?: string[];
     };
     profiles?: Record<
@@ -108,6 +109,23 @@ type BenchmarkJson = {
       }
     >;
     per_query_profiles?: Record<
+      string,
+      Record<
+        string,
+        {
+          samples: number;
+          transport_error_count: number;
+          status_counts: Record<string, number>;
+          recall_latency_ms: { mean: number; p50: number; p95: number; min: number; max: number };
+          stage1_candidates_ann_ms: { mean: number; p50: number; p95: number; min: number; max: number };
+          ann_seed_count: { mean: number; p50: number; p95: number; min: number; max: number };
+          final_seed_count: { mean: number; p50: number; p95: number; min: number; max: number };
+          result_nodes: { mean: number; p50: number; p95: number; min: number; max: number };
+          result_edges: { mean: number; p50: number; p95: number; min: number; max: number };
+        }
+      >
+    >;
+    per_class_profiles?: Record<
       string,
       Record<
         string,
@@ -487,11 +505,21 @@ async function main() {
 
     const ann = bench?.ann;
     if (ann?.enabled) {
-      annLines.push(`- scale=${scale}: samples_per_query=${ann.params?.samples_per_query ?? 0}; queries=${(ann.params?.query_texts ?? []).length}`);
+      annLines.push(
+        `- scale=${scale}: samples_per_query=${ann.params?.samples_per_query ?? 0}; queries=${(ann.params?.query_texts ?? []).length}; classes=${(ann.params?.query_classes ?? []).length}`,
+      );
       for (const [profile, profileOut] of Object.entries(ann.profiles ?? {}).sort((a, b) => a[0].localeCompare(b[0]))) {
         annLines.push(
           `  - ${profile}: recall p95=${round(profileOut.recall_latency_ms.p95)} ms; stage1_ann p95=${round(profileOut.stage1_candidates_ann_ms.p95)} ms; ann_seed_count p95=${round(profileOut.ann_seed_count.p95, 3)}; final_seed_count p95=${round(profileOut.final_seed_count.p95, 3)}; result_nodes mean=${round(profileOut.result_nodes.mean, 3)}; result_edges mean=${round(profileOut.result_edges.mean, 3)}`,
         );
+      }
+      for (const [queryClass, profiles] of Object.entries(ann.per_class_profiles ?? {}).sort((a, b) => a[0].localeCompare(b[0]))) {
+        annLines.push(`  - class=\`${queryClass}\``);
+        for (const [profile, profileOut] of Object.entries(profiles).sort((a, b) => a[0].localeCompare(b[0]))) {
+          annLines.push(
+            `    - ${profile}: recall p95=${round(profileOut.recall_latency_ms.p95)} ms; stage1_ann p95=${round(profileOut.stage1_candidates_ann_ms.p95)} ms; ann_seed_count p95=${round(profileOut.ann_seed_count.p95, 3)}; final_seed_count p95=${round(profileOut.final_seed_count.p95, 3)}; result_nodes mean=${round(profileOut.result_nodes.mean, 3)}; result_edges mean=${round(profileOut.result_edges.mean, 3)}`,
+          );
+        }
       }
       for (const [queryText, profiles] of Object.entries(ann.per_query_profiles ?? {}).sort((a, b) => a[0].localeCompare(b[0]))) {
         annLines.push(`  - query=\`${queryText}\``);

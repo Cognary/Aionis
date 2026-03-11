@@ -1,0 +1,10 @@
+[
+  { "text": "dense edge relationship recall", "class": "dense_edge" },
+  { "text": "topic cluster reliability graph", "class": "dense_edge" },
+  { "text": "edge-heavy deployment rollback path", "class": "workflow_path" },
+  { "text": "incident dependency graph chain", "class": "workflow_path" },
+  { "text": "broad semantic memory context", "class": "broad_semantic" },
+  { "text": "prepare production deploy context", "class": "broad_semantic" },
+  { "text": "one-off unique phrase no match", "class": "sparse_hit" },
+  { "text": "sparse unrelated lookup", "class": "sparse_hit" }
+]

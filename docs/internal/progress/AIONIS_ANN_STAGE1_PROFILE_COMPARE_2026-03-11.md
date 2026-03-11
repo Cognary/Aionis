@@ -14,6 +14,8 @@ Related artifacts:
 3. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_stage1_wave_a_v3_20260311_134547](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_stage1_wave_a_v3_20260311_134547)
 4. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_stage1_wave_b_v1_20260311_134805](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_stage1_wave_b_v1_20260311_134805)
 5. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_stage1_wave_b_v2_20260311_135449](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_stage1_wave_b_v2_20260311_135449)
+6. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_smoke_20260311_140724](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_smoke_20260311_140724)
+7. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_v1_20260311_141044](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_v1_20260311_141044)
 
 ## Scope
 
@@ -36,6 +38,43 @@ This run isolates `recall_text` stage-1 ANN behavior on the existing seeded work
 
 1. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_stage1_wave_b_v2_20260311_135449/benchmark_10000.json](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_stage1_wave_b_v2_20260311_135449/benchmark_10000.json)
 2. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_stage1_wave_b_v2_20260311_135449/PERFORMANCE_REPORT_V1.md](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_stage1_wave_b_v2_20260311_135449/PERFORMANCE_REPORT_V1.md)
+
+## Taxonomy Phase Start
+
+The benchmark tool now supports workload-classed ANN query specs and emits:
+
+1. `ann.per_query_profiles`
+2. `ann.per_class_profiles`
+
+First smoke artifact:
+
+1. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_smoke_20260311_140724/benchmark_10000.json](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_smoke_20260311_140724/benchmark_10000.json)
+2. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_smoke_20260311_140724/PERFORMANCE_REPORT_V1.md](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_smoke_20260311_140724/PERFORMANCE_REPORT_V1.md)
+
+Observed classes in the smoke run:
+
+1. `dense_edge`
+2. `workflow_path`
+3. `broad_semantic`
+4. `sparse_hit`
+
+This smoke run is not the final evidence set, but it confirms the benchmark pipeline is now able to compare profiles by workload class rather than only by mixed query batches.
+
+Canonical fixture:
+
+1. [/Users/lucio/Desktop/Aionis/src/jobs/fixtures/ann-query-taxonomy-v1.json](/Users/lucio/Desktop/Aionis/src/jobs/fixtures/ann-query-taxonomy-v1.json)
+
+First canonical classed artifact:
+
+1. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_v1_20260311_141044/benchmark_10000.json](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_v1_20260311_141044/benchmark_10000.json)
+2. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_v1_20260311_141044/PERFORMANCE_REPORT_V1.md](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_taxonomy_v1_20260311_141044/PERFORMANCE_REPORT_V1.md)
+
+Preliminary class-level reading from the canonical fixture:
+
+1. `dense_edge`: `quality_first` currently has the best stage-1 ANN p95 while also preserving the broadest result surface
+2. `workflow_path`: `lite` is the raw-latency floor, but `strict_edges` is close enough to remain interesting as a broader balanced option
+3. `broad_semantic`: `legacy` is currently the strongest stage-1 performer
+4. `sparse_hit`: `quality_first` currently leads this class on the canonical fixture
 
 ## Key Results
 
@@ -93,6 +132,8 @@ The more extreme `wave_b_v2` run expanded the query set toward denser-edge and s
 6. The denser/sparser `wave_b_v2` run weakens the case for promoting `strict_edges` prematurely; it performed worst on aggregate ANN p95 in that slice.
 7. `quality_first` handled one dense-edge and one sparse query best, `legacy` won two broader semantic/sparse queries, `lite` won three narrower queries, and `strict_edges` won one edge-heavy workflow query.
 8. The practical conclusion is no longer "pick the best profile", but "separate floor profile, breadth profile, and balanced profile candidates, then measure against workload mix."
+9. The benchmark system itself is now aligned with that conclusion because it can emit per-class ANN comparisons.
+10. The first canonical classed artifact suggests the next policy conversation should happen at the class level, not at the global-profile level.
 
 ## Caveats
 
