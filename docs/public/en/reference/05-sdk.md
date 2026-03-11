@@ -88,6 +88,64 @@ print(write_res.get("commit_uri"), recall_res.get("request_id"))
 4. Policy loop: `rules_evaluate`, `tools_select`, `tools_decision`, `tools_feedback`
 5. Replay: `replayPlaybookGet`, `replayPlaybookCandidate`, `replayPlaybookRun`, `replayPlaybookDispatch`
 
+## Find Summary (TypeScript)
+
+Use `find` as a compact inventory surface first, then read the full `nodes` payload only when `find_summary` shows you need it.
+
+```ts
+const found = await client.find({
+  text_contains: "deploy",
+  limit: 20,
+});
+
+console.log(found.find_summary?.returned_nodes);
+console.log(found.find_summary?.type_counts);
+console.log(found.find_summary?.filters_applied);
+```
+
+You can also let the SDK extract the summary-first shape directly:
+
+```ts
+const found = await client.inspectFind({
+  text_contains: "deploy",
+  limit: 20,
+});
+
+console.log(found.summary?.returned_nodes);
+console.log(found.summary?.type_counts);
+console.log(found.data.nodes.length);
+```
+
+## Resolve Summary (TypeScript)
+
+Use `resolve` as a compact object-inspection surface first, then read the full `node`, `edge`, `commit`, or `decision` payload only when `resolve_summary` says you need it.
+
+```ts
+const resolved = await client.resolve({
+  uri: "aionis://default/default/event/00000000-0000-0000-0000-000000001101",
+  include_meta: true,
+  include_slots_preview: true,
+});
+
+console.log(resolved.resolve_summary?.payload_kind);
+console.log(resolved.resolve_summary?.related_uris);
+console.log(resolved.resolve_summary?.object_keys);
+```
+
+For summary-first inspection, prefer the SDK helper:
+
+```ts
+const resolved = await client.inspectResolve({
+  uri: "aionis://default/default/event/00000000-0000-0000-0000-000000001101",
+  include_meta: true,
+  include_slots_preview: true,
+});
+
+console.log(resolved.summary?.payload_kind);
+console.log(resolved.summary?.related_uris);
+console.log(resolved.data.node?.uri);
+```
+
 ## Rule Evaluation Summary (TypeScript)
 
 Use `rulesEvaluate` as a compact policy-inspection surface first, then inspect full `active`, `shadow`, or `applied` payloads only when the summary indicates you need them.
@@ -103,6 +161,14 @@ console.log(rules.evaluation_summary?.matched);
 console.log(rules.evaluation_summary?.filtered_by_lane);
 console.log(rules.evaluation_summary?.selected_tool);
 ```
+
+The same summary-first helper pattern is available for:
+
+1. `inspectContextAssemble`
+2. `inspectRulesEvaluate`
+3. `inspectToolsSelect`
+4. `inspectToolsDecision`
+5. `inspectToolsRun`
 
 ## Sandbox Result Summary (TypeScript)
 

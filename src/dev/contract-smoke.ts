@@ -72,6 +72,7 @@ import {
   replayStepAfter,
   replayStepBefore,
 } from "../memory/replay.js";
+import { memoryFind } from "../memory/find.js";
 import { memoryResolve } from "../memory/resolve.js";
 import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
@@ -413,6 +414,72 @@ class ResolveFixturePgClient {
     }
 
     throw new Error(`ResolveFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class FindFixturePgClient {
+  async query<T>(sql: string, _params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+    if (s.includes("FROM memory_nodes n") && s.includes("ORDER BY n.created_at DESC, n.id DESC")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-00000000f201",
+            type: "event",
+            client_id: "find:event:1",
+            title: "Deploy started",
+            text_summary: "deployment started",
+            slots: { env: "prod", service: "api", trace_id: "trace-1" },
+            tier: "hot",
+            memory_lane: "shared",
+            producer_agent_id: "agent_ops",
+            owner_agent_id: null,
+            owner_team_id: null,
+            embedding_status: "ready",
+            embedding_model: "test",
+            raw_ref: null,
+            evidence_ref: null,
+            salience: 0.9,
+            importance: 0.8,
+            confidence: 0.95,
+            last_activated: null,
+            created_at: "2026-03-11T08:00:00.000Z",
+            updated_at: "2026-03-11T08:00:00.000Z",
+            commit_id: "00000000-0000-0000-0000-00000000c201",
+            topic_state: null,
+            member_count: null,
+          },
+          {
+            id: "00000000-0000-0000-0000-00000000f202",
+            type: "topic",
+            client_id: "find:topic:1",
+            title: "Deploy workflow",
+            text_summary: "topic for deploy workflow",
+            slots: { topic_state: "active", member_count: 4, owner: "platform" },
+            tier: "warm",
+            memory_lane: "private",
+            producer_agent_id: "agent_ops",
+            owner_agent_id: "agent_find",
+            owner_team_id: "team_ops",
+            embedding_status: "ready",
+            embedding_model: "test",
+            raw_ref: null,
+            evidence_ref: null,
+            salience: 0.6,
+            importance: 0.7,
+            confidence: 0.8,
+            last_activated: null,
+            created_at: "2026-03-11T07:00:00.000Z",
+            updated_at: "2026-03-11T07:00:00.000Z",
+            commit_id: "00000000-0000-0000-0000-00000000c202",
+            topic_state: "active",
+            member_count: 4,
+          },
+        ] as any as T[],
+        rowCount: 2,
+      };
+    }
+    throw new Error(`FindFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
   }
 }
 
@@ -3531,6 +3598,37 @@ async function run() {
     (err: any) => err instanceof HttpError && err.statusCode === 403 && err.code === "session_owner_mismatch",
   );
 
+  // Find should expose a compact inventory summary before callers inspect full node payloads.
+  const findClient = new FindFixturePgClient();
+  const findOut = await memoryFind(
+    findClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      text_contains: "deploy",
+      consumer_agent_id: "agent_find",
+      consumer_team_id: "team_ops",
+      include_meta: false,
+      include_slots_preview: true,
+      slots_preview_keys: 2,
+      limit: 2,
+      offset: 0,
+    },
+    "default",
+    "default",
+  );
+  assert.equal((findOut as any).find_summary.summary_version, "find_summary_v1");
+  assert.equal((findOut as any).find_summary.returned_nodes, 2);
+  assert.equal((findOut as any).find_summary.has_more, false);
+  assert.equal((findOut as any).find_summary.slots_mode, "preview");
+  assert.equal((findOut as any).find_summary.meta_included, false);
+  assert.deepEqual((findOut as any).find_summary.type_counts, { event: 1, topic: 1 });
+  assert.deepEqual((findOut as any).find_summary.tier_counts, { hot: 1, warm: 1 });
+  assert.deepEqual((findOut as any).find_summary.memory_lane_counts, { private: 1, shared: 1 });
+  assert.deepEqual((findOut as any).find_summary.filters_applied, ["text_contains", "consumer_agent_id", "consumer_team_id"]);
+  assert.equal((findOut as any).nodes.length, 2);
+  assert.deepEqual(Object.keys((findOut as any).nodes[0].slots_preview), ["env", "service"]);
+
   // Unified URI resolver: node/edge/commit/decision should all resolve with typed payloads.
   const resolveClient = new ResolveFixturePgClient();
   const nodeUri = "aionis://default/default/event/00000000-0000-0000-0000-000000001101";
@@ -3547,6 +3645,11 @@ async function run() {
   assert.equal((resolvedNode as any).type, "event");
   assert.equal((resolvedNode as any).node?.uri, nodeUri);
   assert.equal((resolvedNode as any).node?.commit_uri, commitUri);
+  assert.equal((resolvedNode as any).resolve_summary.summary_version, "resolve_summary_v1");
+  assert.equal((resolvedNode as any).resolve_summary.payload_kind, "node");
+  assert.equal((resolvedNode as any).resolve_summary.include_meta, true);
+  assert.equal((resolvedNode as any).resolve_summary.slots_mode, "preview");
+  assert.deepEqual((resolvedNode as any).resolve_summary.related_uris, [commitUri, nodeUri]);
 
   const resolvedEdge = await memoryResolve(
     resolveClient as any,
@@ -3558,6 +3661,8 @@ async function run() {
   assert.equal((resolvedEdge as any).edge?.uri, edgeUri);
   assert.equal((resolvedEdge as any).edge?.src_uri, nodeUri);
   assert.equal((resolvedEdge as any).edge?.commit_uri, commitUri);
+  assert.equal((resolvedEdge as any).resolve_summary.payload_kind, "edge");
+  assert.equal((resolvedEdge as any).resolve_summary.related_uri_count, 4);
 
   const resolvedCommit = await memoryResolve(
     resolveClient as any,
@@ -3568,6 +3673,7 @@ async function run() {
   assert.equal((resolvedCommit as any).type, "commit");
   assert.equal((resolvedCommit as any).commit?.uri, commitUri);
   assert.equal((resolvedCommit as any).commit?.parent_uri, "aionis://default/default/commit/00000000-0000-0000-0000-00000000c100");
+  assert.equal((resolvedCommit as any).resolve_summary.payload_kind, "commit");
   assert.deepEqual((resolvedCommit as any).commit?.linked_object_counts, {
     nodes: 2,
     edges: 1,
@@ -3584,6 +3690,14 @@ async function run() {
   assert.equal((resolvedDecision as any).type, "decision");
   assert.equal((resolvedDecision as any).decision?.decision_uri, decisionUri);
   assert.equal((resolvedDecision as any).decision?.commit_uri, commitUri);
+  assert.equal((resolvedDecision as any).resolve_summary.payload_kind, "decision");
+  assert.deepEqual((resolvedDecision as any).resolve_summary.object_keys, [
+    "commit_id",
+    "decision_id",
+    "decision_kind",
+    "run_id",
+    "selected_tool",
+  ]);
 
   await assert.rejects(
     () =>

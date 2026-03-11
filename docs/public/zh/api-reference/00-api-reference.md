@@ -125,6 +125,11 @@ Memory 路由使用以下任一方式：
 1. `POST /v1/memory/find`
 2. `POST /v1/memory/resolve`
 
+说明：
+
+1. `memory/find` 响应现在也会带紧凑的 `find_summary`，方便调用方先看结果规模、类型分布和实际生效的过滤条件，再决定是否读取完整节点列表。
+2. `memory/resolve` 响应现在也会带紧凑的 `resolve_summary`，方便调用方先看解析出的对象类型、payload 形状和关联 URI，再决定是否读取完整 `node / edge / commit / decision` 载荷。
+
 ## 常见请求字段
 
 1. `tenant_id`

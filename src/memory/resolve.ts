@@ -78,6 +78,17 @@ type DecisionRow = {
   commit_scope: string | null;
 };
 
+type ResolveSummary = {
+  summary_version: "resolve_summary_v1";
+  resolved_type: string;
+  payload_kind: "node" | "edge" | "commit" | "decision";
+  include_meta: boolean;
+  slots_mode: "full" | "preview" | "none";
+  related_uris: string[];
+  related_uri_count: number;
+  object_keys: string[];
+};
+
 function pickSlotsPreview(slots: unknown, maxKeys: number): Record<string, unknown> | null {
   if (!slots || typeof slots !== "object" || Array.isArray(slots)) return null;
   const obj = slots as Record<string, unknown>;
@@ -109,6 +120,34 @@ function buildCommitUri(
     type: "commit",
     id: commitId,
   });
+}
+
+function sortObjectKeys(value: Record<string, unknown>): string[] {
+  return Object.keys(value).sort();
+}
+
+function buildResolveSummary(args: {
+  resolvedType: string;
+  payloadKind: "node" | "edge" | "commit" | "decision";
+  includeMeta: boolean;
+  includeSlots: boolean;
+  includeSlotsPreview: boolean;
+  relatedUris: Array<string | null | undefined>;
+  payload: Record<string, unknown>;
+}): ResolveSummary {
+  const dedupedRelatedUris = Array.from(
+    new Set(args.relatedUris.filter((value): value is string => typeof value === "string" && value.length > 0)),
+  ).sort();
+  return {
+    summary_version: "resolve_summary_v1",
+    resolved_type: args.resolvedType,
+    payload_kind: args.payloadKind,
+    include_meta: args.includeMeta,
+    slots_mode: args.includeSlots ? "full" : args.includeSlotsPreview ? "preview" : "none",
+    related_uris: dedupedRelatedUris,
+    related_uri_count: dedupedRelatedUris.length,
+    object_keys: sortObjectKeys(args.payload),
+  };
 }
 
 export async function memoryResolve(client: pg.PoolClient, body: unknown, defaultScope: string, defaultTenantId: string) {
@@ -185,6 +224,26 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
         commit_id: row.commit_id,
         commit_uri: buildCommitUri(tenancy.tenant_id, row.commit_scope, row.commit_id, defaultTenantId),
       },
+      resolve_summary: buildResolveSummary({
+        resolvedType: uriParts.type,
+        payloadKind: "edge",
+        includeMeta: true,
+        includeSlots: false,
+        includeSlotsPreview: false,
+        relatedUris: [
+          buildAionisUri({ tenant_id: tenancy.tenant_id, scope: tenancy.scope, type: "edge", id: row.id }),
+          buildAionisUri({ tenant_id: tenancy.tenant_id, scope: tenancy.scope, type: row.src_type, id: row.src_id }),
+          buildAionisUri({ tenant_id: tenancy.tenant_id, scope: tenancy.scope, type: row.dst_type, id: row.dst_id }),
+          buildCommitUri(tenancy.tenant_id, row.commit_scope, row.commit_id, defaultTenantId),
+        ],
+        payload: {
+          id: row.id,
+          type: row.type,
+          src_id: row.src_id,
+          dst_id: row.dst_id,
+          commit_id: row.commit_id,
+        },
+      }),
     };
   }
 
@@ -251,6 +310,27 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
           total: Number(row.node_count ?? 0) + Number(row.edge_count ?? 0) + Number(row.decision_count ?? 0),
         },
       },
+      resolve_summary: buildResolveSummary({
+        resolvedType: uriParts.type,
+        payloadKind: "commit",
+        includeMeta: true,
+        includeSlots: false,
+        includeSlotsPreview: false,
+        relatedUris: [
+          buildAionisUri({ tenant_id: tenancy.tenant_id, scope: tenancy.scope, type: "commit", id: row.id }),
+          row.parent_id
+            ? buildAionisUri({ tenant_id: tenancy.tenant_id, scope: tenancy.scope, type: "commit", id: row.parent_id })
+            : null,
+        ],
+        payload: {
+          id: row.id,
+          parent_id: row.parent_id,
+          actor: row.actor,
+          node_count: Number(row.node_count ?? 0),
+          edge_count: Number(row.edge_count ?? 0),
+          decision_count: Number(row.decision_count ?? 0),
+        },
+      }),
     };
   }
 
@@ -300,6 +380,24 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
         commit_id: row.commit_id,
         commit_uri: buildCommitUri(tenancy.tenant_id, row.commit_scope, row.commit_id, defaultTenantId),
       },
+      resolve_summary: buildResolveSummary({
+        resolvedType: uriParts.type,
+        payloadKind: "decision",
+        includeMeta: true,
+        includeSlots: false,
+        includeSlotsPreview: false,
+        relatedUris: [
+          buildAionisUri({ tenant_id: tenancy.tenant_id, scope: tenancy.scope, type: "decision", id: row.id }),
+          buildCommitUri(tenancy.tenant_id, row.commit_scope, row.commit_id, defaultTenantId),
+        ],
+        payload: {
+          decision_id: row.id,
+          decision_kind: row.decision_kind,
+          run_id: row.run_id,
+          selected_tool: row.selected_tool,
+          commit_id: row.commit_id,
+        },
+      }),
     };
   }
 
@@ -395,5 +493,22 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
   return {
     ...base,
     node,
+    resolve_summary: buildResolveSummary({
+      resolvedType: uriParts.type,
+      payloadKind: "node",
+      includeMeta: parsed.include_meta,
+      includeSlots: parsed.include_slots,
+      includeSlotsPreview: parsed.include_slots_preview,
+      relatedUris: [
+        buildAionisUri({ tenant_id: tenancy.tenant_id, scope: tenancy.scope, type: row.type, id: row.id }),
+        buildCommitUri(tenancy.tenant_id, row.commit_scope, row.commit_id, defaultTenantId),
+      ],
+      payload: {
+        id: row.id,
+        type: row.type,
+        client_id: row.client_id,
+        commit_id: row.commit_id,
+      },
+    }),
   };
 }

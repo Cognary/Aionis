@@ -91,13 +91,16 @@ import type {
   ControlTenantTimeseriesResponse,
   CapabilityContractSpec,
   ContextAssembleInput,
+  ContextAssembleSummary,
   ContextAssembleResponse,
   HealthResponse,
   MemoryEventWriteInput,
   MemoryEventWriteResponse,
   MemoryFindInput,
+  MemoryFindSummary,
   MemoryFindResponse,
   MemoryResolveInput,
+  MemoryResolveSummary,
   MemoryResolveResponse,
   MemoryPackExportInput,
   MemoryPackExportResponse,
@@ -123,6 +126,7 @@ import type {
   RequestOptions,
   RetryPolicy,
   RulesEvaluateInput,
+  RulesEvaluateSummary,
   RulesEvaluateResponse,
   SandboxExecuteInput,
   SandboxExecuteResponse,
@@ -135,13 +139,17 @@ import type {
   SandboxSessionCreateInput,
   SandboxSessionCreateResponse,
   ToolsDecisionInput,
+  ToolsDecisionSummary,
   ToolsDecisionResponse,
   ToolsFeedbackInput,
   ToolsFeedbackResponse,
   ToolsRunInput,
+  ToolsRunSummary,
   ToolsRunResponse,
   ToolsSelectInput,
+  ToolsSelectSummary,
   ToolsSelectResponse,
+  AionisSummaryResponse,
 } from "./types.js";
 import { AionisApiError, AionisNetworkError } from "./types.js";
 
@@ -232,6 +240,16 @@ function buildQueryString(query: Record<string, unknown> | undefined): string {
   return s.length > 0 ? `?${s}` : "";
 }
 
+function withSummary<TResponse, TSummary>(
+  response: AionisResponse<TResponse>,
+  pick: (data: TResponse) => TSummary | null | undefined,
+): AionisSummaryResponse<TResponse, TSummary> {
+  return {
+    ...response,
+    summary: pick(response.data) ?? null,
+  };
+}
+
 async function parseBody(res: Response): Promise<unknown> {
   const ct = (res.headers.get("content-type") ?? "").toLowerCase();
   if (ct.includes("application/json")) {
@@ -281,12 +299,30 @@ export class AionisClient {
     return this.requestPost<ContextAssembleInput, ContextAssembleResponse>("/v1/memory/context/assemble", input, opts);
   }
 
+  async inspectContextAssemble(
+    input: ContextAssembleInput,
+    opts?: RequestOptions,
+  ): Promise<AionisSummaryResponse<ContextAssembleResponse, ContextAssembleSummary>> {
+    return withSummary(await this.contextAssemble(input, opts), (data) => data.assembly_summary);
+  }
+
   async find(input: MemoryFindInput, opts?: RequestOptions): Promise<AionisResponse<MemoryFindResponse>> {
     return this.requestPost<MemoryFindInput, MemoryFindResponse>("/v1/memory/find", input, opts);
   }
 
+  async inspectFind(input: MemoryFindInput, opts?: RequestOptions): Promise<AionisSummaryResponse<MemoryFindResponse, MemoryFindSummary>> {
+    return withSummary(await this.find(input, opts), (data) => data.find_summary);
+  }
+
   async resolve(input: MemoryResolveInput, opts?: RequestOptions): Promise<AionisResponse<MemoryResolveResponse>> {
     return this.requestPost<MemoryResolveInput, MemoryResolveResponse>("/v1/memory/resolve", input, opts);
+  }
+
+  async inspectResolve(
+    input: MemoryResolveInput,
+    opts?: RequestOptions,
+  ): Promise<AionisSummaryResponse<MemoryResolveResponse, MemoryResolveSummary>> {
+    return withSummary(await this.resolve(input, opts), (data) => data.resolve_summary);
   }
 
   async createSession(input: MemorySessionCreateInput, opts?: RequestOptions): Promise<AionisResponse<MemorySessionCreateResponse>> {
@@ -349,16 +385,44 @@ export class AionisClient {
     return this.requestPost<RulesEvaluateInput, RulesEvaluateResponse>("/v1/memory/rules/evaluate", input, opts);
   }
 
+  async inspectRulesEvaluate(
+    input: RulesEvaluateInput,
+    opts?: RequestOptions,
+  ): Promise<AionisSummaryResponse<RulesEvaluateResponse, RulesEvaluateSummary>> {
+    return withSummary(await this.rulesEvaluate(input, opts), (data) => data.evaluation_summary);
+  }
+
   async toolsSelect(input: ToolsSelectInput, opts?: RequestOptions): Promise<AionisResponse<ToolsSelectResponse>> {
     return this.requestPost<ToolsSelectInput, ToolsSelectResponse>("/v1/memory/tools/select", input, opts);
+  }
+
+  async inspectToolsSelect(
+    input: ToolsSelectInput,
+    opts?: RequestOptions,
+  ): Promise<AionisSummaryResponse<ToolsSelectResponse, ToolsSelectSummary>> {
+    return withSummary(await this.toolsSelect(input, opts), (data) => data.selection_summary);
   }
 
   async toolsDecision(input: ToolsDecisionInput, opts?: RequestOptions): Promise<AionisResponse<ToolsDecisionResponse>> {
     return this.requestPost<ToolsDecisionInput, ToolsDecisionResponse>("/v1/memory/tools/decision", input, opts);
   }
 
+  async inspectToolsDecision(
+    input: ToolsDecisionInput,
+    opts?: RequestOptions,
+  ): Promise<AionisSummaryResponse<ToolsDecisionResponse, ToolsDecisionSummary>> {
+    return withSummary(await this.toolsDecision(input, opts), (data) => data.lifecycle_summary);
+  }
+
   async toolsRun(input: ToolsRunInput, opts?: RequestOptions): Promise<AionisResponse<ToolsRunResponse>> {
     return this.requestPost<ToolsRunInput, ToolsRunResponse>("/v1/memory/tools/run", input, opts);
+  }
+
+  async inspectToolsRun(
+    input: ToolsRunInput,
+    opts?: RequestOptions,
+  ): Promise<AionisSummaryResponse<ToolsRunResponse, ToolsRunSummary>> {
+    return withSummary(await this.toolsRun(input, opts), (data) => data.lifecycle_summary);
   }
 
   async toolsFeedback(input: ToolsFeedbackInput, opts?: RequestOptions): Promise<AionisResponse<ToolsFeedbackResponse>> {

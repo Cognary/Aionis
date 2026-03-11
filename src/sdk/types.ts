@@ -432,6 +432,10 @@ export type AionisResponse<T> = {
   request_id: string | null;
 };
 
+export type AionisSummaryResponse<TResponse, TSummary> = AionisResponse<TResponse> & {
+  summary: TSummary | null;
+};
+
 export type RetryPolicy = {
   max_retries: number;
   base_delay_ms: number;
@@ -855,12 +859,26 @@ export type ContextAssembleResponse = {
   [k: string]: unknown;
 };
 
+export type ContextAssembleSummary = NonNullable<ContextAssembleResponse["assembly_summary"]>;
+
 export type MemoryFindResponse = {
   tenant_id: string;
   scope: string;
   mode: "find";
   filters: Record<string, unknown>;
   nodes: Array<Record<string, unknown>>;
+  find_summary?: {
+    summary_version: "find_summary_v1";
+    returned_nodes: number;
+    has_more: boolean;
+    type_counts: Record<string, number>;
+    tier_counts: Record<string, number>;
+    memory_lane_counts: Record<string, number>;
+    slots_mode: "full" | "preview" | "none";
+    meta_included: boolean;
+    filters_applied: string[];
+    [k: string]: unknown;
+  };
   page: {
     limit: number;
     offset: number;
@@ -870,17 +888,32 @@ export type MemoryFindResponse = {
   [k: string]: unknown;
 };
 
+export type MemoryFindSummary = NonNullable<MemoryFindResponse["find_summary"]>;
+
 export type MemoryResolveResponse = {
   tenant_id: string;
   scope: string;
   uri: string;
   type: "event" | "entity" | "topic" | "rule" | "evidence" | "concept" | "procedure" | "self_model" | "edge" | "commit" | "decision";
+  resolve_summary?: {
+    summary_version: "resolve_summary_v1";
+    resolved_type: string;
+    payload_kind: "node" | "edge" | "commit" | "decision";
+    include_meta: boolean;
+    slots_mode: "full" | "preview" | "none";
+    related_uris: string[];
+    related_uri_count: number;
+    object_keys: string[];
+    [k: string]: unknown;
+  };
   node?: Record<string, unknown>;
   edge?: Record<string, unknown>;
   commit?: Record<string, unknown>;
   decision?: Record<string, unknown>;
   [k: string]: unknown;
 };
+
+export type MemoryResolveSummary = NonNullable<MemoryResolveResponse["resolve_summary"]>;
 
 export type MemorySessionCreateResponse = {
   tenant_id: string;
@@ -1137,6 +1170,8 @@ export type RulesEvaluateResponse = {
   [k: string]: unknown;
 };
 
+export type RulesEvaluateSummary = NonNullable<RulesEvaluateResponse["evaluation_summary"]>;
+
 export type ToolsSelectResponse = {
   tenant_id?: string;
   scope: string;
@@ -1178,6 +1213,8 @@ export type ToolsSelectResponse = {
   [k: string]: unknown;
 };
 
+export type ToolsSelectSummary = NonNullable<ToolsSelectResponse["selection_summary"]>;
+
 export type ToolsDecisionResponse = {
   tenant_id: string;
   scope: string;
@@ -1215,6 +1252,8 @@ export type ToolsDecisionResponse = {
   };
   [k: string]: unknown;
 };
+
+export type ToolsDecisionSummary = NonNullable<ToolsDecisionResponse["lifecycle_summary"]>;
 
 export type ToolsRunResponse = {
   tenant_id: string;
@@ -1279,6 +1318,8 @@ export type ToolsRunResponse = {
   };
   [k: string]: unknown;
 };
+
+export type ToolsRunSummary = NonNullable<ToolsRunResponse["lifecycle_summary"]>;
 
 export type ToolsFeedbackResponse = {
   ok: boolean;

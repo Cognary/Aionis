@@ -125,6 +125,11 @@ Notes:
 1. `POST /v1/memory/find`
 2. `POST /v1/memory/resolve`
 
+Notes:
+
+1. `memory/find` responses now also include compact `find_summary` objects so callers can inspect result breadth, type mix, and applied filters before reading the full node list.
+2. `memory/resolve` responses now also include compact `resolve_summary` objects so callers can inspect the resolved object kind, payload shape, and related URIs before reading the full `node / edge / commit / decision` payload.
+
 ## Common Request Fields
 
 1. `tenant_id`

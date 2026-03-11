@@ -52,6 +52,64 @@ const recallRes = await client.recallText({
 console.log(writeRes.commit_uri, recallRes.request_id);
 ```
 
+## Find Summary（TypeScript）
+
+现在也可以先把 `find` 当成紧凑的 inventory surface 来用；只有当 `find_summary` 提示需要时，再去读取完整的 `nodes` 列表。
+
+```ts
+const found = await client.find({
+  text_contains: "deploy",
+  limit: 20,
+});
+
+console.log(found.find_summary?.returned_nodes);
+console.log(found.find_summary?.type_counts);
+console.log(found.find_summary?.filters_applied);
+```
+
+现在也可以直接用 SDK helper 拿到 summary-first 结构：
+
+```ts
+const found = await client.inspectFind({
+  text_contains: "deploy",
+  limit: 20,
+});
+
+console.log(found.summary?.returned_nodes);
+console.log(found.summary?.type_counts);
+console.log(found.data.nodes.length);
+```
+
+## Resolve Summary（TypeScript）
+
+现在也可以先把 `resolve` 当成紧凑的 object inspection surface 来用；只有当 `resolve_summary` 提示需要时，再去读取完整的 `node`、`edge`、`commit` 或 `decision` 载荷。
+
+```ts
+const resolved = await client.resolve({
+  uri: "aionis://default/default/event/00000000-0000-0000-0000-000000001101",
+  include_meta: true,
+  include_slots_preview: true,
+});
+
+console.log(resolved.resolve_summary?.payload_kind);
+console.log(resolved.resolve_summary?.related_uris);
+console.log(resolved.resolve_summary?.object_keys);
+```
+
+如果你想默认先走 summary-first inspection，更适合直接用 SDK helper：
+
+```ts
+const resolved = await client.inspectResolve({
+  uri: "aionis://default/default/event/00000000-0000-0000-0000-000000001101",
+  include_meta: true,
+  include_slots_preview: true,
+});
+
+console.log(resolved.summary?.payload_kind);
+console.log(resolved.summary?.related_uris);
+console.log(resolved.data.node?.uri);
+```
+
 ## Rule Evaluation Summary（TypeScript）
 
 `rulesEvaluate` 现在也可以先当紧凑的 policy inspection surface 来用；只有当 `evaluation_summary` 不够时，再去看完整的 `active / shadow / applied` 载荷。
@@ -67,6 +125,14 @@ console.log(rules.evaluation_summary?.matched);
 console.log(rules.evaluation_summary?.filtered_by_lane);
 console.log(rules.evaluation_summary?.selected_tool);
 ```
+
+同样的 summary-first helper 模式现在也适用于：
+
+1. `inspectContextAssemble`
+2. `inspectRulesEvaluate`
+3. `inspectToolsSelect`
+4. `inspectToolsDecision`
+5. `inspectToolsRun`
 
 ## Replay Dispatch（TypeScript）
 

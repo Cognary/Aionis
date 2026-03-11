@@ -60,6 +60,18 @@ type NodeDTO = {
   commit_id?: string | null;
 };
 
+type FindSummary = {
+  summary_version: "find_summary_v1";
+  returned_nodes: number;
+  has_more: boolean;
+  type_counts: Record<string, number>;
+  tier_counts: Record<string, number>;
+  memory_lane_counts: Record<string, number>;
+  slots_mode: "full" | "preview" | "none";
+  meta_included: boolean;
+  filters_applied: string[];
+};
+
 function pickSlotsPreview(slots: unknown, maxKeys: number): Record<string, unknown> | null {
   if (!slots || typeof slots !== "object" || Array.isArray(slots)) return null;
   const obj = slots as Record<string, unknown>;
@@ -181,6 +193,48 @@ function toNodeDto(row: NodeRow, scope: string, tenantId: string, input: ReturnT
   return out;
 }
 
+function buildSortedCounts(rows: NodeRow[], pick: (row: NodeRow) => string | null | undefined): Record<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key = pick(row);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const out: Record<string, number> = {};
+  for (const key of Array.from(counts.keys()).sort()) out[key] = counts.get(key)!;
+  return out;
+}
+
+function buildFindSummary(
+  rows: NodeRow[],
+  input: ReturnType<typeof normalizeFindInput>,
+  parsed: MemoryFindInput,
+  hasMore: boolean,
+): FindSummary {
+  const filtersApplied: string[] = [];
+  if (parsed.uri) filtersApplied.push("uri");
+  if (input.id) filtersApplied.push("id");
+  if (input.client_id) filtersApplied.push("client_id");
+  if (input.type) filtersApplied.push("type");
+  if (input.title_contains) filtersApplied.push("title_contains");
+  if (input.text_contains) filtersApplied.push("text_contains");
+  if (input.memory_lane) filtersApplied.push("memory_lane");
+  if (input.slots_contains) filtersApplied.push("slots_contains");
+  if (input.consumer_agent_id) filtersApplied.push("consumer_agent_id");
+  if (input.consumer_team_id) filtersApplied.push("consumer_team_id");
+  return {
+    summary_version: "find_summary_v1",
+    returned_nodes: rows.length,
+    has_more: hasMore,
+    type_counts: buildSortedCounts(rows, (row) => row.type),
+    tier_counts: buildSortedCounts(rows, (row) => row.tier),
+    memory_lane_counts: buildSortedCounts(rows, (row) => row.memory_lane),
+    slots_mode: input.include_slots ? "full" : input.include_slots_preview ? "preview" : "none",
+    meta_included: input.include_meta,
+    filters_applied: filtersApplied,
+  };
+}
+
 export async function memoryFind(client: pg.PoolClient, body: unknown, defaultScope: string, defaultTenantId: string) {
   const parsed = MemoryFindRequest.parse(body);
   const input = normalizeFindInput(parsed);
@@ -275,6 +329,7 @@ export async function memoryFind(client: pg.PoolClient, body: unknown, defaultSc
       consumer_team_id: input.consumer_team_id ?? null,
     },
     nodes: rows.map((row) => toNodeDto(row, tenancy.scope, tenancy.tenant_id, input)),
+    find_summary: buildFindSummary(rows, input, parsed, hasMore),
     page: {
       limit: input.limit,
       offset: input.offset,
