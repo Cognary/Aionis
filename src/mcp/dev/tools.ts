@@ -1,5 +1,6 @@
 import { z, type ZodTypeAny } from "zod";
 import { type AionisDevEnv, HttpError, clipText, postJson } from "./client.js";
+import { type ToolResultSummary } from "../../memory/tool-result-summary.js";
 import {
   CodexGateArgsSchema,
   CodexLearnFromRunArgsSchema,
@@ -48,7 +49,44 @@ function invalidArgs(error: z.ZodError): ToolResult {
 }
 
 function stringifyResult(toolName: string, result: unknown, env: AionisDevEnv): string {
+  const summary = extractToolResultSummary(result);
+  if (summary) {
+    const lines = [
+      `${toolName} result`,
+      `summary_version: ${summary.summary_version}`,
+      `signals: ${summary.signals.join(", ") || "none"}`,
+      `stdout_preview: ${summary.stdout_preview || "<empty>"}`,
+      summary.stderr_preview ? `stderr_preview: ${summary.stderr_preview}` : null,
+      summary.result_preview ? `result_preview: ${summary.result_preview}` : null,
+      `stdout_chars: ${summary.stdout_chars}`,
+      `stderr_chars: ${summary.stderr_chars}`,
+      `result_kind: ${summary.result_kind}`,
+      summary.result_keys.length > 0 ? `result_keys: ${summary.result_keys.join(", ")}` : null,
+      summary.exit_code !== null ? `exit_code: ${summary.exit_code}` : null,
+      summary.error ? `error: ${summary.error}` : null,
+      summary.truncated ? "truncated: true" : null,
+    ].filter(Boolean);
+    return clipText(lines.join("\n"), env.AIONIS_MAX_TOOL_TEXT_CHARS);
+  }
   return clipText(`${toolName} result\n${JSON.stringify(result, null, 2)}`, env.AIONIS_MAX_TOOL_TEXT_CHARS);
+}
+
+function extractToolResultSummary(result: unknown): ToolResultSummary | null {
+  const obj = result && typeof result === "object" ? (result as Record<string, unknown>) : null;
+  if (!obj) return null;
+  const candidates = [
+    obj.result_summary,
+    (obj.run as Record<string, unknown> | undefined)?.result_summary,
+    (obj.logs as Record<string, unknown> | undefined)?.summary,
+    (obj.artifact as Record<string, unknown> | undefined)?.summary,
+    Array.isArray(obj.steps) ? (obj.steps[0] as Record<string, unknown> | undefined)?.result_summary : null,
+  ];
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === "object" && (candidate as Record<string, unknown>).summary_version === "tool_result_summary_v1") {
+      return candidate as ToolResultSummary;
+    }
+  }
+  return null;
 }
 
 function summarizeRecallText(result: any, env: AionisDevEnv): string {

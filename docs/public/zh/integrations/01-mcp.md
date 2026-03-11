@@ -24,6 +24,12 @@ Aionis 现在提供两套 MCP 服务：
 4. sandbox 执行能力
 5. 面向 Codex 的 planning context、quality gate、learn-from-run 工具
 
+当前 Dev MCP 的输出策略也开始优先消费有界执行摘要，而不是原始大结果：
+
+1. sandbox 工具会暴露 `result_summary`
+2. replay 记录的命令步骤会写入 `result_summary`
+3. MCP 文本响应会优先返回这些摘要，只有需要时才回退到原始 JSON
+
 ## 快速开始
 
 1. 构建项目：

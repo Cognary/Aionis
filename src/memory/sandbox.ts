@@ -16,6 +16,7 @@ import {
   SandboxSessionCreateRequest,
 } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
+import { summarizeToolResult } from "./tool-result-summary.js";
 
 type SandboxDefaults = {
   defaultScope: string;
@@ -482,6 +483,14 @@ export async function postJsonWithTls(
 }
 
 function toRunPayload(row: SandboxRunRow) {
+  const resultSummary = summarizeToolResult({
+    stdout: row.stdout_text,
+    stderr: row.stderr_text,
+    result: row.result_json ?? {},
+    exit_code: row.exit_code,
+    error: row.error,
+    truncated: row.output_truncated,
+  });
   return {
     run_id: row.id,
     session_id: row.session_id,
@@ -505,6 +514,7 @@ function toRunPayload(row: SandboxRunRow) {
     cancel_requested: row.cancel_requested,
     cancel_reason: row.cancel_reason,
     result: row.result_json ?? {},
+    result_summary: resultSummary,
     started_at: row.started_at,
     finished_at: row.finished_at,
     created_at: row.created_at,
@@ -866,6 +876,13 @@ export async function getSandboxRunLogs(client: pg.PoolClient, body: unknown, de
       stdout: tailText(row.stdout_text, parsed.tail_bytes),
       stderr: tailText(row.stderr_text, parsed.tail_bytes),
       truncated: !!row.output_truncated,
+      summary: summarizeToolResult({
+        stdout: row.stdout_text,
+        stderr: row.stderr_text,
+        exit_code: null,
+        error: null,
+        truncated: row.output_truncated,
+      }),
     },
   };
 }
@@ -952,6 +969,14 @@ export async function getSandboxRunArtifact(
             truncated: !!row.output_truncated,
           }
         : undefined,
+      summary: summarizeToolResult({
+        stdout: row.stdout_text,
+        stderr: row.stderr_text,
+        result: row.result_json ?? {},
+        exit_code: row.exit_code,
+        error: row.error,
+        truncated: row.output_truncated,
+      }),
       exit_code: row.exit_code,
       error: row.error,
       result: parsed.include_result ? row.result_json ?? {} : undefined,
@@ -997,6 +1022,18 @@ export async function getSandboxRunArtifact(
         if (parsed.include_result) {
           addObject("result.json", "application/json", row.result_json ?? {});
         }
+        addObject(
+          "summary.json",
+          "application/json",
+          summarizeToolResult({
+            stdout: row.stdout_text,
+            stderr: row.stderr_text,
+            result: row.result_json ?? {},
+            exit_code: row.exit_code,
+            error: row.error,
+            truncated: row.output_truncated,
+          }),
+        );
         if (parsed.include_metadata) {
           addObject("metadata.json", "application/json", row.metadata ?? {});
         }
@@ -1013,6 +1050,14 @@ export async function getSandboxRunArtifact(
           timeout_ms: row.timeout_ms,
           exit_code: row.exit_code,
           error: row.error,
+          result_summary: summarizeToolResult({
+            stdout: row.stdout_text,
+            stderr: row.stderr_text,
+            result: row.result_json ?? {},
+            exit_code: row.exit_code,
+            error: row.error,
+            truncated: row.output_truncated,
+          }),
           started_at: row.started_at,
           finished_at: row.finished_at,
           created_at: row.created_at,

@@ -70,6 +70,7 @@ Notes:
 4. `POST /v1/memory/sandbox/runs/logs`
 5. `POST /v1/memory/sandbox/runs/artifact`
 6. `POST /v1/memory/sandbox/runs/cancel`
+7. Sandbox run responses now include bounded `result_summary` fields for compact tool-output inspection.
 
 ### Replay Automation (Experimental)
 

@@ -88,6 +88,26 @@ print(write_res.get("commit_uri"), recall_res.get("request_id"))
 4. Policy loop: `rules_evaluate`, `tools_select`, `tools_decision`, `tools_feedback`
 5. Replay: `replayPlaybookGet`, `replayPlaybookCandidate`, `replayPlaybookRun`, `replayPlaybookDispatch`
 
+## Sandbox Result Summary (TypeScript)
+
+Use sandbox responses as a compact tool-output surface first, and only inspect raw logs when the bounded summary indicates you need them.
+
+```ts
+const run = await client.sandboxRunGet({
+  run_id: "11111111-1111-1111-1111-111111111111",
+});
+
+console.log(run.run.result_summary.stdout_preview);
+console.log(run.run.result_summary.result_keys);
+
+const logs = await client.sandboxRunLogs({
+  run_id: "11111111-1111-1111-1111-111111111111",
+  tail_bytes: 4096,
+});
+
+console.log(logs.logs.summary.signals, logs.logs.summary.truncated);
+```
+
 ## Replay Dispatch Quick Start (TypeScript)
 
 Use replay candidate lookup to decide whether a playbook can skip primary reasoning, then let dispatch execute deterministic replay or fallback automatically.

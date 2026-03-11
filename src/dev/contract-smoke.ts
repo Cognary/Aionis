@@ -68,7 +68,13 @@ import {
 import { memoryResolve } from "../memory/resolve.js";
 import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
-import { postJsonWithTls } from "../memory/sandbox.js";
+import {
+  enqueueSandboxRun,
+  getSandboxRun,
+  getSandboxRunArtifact,
+  getSandboxRunLogs,
+  postJsonWithTls,
+} from "../memory/sandbox.js";
 import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   assertRecallStoreAccessContract,
@@ -148,6 +154,63 @@ class FakePgClient {
     }
 
     throw new Error(`FakePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class SandboxFixturePgClient {
+  private readonly runRow = {
+    id: "99999999-9999-9999-9999-999999999999",
+    session_id: "99999999-9999-9999-9999-999999999998",
+    tenant_id: "default",
+    scope: "default",
+    project_id: "project_alpha",
+    planner_run_id: "planner_123",
+    decision_id: "99999999-9999-9999-9999-999999999997",
+    action_kind: "command",
+    action_json: { argv: ["echo", "hello"] },
+    mode: "sync",
+    status: "succeeded",
+    timeout_ms: 1500,
+    stdout_text: "hello world from sandbox\nsecond line\n",
+    stderr_text: "warning: trimmed sample\n",
+    output_truncated: true,
+    exit_code: 0,
+    error: null,
+    cancel_requested: false,
+    cancel_reason: null,
+    metadata: { trace_id: "trace_1" },
+    result_json: { executor: "mock", files_written: 2, ok: true },
+    started_at: "2026-03-10T10:00:01.000Z",
+    finished_at: "2026-03-10T10:00:02.000Z",
+    created_at: "2026-03-10T10:00:00.000Z",
+    updated_at: "2026-03-10T10:00:02.000Z",
+  };
+
+  async query<T>(sql: string, _params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+
+    if (s.includes("FROM memory_sandbox_sessions")) {
+      return {
+        rows: [{ id: this.runRow.session_id, expires_at: null } as any] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("INSERT INTO memory_sandbox_runs")) {
+      return {
+        rows: [{ ...this.runRow } as any] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("FROM memory_sandbox_runs")) {
+      return {
+        rows: [{ ...this.runRow } as any] as T[],
+        rowCount: 1,
+      };
+    }
+
+    throw new Error(`SandboxFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
   }
 }
 
@@ -2727,6 +2790,82 @@ async function run() {
     });
   }
 
+  // Sandbox responses should expose a bounded result summary so upper layers can avoid reading raw output first.
+  const sandboxClient = new SandboxFixturePgClient();
+  const sandboxDefaults = {
+    defaultScope: "default",
+    defaultTenantId: "default",
+    defaultTimeoutMs: 2000,
+  };
+  const sandboxExecuteOut = await enqueueSandboxRun(
+    sandboxClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      session_id: "99999999-9999-9999-9999-999999999998",
+      mode: "sync",
+      action: { kind: "command", argv: ["echo", "hello"] },
+    },
+    sandboxDefaults,
+  );
+  assert.equal((sandboxExecuteOut as any).run.result_summary.summary_version, "tool_result_summary_v1");
+  assert.deepEqual((sandboxExecuteOut as any).run.result_summary.result_keys, ["executor", "files_written", "ok"]);
+  assert.equal((sandboxExecuteOut as any).run.result_summary.truncated, true);
+  assert.equal((sandboxExecuteOut as any).run.result_summary.stdout_preview, "hello world from sandbox second line");
+  assert.equal((sandboxExecuteOut as any).run.result_summary.signals.includes("stderr_present"), true);
+
+  const sandboxRunGetOut = await getSandboxRun(
+    sandboxClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      run_id: "99999999-9999-9999-9999-999999999999",
+    },
+    sandboxDefaults,
+  );
+  assert.equal((sandboxRunGetOut as any).run.result_summary.result_kind, "object");
+  assert.equal((sandboxRunGetOut as any).run.result_summary.result_preview.includes("\"files_written\":2"), true);
+
+  const sandboxLogsOut = await getSandboxRunLogs(
+    sandboxClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      run_id: "99999999-9999-9999-9999-999999999999",
+      tail_bytes: 12,
+    },
+    {
+      defaultScope: "default",
+      defaultTenantId: "default",
+    },
+  );
+  assert.equal((sandboxLogsOut as any).logs.summary.summary_version, "tool_result_summary_v1");
+  assert.equal((sandboxLogsOut as any).logs.summary.stdout_chars > (sandboxLogsOut as any).logs.stdout.length, true);
+
+  const sandboxArtifactOut = await getSandboxRunArtifact(
+    sandboxClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      run_id: "99999999-9999-9999-9999-999999999999",
+      include_action: true,
+      include_output: true,
+      include_result: true,
+      include_metadata: true,
+      bundle_inline: false,
+    },
+    {
+      defaultScope: "default",
+      defaultTenantId: "default",
+      artifactObjectStoreBaseUri: "s3://aionis-artifacts",
+    },
+  );
+  assert.equal((sandboxArtifactOut as any).artifact.summary.summary_version, "tool_result_summary_v1");
+  assert.equal(
+    (sandboxArtifactOut as any).artifact.bundle.objects.some((entry: any) => entry.name === "summary.json"),
+    true,
+  );
+
   // Hybrid auth mode semantics: invalid API key must not block a valid JWT fallback.
   const nowSec = Math.floor(Date.now() / 1000);
   const jwtSecret = "contract-smoke-secret";
@@ -3318,6 +3457,12 @@ async function run() {
   assert.equal((replayDeterministicRunOut as any).deterministic_gate.decision, "promoted_to_strict");
   assert.equal((replayDeterministicRunOut as any).execution.inference_skipped, true);
   assert.equal((replayDeterministicRunOut as any).summary.failed_steps, 0);
+  assert.equal((replayDeterministicRunOut as any).steps[0].result_summary.summary_version, "tool_result_summary_v1");
+  assert.equal((replayDeterministicRunOut as any).steps[0].result_summary.stdout_preview, "shadow-ok");
+  assert.equal(
+    (replayDeterministicRunOut as any).steps[0].result_summary.signals.includes("structured_result_object"),
+    false,
+  );
 
   await assert.rejects(
     () =>

@@ -24,6 +24,12 @@ The native Dev MCP adds:
 4. sandbox execution operations
 5. Codex-oriented planning context, quality gate, and learning tools
 
+The current Dev MCP output policy also prefers bounded execution summaries over raw tool payloads when available:
+
+1. sandbox tools surface `result_summary`
+2. replay-backed command steps record `result_summary`
+3. MCP text responses prefer those summaries first, then fall back to raw JSON only when needed
+
 ## Quick Start
 
 1. Build the project:

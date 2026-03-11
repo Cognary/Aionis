@@ -1444,6 +1444,22 @@ export type SandboxSessionCreateResponse = {
   [k: string]: unknown;
 };
 
+export type ToolResultSummary = {
+  summary_version: "tool_result_summary_v1";
+  stdout_preview: string;
+  stderr_preview: string;
+  stdout_chars: number;
+  stderr_chars: number;
+  result_kind: "none" | "null" | "scalar" | "array" | "object";
+  result_keys: string[];
+  result_preview: string | null;
+  exit_code: number | null;
+  error: string | null;
+  truncated: boolean;
+  signals: string[];
+  [k: string]: unknown;
+};
+
 export type SandboxExecuteResponse = {
   tenant_id: string;
   scope: string;
@@ -1467,6 +1483,7 @@ export type SandboxExecuteResponse = {
     cancel_requested: boolean;
     cancel_reason: string | null;
     result: Record<string, unknown>;
+    result_summary: ToolResultSummary;
     started_at: string | null;
     finished_at: string | null;
     created_at: string;
@@ -1493,6 +1510,7 @@ export type SandboxRunLogsResponse = {
     stdout: string;
     stderr: string;
     truncated: boolean;
+    summary: ToolResultSummary;
     [k: string]: unknown;
   };
   [k: string]: unknown;

@@ -70,6 +70,7 @@ Memory 路由使用以下任一方式：
 4. `POST /v1/memory/sandbox/runs/logs`
 5. `POST /v1/memory/sandbox/runs/artifact`
 6. `POST /v1/memory/sandbox/runs/cancel`
+7. sandbox run 响应现在会带有界的 `result_summary` 字段，便于先做紧凑结果判断。
 
 ### Replay Automation（实验）
 

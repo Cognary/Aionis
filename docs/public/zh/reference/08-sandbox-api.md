@@ -89,6 +89,8 @@ Artifact 契约：
 2. 响应包含 `bundle.manifest_version=sandbox_artifact_bundle_manifest_v1`。
 3. `bundle_inline=false` 时仅返回 manifest/hash/uri 元数据，不内联 payload。
 4. 可选对象存储基址：`SANDBOX_ARTIFACT_OBJECT_STORE_BASE_URI`。
+5. `sandbox/execute`、`sandbox/runs/get`、`sandbox/runs/logs`、`sandbox/runs/artifact` 现在都会返回有界的 `result_summary`，调用方可以先消费压缩后的工具结果摘要，再决定是否读取原始 `stdout` / `stderr` / `result`。
+6. artifact bundle 现在会额外包含 `summary.json`。
 
 ## 预算与保留策略
 

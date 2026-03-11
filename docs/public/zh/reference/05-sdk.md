@@ -88,6 +88,26 @@ console.log(
 );
 ```
 
+## Sandbox Result Summary（TypeScript）
+
+如果你希望先用低 token 成本的工具结果摘要做判断，再按需读取原始日志，可以直接消费 sandbox 响应里的 `result_summary`。
+
+```ts
+const run = await client.sandboxRunGet({
+  run_id: "11111111-1111-1111-1111-111111111111",
+});
+
+console.log(run.run.result_summary.stdout_preview);
+console.log(run.run.result_summary.result_keys);
+
+const logs = await client.sandboxRunLogs({
+  run_id: "11111111-1111-1111-1111-111111111111",
+  tail_bytes: 4096,
+});
+
+console.log(logs.logs.summary.signals, logs.logs.summary.truncated);
+```
+
 ## Context Forgetting（TypeScript）
 
 如果你希望 Aionis 在注入上下文时默认排除 `cold/archive` 或低 salience 记忆，可以直接在 layered context 上启用 forgetting policy。

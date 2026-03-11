@@ -43,6 +43,7 @@ import {
   type ReplayStepBeforeInput,
 } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
+import { summarizeToolResult } from "./tool-result-summary.js";
 import { buildAionisUri } from "./uri.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 
@@ -5221,6 +5222,13 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       continue;
     }
     const execOutcome = exec.outcome;
+    const resultSummary = summarizeToolResult({
+      stdout: execOutcome.stdout,
+      stderr: execOutcome.stderr,
+      exit_code: execOutcome.exit_code,
+      error: execOutcome.error,
+      truncated: false,
+    });
     const signature = evaluateExpectedSignature(expectedSignature, execOutcome);
     const postChecks: PreconditionResult[] = [];
     for (const cond of postconditions) postChecks.push(await evaluatePostcondition(cond, execOutcome));
@@ -5241,6 +5249,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         sandbox_run_id: exec.sandbox_run_id,
         sensitive_review: sensitiveReviewInfo,
         execution: execOutcome,
+        result_summary: resultSummary,
         signature,
         postconditions: postChecks,
       });
@@ -5262,6 +5271,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
               sensitive_review: sensitiveReviewInfo,
               exit_code: execOutcome.exit_code,
               duration_ms: execOutcome.duration_ms,
+              result_summary: resultSummary,
               signature,
             },
             postconditions: postChecks,
@@ -5288,6 +5298,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         sandbox_run_id: exec.sandbox_run_id,
         sensitive_review: sensitiveReviewInfo,
         execution: execOutcome,
+        result_summary: resultSummary,
         signature,
         postconditions: postChecks,
         error: failureReason,
@@ -5310,6 +5321,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
               sensitive_review: sensitiveReviewInfo,
               exit_code: execOutcome.exit_code,
               duration_ms: execOutcome.duration_ms,
+              result_summary: resultSummary,
               signature,
               preconditions: preChecks,
               postconditions: postChecks,
@@ -5361,6 +5373,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       sandbox_run_id: exec.sandbox_run_id,
       sensitive_review: sensitiveReviewInfo,
       execution: execOutcome,
+      result_summary: resultSummary,
       signature,
       postconditions: postChecks,
       repair_applied: true,
@@ -5384,6 +5397,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             sensitive_review: sensitiveReviewInfo,
             exit_code: execOutcome.exit_code,
             duration_ms: execOutcome.duration_ms,
+            result_summary: resultSummary,
             signature,
             postconditions: postChecks,
             repair,

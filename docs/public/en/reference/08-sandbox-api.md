@@ -89,6 +89,8 @@ Artifact contract:
 2. Response includes `bundle.manifest_version=sandbox_artifact_bundle_manifest_v1`.
 3. `bundle_inline=false` returns manifest/hash/uri metadata without inline payload bodies.
 4. Optional object-store pointer base: `SANDBOX_ARTIFACT_OBJECT_STORE_BASE_URI`.
+5. `sandbox/execute`, `sandbox/runs/get`, `sandbox/runs/logs`, and `sandbox/runs/artifact` return a bounded `result_summary` so callers can inspect a compact tool-output summary before reading raw `stdout` / `stderr` / `result`.
+6. Artifact bundles now include `summary.json` alongside raw output/result objects.
 
 ## Budget and Retention
 

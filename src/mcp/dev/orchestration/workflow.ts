@@ -4,6 +4,7 @@ import { extname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { type AionisDevEnv, clipText, postJson } from "../client.js";
+import { summarizeToolResult } from "../../../memory/tool-result-summary.js";
 import {
   CodexGateArgsSchema,
   CodexPlanningContextArgsSchema,
@@ -369,6 +370,13 @@ export async function executeRecordedCommandStep(
   });
 
   const execution = executeLocalCommand(parsed);
+  const resultSummary = summarizeToolResult({
+    stdout: execution.stdout,
+    stderr: execution.stderr,
+    exit_code: execution.exit_code,
+    error: execution.error_message,
+    truncated: false,
+  });
   const after = await recordReplayStepAfter(env, {
     tenant_id: parsed.tenant_id,
     scope: parsed.scope,
@@ -383,8 +391,7 @@ export async function executeRecordedCommandStep(
       cwd,
       exit_code: execution.exit_code,
       signal: execution.signal,
-      stdout_preview: clipText(execution.stdout, 4000),
-      stderr_preview: clipText(execution.stderr, 4000),
+      result_summary: resultSummary,
     },
     error: execution.error_message ? clipText(execution.error_message, 2000) : undefined,
     metadata: {
@@ -404,6 +411,7 @@ export async function executeRecordedCommandStep(
       signal: execution.signal,
       duration_ms: execution.duration_ms,
       status: execution.status,
+      result_summary: resultSummary,
       stdout_chars: execution.stdout.length,
       stderr_chars: execution.stderr.length,
     },
