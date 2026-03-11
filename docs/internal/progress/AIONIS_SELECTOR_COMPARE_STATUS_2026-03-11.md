@@ -41,6 +41,13 @@ First single-process selector artifacts:
 
 1. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_selector_compare_v1_20260311_145130](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_selector_compare_v1_20260311_145130)
 2. [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_selector_compare_v2_20260311_145503](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_selector_compare_v2_20260311_145503)
+3. conservative-mapping runs:
+   - [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_selector_compare_v4_20260311_150455](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_selector_compare_v4_20260311_150455)
+   - [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_selector_compare_v5_20260311_150631](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_selector_compare_v5_20260311_150631)
+   - [/Users/lucio/Desktop/Aionis/artifacts/perf/ann_selector_compare_v6_20260311_150709](/Users/lucio/Desktop/Aionis/artifacts/perf/ann_selector_compare_v6_20260311_150709)
+4. median aggregate for conservative mapping:
+   - [/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_COMPARE_AGGREGATE_V3_20260311.md](/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_COMPARE_AGGREGATE_V3_20260311.md)
+   - [/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_COMPARE_AGGREGATE_V3_20260311.json](/Users/lucio/Desktop/Aionis/artifacts/perf/SELECTOR_COMPARE_AGGREGATE_V3_20260311.json)
 
 ## Current Reading
 
@@ -59,11 +66,21 @@ Observed behavior so far:
    - some slices narrow result breadth
 4. `sparse_hit -> legacy` looked unsafe in the first compare run, so the mapping was tightened to `strict_edges`
 
+Observed behavior after the conservative remap (`v4/v5/v6` median):
+
+1. overall selector median still regresses recall p95
+2. overall selector median still regresses stage1 ANN p95
+3. `dense_edge` keeps its breadth gain:
+   - nodes mean `60 -> 80`
+   - edges mean `36 -> 50`
+4. but `dense_edge` also carries the largest latency regression
+5. other classes no longer change policy, so remaining differences there should be treated as benchmark noise, not policy gain
+
 ## Current v1 Mapping
 
 1. `dense_edge` -> `quality_first`
 2. `workflow_path` -> `strict_edges`
-3. `broad_semantic` -> `legacy`
+3. `broad_semantic` -> `strict_edges`
 4. `sparse_hit` -> `strict_edges`
 
 ## Why It Is Not Default Yet
@@ -83,12 +100,8 @@ The next useful step is not another one-off query batch.
 
 It should be:
 
-1. run at least `3` selector-compare artifacts against the same canonical taxonomy
-2. aggregate median deltas per class:
-   - recall p95
-   - stage1 ANN p95
-   - result nodes / edges
-3. only after that decide whether:
-   - `broad_semantic -> legacy` stays
-   - `dense_edge -> quality_first` stays
-   - selector can move from experimental to recommended
+1. keep selector behind experiment gates
+2. do not enable it by default yet
+3. if we continue this line, the next design question is narrower:
+   - whether `dense_edge -> quality_first` should become an explicit opt-in policy mode
+   - rather than a global hidden selector

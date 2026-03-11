@@ -140,10 +140,17 @@ Current class mapping:
 
 1. `dense_edge` -> `quality_first`
 2. `workflow_path` -> `strict_edges`
-3. `broad_semantic` -> `legacy`
+3. `broad_semantic` -> `strict_edges`
 4. `sparse_hit` -> `strict_edges`
 
 This is intentionally not the final policy.
+
+After three conservative-mapping selector compare runs, the safest current reading is:
+
+1. selector remains experimental
+2. selector should not be default-enabled yet
+3. `dense_edge -> quality_first` is still the only mapping with a clear breadth upside
+4. that upside currently comes with a measurable latency cost
 
 It is a safe first implementation because:
 

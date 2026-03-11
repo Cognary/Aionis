@@ -624,6 +624,13 @@ npm run job:perf-benchmark -- \
   --ann-samples 6
 ```
 
+Aggregate multiple selector-compare runs into one median summary:
+
+```bash
+npm run job:perf-selector-aggregate -- \
+  --dirs-json '["/path/to/ann_selector_compare_v1","/path/to/ann_selector_compare_v2","/path/to/ann_selector_compare_v3"]'
+```
+
 Auth handling:
 
 - for `MEMORY_AUTH_MODE=api_key` or `api_key_or_jwt`, script auto-picks the first key from `MEMORY_API_KEYS_JSON`

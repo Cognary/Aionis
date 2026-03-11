@@ -200,7 +200,8 @@ Current assessment:
 10. class-aware recall policy selector v1 is now implemented behind `MEMORY_RECALL_CLASS_AWARE_ENABLED`
 11. the next gap is broader benchmark coverage across additional tool surfaces beyond sandbox and a selector-vs-static benchmark comparison
 12. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
-13. selector-vs-static comparison is now implemented as a first-class benchmark slice, but the current selector policy is still experimental and should not be enabled by default yet
+13. selector-vs-static comparison is now implemented as a first-class benchmark slice, and a dedicated aggregate job now exists for median reads across repeated selector runs
+14. after repeated selector compares, the current safe reading is still: do not default-enable class-aware recall selector yet
 
 ## Overall Stage Assessment
 

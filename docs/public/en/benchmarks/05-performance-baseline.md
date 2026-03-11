@@ -156,6 +156,13 @@ npm run job:perf-benchmark -- \
   --ann-samples 6
 ```
 
+Aggregate repeated selector-compare runs:
+
+```bash
+npm run job:perf-selector-aggregate -- \
+  --dirs-json '["/path/to/ann_selector_compare_v1","/path/to/ann_selector_compare_v2","/path/to/ann_selector_compare_v3"]'
+```
+
 ## Output Fields
 
 1. `latency_ms.p50/p95/p99`

@@ -133,7 +133,7 @@ const RECALL_KNOB_KEYS: Array<keyof RecallProfileDefaults> = [
 const RECALL_CLASS_PROFILE_DEFAULTS: Record<RecallWorkloadClass, RecallProfileName> = {
   dense_edge: "quality_first",
   workflow_path: "strict_edges",
-  broad_semantic: "legacy",
+  broad_semantic: "strict_edges",
   sparse_hit: "strict_edges",
 };
 

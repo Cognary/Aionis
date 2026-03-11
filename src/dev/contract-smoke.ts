@@ -1084,6 +1084,16 @@ async function run() {
       assert.equal(broad.profile, "strict_edges");
       assert.equal(broad.applied, false);
 
+      const broadSemantic = recallPolicy.resolveClassAwareRecallProfile(
+        "context_assemble",
+        { query_text: "broad semantic memory context overview" },
+        "strict_edges",
+        false,
+      );
+      assert.equal(broadSemantic.workload_class, "broad_semantic");
+      assert.equal(broadSemantic.profile, "strict_edges");
+      assert.equal(broadSemantic.applied, false);
+
       const sparse = recallPolicy.resolveClassAwareRecallProfile(
         "recall_text",
         { query_text: "lookup exact uuid hash for sparse ticket" },
