@@ -176,6 +176,7 @@ Landed surfaces:
 5. benchmark artifacts can also sample replay deterministic-eligibility and dispatch decision mix for an existing playbook
 6. benchmark artifacts can also sample summary-first sandbox execution coverage across `execute/get/logs/artifact`
 7. `job:perf-report` now renders context-optimization, replay-optimization, and sandbox summary-first sections when those artifacts are present
+8. benchmark artifacts can now also isolate `recall_text` stage-1 ANN timing across multiple recall profiles
 
 Key code:
 
@@ -190,8 +191,12 @@ Current assessment:
 1. Aionis now has a first consolidated benchmark surface for context-optimization deltas
 2. replay dispatch hit-rate and `result_summary` coverage now have a first artifact-level measurement path
 3. non-replay summary-first execution now also has a first artifact-level measurement path via sandbox
-4. the next gap is broader benchmark coverage across additional tool surfaces beyond sandbox
-5. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
+4. ANN seed-count observability has now been validated after correcting the benchmark request shape
+5. the wider clean ANN sweep shows `lite` is currently the raw ANN latency floor and `quality_first` remains the broad-recall reference
+6. the follow-up extreme-query sweep shows profile ranking is highly workload-sensitive, so no universal default should be picked yet
+7. `strict_edges` remains a balanced candidate, but the current evidence is not strong enough to promote it to the default profile
+8. the next gap is broader benchmark coverage across additional tool surfaces beyond sandbox and a query-classified ANN matrix
+9. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
 
 ## Overall Stage Assessment
 

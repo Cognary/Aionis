@@ -569,6 +569,20 @@ npm run job:perf-benchmark -- \
   --sandbox-samples 8
 ```
 
+Optional ANN-focused evidence sampling (compare stage1 ANN timing and seed counts across recall profiles, with per-query breakdown in the artifact):
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --ann-check true \
+  --ann-profiles strict_edges,quality_first,lite \
+  --ann-query-texts-json '["memory graph perf","prepare production deploy context"]' \
+  --ann-samples 8
+```
+
 Auth handling:
 
 - for `MEMORY_AUTH_MODE=api_key` or `api_key_or_jwt`, script auto-picks the first key from `MEMORY_API_KEYS_JSON`

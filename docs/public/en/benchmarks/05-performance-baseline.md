@@ -15,6 +15,7 @@ This page defines the reproducible performance baseline workflow for Aionis.
 5. Optional context-optimization cost signals (`context/assemble` baseline vs optimized)
 6. Optional replay-optimization signals (`playbooks/candidate` + `playbooks/dispatch`)
 7. Optional summary-first sandbox signals (`sandbox/execute` + `runs/get|logs|artifact`)
+8. Optional ANN stage1 profile comparison signals (`recall_text` across recall profiles, including per-query breakdown)
 
 ## Preconditions
 
@@ -100,6 +101,20 @@ npm run job:perf-benchmark -- \
   --sandbox-samples 8
 ```
 
+Add ANN-focused evidence to the benchmark artifact:
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url "http://localhost:${PORT:-3001}" \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --ann-check true \
+  --ann-profiles strict_edges,quality_first,lite \
+  --ann-query-texts-json '["memory graph perf","prepare production deploy context"]' \
+  --ann-samples 8
+```
+
 ## Output Fields
 
 1. `latency_ms.p50/p95/p99`
@@ -109,6 +124,7 @@ npm run job:perf-benchmark -- \
 5. optional `optimization.summary.*` for estimated token reduction, forgotten items, static-block selection, and `context/assemble` p95 delta
 6. optional `replay.*` for deterministic eligibility ratio, dispatch decision mix, primary-inference-skipped ratio, and `result_summary` coverage
 7. optional `sandbox.*` for `result_summary` coverage across `execute/get/logs/artifact` and endpoint latency percentiles
+8. optional `ann.*` for `stage1_candidates_ann_ms`, ANN seed counts, final seed counts, and recall latency by recall profile and by query
 
 ## Starter SLO Guidance
 

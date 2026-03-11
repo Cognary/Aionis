@@ -199,6 +199,29 @@ type SandboxOptimizationAggregate = {
   };
 };
 
+type AnnProfileAggregate = {
+  samples: number;
+  transport_error_count: number;
+  status_counts: Record<string, number>;
+  recall_latency_ms: { mean: number; p50: number; p95: number; min: number; max: number };
+  stage1_candidates_ann_ms: { mean: number; p50: number; p95: number; min: number; max: number };
+  ann_seed_count: { mean: number; p50: number; p95: number; min: number; max: number };
+  final_seed_count: { mean: number; p50: number; p95: number; min: number; max: number };
+  result_nodes: { mean: number; p50: number; p95: number; min: number; max: number };
+  result_edges: { mean: number; p50: number; p95: number; min: number; max: number };
+};
+
+type AnnOptimizationAggregate = {
+  enabled: boolean;
+  params: {
+    samples_per_query: number;
+    query_texts: string[];
+    profiles: RecallProfileName[];
+  };
+  profiles: Record<string, AnnProfileAggregate>;
+  per_query_profiles: Record<string, Record<string, AnnProfileAggregate>>;
+};
+
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);
   if (i === -1) return null;
@@ -249,6 +272,18 @@ function parseJsonStringArrayArg(flag: string, fallback: string[]): string[] {
   } catch (err: any) {
     throw new Error(`invalid ${flag}: ${String(err?.message ?? err)}`);
   }
+}
+
+function parseCsvRecallProfiles(flag: string, fallback: RecallProfileName[]): RecallProfileName[] {
+  const raw = argValue(flag);
+  if (!raw) return fallback;
+  const out: RecallProfileName[] = [];
+  for (const part of raw.split(",")) {
+    const parsed = parseRecallProfile(part.trim());
+    if (!parsed) throw new Error(`invalid ${flag}: expected comma-separated legacy|strict_edges|quality_first|lite`);
+    if (!out.includes(parsed)) out.push(parsed);
+  }
+  return out.length > 0 ? out : fallback;
 }
 
 function summarizeSeries(values: number[]): { mean: number; p50: number; p95: number; min: number; max: number } {
@@ -414,6 +449,15 @@ async function main() {
   const sandboxArgv = parseJsonStringArrayArg("--sandbox-argv-json", ["echo", "hello from sandbox benchmark"]);
   const sandboxTimeoutMs = argValue("--sandbox-timeout-ms");
   const sandboxTimeout = sandboxTimeoutMs ? clampInt(Number(sandboxTimeoutMs), 1, 600000) : null;
+  const annCheckRaw = (argValue("--ann-check") ?? "false").trim().toLowerCase();
+  const annCheck = annCheckRaw === "true";
+  const annSamples = clampInt(Number(argValue("--ann-samples") ?? "8"), 1, 2000);
+  const annQueryTexts = parseJsonStringArrayArg("--ann-query-texts-json", [
+    "memory graph perf",
+    "prepare production deploy context",
+    "rollback production deploy health verification",
+  ]);
+  const annProfiles = parseCsvRecallProfiles("--ann-profiles", ["strict_edges", "quality_first", "lite"]);
   const recallProfileRaw = (argValue("--recall-profile") ?? "").trim().toLowerCase();
   const recallProfile = parseRecallProfile(recallProfileRaw);
   if (recallProfileRaw.length > 0 && !recallProfile) {
@@ -1119,6 +1163,105 @@ async function main() {
     };
   }
 
+  let ann: AnnOptimizationAggregate | null = null;
+  if (annCheck) {
+    const annProfilesOut: Record<string, AnnProfileAggregate> = {};
+    const annPerQueryProfilesOut: Record<string, Record<string, AnnProfileAggregate>> = {};
+    for (const profile of annProfiles) {
+      const profileDefaults = RECALL_PROFILE_DEFAULTS[profile];
+      const statusCounts: Record<string, number> = {};
+      const recallLatency: number[] = [];
+      const annStage1Latency: number[] = [];
+      const annSeedCount: number[] = [];
+      const finalSeedCount: number[] = [];
+      const resultNodes: number[] = [];
+      const resultEdges: number[] = [];
+      let transportErrorCount = 0;
+      let sampleCount = 0;
+
+      for (const queryText of annQueryTexts) {
+        const queryStatusCounts: Record<string, number> = {};
+        const queryRecallLatency: number[] = [];
+        const queryAnnStage1Latency: number[] = [];
+        const queryAnnSeedCount: number[] = [];
+        const queryFinalSeedCount: number[] = [];
+        const queryResultNodes: number[] = [];
+        const queryResultEdges: number[] = [];
+        let queryTransportErrorCount = 0;
+        let querySampleCount = 0;
+        for (let i = 0; i < annSamples; i += 1) {
+          if (paceMs > 0) await sleepMs(paceMs);
+          const out = await timedRequestJson(
+            "/v1/memory/recall_text",
+            recallPayload(queryText, {
+              ...profileDefaults,
+              limit: profileDefaults.limit,
+              return_debug: true,
+            }),
+          );
+          const statusKey = out.error ? `error:${out.error}` : String(out.status);
+          statusCounts[statusKey] = (statusCounts[statusKey] ?? 0) + 1;
+          queryStatusCounts[statusKey] = (queryStatusCounts[statusKey] ?? 0) + 1;
+          if (out.error) transportErrorCount += 1;
+          if (out.error) queryTransportErrorCount += 1;
+          if (!out.ok) continue;
+
+          sampleCount += 1;
+          querySampleCount += 1;
+          const observability = out.body?.observability ?? {};
+          const stage1 = observability.stage1 ?? {};
+          recallLatency.push(out.ms);
+          queryRecallLatency.push(out.ms);
+          annStage1Latency.push(Number(observability.stage_timings_ms?.stage1_candidates_ann_ms ?? 0));
+          queryAnnStage1Latency.push(Number(observability.stage_timings_ms?.stage1_candidates_ann_ms ?? 0));
+          annSeedCount.push(Number(stage1.ann_seed_count ?? 0));
+          queryAnnSeedCount.push(Number(stage1.ann_seed_count ?? 0));
+          finalSeedCount.push(Number(stage1.final_seed_count ?? 0));
+          queryFinalSeedCount.push(Number(stage1.final_seed_count ?? 0));
+          const nodeCount = Array.isArray(out.body?.subgraph?.nodes) ? out.body.subgraph.nodes.length : 0;
+          const edgeCount = Array.isArray(out.body?.subgraph?.edges) ? out.body.subgraph.edges.length : 0;
+          resultNodes.push(nodeCount);
+          queryResultNodes.push(nodeCount);
+          resultEdges.push(edgeCount);
+          queryResultEdges.push(edgeCount);
+        }
+        (annPerQueryProfilesOut[queryText] ??= {})[profile] = {
+          samples: querySampleCount,
+          transport_error_count: queryTransportErrorCount,
+          status_counts: queryStatusCounts,
+          recall_latency_ms: summarizeSeries(queryRecallLatency),
+          stage1_candidates_ann_ms: summarizeSeries(queryAnnStage1Latency),
+          ann_seed_count: summarizeSeries(queryAnnSeedCount),
+          final_seed_count: summarizeSeries(queryFinalSeedCount),
+          result_nodes: summarizeSeries(queryResultNodes),
+          result_edges: summarizeSeries(queryResultEdges),
+        };
+      }
+
+      annProfilesOut[profile] = {
+        samples: sampleCount,
+        transport_error_count: transportErrorCount,
+        status_counts: statusCounts,
+        recall_latency_ms: summarizeSeries(recallLatency),
+        stage1_candidates_ann_ms: summarizeSeries(annStage1Latency),
+        ann_seed_count: summarizeSeries(annSeedCount),
+        final_seed_count: summarizeSeries(finalSeedCount),
+        result_nodes: summarizeSeries(resultNodes),
+        result_edges: summarizeSeries(resultEdges),
+      };
+    }
+    ann = {
+      enabled: true,
+      params: {
+        samples_per_query: annSamples,
+        query_texts: annQueryTexts,
+        profiles: annProfiles,
+      },
+      profiles: annProfilesOut,
+      per_query_profiles: annPerQueryProfilesOut,
+    };
+  }
+
   const caseSummaries = cases.map((c) => c.summary);
   const transportFailCases =
     failTransportRate === null || !Number.isFinite(failTransportRate)
@@ -1176,6 +1319,9 @@ async function main() {
           sandbox_samples: sandboxSamples,
           sandbox_argv: sandboxArgv,
           sandbox_timeout_ms: sandboxTimeout,
+          ann_check: annCheck,
+          ann_samples: annSamples,
+          ann_profiles: annProfiles,
         },
         quality: {
           transport_error_gate: {
@@ -1197,6 +1343,7 @@ async function main() {
         optimization,
         replay,
         sandbox,
+        ann,
       },
       null,
       2,
