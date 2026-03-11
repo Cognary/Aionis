@@ -428,10 +428,14 @@ export function assembleLayeredContext(args: {
   static_injection?: StaticInjectionPolicyConfig | null;
   config?: ContextLayerConfig | null;
 }) {
+  const totalStartedAt = performance.now();
   const cfg = args.config ?? {};
   const order = normalizeLayerOrder(cfg.enabled);
+  const candidateCollectionStartedAt = performance.now();
   const raw = collectLayerCandidates(args.recall, args.rules, args.tools);
   const forgetting = resolveForgettingPolicy(cfg);
+  const candidateCollectionMs = performance.now() - candidateCollectionStartedAt;
+  const staticSelectionStartedAt = performance.now();
   const staticCandidates = collectStaticContextCandidates({
     queryText: args.query_text ?? null,
     executionContext: args.execution_context,
@@ -439,6 +443,7 @@ export function assembleLayeredContext(args: {
     staticBlocks: args.static_blocks ?? null,
     staticInjection: args.static_injection ?? null,
   });
+  const staticSelectionMs = performance.now() - staticSelectionStartedAt;
   raw.static = staticCandidates.lines;
   const totalBudget = parseBoundedInt(cfg.char_budget_total, 4000, 200, 200000);
   const includeMergeTrace = cfg.include_merge_trace !== false;
@@ -458,6 +463,7 @@ export function assembleLayeredContext(args: {
     lifecycle: 0,
     salience: 0,
   };
+  const assemblyLoopStartedAt = performance.now();
 
   for (const layer of order) {
     const charBudget = parseBoundedInt(cfg.char_budget_by_layer?.[layer], DEFAULT_CHAR_BUDGET_BY_LAYER[layer], 80, 200000);
@@ -536,6 +542,8 @@ export function assembleLayeredContext(args: {
       });
     }
   }
+  const assemblyLoopMs = performance.now() - assemblyLoopStartedAt;
+  const totalMs = performance.now() - totalStartedAt;
 
   return {
     version: 1,
@@ -557,6 +565,12 @@ export function assembleLayeredContext(args: {
     merged_text: mergedParts.join("\n"),
     merge_trace: includeMergeTrace ? mergeTrace : undefined,
     dropped_reasons: droppedReasons.slice(0, 120),
+    timings_ms: {
+      layer_candidates_ms: candidateCollectionMs,
+      static_selection_ms: staticSelectionMs,
+      assembly_loop_ms: assemblyLoopMs,
+      layered_total_ms: totalMs,
+    },
     forgetting: {
       enabled: forgetting.enabled,
       allowed_tiers: Array.from(forgetting.allowedTiers),

@@ -40,6 +40,11 @@ type BenchmarkJson = {
       optimization_profile_applied_ratio?: number;
       latency_ms?: { baseline_p95: number; optimized_p95: number; delta_p95: number };
     };
+    latency_breakdown_ms?: {
+      baseline?: Record<string, { mean: number; p50: number; p95: number; min: number; max: number }>;
+      optimized?: Record<string, { mean: number; p50: number; p95: number; min: number; max: number }>;
+      delta_p95?: Record<string, number>;
+    };
     levers_frequency?: Record<string, number>;
   } | null;
   replay?: {
@@ -373,6 +378,12 @@ async function main() {
           `  - context assemble p95 baseline=${round(latency.baseline_p95)} ms optimized=${round(latency.optimized_p95)} ms delta=${round(latency.delta_p95)} ms`,
         );
       }
+      const stageBreakdown = Object.entries(optimization.latency_breakdown_ms?.delta_p95 ?? {})
+        .sort((a, b) => Math.abs(Number(b[1])) - Math.abs(Number(a[1])) || a[0].localeCompare(b[0]))
+        .slice(0, 5)
+        .map(([k, v]) => `${k}=${round(Number(v), 3)} ms`)
+        .join(", ");
+      if (stageBreakdown) optimizationLines.push(`  - top stage delta p95: ${stageBreakdown}`);
       if (levers) optimizationLines.push(`  - top savings levers: ${levers}`);
     }
 

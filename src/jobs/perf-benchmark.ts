@@ -133,6 +133,11 @@ type OptimizationAggregate = {
     optimization_profile_applied_ratio: number;
     latency_ms: { baseline_p95: number; optimized_p95: number; delta_p95: number };
   };
+  latency_breakdown_ms: {
+    baseline: Record<string, { mean: number; p50: number; p95: number; min: number; max: number }>;
+    optimized: Record<string, { mean: number; p50: number; p95: number; min: number; max: number }>;
+    delta_p95: Record<string, number>;
+  };
 };
 
 type ReplayOptimizationAggregate = {
@@ -257,6 +262,27 @@ function summarizeSeries(values: number[]): { mean: number; p50: number; p95: nu
     min: round(sorted[0], 6),
     max: round(sorted[sorted.length - 1], 6),
   };
+}
+
+function collectStageTimingSeries(samples: Array<Record<string, unknown>>): Record<string, number[]> {
+  const out: Record<string, number[]> = {};
+  for (const sample of samples) {
+    for (const [key, value] of Object.entries(sample ?? {})) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) continue;
+      (out[key] ??= []).push(num);
+    }
+  }
+  return out;
+}
+
+function summarizeStageTimingSeries(samples: Array<Record<string, unknown>>) {
+  const series = collectStageTimingSeries(samples);
+  const out: Record<string, ReturnType<typeof summarizeSeries>> = {};
+  for (const [key, values] of Object.entries(series)) {
+    out[key] = summarizeSeries(values);
+  }
+  return out;
 }
 
 async function sleepMs(ms: number): Promise<void> {
@@ -619,6 +645,8 @@ async function main() {
     const staticBlocksSelected: number[] = [];
     const baselineLatency: number[] = [];
     const optimizedLatency: number[] = [];
+    const baselineStageTimings: Array<Record<string, unknown>> = [];
+    const optimizedStageTimings: Array<Record<string, unknown>> = [];
     let transportErrorCount = 0;
     let withinTokenBudgetCount = 0;
     let optimizationProfileAppliedCount = 0;
@@ -715,6 +743,10 @@ async function main() {
 
       const baselineCost = baseline.body?.cost_signals ?? null;
       const optimizedCost = optimized.body?.cost_signals ?? null;
+      const baselineStageTiming = baseline.body?.recall?.observability?.stage_timings_ms ?? null;
+      const optimizedStageTiming = optimized.body?.recall?.observability?.stage_timings_ms ?? null;
+      const baselineLayeredTiming = baseline.body?.layered_context?.timings_ms ?? null;
+      const optimizedLayeredTiming = optimized.body?.layered_context?.timings_ms ?? null;
       const baselineContextTokens = Number(baselineCost?.context_est_tokens ?? 0);
       const optimizedContextTokens = Number(optimizedCost?.context_est_tokens ?? 0);
       if (!(baselineContextTokens > 0)) continue;
@@ -726,6 +758,18 @@ async function main() {
       staticBlocksSelected.push(Math.max(0, Number(optimizedCost?.static_blocks_selected ?? 0)));
       baselineLatency.push(baseline.ms);
       optimizedLatency.push(optimized.ms);
+      if ((baselineStageTiming && typeof baselineStageTiming === "object") || (baselineLayeredTiming && typeof baselineLayeredTiming === "object")) {
+        baselineStageTimings.push({
+          ...((baselineStageTiming && typeof baselineStageTiming === "object" ? baselineStageTiming : {}) as Record<string, unknown>),
+          ...((baselineLayeredTiming && typeof baselineLayeredTiming === "object" ? baselineLayeredTiming : {}) as Record<string, unknown>),
+        });
+      }
+      if ((optimizedStageTiming && typeof optimizedStageTiming === "object") || (optimizedLayeredTiming && typeof optimizedLayeredTiming === "object")) {
+        optimizedStageTimings.push({
+          ...((optimizedStageTiming && typeof optimizedStageTiming === "object" ? optimizedStageTiming : {}) as Record<string, unknown>),
+          ...((optimizedLayeredTiming && typeof optimizedLayeredTiming === "object" ? optimizedLayeredTiming : {}) as Record<string, unknown>),
+        });
+      }
 
       if (optimizedCost?.within_token_budget === true) withinTokenBudgetCount += 1;
       if (optimized.body?.layered_context?.optimization_profile?.applied === true) optimizationProfileAppliedCount += 1;
@@ -744,6 +788,12 @@ async function main() {
     const staticBlocksSummary = summarizeSeries(staticBlocksSelected);
     const baselineLatencySummary = summarizeSeries(baselineLatency);
     const optimizedLatencySummary = summarizeSeries(optimizedLatency);
+    const baselineStageSummary = summarizeStageTimingSeries(baselineStageTimings);
+    const optimizedStageSummary = summarizeStageTimingSeries(optimizedStageTimings);
+    const stageDeltaP95: Record<string, number> = {};
+    for (const key of Array.from(new Set([...Object.keys(baselineStageSummary), ...Object.keys(optimizedStageSummary)])).sort()) {
+      stageDeltaP95[key] = round((optimizedStageSummary[key]?.p95 ?? 0) - (baselineStageSummary[key]?.p95 ?? 0), 6);
+    }
     const okPairs = tokenReductionRatios.length;
 
     optimization = {
@@ -791,6 +841,11 @@ async function main() {
           optimized_p95: optimizedLatencySummary.p95,
           delta_p95: round(optimizedLatencySummary.p95 - baselineLatencySummary.p95, 6),
         },
+      },
+      latency_breakdown_ms: {
+        baseline: baselineStageSummary,
+        optimized: optimizedStageSummary,
+        delta_p95: stageDeltaP95,
       },
     };
   }
