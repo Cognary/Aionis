@@ -5,7 +5,9 @@ title: "Aionis Agent Cost Reduction Roadmap"
 # Aionis Agent Cost Reduction Roadmap
 
 Date: `2026-03-10`
-Status: `proposed`
+Status: `in_progress`
+
+Latest status snapshot: [/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_AGENT_COST_REDUCTION_STATUS_2026-03-11.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_AGENT_COST_REDUCTION_STATUS_2026-03-11.md)
 
 ## Purpose
 

@@ -27,6 +27,7 @@ title: "上下文编排"
 5. 合并/丢弃轨迹 `include_merge_trace`。
 6. 使用 `static_context_blocks` + `static_injection` 对静态 bootstrap/config blocks 做按需注入。
 7. 使用 `context_layers.forgetting_policy` 默认排除 cold/archive 记忆。
+8. 如果你不想手工同时传 compaction、forgetting、static injection，可以直接使用 `context_optimization_profile=balanced|aggressive` 让 Aionis 自动补齐默认值。
 
 ## 预设
 
@@ -78,6 +79,33 @@ title: "上下文编排"
   }
 }
 ```
+
+## Optimization Profile 快捷方式
+
+如果你不想分别配置 compaction、forgetting 和 static injection，可以直接使用一个预设：
+
+```json
+{
+  "query_text": "prepare prod deploy context",
+  "context": { "intent": "deploy", "approval": "required" },
+  "tool_candidates": ["kubectl", "bash"],
+  "return_layered_context": true,
+  "context_optimization_profile": "aggressive"
+}
+```
+
+当前预设行为：
+
+1. `balanced`
+   - 在未显式提供时设置 `context_compaction_profile=balanced`
+   - forgetting 默认保留 `hot + warm`，排除 archived，`min_salience=0.15`
+   - static injection 默认 `max_blocks=4`、`min_score=50`
+2. `aggressive`
+   - 在未显式提供时设置 `context_compaction_profile=aggressive`
+   - forgetting 默认只保留 `hot`，排除 archived，`min_salience=0.35`
+   - static injection 默认 `max_blocks=2`、`min_score=80`
+
+响应会在 `layered_context.optimization_profile` 里回显实际应用的预设。
 
 ## 重点监控
 

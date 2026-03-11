@@ -251,6 +251,7 @@ export const PlanningContextRequest = z.object({
   context_token_budget: z.number().int().positive().max(256000).optional(),
   context_char_budget: z.number().int().positive().max(1000000).optional(),
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
+  context_optimization_profile: z.enum(["balanced", "aggressive"]).optional(),
   // Experimental: return explicit multi-layer context assembly (facts/episodes/rules/decisions/tools/citations).
   return_layered_context: z.boolean().default(false),
   context_layers: ContextLayerConfig.optional(),
@@ -290,6 +291,7 @@ export const ContextAssembleRequest = z.object({
   context_token_budget: z.number().int().positive().max(256000).optional(),
   context_char_budget: z.number().int().positive().max(1000000).optional(),
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
+  context_optimization_profile: z.enum(["balanced", "aggressive"]).optional(),
   return_layered_context: z.boolean().default(true),
   context_layers: ContextLayerConfig.optional(),
   static_context_blocks: z.array(StaticContextBlock).max(100).optional(),

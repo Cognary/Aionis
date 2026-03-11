@@ -27,6 +27,7 @@ Context orchestration assembles deterministic, planner-ready context with explic
 5. Include merge/drop traces (`include_merge_trace`).
 6. Use `static_context_blocks` + `static_injection` to select only the relevant static bootstrap/config blocks.
 7. Use `context_layers.forgetting_policy` to keep cold or archived memory out of the injected prompt by default.
+8. Use `context_optimization_profile=balanced|aggressive` when you want Aionis to auto-fill compaction + forgetting + static-injection defaults instead of sending all three controls manually.
 
 ## Presets
 
@@ -78,6 +79,33 @@ Context orchestration assembles deterministic, planner-ready context with explic
   }
 }
 ```
+
+## Optimization Profile Shortcut
+
+If you do not want to specify compaction, forgetting, and static injection separately, you can use one preset:
+
+```json
+{
+  "query_text": "prepare prod deploy context",
+  "context": { "intent": "deploy", "approval": "required" },
+  "tool_candidates": ["kubectl", "bash"],
+  "return_layered_context": true,
+  "context_optimization_profile": "aggressive"
+}
+```
+
+Current preset behavior:
+
+1. `balanced`
+   - sets `context_compaction_profile=balanced` when omitted
+   - defaults forgetting to `hot + warm`, archived excluded, `min_salience=0.15`
+   - defaults static injection to `max_blocks=4`, `min_score=50`
+2. `aggressive`
+   - sets `context_compaction_profile=aggressive` when omitted
+   - defaults forgetting to `hot` only, archived excluded, `min_salience=0.35`
+   - defaults static injection to `max_blocks=2`, `min_score=80`
+
+Responses expose the applied preset under `layered_context.optimization_profile`.
 
 ## What to Monitor
 

@@ -49,6 +49,7 @@ import { evaluateRules, evaluateRulesAppliedOnly } from "../memory/rules-evaluat
 import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
+import { applyContextOptimizationProfile } from "../app/context-optimization-profile.js";
 import { validateAutomationGraph } from "../memory/automation.js";
 import {
   replayPlaybookCandidate,
@@ -2108,6 +2109,13 @@ async function run() {
   assert.equal(planningReq.rules_limit, 50);
   assert.equal(planningReq.tool_strict, true);
   assert.equal(planningReq.limit, 30);
+  const planningOptimizedReq = PlanningContextRequest.parse({
+    query_text: "deploy api",
+    context: { intent: "deploy" },
+    tool_candidates: ["kubectl"],
+    context_optimization_profile: "aggressive",
+  });
+  assert.equal(planningOptimizedReq.context_optimization_profile, "aggressive");
   const assembleReq = ContextAssembleRequest.parse({
     query_text: "memory graph",
     context: { run: { id: "run_2" }, agent: { id: "agent_b", team_id: "team_b" } },
@@ -2147,6 +2155,11 @@ async function run() {
   assert.equal(assembleReq.static_context_blocks?.[0]?.id, "deploy_bootstrap");
   assert.equal(assembleReq.static_injection?.max_blocks, 2);
   assert.equal(assembleReq.static_injection?.min_score, 40);
+  const assembleOptimizedReq = ContextAssembleRequest.parse({
+    query_text: "deploy production",
+    context_optimization_profile: "balanced",
+  });
+  assert.equal(assembleOptimizedReq.context_optimization_profile, "balanced");
   assert.throws(
     () =>
       ContextAssembleRequest.parse({
@@ -2155,6 +2168,30 @@ async function run() {
       }),
     /Invalid enum value/i,
   );
+  const balancedOptimization = applyContextOptimizationProfile(assembleOptimizedReq as any);
+  assert.equal(balancedOptimization.optimization_profile.requested, "balanced");
+  assert.equal(balancedOptimization.optimization_profile.applied, true);
+  assert.equal((balancedOptimization.parsed as any).context_compaction_profile, "balanced");
+  assert.deepEqual((balancedOptimization.parsed as any).context_layers.forgetting_policy.allowed_tiers, ["hot", "warm"]);
+  assert.equal((balancedOptimization.parsed as any).static_injection.max_blocks, 4);
+  const aggressiveOptimization = applyContextOptimizationProfile(planningOptimizedReq as any);
+  assert.equal((aggressiveOptimization.parsed as any).context_compaction_profile, "aggressive");
+  assert.deepEqual((aggressiveOptimization.parsed as any).context_layers.forgetting_policy.allowed_tiers, ["hot"]);
+  assert.equal((aggressiveOptimization.parsed as any).context_layers.forgetting_policy.min_salience, 0.35);
+  assert.equal((aggressiveOptimization.parsed as any).static_injection.min_score, 80);
+  const manualOptimization = applyContextOptimizationProfile(
+    ContextAssembleRequest.parse({
+      query_text: "x",
+      context_optimization_profile: "balanced",
+      context_compaction_profile: "aggressive",
+      context_layers: { forgetting_policy: { allowed_tiers: ["hot"], exclude_archived: true } },
+      static_injection: { max_blocks: 1, min_score: 95 },
+    }) as any,
+  );
+  assert.equal(manualOptimization.optimization_profile.applied, false);
+  assert.equal(manualOptimization.optimization_profile.forgetting_policy_applied, false);
+  assert.equal(manualOptimization.optimization_profile.static_injection_applied, false);
+  assert.equal((manualOptimization.parsed as any).context_compaction_profile, "aggressive");
   const layeredForgotten = assembleLayeredContext({
     recall: {
       context: {

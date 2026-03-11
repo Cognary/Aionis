@@ -1,4 +1,5 @@
 import { buildRecallObservability, collectRecallTrajectoryUriLinks } from "../app/recall-observability.js";
+import { applyContextOptimizationProfile } from "../app/context-optimization-profile.js";
 import { memoryRecallParsed } from "../memory/recall.js";
 import { ContextAssembleRequest, MemoryRecallRequest, MemoryRecallTextRequest, PlanningContextRequest } from "../memory/schemas.js";
 import { evaluateRules } from "../memory/rules-evaluate.js";
@@ -446,6 +447,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
     if (adaptiveHardCap.applied) {
       parsed = PlanningContextRequest.parse({ ...(parsed as any), ...adaptiveHardCap.defaults });
     }
+    const planningOptimization = applyContextOptimizationProfile(parsed);
+    parsed = PlanningContextRequest.parse(planningOptimization.parsed);
 
     let out: any;
     try {
@@ -631,6 +634,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           context_token_budget: recallParsed.context_token_budget ?? null,
           context_char_budget: recallParsed.context_char_budget ?? null,
           context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
+          context_optimization_profile: parsed.context_optimization_profile ?? null,
           context_budget_default_applied: contextBudgetDefaultApplied,
           rules_considered: out.rules?.considered ?? 0,
           rules_matched: out.rules?.matched ?? 0,
@@ -656,6 +660,9 @@ export function registerMemoryContextRuntimeRoutes(args: {
           config: parsed.context_layers ?? null,
         })
       : undefined;
+    if (layeredContext) {
+      (layeredContext as any).optimization_profile = planningOptimization.optimization_profile;
+    }
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     try {
       await recordContextAssemblyTelemetryBestEffort({
@@ -758,6 +765,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
     if (adaptiveHardCap.applied) {
       parsed = ContextAssembleRequest.parse({ ...(parsed as any), ...adaptiveHardCap.defaults });
     }
+    const assembleOptimization = applyContextOptimizationProfile(parsed);
+    parsed = ContextAssembleRequest.parse(assembleOptimization.parsed);
 
     let out: any;
     try {
@@ -941,6 +950,9 @@ export function registerMemoryContextRuntimeRoutes(args: {
           config: parsed.context_layers ?? null,
         })
       : undefined;
+    if (layeredContext) {
+      (layeredContext as any).optimization_profile = assembleOptimization.optimization_profile;
+    }
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     try {
       await recordContextAssemblyTelemetryBestEffort({
@@ -977,6 +989,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           context_token_budget: recallParsed.context_token_budget ?? null,
           context_char_budget: recallParsed.context_char_budget ?? null,
           context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
+          context_optimization_profile: parsed.context_optimization_profile ?? null,
           context_budget_default_applied: contextBudgetDefaultApplied,
           rules_considered: out.rules?.considered ?? 0,
           rules_matched: out.rules?.matched ?? 0,

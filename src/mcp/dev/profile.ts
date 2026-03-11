@@ -63,6 +63,7 @@ export const CodexPlanningContextArgsSchema = z.object({
   context_token_budget: z.number().int().positive().max(256_000).optional(),
   context_char_budget: z.number().int().positive().max(1_000_000).optional(),
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
+  context_optimization_profile: z.enum(["balanced", "aggressive"]).optional(),
   return_layered_context: z.boolean().optional(),
   context_layers: z.object({
     enabled: z.array(z.enum(["facts", "episodes", "rules", "static", "decisions", "tools", "citations"])).min(1).max(7).optional(),

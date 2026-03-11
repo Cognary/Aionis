@@ -807,6 +807,14 @@ export type ContextAssembleResponse = {
       selection_trace?: Array<Record<string, unknown>>;
       [k: string]: unknown;
     };
+    optimization_profile?: {
+      requested?: "balanced" | "aggressive" | null;
+      applied?: boolean;
+      context_compaction_profile?: "balanced" | "aggressive" | null;
+      forgetting_policy_applied?: boolean;
+      static_injection_applied?: boolean;
+      [k: string]: unknown;
+    };
     [k: string]: unknown;
   };
   [k: string]: unknown;
