@@ -12,6 +12,7 @@ import { MemoryWriteRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { resolveTenantScope, toTenantScopeKey } from "./tenant.js";
 import { buildAionisUri } from "./uri.js";
+import { distillWriteArtifacts, type WriteDistillationSummary } from "./write-distillation.js";
 
 type WriteResult = {
   tenant_id?: string;
@@ -48,6 +49,7 @@ type WriteResult = {
       }
     | { enqueued: true };
   warnings?: Array<{ code: string; message: string; details?: Record<string, unknown> }>;
+  distillation?: WriteDistillationSummary;
 };
 
 function resolveScope(reqScope: string | undefined, defaultScope: string): string {
@@ -137,6 +139,7 @@ type PreparedWrite = {
   edges: PreparedEdge[];
   requested_trigger_topic_cluster?: boolean;
   requested_topic_cluster_async?: boolean;
+  distillation?: WriteDistillationSummary;
 };
 
 type SeenPreparedNodeRef = {
@@ -344,6 +347,34 @@ export async function prepareMemoryWrite(
     return { ...e, id, scope: edgeScope, src_id, dst_id };
   });
 
+  let distillation: WriteDistillationSummary | undefined;
+  if (parsed.distill?.enabled) {
+    const distilled = distillWriteArtifacts({
+      scope,
+      input_text: inputText ?? null,
+      nodes,
+      config: parsed.distill,
+      fallback_memory_lane: defaultLane,
+      fallback_producer_agent_id: defaultProducerAgentId,
+      fallback_owner_agent_id: defaultOwnerAgentId,
+      fallback_owner_team_id: defaultOwnerTeamId,
+    });
+    for (const node of distilled.nodes) {
+      const priorId = seenNodeIds.get(node.id);
+      if (priorId) {
+        badRequest("distillation_node_id_collision", "distillation generated duplicate node id within write batch", {
+          node_id: node.id,
+          existing_index: priorId.index,
+          generated_type: node.type,
+        });
+      }
+      seenNodeIds.set(node.id, { index: nodes.length, scope: node.scope });
+      nodes.push(node);
+    }
+    edges.push(...distilled.edges);
+    distillation = distilled.summary;
+  }
+
   assertSingleScopeWrite(scope, tenancy.scope, nodes, edges);
 
   // Embeddings are a derived artifact: we do NOT block /write.
@@ -382,6 +413,7 @@ export async function prepareMemoryWrite(
     edges,
     requested_trigger_topic_cluster: parsed.trigger_topic_cluster,
     requested_topic_cluster_async: parsed.topic_cluster_async,
+    distillation,
   };
 }
 
@@ -599,6 +631,7 @@ export async function applyMemoryWrite(
       src_id: e.src_id,
       dst_id: e.dst_id,
     })),
+    ...(prepared.distillation ? { distillation: prepared.distillation } : {}),
   };
 
   // Derived artifact: enqueue embedding backfill for nodes that opted into auto-embed and have embed_text.

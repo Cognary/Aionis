@@ -9,6 +9,7 @@ import {
   MemoryPackExportRequest,
   MemoryPackImportRequest,
   MemoryRecallRequest,
+  MemoryWriteRequest,
   ReplayPlaybookCandidateRequest,
   MemorySessionEventsListRequest,
   PlanningContextRequest,
@@ -1377,6 +1378,37 @@ async function run() {
       (err.details as any)?.first_index === 0 &&
       (err.details as any)?.duplicate_index === 1,
   );
+  const preparedWriteDistilled = await prepareMemoryWrite(
+    {
+      tenant_id: "default",
+      scope: "default",
+      input_text: "Service: payments. Owner: platform team. payments requires approval before deploy.",
+      distill: {
+        enabled: true,
+        max_evidence_nodes: 1,
+        max_fact_nodes: 2,
+        min_sentence_chars: 12,
+        attach_edges: true,
+      },
+    },
+    "default",
+    "default",
+    { maxTextLen: 8000, piiRedaction: false, allowCrossScopeEdges: false },
+    null,
+  );
+  assert.equal(preparedWriteDistilled.distillation?.enabled, true);
+  assert.equal(preparedWriteDistilled.distillation?.sources_considered, 1);
+  assert.equal(preparedWriteDistilled.distillation?.generated_evidence_nodes, 1);
+  assert.equal(preparedWriteDistilled.distillation?.generated_fact_nodes, 2);
+  assert.equal(preparedWriteDistilled.distillation?.generated_edges, 2);
+  assert.equal(preparedWriteDistilled.nodes.length, 3);
+  assert.equal(preparedWriteDistilled.edges.length, 2);
+  assert.ok(preparedWriteDistilled.nodes.some((node) => node.type === "evidence" && node.slots.summary_kind === "write_distillation_evidence"));
+  assert.equal(
+    preparedWriteDistilled.nodes.filter((node) => node.type === "concept" && node.slots.summary_kind === "write_distillation_fact").length,
+    2,
+  );
+  assert.ok(preparedWriteDistilled.edges.every((edge) => edge.type === "derived_from"));
   const writeOutNoMirror = await applyMemoryWrite({} as any, preparedWriteMinimal as any, {
     maxTextLen: 8000,
     piiRedaction: false,
@@ -2134,6 +2166,14 @@ async function run() {
   assert.equal(layeredStatic.static_injection?.selected_blocks, 1);
   assert.equal(layeredStatic.static_injection?.rejected_blocks, 1);
   assert.deepEqual(layeredStatic.static_injection?.selected_ids, ["deploy_bootstrap"]);
+  const writeDistillDefaults = MemoryWriteRequest.parse({
+    input_text: "distill me",
+    distill: {},
+  });
+  assert.equal(writeDistillDefaults.distill?.enabled, true);
+  assert.deepEqual(writeDistillDefaults.distill?.sources, ["input_text", "event_nodes", "evidence_nodes"]);
+  assert.equal(writeDistillDefaults.distill?.max_evidence_nodes, 4);
+  assert.equal(writeDistillDefaults.distill?.max_fact_nodes, 6);
   const packExportDefaults = MemoryPackExportRequest.parse({});
   assert.equal(packExportDefaults.include_decisions, false);
   const packImportWithDecisions = MemoryPackImportRequest.parse({

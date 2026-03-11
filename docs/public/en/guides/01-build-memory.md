@@ -42,6 +42,24 @@ Minimal payload:
 
 Success signal: response includes `request_id` and write metadata.
 
+Optional structured-ingestion path:
+
+```json
+{
+  "tenant_id": "default",
+  "scope": "default",
+  "input_text": "Service: payments. Owner: platform team. payments requires approval before deploy.",
+  "distill": {
+    "enabled": true,
+    "max_evidence_nodes": 1,
+    "max_fact_nodes": 3,
+    "attach_edges": true
+  }
+}
+```
+
+This lets Aionis synthesize recallable `evidence` / `concept` nodes before commit instead of only storing raw write intent.
+
 ## 2) Recall Useful Context
 
 Endpoints:

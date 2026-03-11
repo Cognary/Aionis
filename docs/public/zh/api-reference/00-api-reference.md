@@ -136,6 +136,9 @@ Memory 路由使用以下任一方式：
 3. 仅提供 `input_text` 不会自动生成可召回节点。
 4. 可选严格模式：
    - 设置 `MEMORY_WRITE_REQUIRE_NODES=true` 后，`nodes` 为空会直接返回 `400 write_nodes_required`。
+5. 可选写前蒸馏：
+   - `distill.enabled=true` 后，Aionis 会在 commit 前把 `input_text` 和可用的 event/evidence 文本蒸馏成结构化 `evidence` / `concept` 节点
+   - 响应可能包含 `distillation.generated_evidence_nodes`、`distillation.generated_fact_nodes`、`distillation.generated_edges`
 
 ## Replay 执行说明（实验）
 

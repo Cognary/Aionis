@@ -92,6 +92,20 @@ export const MemoryWriteRequest = z
     force_reembed: z.boolean().optional(),
     trigger_topic_cluster: z.boolean().optional(),
     topic_cluster_async: z.boolean().optional(),
+    distill: z
+      .object({
+        enabled: z.boolean().default(true),
+        sources: z.array(z.enum(["input_text", "event_nodes", "evidence_nodes"])).min(1).max(3).default([
+          "input_text",
+          "event_nodes",
+          "evidence_nodes",
+        ]),
+        max_evidence_nodes: z.number().int().positive().max(20).default(4),
+        max_fact_nodes: z.number().int().positive().max(20).default(6),
+        min_sentence_chars: z.number().int().min(12).max(500).default(24),
+        attach_edges: z.boolean().default(true),
+      })
+      .optional(),
     nodes: z.array(WriteNode).default([]),
     edges: z.array(WriteEdge).default([]),
   })

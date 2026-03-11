@@ -148,6 +148,24 @@ const assembled = await client.contextAssemble({
 console.log(assembled.layered_context?.forgetting, assembled.layered_context?.layers?.episodes?.forgotten_count);
 ```
 
+## Write-Time Distillation (TypeScript)
+
+Use this when raw task text should enter memory as structured evidence/fact nodes instead of only as commit input.
+
+```ts
+const writeRes = await client.write({
+  input_text: "Service: payments. Owner: platform team. payments requires approval before deploy.",
+  distill: {
+    enabled: true,
+    max_evidence_nodes: 1,
+    max_fact_nodes: 3,
+    attach_edges: true,
+  },
+});
+
+console.log(writeRes.distillation, writeRes.nodes);
+```
+
 ## Replay Dispatch Notes
 
 1. `replayPlaybookCandidate` is read-only and returns deterministic replay eligibility plus mismatch reasons.

@@ -93,6 +93,14 @@ const MemoryRememberArgs = z.object({
   force_reembed: z.boolean().optional(),
   trigger_topic_cluster: z.boolean().optional(),
   topic_cluster_async: z.boolean().optional(),
+  distill: z.object({
+    enabled: z.boolean().optional(),
+    sources: z.array(z.enum(["input_text", "event_nodes", "evidence_nodes"])).min(1).max(3).optional(),
+    max_evidence_nodes: z.number().int().min(1).max(20).optional(),
+    max_fact_nodes: z.number().int().min(1).max(20).optional(),
+    min_sentence_chars: z.number().int().min(12).max(500).optional(),
+    attach_edges: z.boolean().optional(),
+  }).optional(),
   nodes: z.array(z.record(z.unknown())).min(1),
   edges: z.array(z.record(z.unknown())).optional(),
 });
@@ -402,6 +410,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         force_reembed: { type: "boolean" },
         trigger_topic_cluster: { type: "boolean" },
         topic_cluster_async: { type: "boolean" },
+        distill: { type: "object" },
         nodes: { type: "array", items: { type: "object" } },
         edges: { type: "array", items: { type: "object" } },
       },

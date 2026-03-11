@@ -100,7 +100,7 @@ export type {
 };
 
 export type MemorySessionEventsListInput = Partial<Omit<MemorySessionEventsListSchemaInput, "session_id">>;
-export type ContextLayerName = "facts" | "episodes" | "rules" | "decisions" | "tools" | "citations";
+export type ContextLayerName = "facts" | "episodes" | "rules" | "static" | "decisions" | "tools" | "citations";
 export type AutomationDefStatus = "draft" | "shadow" | "active" | "disabled";
 export type AutomationRunLifecycleState = "queued" | "running" | "paused" | "compensating" | "terminal";
 export type AutomationRunPauseReason = "approval_required" | "repair_required" | "dependency_wait" | "operator_pause";
@@ -603,6 +603,15 @@ export type MemoryWriteResponse = {
   edges: Array<{ id: string; uri?: string; type: string; src_id: string; dst_id: string }>;
   embedding_backfill?: { enqueued: true; pending_nodes: number };
   topic_cluster?: Record<string, unknown>;
+  distillation?: {
+    enabled: boolean;
+    sources_considered: number;
+    source_kinds: string[];
+    generated_evidence_nodes: number;
+    generated_fact_nodes: number;
+    generated_edges: number;
+    [k: string]: unknown;
+  };
   shadow_dual_write?: {
     enabled: boolean;
     strict: boolean;

@@ -136,6 +136,9 @@ Notes:
 3. `input_text` alone does not create recallable nodes.
 4. Optional strict mode:
    - `MEMORY_WRITE_REQUIRE_NODES=true` makes `/v1/memory/write` fail with `400 write_nodes_required` when `nodes` is empty.
+5. Optional write-time distillation:
+   - `distill.enabled=true` lets Aionis synthesize structured `evidence` / `concept` nodes from `input_text` and eligible event/evidence nodes before commit
+   - response may include `distillation.generated_evidence_nodes`, `distillation.generated_fact_nodes`, and `distillation.generated_edges`
 
 ## Replay Execution Notes
 

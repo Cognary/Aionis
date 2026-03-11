@@ -13,6 +13,7 @@ title: "构建记忆"
 1. `POST /v1/memory/write`
 2. 会话优先写入：`create session / write event / list session events`
 3. 事实来源（SoR）：`commit` + node/edge 血缘链
+4. 可选 `distill`：在 write 前把原始文本蒸馏成结构化 `evidence/concept` 节点
 
 建议阅读：
 

@@ -114,6 +114,24 @@ console.log(
 );
 ```
 
+## Write-Time Distillation（TypeScript）
+
+如果你希望原始任务文本进入记忆前先变成结构化 `evidence/fact` 节点，而不是只当作 commit 输入，可以直接在 write 上开启蒸馏。
+
+```ts
+const writeRes = await client.write({
+  input_text: "Service: payments. Owner: platform team. payments requires approval before deploy.",
+  distill: {
+    enabled: true,
+    max_evidence_nodes: 1,
+    max_fact_nodes: 3,
+    attach_edges: true,
+  },
+});
+
+console.log(writeRes.distillation, writeRes.nodes);
+```
+
 ## 核心 SDK 方法
 
 1. Memory: `write`、`recall`、`recall_text`
