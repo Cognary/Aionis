@@ -76,6 +76,7 @@ import {
   getSandboxRunLogs,
   postJsonWithTls,
 } from "../memory/sandbox.js";
+import { buildLayeredContextCostSignals } from "../memory/cost-signals.js";
 import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   assertRecallStoreAccessContract,
@@ -2192,6 +2193,24 @@ async function run() {
   assert.equal(manualOptimization.optimization_profile.forgetting_policy_applied, false);
   assert.equal(manualOptimization.optimization_profile.static_injection_applied, false);
   assert.equal((manualOptimization.parsed as any).context_compaction_profile, "aggressive");
+  const contextCostSignals = buildLayeredContextCostSignals({
+    layered_context: {
+      budget: { used_chars: 900 },
+      forgetting: { dropped_items: 3, dropped_by_reason: { tier: 2, salience: 1 } },
+      static_injection: { selected_blocks: 2, rejected_blocks: 1 },
+    },
+    context_est_tokens: 220,
+    context_token_budget: 300,
+    context_char_budget: 1200,
+    context_compaction_profile: "aggressive",
+    context_optimization_profile: "aggressive",
+  });
+  assert.equal(contextCostSignals.summary_version, "context_cost_signals_v1");
+  assert.equal(contextCostSignals.within_token_budget, true);
+  assert.equal(contextCostSignals.within_char_budget, true);
+  assert.equal(contextCostSignals.forgotten_items, 3);
+  assert.equal(contextCostSignals.static_blocks_selected, 2);
+  assert.equal(contextCostSignals.primary_savings_levers.includes("optimization_profile:aggressive"), true);
   const layeredForgotten = assembleLayeredContext({
     recall: {
       context: {
@@ -3286,6 +3305,9 @@ async function run() {
   assert.deepEqual((replayCandidateOut as any).candidate.mismatch_reasons, []);
   assert.equal((replayCandidateOut as any).candidate.rejectable, false);
   assert.equal((replayCandidateOut as any).deterministic_gate.matched, true);
+  assert.equal((replayCandidateOut as any).cost_signals.summary_version, "replay_cost_signals_v1");
+  assert.equal((replayCandidateOut as any).cost_signals.deterministic_replay_eligible, true);
+  assert.equal((replayCandidateOut as any).cost_signals.estimated_primary_model_calls_avoided, 1);
   const replayCandidateMismatchOut = await replayPlaybookCandidate(
     replayClient as any,
     {
@@ -3321,6 +3343,7 @@ async function run() {
   assert.equal((replayDispatchCandidateOnlyOut as any).dispatch.decision, "candidate_only");
   assert.equal((replayDispatchCandidateOnlyOut as any).dispatch.primary_inference_skipped, false);
   assert.equal((replayDispatchCandidateOnlyOut as any).replay, null);
+  assert.equal((replayDispatchCandidateOnlyOut as any).cost_signals.fallback_executed, false);
   const replayDispatchDeterministicOut = await replayPlaybookDispatch(
     replayClient as any,
     {
@@ -3376,6 +3399,8 @@ async function run() {
   assert.equal((replayDispatchDeterministicOut as any).dispatch.decision, "deterministic_replay_executed");
   assert.equal((replayDispatchDeterministicOut as any).dispatch.primary_inference_skipped, true);
   assert.equal((replayDispatchDeterministicOut as any).replay.mode, "strict");
+  assert.equal((replayDispatchDeterministicOut as any).cost_signals.primary_inference_skipped, true);
+  assert.equal((replayDispatchDeterministicOut as any).cost_signals.estimated_primary_model_calls_avoided, 1);
   const replayDispatchFallbackOut = await replayPlaybookDispatch(
     replayClient as any,
     {
@@ -3394,6 +3419,7 @@ async function run() {
   assert.equal((replayDispatchFallbackOut as any).dispatch.decision, "fallback_replay_executed");
   assert.equal((replayDispatchFallbackOut as any).dispatch.primary_inference_skipped, false);
   assert.equal((replayDispatchFallbackOut as any).replay.mode, "simulate");
+  assert.equal((replayDispatchFallbackOut as any).cost_signals.fallback_executed, true);
 
   const replayRunOut = await replayPlaybookRun(
     replayClient as any,
@@ -3415,6 +3441,7 @@ async function run() {
   assert.equal((replayRunOut as any).steps[1].readiness, "blocked");
   assert.equal((replayRunOut as any).deterministic_gate.matched, false);
   assert.equal((replayRunOut as any).deterministic_gate.decision, "disabled");
+  assert.equal((replayRunOut as any).cost_signals.primary_inference_skipped, false);
 
   const replayDeterministicFallbackOut = await replayPlaybookRun(
     replayClient as any,
@@ -3435,6 +3462,7 @@ async function run() {
   assert.equal((replayDeterministicFallbackOut as any).deterministic_gate.matched, false);
   assert.equal((replayDeterministicFallbackOut as any).deterministic_gate.decision, "fallback_to_requested_mode");
   assert.equal((replayDeterministicFallbackOut as any).execution.inference_skipped, false);
+  assert.equal((replayDeterministicFallbackOut as any).cost_signals.deterministic_replay_eligible, false);
 
   const replayDeterministicRunOut = await replayPlaybookRun(
     replayClient as any,
@@ -3494,6 +3522,8 @@ async function run() {
   assert.equal((replayDeterministicRunOut as any).deterministic_gate.decision, "promoted_to_strict");
   assert.equal((replayDeterministicRunOut as any).execution.inference_skipped, true);
   assert.equal((replayDeterministicRunOut as any).summary.failed_steps, 0);
+  assert.equal((replayDeterministicRunOut as any).cost_signals.primary_inference_skipped, true);
+  assert.equal((replayDeterministicRunOut as any).cost_signals.estimated_primary_model_calls_avoided, 1);
   assert.equal((replayDeterministicRunOut as any).steps[0].result_summary.summary_version, "tool_result_summary_v1");
   assert.equal((replayDeterministicRunOut as any).steps[0].result_summary.stdout_preview, "shadow-ok");
   assert.equal(

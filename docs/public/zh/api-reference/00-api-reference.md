@@ -158,7 +158,8 @@ Memory 路由使用以下任一方式：
    - `dispatch.decision=fallback_replay_executed`
    - `dispatch.decision=candidate_only`
    - 可通过 `execute_fallback=false` 禁止回退执行
-3. 执行后端支持：
+6. replay 的 `candidate / run / dispatch` 响应现在都会带机器可读的 `cost_signals`。
+7. 执行后端支持：
    - `params.execution_backend=local_process`（默认）
    - `params.execution_backend=sandbox_sync`（沙箱同步执行并校验结果）
    - `params.execution_backend=sandbox_async`（沙箱排队执行，返回 pending 证据）

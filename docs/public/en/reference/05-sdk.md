@@ -143,6 +143,7 @@ const dispatch = await client.replayPlaybookDispatch({
 });
 
 console.log(dispatch.dispatch.decision, dispatch.dispatch.primary_inference_skipped);
+console.log(dispatch.cost_signals.estimated_primary_model_calls_avoided);
 ```
 
 ## Context Forgetting Policy (TypeScript)
@@ -166,6 +167,7 @@ const assembled = await client.contextAssemble({
 });
 
 console.log(assembled.layered_context?.forgetting, assembled.layered_context?.layers?.episodes?.forgotten_count);
+console.log(assembled.cost_signals?.primary_savings_levers, assembled.cost_signals?.context_est_tokens);
 ```
 
 ## Write-Time Distillation (TypeScript)
@@ -195,12 +197,14 @@ console.log(writeRes.distillation, writeRes.nodes);
    - `deterministic_replay_executed`
    - `fallback_replay_executed`
    - `candidate_only`
+5. replay responses now expose `cost_signals` so callers can inspect deterministic replay eligibility and avoided primary-model calls directly.
 
 ## Context Forgetting Notes
 
 1. Forgetting policy only affects injected layered context.
 2. It does not delete memory graph objects or archive them by itself.
 3. The default policy is intentionally conservative: keep `hot/warm`, exclude archived, and only apply salience filtering when you opt in.
+4. `contextAssemble` responses now expose `cost_signals` so callers can inspect estimated context tokens, forgotten items, and active savings levers directly.
 
 ## Selective Static Injection (TypeScript)
 

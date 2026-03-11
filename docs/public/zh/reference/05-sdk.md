@@ -86,6 +86,7 @@ console.log(
   candidate.candidate.eligible_for_deterministic_replay,
   dispatch.dispatch.decision,
 );
+console.log(dispatch.cost_signals.estimated_primary_model_calls_avoided);
 ```
 
 ## Sandbox Result Summary（TypeScript）
@@ -132,6 +133,7 @@ console.log(
   assembled.layered_context?.forgetting,
   assembled.layered_context?.layers?.episodes?.forgotten_count,
 );
+console.log(assembled.cost_signals?.primary_savings_levers, assembled.cost_signals?.context_est_tokens);
 ```
 
 ## Write-Time Distillation（TypeScript）
@@ -167,12 +169,14 @@ console.log(writeRes.distillation, writeRes.nodes);
    - `deterministic_replay_executed`
    - `fallback_replay_executed`
    - `candidate_only`
+4. replay 响应现在也会带 `cost_signals`，可以直接看 deterministic replay 命中情况和避免的主模型调用次数。
 
 ## Context Forgetting 说明
 
 1. forgetting policy 只影响 layered context 的注入结果。
 2. 它不会自己删除 memory graph，也不会直接归档节点。
 3. 默认策略是保守的：保留 `hot/warm`、排除 archived，只有显式配置 `min_salience` 才会做低 salience 过滤。
+4. `contextAssemble` 响应现在也会带 `cost_signals`，可直接查看估算 token、forgotten items 和当前生效的节省杠杆。
 
 ## Selective Static Injection（TypeScript）
 

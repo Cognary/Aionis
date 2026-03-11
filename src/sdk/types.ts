@@ -752,6 +752,23 @@ export type ContextAssembleResponse = {
   recall: MemoryRecallResponse;
   rules?: RulesEvaluateResponse;
   tools?: ToolsSelectResponse;
+  cost_signals?: {
+    summary_version: "context_cost_signals_v1";
+    layered_output: boolean;
+    context_est_tokens: number;
+    context_token_budget: number | null;
+    context_char_budget: number | null;
+    within_token_budget: boolean | null;
+    within_char_budget: boolean | null;
+    context_compaction_profile: "balanced" | "aggressive";
+    optimization_profile: "balanced" | "aggressive" | null;
+    forgotten_items: number;
+    forgotten_by_reason: Record<string, number>;
+    static_blocks_selected: number;
+    static_blocks_rejected: number;
+    primary_savings_levers: string[];
+    [k: string]: unknown;
+  };
   layered_context?: {
     version?: string;
     mode?: string;
@@ -970,6 +987,19 @@ export type ReplayDeterministicGateResult = {
   [k: string]: unknown;
 };
 
+export type ReplayCostSignals = {
+  summary_version: "replay_cost_signals_v1";
+  deterministic_replay_eligible: boolean;
+  primary_inference_skipped: boolean;
+  estimated_primary_model_calls_avoided: number;
+  fallback_executed: boolean;
+  requested_mode: "simulate" | "strict" | "guided";
+  effective_mode: "simulate" | "strict" | "guided";
+  mismatch_reasons: string[];
+  primary_savings_levers: string[];
+  [k: string]: unknown;
+};
+
 export type ReplayPlaybookGetResponse = {
   tenant_id?: string;
   scope: string;
@@ -1017,6 +1047,7 @@ export type ReplayPlaybookCandidateResponse = {
     [k: string]: unknown;
   };
   deterministic_gate: ReplayDeterministicGateResult;
+  cost_signals: ReplayCostSignals;
   [k: string]: unknown;
 };
 
@@ -1039,6 +1070,7 @@ export type ReplayPlaybookRunResponse = {
   execution?: Record<string, unknown>;
   execution_policy?: Record<string, unknown>;
   params_echo?: Record<string, unknown>;
+  cost_signals?: ReplayCostSignals;
   [k: string]: unknown;
 };
 
@@ -1053,6 +1085,7 @@ export type ReplayPlaybookDispatchResponse = {
   };
   candidate: ReplayPlaybookCandidateResponse;
   replay: ReplayPlaybookRunResponse | null;
+  cost_signals: ReplayCostSignals;
   [k: string]: unknown;
 };
 

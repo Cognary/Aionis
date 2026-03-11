@@ -1,5 +1,6 @@
 import { buildRecallObservability, collectRecallTrajectoryUriLinks } from "../app/recall-observability.js";
 import { applyContextOptimizationProfile } from "../app/context-optimization-profile.js";
+import { buildLayeredContextCostSignals } from "../memory/cost-signals.js";
 import { memoryRecallParsed } from "../memory/recall.js";
 import { ContextAssembleRequest, MemoryRecallRequest, MemoryRecallTextRequest, PlanningContextRequest } from "../memory/schemas.js";
 import { evaluateRules } from "../memory/rules-evaluate.js";
@@ -663,6 +664,14 @@ export function registerMemoryContextRuntimeRoutes(args: {
     if (layeredContext) {
       (layeredContext as any).optimization_profile = planningOptimization.optimization_profile;
     }
+    const costSignals = buildLayeredContextCostSignals({
+      layered_context: layeredContext,
+      context_est_tokens: contextEstTokens,
+      context_token_budget: recallParsed.context_token_budget ?? null,
+      context_char_budget: recallParsed.context_char_budget ?? null,
+      context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
+      context_optimization_profile: parsed.context_optimization_profile ?? null,
+    });
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     try {
       await recordContextAssemblyTelemetryBestEffort({
@@ -690,6 +699,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       rules: out.rules,
       tools: out.tools ?? undefined,
       layered_context: layeredContext,
+      cost_signals: costSignals,
     });
   });
 
@@ -953,6 +963,14 @@ export function registerMemoryContextRuntimeRoutes(args: {
     if (layeredContext) {
       (layeredContext as any).optimization_profile = assembleOptimization.optimization_profile;
     }
+    const costSignals = buildLayeredContextCostSignals({
+      layered_context: layeredContext,
+      context_est_tokens: contextEstTokens,
+      context_token_budget: recallParsed.context_token_budget ?? null,
+      context_char_budget: recallParsed.context_char_budget ?? null,
+      context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
+      context_optimization_profile: parsed.context_optimization_profile ?? null,
+    });
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     try {
       await recordContextAssemblyTelemetryBestEffort({
@@ -1013,6 +1031,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       rules: out.rules ?? undefined,
       tools: out.tools ?? undefined,
       layered_context: layeredContext,
+      cost_signals: costSignals,
     });
   });
 }

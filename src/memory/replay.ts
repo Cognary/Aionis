@@ -14,6 +14,7 @@ import {
   type ReplayLearningProjectionResolvedConfig,
   type ReplayLearningProjectionResult,
 } from "./replay-learning.js";
+import { buildReplayCostSignals } from "./cost-signals.js";
 import {
   ReplayPlaybookDispatchRequest,
   ReplayPlaybookCandidateRequest,
@@ -3192,6 +3193,7 @@ export async function replayPlaybookCandidate(client: pg.PoolClient, body: unkno
       rejectable: deterministicGate.enabled && deterministicGate.decision === "rejected",
     },
     deterministic_gate: deterministicGate,
+    cost_signals: buildReplayCostSignals({ deterministic_gate: deterministicGate }),
   };
 }
 
@@ -3237,6 +3239,10 @@ export async function replayPlaybookDispatch(client: pg.PoolClient, body: unknow
       },
       candidate,
       replay,
+      cost_signals: buildReplayCostSignals({
+        deterministic_gate: (replay as any)?.deterministic_gate,
+        dispatch: { fallback_executed: false },
+      }),
     };
   }
   if (parsed.execute_fallback === false) {
@@ -3250,6 +3256,10 @@ export async function replayPlaybookDispatch(client: pg.PoolClient, body: unknow
       },
       candidate,
       replay: null,
+      cost_signals: buildReplayCostSignals({
+        deterministic_gate: (candidate as any)?.deterministic_gate,
+        dispatch: { fallback_executed: false },
+      }),
     };
   }
   const replay = await replayPlaybookRun(
@@ -3277,6 +3287,10 @@ export async function replayPlaybookDispatch(client: pg.PoolClient, body: unknow
     },
     candidate,
     replay,
+    cost_signals: buildReplayCostSignals({
+      deterministic_gate: (replay as any)?.deterministic_gate,
+      dispatch: { fallback_executed: true },
+    }),
   };
 }
 
@@ -4506,6 +4520,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         deterministic_gate_matched: deterministicGate.matched,
       },
       params_echo: parsed.params ?? {},
+      cost_signals: buildReplayCostSignals({ deterministic_gate: deterministicGate }),
     };
   }
 
@@ -5521,5 +5536,6 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       ),
     },
     params_echo: parsed.params ?? {},
+    cost_signals: buildReplayCostSignals({ deterministic_gate: deterministicGate }),
   };
 }

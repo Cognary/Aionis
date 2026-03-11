@@ -158,7 +158,8 @@ Notes:
    - `dispatch.decision=fallback_replay_executed`
    - `dispatch.decision=candidate_only`
    - callers can disable fallback with `execute_fallback=false`
-3. Execution backends:
+6. replay `candidate / run / dispatch` responses now include machine-readable `cost_signals`.
+7. Execution backends:
    - `params.execution_backend=local_process` (default)
    - `params.execution_backend=sandbox_sync` (sandbox run sync, with command result validation)
    - `params.execution_backend=sandbox_async` (sandbox queue mode, pending execution evidence)
