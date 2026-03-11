@@ -556,6 +556,19 @@ npm run job:perf-benchmark -- \
   --replay-samples 12
 ```
 
+Optional sandbox summary-first evidence sampling (requires sandbox to be enabled and the command to be allowed):
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --sandbox-check true \
+  --sandbox-argv-json '["echo","hello from sandbox benchmark"]' \
+  --sandbox-samples 8
+```
+
 Auth handling:
 
 - for `MEMORY_AUTH_MODE=api_key` or `api_key_or_jwt`, script auto-picks the first key from `MEMORY_API_KEYS_JSON`

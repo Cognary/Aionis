@@ -174,7 +174,8 @@ Landed surfaces:
 3. `job:perf-benchmark` can now sample `context/assemble` baseline vs optimized runs
 4. benchmark artifacts now carry optimization summaries for estimated token reduction, forgotten items, static-block selection, and latency delta
 5. benchmark artifacts can also sample replay deterministic-eligibility and dispatch decision mix for an existing playbook
-6. `job:perf-report` now renders both context-optimization and replay-optimization sections when those artifacts are present
+6. benchmark artifacts can also sample summary-first sandbox execution coverage across `execute/get/logs/artifact`
+7. `job:perf-report` now renders context-optimization, replay-optimization, and sandbox summary-first sections when those artifacts are present
 
 Key code:
 
@@ -188,8 +189,9 @@ Current assessment:
 
 1. Aionis now has a first consolidated benchmark surface for context-optimization deltas
 2. replay dispatch hit-rate and `result_summary` coverage now have a first artifact-level measurement path
-3. the next gap is broader benchmark coverage across non-replay summary-first execution paths
-4. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
+3. non-replay summary-first execution now also has a first artifact-level measurement path via sandbox
+4. the next gap is broader benchmark coverage across additional tool surfaces beyond sandbox
+5. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
 
 ## Overall Stage Assessment
 

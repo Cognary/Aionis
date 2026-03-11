@@ -167,6 +167,33 @@ type ReplayOptimizationAggregate = {
   };
 };
 
+type SandboxOptimizationAggregate = {
+  enabled: boolean;
+  params: {
+    samples: number;
+    argv: string[];
+    timeout_ms: number | null;
+  };
+  session_created: boolean;
+  total_samples: number;
+  ok_samples: number;
+  failed_samples: number;
+  by_status: Record<string, number>;
+  transport_error_count: number;
+  result_summary_present_ratio: {
+    execute: number;
+    run_get: number;
+    logs: number;
+    artifact: number;
+  };
+  endpoint_latency_ms: {
+    execute: { p50: number; p95: number; mean: number };
+    run_get: { p50: number; p95: number; mean: number };
+    logs: { p50: number; p95: number; mean: number };
+    artifact: { p50: number; p95: number; mean: number };
+  };
+};
+
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);
   if (i === -1) return null;
@@ -200,6 +227,20 @@ function parseJsonObjectArg(flag: string): Record<string, unknown> | null {
       throw new Error(`${flag} must be a JSON object`);
     }
     return parsed as Record<string, unknown>;
+  } catch (err: any) {
+    throw new Error(`invalid ${flag}: ${String(err?.message ?? err)}`);
+  }
+}
+
+function parseJsonStringArrayArg(flag: string, fallback: string[]): string[] {
+  const raw = argValue(flag);
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string" || item.trim().length === 0)) {
+      throw new Error(`${flag} must be a JSON string array`);
+    }
+    return parsed.map((item) => String(item));
   } catch (err: any) {
     throw new Error(`invalid ${flag}: ${String(err?.message ?? err)}`);
   }
@@ -341,6 +382,12 @@ async function main() {
   const replayExecuteFallback = (argValue("--replay-execute-fallback") ?? "true").trim().toLowerCase() === "true";
   const replayGateMatchers = parseJsonObjectArg("--replay-gate-matchers");
   const replayGatePolicyConstraints = parseJsonObjectArg("--replay-gate-policy-constraints");
+  const sandboxCheckRaw = (argValue("--sandbox-check") ?? "false").trim().toLowerCase();
+  const sandboxCheck = sandboxCheckRaw === "true";
+  const sandboxSamples = clampInt(Number(argValue("--sandbox-samples") ?? "10"), 1, 2000);
+  const sandboxArgv = parseJsonStringArrayArg("--sandbox-argv-json", ["echo", "hello from sandbox benchmark"]);
+  const sandboxTimeoutMs = argValue("--sandbox-timeout-ms");
+  const sandboxTimeout = sandboxTimeoutMs ? clampInt(Number(sandboxTimeoutMs), 1, 600000) : null;
   const recallProfileRaw = (argValue("--recall-profile") ?? "").trim().toLowerCase();
   const recallProfile = parseRecallProfile(recallProfileRaw);
   if (recallProfileRaw.length > 0 && !recallProfile) {
@@ -870,6 +917,153 @@ async function main() {
     };
   }
 
+  let sandbox: SandboxOptimizationAggregate | null = null;
+  if (sandboxCheck) {
+    const sandboxByStatus: Record<string, number> = {};
+    const executeLatency: number[] = [];
+    const runGetLatency: number[] = [];
+    const logsLatency: number[] = [];
+    const artifactLatency: number[] = [];
+    let transportErrorCount = 0;
+    let sessionCreated = false;
+    let okSamples = 0;
+    let executeSummaryCount = 0;
+    let runGetSummaryCount = 0;
+    let logsSummaryCount = 0;
+    let artifactSummaryCount = 0;
+    let sessionId: string | null = null;
+
+    const sessionCreate = await timedRequestJson("/v1/memory/sandbox/sessions", {
+      tenant_id: tenantId,
+      scope,
+      profile: "default",
+      metadata: { source: "perf_benchmark" },
+    });
+    const sessionStatusKey = sessionCreate.error ? `session:error:${sessionCreate.error}` : `session:${sessionCreate.status}`;
+    sandboxByStatus[sessionStatusKey] = (sandboxByStatus[sessionStatusKey] ?? 0) + 1;
+    if (sessionCreate.error) transportErrorCount += 1;
+    if (sessionCreate.ok) {
+      sessionId = String(sessionCreate.body?.session?.session_id ?? "").trim() || null;
+      sessionCreated = Boolean(sessionId);
+    }
+
+    if (sessionId) {
+      for (let i = 0; i < sandboxSamples; i += 1) {
+        if (paceMs > 0) await sleepMs(paceMs);
+
+        const execute = await timedRequestJson("/v1/memory/sandbox/execute", {
+          tenant_id: tenantId,
+          scope,
+          session_id: sessionId,
+          mode: "sync",
+          ...(sandboxTimeout ? { timeout_ms: sandboxTimeout } : {}),
+          action: {
+            kind: "command",
+            argv: sandboxArgv,
+          },
+          metadata: { sample_index: i, source: "perf_benchmark" },
+        });
+        const executeStatusKey = execute.error ? `execute:error:${execute.error}` : `execute:${execute.status}`;
+        sandboxByStatus[executeStatusKey] = (sandboxByStatus[executeStatusKey] ?? 0) + 1;
+        if (execute.error) transportErrorCount += 1;
+        if (!execute.ok) continue;
+
+        okSamples += 1;
+        executeLatency.push(execute.ms);
+        const runId = String(execute.body?.run?.run_id ?? "").trim();
+        if (execute.body?.run?.result_summary?.summary_version) executeSummaryCount += 1;
+
+        const runGet = await timedRequestJson("/v1/memory/sandbox/runs/get", {
+          tenant_id: tenantId,
+          scope,
+          run_id: runId,
+        });
+        const runGetStatusKey = runGet.error ? `run_get:error:${runGet.error}` : `run_get:${runGet.status}`;
+        sandboxByStatus[runGetStatusKey] = (sandboxByStatus[runGetStatusKey] ?? 0) + 1;
+        if (runGet.error) transportErrorCount += 1;
+        if (runGet.ok) {
+          runGetLatency.push(runGet.ms);
+          if (runGet.body?.run?.result_summary?.summary_version) runGetSummaryCount += 1;
+        }
+
+        const logs = await timedRequestJson("/v1/memory/sandbox/runs/logs", {
+          tenant_id: tenantId,
+          scope,
+          run_id: runId,
+        });
+        const logsStatusKey = logs.error ? `logs:error:${logs.error}` : `logs:${logs.status}`;
+        sandboxByStatus[logsStatusKey] = (sandboxByStatus[logsStatusKey] ?? 0) + 1;
+        if (logs.error) transportErrorCount += 1;
+        if (logs.ok) {
+          logsLatency.push(logs.ms);
+          if (logs.body?.logs?.summary?.summary_version) logsSummaryCount += 1;
+        }
+
+        const artifact = await timedRequestJson("/v1/memory/sandbox/runs/artifact", {
+          tenant_id: tenantId,
+          scope,
+          run_id: runId,
+          bundle_inline: false,
+        });
+        const artifactStatusKey = artifact.error ? `artifact:error:${artifact.error}` : `artifact:${artifact.status}`;
+        sandboxByStatus[artifactStatusKey] = (sandboxByStatus[artifactStatusKey] ?? 0) + 1;
+        if (artifact.error) transportErrorCount += 1;
+        if (artifact.ok) {
+          artifactLatency.push(artifact.ms);
+          if (artifact.body?.artifact?.summary?.summary_version) artifactSummaryCount += 1;
+        }
+      }
+    }
+
+    const executeLatencySummary = summarizeSeries(executeLatency);
+    const runGetLatencySummary = summarizeSeries(runGetLatency);
+    const logsLatencySummary = summarizeSeries(logsLatency);
+    const artifactLatencySummary = summarizeSeries(artifactLatency);
+
+    sandbox = {
+      enabled: true,
+      params: {
+        samples: sandboxSamples,
+        argv: sandboxArgv,
+        timeout_ms: sandboxTimeout,
+      },
+      session_created: sessionCreated,
+      total_samples: sandboxSamples,
+      ok_samples: okSamples,
+      failed_samples: Math.max(0, sandboxSamples - okSamples),
+      by_status: sandboxByStatus,
+      transport_error_count: transportErrorCount,
+      result_summary_present_ratio: {
+        execute: okSamples > 0 ? round(executeSummaryCount / okSamples, 6) : 0,
+        run_get: okSamples > 0 ? round(runGetSummaryCount / okSamples, 6) : 0,
+        logs: okSamples > 0 ? round(logsSummaryCount / okSamples, 6) : 0,
+        artifact: okSamples > 0 ? round(artifactSummaryCount / okSamples, 6) : 0,
+      },
+      endpoint_latency_ms: {
+        execute: {
+          p50: executeLatencySummary.p50,
+          p95: executeLatencySummary.p95,
+          mean: executeLatencySummary.mean,
+        },
+        run_get: {
+          p50: runGetLatencySummary.p50,
+          p95: runGetLatencySummary.p95,
+          mean: runGetLatencySummary.mean,
+        },
+        logs: {
+          p50: logsLatencySummary.p50,
+          p95: logsLatencySummary.p95,
+          mean: logsLatencySummary.mean,
+        },
+        artifact: {
+          p50: artifactLatencySummary.p50,
+          p95: artifactLatencySummary.p95,
+          mean: artifactLatencySummary.mean,
+        },
+      },
+    };
+  }
+
   const caseSummaries = cases.map((c) => c.summary);
   const transportFailCases =
     failTransportRate === null || !Number.isFinite(failTransportRate)
@@ -923,6 +1117,10 @@ async function main() {
           replay_samples: replaySamples,
           replay_fallback_mode: replayFallbackMode,
           replay_execute_fallback: replayExecuteFallback,
+          sandbox_check: sandboxCheck,
+          sandbox_samples: sandboxSamples,
+          sandbox_argv: sandboxArgv,
+          sandbox_timeout_ms: sandboxTimeout,
         },
         quality: {
           transport_error_gate: {
@@ -943,6 +1141,7 @@ async function main() {
         compression,
         optimization,
         replay,
+        sandbox,
       },
       null,
       2,

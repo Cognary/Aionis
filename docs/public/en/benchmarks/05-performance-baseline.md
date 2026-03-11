@@ -14,6 +14,7 @@ This page defines the reproducible performance baseline workflow for Aionis.
 4. Optional worker throughput metrics
 5. Optional context-optimization cost signals (`context/assemble` baseline vs optimized)
 6. Optional replay-optimization signals (`playbooks/candidate` + `playbooks/dispatch`)
+7. Optional summary-first sandbox signals (`sandbox/execute` + `runs/get|logs|artifact`)
 
 ## Preconditions
 
@@ -86,6 +87,19 @@ npm run job:perf-benchmark -- \
   --replay-samples 12
 ```
 
+Add summary-first sandbox evidence to the benchmark artifact:
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url "http://localhost:${PORT:-3001}" \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --sandbox-check true \
+  --sandbox-argv-json '["echo","hello from sandbox benchmark"]' \
+  --sandbox-samples 8
+```
+
 ## Output Fields
 
 1. `latency_ms.p50/p95/p99`
@@ -94,6 +108,7 @@ npm run job:perf-benchmark -- \
 4. `by_status`
 5. optional `optimization.summary.*` for estimated token reduction, forgotten items, static-block selection, and `context/assemble` p95 delta
 6. optional `replay.*` for deterministic eligibility ratio, dispatch decision mix, primary-inference-skipped ratio, and `result_summary` coverage
+7. optional `sandbox.*` for `result_summary` coverage across `execute/get/logs/artifact` and endpoint latency percentiles
 
 ## Starter SLO Guidance
 

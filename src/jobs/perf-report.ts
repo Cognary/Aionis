@@ -62,6 +62,25 @@ type BenchmarkJson = {
       latency_ms?: { p50: number; p95: number; mean: number };
     };
   } | null;
+  sandbox?: {
+    enabled: boolean;
+    session_created: boolean;
+    total_samples: number;
+    ok_samples: number;
+    failed_samples: number;
+    result_summary_present_ratio?: {
+      execute?: number;
+      run_get?: number;
+      logs?: number;
+      artifact?: number;
+    };
+    endpoint_latency_ms?: {
+      execute?: { p50: number; p95: number; mean: number };
+      run_get?: { p50: number; p95: number; mean: number };
+      logs?: { p50: number; p95: number; mean: number };
+      artifact?: { p50: number; p95: number; mean: number };
+    };
+  } | null;
 };
 
 type SeedJson = {
@@ -248,6 +267,7 @@ async function main() {
   const recommendationLines: string[] = [];
   const optimizationLines: string[] = [];
   const replayLines: string[] = [];
+  const sandboxLines: string[] = [];
   const scalesCsv = scales.join(",");
   const anyRecallIssue = { v: false };
   const anyWriteIssue = { v: false };
@@ -396,6 +416,23 @@ async function main() {
       }
       if (mismatchReasons) replayLines.push(`  - top mismatch reasons: ${mismatchReasons}`);
     }
+
+    const sandbox = bench?.sandbox;
+    if (sandbox?.enabled) {
+      sandboxLines.push(`- scale=${scale}: session_created=${sandbox.session_created ? "yes" : "no"} ok_samples=${sandbox.ok_samples}/${sandbox.total_samples}`);
+      const coverage = sandbox.result_summary_present_ratio;
+      if (coverage) {
+        sandboxLines.push(
+          `  - result_summary coverage execute=${round(Number(coverage.execute ?? 0) * 100, 2)}% run_get=${round(Number(coverage.run_get ?? 0) * 100, 2)}% logs=${round(Number(coverage.logs ?? 0) * 100, 2)}% artifact=${round(Number(coverage.artifact ?? 0) * 100, 2)}%`,
+        );
+      }
+      const latency = sandbox.endpoint_latency_ms;
+      if (latency) {
+        sandboxLines.push(
+          `  - latency p95 execute=${round(Number(latency.execute?.p95 ?? 0))} ms run_get=${round(Number(latency.run_get?.p95 ?? 0))} ms logs=${round(Number(latency.logs?.p95 ?? 0))} ms artifact=${round(Number(latency.artifact?.p95 ?? 0))} ms`,
+        );
+      }
+    }
   }
 
   const explainLines: string[] = [];
@@ -462,6 +499,10 @@ ${optimizationLines.length > 0 ? optimizationLines.join("\n") : "- no optimizati
 ## Replay Optimization Signals
 
 ${replayLines.length > 0 ? replayLines.join("\n") : "- no replay optimization data found in benchmark artifacts"}
+
+## Summary-First Sandbox Signals
+
+${sandboxLines.length > 0 ? sandboxLines.join("\n") : "- no sandbox summary-first data found in benchmark artifacts"}
 
 ## Explain Baseline
 
