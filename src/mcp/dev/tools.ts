@@ -95,16 +95,207 @@ function summarizeRecallText(result: any, env: AionisDevEnv): string {
 }
 
 function summarizePlanningContext(result: any, env: AionisDevEnv): string {
-  const selected = result?.tools?.selection?.selected;
-  const decisionId = result?.tools?.decision?.decision_id;
+  const planningSummary = result?.planning_summary;
+  const selected =
+    typeof planningSummary?.selected_tool === "string"
+      ? planningSummary.selected_tool
+      : result?.tools?.selection?.selected;
+  const decisionId =
+    typeof planningSummary?.decision_id === "string"
+      ? planningSummary.decision_id
+      : result?.tools?.decision?.decision_id;
   const merged = typeof result?.layered_context?.merged_text === "string" ? result.layered_context.merged_text : "";
   const recallText = typeof result?.recall?.context?.text === "string" ? result.recall.context.text : "";
   const text = merged || recallText || JSON.stringify(result, null, 2);
 
   return clipText(
-    [selected ? `selected_tool: ${selected}` : null, decisionId ? `decision_id: ${decisionId}` : null, text]
+    [
+      selected ? `selected_tool: ${selected}` : null,
+      decisionId ? `decision_id: ${decisionId}` : null,
+      planningSummary && typeof planningSummary === "object"
+        ? [
+            Number.isFinite(Number(planningSummary.rules_matched))
+              ? `rules_matched: ${Number(planningSummary.rules_matched)}`
+              : null,
+            Number.isFinite(Number(planningSummary.context_est_tokens))
+              ? `context_est_tokens: ${Number(planningSummary.context_est_tokens)}`
+              : null,
+            Number.isFinite(Number(planningSummary.forgotten_items))
+              ? `forgotten_items: ${Number(planningSummary.forgotten_items)}`
+              : null,
+            Number.isFinite(Number(planningSummary.static_blocks_selected))
+              ? `static_blocks_selected: ${Number(planningSummary.static_blocks_selected)}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : null,
+      text,
+    ]
       .filter(Boolean)
       .join("\n\n"),
+    env.AIONIS_MAX_TOOL_TEXT_CHARS,
+  );
+}
+
+function formatToolsLifecycleSummary(summary: any, env: AionisDevEnv): string | null {
+  if (!summary || typeof summary !== "object" || summary.summary_version !== "tools_lifecycle_summary_v1") {
+    return null;
+  }
+  const lines =
+    summary.kind === "decision"
+      ? [
+          "tools_decision result",
+          typeof summary.selected_tool === "string" ? `selected_tool: ${summary.selected_tool}` : "selected_tool: <none>",
+          typeof summary.decision_id === "string" ? `decision_id: ${summary.decision_id}` : null,
+          typeof summary.run_id === "string" ? `run_id: ${summary.run_id}` : null,
+          typeof summary.lookup_mode === "string" ? `lookup_mode: ${summary.lookup_mode}` : null,
+          Number.isFinite(Number(summary.candidate_count)) ? `candidate_count: ${Number(summary.candidate_count)}` : null,
+          Number.isFinite(Number(summary.source_rule_count)) ? `source_rule_count: ${Number(summary.source_rule_count)}` : null,
+          typeof summary.metadata_source === "string" ? `metadata_source: ${summary.metadata_source}` : null,
+          typeof summary.created_at === "string" ? `created_at: ${summary.created_at}` : null,
+          Array.isArray(summary.tool_conflicts) && summary.tool_conflicts.length > 0
+            ? `tool_conflicts: ${summary.tool_conflicts.slice(0, 3).join(" | ")}`
+            : null,
+        ]
+      : [
+          "tools_run result",
+          typeof summary.status === "string" ? `status: ${summary.status}` : null,
+          typeof summary.run_id === "string" ? `run_id: ${summary.run_id}` : null,
+          Number.isFinite(Number(summary.decision_count)) ? `decision_count: ${Number(summary.decision_count)}` : null,
+          typeof summary.latest_decision_at === "string" ? `latest_decision_at: ${summary.latest_decision_at}` : null,
+          typeof summary.latest_feedback_at === "string" ? `latest_feedback_at: ${summary.latest_feedback_at}` : null,
+          Array.isArray(summary.recent_decisions) && summary.recent_decisions.length > 0
+            ? `recent_decisions: ${summary.recent_decisions.slice(0, 3).join(" | ")}`
+            : null,
+          Number.isFinite(Number(summary.feedback_total))
+            ? `feedback_total: ${Number(summary.feedback_total)}`
+            : null,
+          Number.isFinite(Number(summary.tools_feedback_count))
+            ? `tools_feedback_count: ${Number(summary.tools_feedback_count)}`
+            : null,
+        ];
+  return clipText(lines.filter(Boolean).join("\n"), env.AIONIS_MAX_TOOL_TEXT_CHARS);
+}
+
+function summarizeToolsSelect(result: any, env: AionisDevEnv): string {
+  const summary = result?.selection_summary;
+  if (summary && typeof summary === "object" && summary.summary_version === "tools_selection_summary_v1") {
+    return clipText(
+      [
+        "tools_select result",
+        typeof summary.selected_tool === "string" ? `selected_tool: ${summary.selected_tool}` : "selected_tool: <none>",
+        Number.isFinite(Number(summary.candidate_count)) ? `candidate_count: ${Number(summary.candidate_count)}` : null,
+        Number.isFinite(Number(summary.allowed_count)) ? `allowed_count: ${Number(summary.allowed_count)}` : null,
+        Number.isFinite(Number(summary.denied_count)) ? `denied_count: ${Number(summary.denied_count)}` : null,
+        Number.isFinite(Number(summary.matched_rules)) ? `matched_rules: ${Number(summary.matched_rules)}` : null,
+        Number.isFinite(Number(summary.source_rule_count))
+          ? `source_rule_count: ${Number(summary.source_rule_count)}`
+          : null,
+        summary.fallback_applied ? `fallback_reason: ${summary.fallback_reason ?? "applied"}` : null,
+        typeof summary.shadow_selected_tool === "string" ? `shadow_selected_tool: ${summary.shadow_selected_tool}` : null,
+        Array.isArray(summary.tool_conflicts) && summary.tool_conflicts.length > 0
+          ? `tool_conflicts: ${summary.tool_conflicts.slice(0, 3).join(" | ")}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      env.AIONIS_MAX_TOOL_TEXT_CHARS,
+    );
+  }
+  const selection = result?.selection ?? {};
+  const selected = typeof selection?.selected === "string" ? selection.selected : null;
+  const candidates = Array.isArray(result?.candidates) ? result.candidates : [];
+  const decisionId = typeof result?.decision?.decision_id === "string" ? result.decision.decision_id : null;
+  const matchedRules = Number(result?.rules?.matched ?? 0);
+  const conflicts = Array.isArray(result?.rules?.tool_conflicts_summary) ? result.rules.tool_conflicts_summary.slice(0, 2) : [];
+  const shadowSelected =
+    typeof result?.rules?.shadow_selection?.selected === "string" ? result.rules.shadow_selection.selected : null;
+  return clipText(
+    [
+      "tools_select result",
+      selected ? `selected_tool: ${selected}` : "selected_tool: <none>",
+      `candidate_count: ${candidates.length}`,
+      candidates.length > 0 ? `candidates: ${candidates.slice(0, 6).join(", ")}` : null,
+      decisionId ? `decision_id: ${decisionId}` : null,
+      Number.isFinite(matchedRules) ? `matched_rules: ${matchedRules}` : null,
+      shadowSelected ? `shadow_selected_tool: ${shadowSelected}` : null,
+      conflicts.length > 0 ? `tool_conflicts: ${conflicts.join(" | ")}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    env.AIONIS_MAX_TOOL_TEXT_CHARS,
+  );
+}
+
+function summarizeToolsDecision(result: any, env: AionisDevEnv): string {
+  const lifecycleSummary = formatToolsLifecycleSummary(result?.lifecycle_summary, env);
+  if (lifecycleSummary) return lifecycleSummary;
+  const decision = result?.decision ?? {};
+  const selected = typeof decision?.selected_tool === "string" ? decision.selected_tool : null;
+  const decisionId = typeof decision?.decision_id === "string" ? decision.decision_id : null;
+  const runId = typeof decision?.run_id === "string" ? decision.run_id : null;
+  const candidates = Array.isArray(decision?.candidates) ? decision.candidates : [];
+  const sourceRuleIds = Array.isArray(decision?.source_rule_ids) ? decision.source_rule_ids : [];
+  const createdAt = typeof decision?.created_at === "string" ? decision.created_at : null;
+  const metadata = decision?.metadata && typeof decision.metadata === "object" ? decision.metadata : {};
+  const source = typeof metadata?.source === "string" ? metadata.source : null;
+  const conflicts = Array.isArray(metadata?.tool_conflicts_summary) ? metadata.tool_conflicts_summary.slice(0, 2) : [];
+
+  return clipText(
+    [
+      "tools_decision result",
+      selected ? `selected_tool: ${selected}` : "selected_tool: <none>",
+      decisionId ? `decision_id: ${decisionId}` : null,
+      runId ? `run_id: ${runId}` : null,
+      typeof result?.lookup_mode === "string" ? `lookup_mode: ${result.lookup_mode}` : null,
+      typeof decision?.decision_kind === "string" ? `decision_kind: ${decision.decision_kind}` : null,
+      `candidate_count: ${candidates.length}`,
+      candidates.length > 0 ? `candidates: ${candidates.slice(0, 6).join(", ")}` : null,
+      `source_rule_count: ${sourceRuleIds.length}`,
+      source ? `metadata_source: ${source}` : null,
+      createdAt ? `created_at: ${createdAt}` : null,
+      conflicts.length > 0 ? `tool_conflicts: ${conflicts.join(" | ")}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    env.AIONIS_MAX_TOOL_TEXT_CHARS,
+  );
+}
+
+function summarizeToolsRun(result: any, env: AionisDevEnv): string {
+  const lifecycleSummary = formatToolsLifecycleSummary(result?.lifecycle_summary, env);
+  if (lifecycleSummary) return lifecycleSummary;
+  const lifecycle = result?.lifecycle ?? {};
+  const decisions = Array.isArray(result?.decisions) ? result.decisions : [];
+  const feedback = result?.feedback ?? null;
+  const recentDecisionSummary = decisions
+    .slice(0, 3)
+    .map((decision: any) => {
+      const selected = typeof decision?.selected_tool === "string" ? decision.selected_tool : "<none>";
+      const createdAt = typeof decision?.created_at === "string" ? decision.created_at : null;
+      return createdAt ? `${selected} @ ${createdAt}` : selected;
+    })
+    .join(" | ");
+
+  return clipText(
+    [
+      "tools_run result",
+      typeof lifecycle?.status === "string" ? `status: ${lifecycle.status}` : null,
+      typeof result?.run_id === "string" ? `run_id: ${result.run_id}` : null,
+      `decision_count: ${Number(lifecycle?.decision_count ?? decisions.length ?? 0)}`,
+      typeof lifecycle?.latest_decision_at === "string" ? `latest_decision_at: ${lifecycle.latest_decision_at}` : null,
+      typeof lifecycle?.latest_feedback_at === "string" ? `latest_feedback_at: ${lifecycle.latest_feedback_at}` : null,
+      recentDecisionSummary ? `recent_decisions: ${recentDecisionSummary}` : null,
+      feedback
+        ? `feedback_total: ${Number(feedback?.total ?? 0)} (positive=${Number(feedback?.by_outcome?.positive ?? 0)}, negative=${Number(feedback?.by_outcome?.negative ?? 0)}, neutral=${Number(feedback?.by_outcome?.neutral ?? 0)})`
+        : null,
+      feedback && Number.isFinite(Number(feedback?.tools_feedback_count ?? NaN))
+        ? `tools_feedback_count: ${Number(feedback.tools_feedback_count ?? 0)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
     env.AIONIS_MAX_TOOL_TEXT_CHARS,
   );
 }
@@ -533,6 +724,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
       ["context", "candidates"],
     ),
+    summarize: summarizeToolsSelect,
   },
   {
     name: "aionis_tools_decision",
@@ -547,6 +739,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       decision_uri: { type: "string" },
       run_id: { type: "string" },
     }),
+    summarize: summarizeToolsDecision,
   },
   {
     name: "aionis_tools_run",
@@ -565,6 +758,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
       ["run_id"],
     ),
+    summarize: summarizeToolsRun,
   },
   {
     name: "aionis_tools_feedback",

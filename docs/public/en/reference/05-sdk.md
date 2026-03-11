@@ -88,6 +88,22 @@ print(write_res.get("commit_uri"), recall_res.get("request_id"))
 4. Policy loop: `rules_evaluate`, `tools_select`, `tools_decision`, `tools_feedback`
 5. Replay: `replayPlaybookGet`, `replayPlaybookCandidate`, `replayPlaybookRun`, `replayPlaybookDispatch`
 
+## Rule Evaluation Summary (TypeScript)
+
+Use `rulesEvaluate` as a compact policy-inspection surface first, then inspect full `active`, `shadow`, or `applied` payloads only when the summary indicates you need them.
+
+```ts
+const rules = await client.rulesEvaluate({
+  context: { agent: { id: "agent_a" } },
+  include_shadow: false,
+  limit: 50,
+});
+
+console.log(rules.evaluation_summary?.matched);
+console.log(rules.evaluation_summary?.filtered_by_lane);
+console.log(rules.evaluation_summary?.selected_tool);
+```
+
 ## Sandbox Result Summary (TypeScript)
 
 Use sandbox responses as a compact tool-output surface first, and only inspect raw logs when the bounded summary indicates you need them.
@@ -106,6 +122,35 @@ const logs = await client.sandboxRunLogs({
 });
 
 console.log(logs.logs.summary.signals, logs.logs.summary.truncated);
+```
+
+## Tool Lifecycle Summary (TypeScript)
+
+Use `toolsDecision` and `toolsRun` as compact lifecycle surfaces first, then inspect the full payload only when the summary indicates you need more detail.
+
+```ts
+const selected = await client.toolsSelect({
+  context: { intent: "deploy" },
+  candidates: ["kubectl", "bash", "python3"],
+});
+
+console.log(selected.selection_summary?.selected_tool);
+console.log(selected.selection_summary?.matched_rules);
+
+const decision = await client.toolsDecision({
+  decision_id: "22222222-2222-2222-2222-222222222222",
+});
+
+console.log(decision.lifecycle_summary?.selected_tool);
+console.log(decision.lifecycle_summary?.candidate_count);
+
+const lifecycle = await client.toolsRun({
+  run_id: "33333333-3333-3333-3333-333333333333",
+  include_feedback: true,
+});
+
+console.log(lifecycle.lifecycle_summary?.status);
+console.log(lifecycle.lifecycle_summary?.recent_decisions);
 ```
 
 ## Replay Dispatch Quick Start (TypeScript)

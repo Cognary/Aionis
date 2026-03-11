@@ -40,6 +40,35 @@ Planner context is the normalized runtime input used by Aionis policy and tool-s
 10. Operators can also set endpoint defaults for `context_optimization_profile` on `planning/context` and `context/assemble`, so stable cost-saving presets can roll out without requiring every caller to pass the field explicitly.
 11. If you roll out endpoint defaults operationally, prefer managed env presets instead of ad hoc edits so rollback stays one command away.
 
+## Planning Summary
+
+`POST /v1/memory/planning/context` now also returns `planning_summary`, a compact planner-facing surface that highlights:
+
+1. `selected_tool`
+2. `decision_id`
+3. `rules_considered` / `rules_matched`
+4. `context_est_tokens`
+5. `forgotten_items`
+6. `static_blocks_selected`
+7. `primary_savings_levers`
+
+Use this summary to make lightweight planner decisions before reading the full `recall`, `rules`, `tools`, or `layered_context` payloads.
+
+## Assembly Summary
+
+`POST /v1/memory/context/assemble` now also returns `assembly_summary`, a compact assembly-facing surface that highlights:
+
+1. `selected_tool`
+2. `decision_id`
+3. `rules_considered` / `rules_matched`
+4. `include_rules`
+5. `context_est_tokens`
+6. `forgotten_items`
+7. `static_blocks_selected`
+8. `primary_savings_levers`
+
+Use this summary when you need a quick answer about whether the assembled context is ready, without immediately traversing the full `layered_context` tree.
+
 ## Minimal Example
 
 ```json

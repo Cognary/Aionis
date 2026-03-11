@@ -11,6 +11,7 @@ import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { applyToolPolicy } from "./tool-selector.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import { buildToolsSelectionSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri } from "./uri.js";
 
 function summarizeToolConflicts(explain: any): string[] {
@@ -124,7 +125,7 @@ export async function selectTools(
     ]);
   }
 
-  return {
+  const response = {
     scope: rules.scope,
     tenant_id: rules.tenant_id,
     candidates: selection.candidates,
@@ -154,5 +155,13 @@ export async function selectTools(
       source_rule_ids,
       created_at: decision_created_at,
     },
+  };
+  return {
+    ...response,
+    selection_summary: buildToolsSelectionSummary({
+      selection: response.selection,
+      rules: response.rules,
+      source_rule_ids,
+    }),
   };
 }

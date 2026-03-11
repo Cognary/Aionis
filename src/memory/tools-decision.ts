@@ -2,6 +2,7 @@ import type pg from "pg";
 import { HttpError } from "../util/http.js";
 import { ToolsDecisionRequest } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
+import { buildToolsDecisionLifecycleSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
 
 type DecisionRow = {
@@ -132,10 +133,11 @@ export async function getToolsDecisionById(
     });
   }
 
-  return {
+  const lookupMode: "decision_id" | "run_id_latest" = decisionId ? "decision_id" : "run_id_latest";
+  const response = {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
-    lookup_mode: decisionId ? "decision_id" : "run_id_latest",
+    lookup_mode: lookupMode,
     decision: {
       decision_id: row.id,
       decision_uri: buildAionisUri({
@@ -164,5 +166,12 @@ export async function getToolsDecisionById(
             })
           : null,
     },
+  };
+  return {
+    ...response,
+    lifecycle_summary: buildToolsDecisionLifecycleSummary({
+      lookup_mode: response.lookup_mode,
+      decision: response.decision,
+    }),
   };
 }

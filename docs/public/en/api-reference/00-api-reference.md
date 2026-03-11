@@ -47,9 +47,11 @@ Notes:
    - per-layer `forgotten_count`
    - `layered_context.static_injection`
    so callers can see what was intentionally excluded or selected.
-5. `recall_text`, `planning/context`, and `context/assemble` also accept experimental `recall_class_aware=true|false` so callers can explicitly enable or disable the class-aware recall selector per request while evaluating policy changes.
-6. `recall`, `recall_text`, `planning/context`, and `context/assemble` also accept `recall_mode="dense_edge"` as an explicit opt-in for wider graph recall. This mode currently maps to the `quality_first` recall profile and is intended for callers that prefer broader relationship coverage over lower latency.
-7. `planning/context` and `context/assemble` can also inherit server-side default `context_optimization_profile` presets when operators enable them; explicit request fields still win.
+5. `planning/context` responses now also include `planning_summary` for compact planner-facing inspection before reading the full `recall / rules / tools / layered_context` payload.
+6. `context/assemble` responses now also include `assembly_summary` for compact assembly-side inspection before reading the full `recall / rules / tools / layered_context` payload.
+7. `recall_text`, `planning/context`, and `context/assemble` also accept experimental `recall_class_aware=true|false` so callers can explicitly enable or disable the class-aware recall selector per request while evaluating policy changes.
+8. `recall`, `recall_text`, `planning/context`, and `context/assemble` also accept `recall_mode="dense_edge"` as an explicit opt-in for wider graph recall. This mode currently maps to the `quality_first` recall profile and is intended for callers that prefer broader relationship coverage over lower latency.
+9. `planning/context` and `context/assemble` can also inherit server-side default `context_optimization_profile` presets when operators enable them; explicit request fields still win.
 
 ### Policy and Execution Loop
 
@@ -58,6 +60,12 @@ Notes:
 3. `POST /v1/memory/tools/decision`
 4. `POST /v1/memory/tools/run`
 5. `POST /v1/memory/tools/feedback`
+
+Notes:
+
+1. `rules/evaluate` responses now include compact `evaluation_summary` objects for summary-first inspection before reading the full matched-rule payload.
+2. `tools/select` responses now include compact `selection_summary` objects for summary-first inspection before reading the full rule/policy payload.
+3. `tools/decision` and `tools/run` responses now include compact `lifecycle_summary` objects for summary-first inspection before reading the full decision or feedback payloads.
 
 ### Sessions and Events
 

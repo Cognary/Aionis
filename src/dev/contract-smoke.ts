@@ -50,7 +50,11 @@ import { evaluateRules, evaluateRulesAppliedOnly } from "../memory/rules-evaluat
 import { applyToolPolicy } from "../memory/tool-selector.js";
 import { computeEffectiveToolPolicy } from "../memory/tool-policy.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
+import { getToolsDecisionById } from "../memory/tools-decision.js";
+import { getToolsRunLifecycle } from "../memory/tools-run.js";
+import { selectTools } from "../memory/tools-select.js";
 import { applyContextOptimizationProfile } from "../app/context-optimization-profile.js";
+import { buildAssemblySummary, buildPlanningSummary } from "../app/planning-summary.js";
 import { createRecallPolicy } from "../app/recall-policy.js";
 import { validateAutomationGraph } from "../memory/automation.js";
 import {
@@ -933,6 +937,148 @@ class ToolsFeedbackFixturePgClient {
     }
 
     throw new Error(`ToolsFeedbackFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class ToolsLifecycleFixturePgClient {
+  async query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+
+    if (s.includes("FROM memory_execution_decisions") && s.includes("AND id = $2") && s.includes("LIMIT 1")) {
+      return {
+        rows: [
+          {
+            id: String(params?.[1] ?? "00000000-0000-0000-0000-00000000f201"),
+            scope: String(params?.[0] ?? "default"),
+            decision_kind: "tools_select",
+            run_id: "run_tools_contract_1",
+            selected_tool: "kubectl",
+            candidates_json: ["kubectl", "bash", "python3"],
+            context_sha256: "ctx_tools_contract",
+            policy_sha256: "policy_tools_contract",
+            source_rule_ids: ["rule_alpha", "rule_beta"],
+            metadata_json: {
+              source: "contract_smoke",
+              tool_conflicts_summary: ["[conflict] deny shell", "[conflict] prefer kubectl"],
+            },
+            created_at: "2026-03-11T08:00:00.000Z",
+            commit_id: "00000000-0000-0000-0000-00000000f299",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("SELECT count(*)::text AS count") && s.includes("FROM memory_execution_decisions")) {
+      return {
+        rows: [{ count: "2", latest_decision_at: "2026-03-11T08:00:00.000Z" } as any] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("FROM memory_execution_decisions") && s.includes("ORDER BY created_at DESC") && s.includes("LIMIT $3")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-00000000f201",
+            decision_kind: "tools_select",
+            run_id: String(params?.[1] ?? "run_tools_contract_1"),
+            selected_tool: "kubectl",
+            candidates_json: ["kubectl", "bash", "python3"],
+            context_sha256: "ctx_tools_contract",
+            policy_sha256: "policy_tools_contract",
+            source_rule_ids: ["rule_alpha", "rule_beta"],
+            metadata_json: { source: "contract_smoke" },
+            created_at: "2026-03-11T08:00:00.000Z",
+            commit_id: "00000000-0000-0000-0000-00000000f299",
+          } as any,
+          {
+            id: "00000000-0000-0000-0000-00000000f202",
+            decision_kind: "tools_select",
+            run_id: String(params?.[1] ?? "run_tools_contract_1"),
+            selected_tool: "bash",
+            candidates_json: ["bash", "python3"],
+            context_sha256: "ctx_tools_contract_2",
+            policy_sha256: "policy_tools_contract_2",
+            source_rule_ids: ["rule_gamma"],
+            metadata_json: { source: "contract_smoke" },
+            created_at: "2026-03-11T07:59:00.000Z",
+            commit_id: null,
+          } as any,
+        ] as T[],
+        rowCount: 2,
+      };
+    }
+
+    if (s.includes("FROM memory_rule_feedback") && s.includes("count(*) FILTER")) {
+      return {
+        rows: [
+          {
+            total: "3",
+            positive: "2",
+            negative: "1",
+            neutral: "0",
+            linked_decision_count: "2",
+            tools_feedback_count: "2",
+            latest_feedback_at: "2026-03-11T08:01:00.000Z",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    if (s.includes("FROM memory_rule_feedback") && s.includes("ORDER BY created_at DESC") && s.includes("LIMIT $3")) {
+      return {
+        rows: [
+          {
+            id: "00000000-0000-0000-0000-00000000f301",
+            rule_node_id: "rule_alpha",
+            outcome: "positive",
+            note: "works",
+            source: "tools_feedback",
+            decision_id: "00000000-0000-0000-0000-00000000f201",
+            commit_id: null,
+            created_at: "2026-03-11T08:01:00.000Z",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    throw new Error(`ToolsLifecycleFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+}
+
+class ToolsSelectFixturePgClient {
+  private readonly rows: any[];
+
+  constructor(rows: any[]) {
+    this.rows = rows;
+  }
+
+  async query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+
+    if (s.includes("FROM memory_rule_defs d") && s.includes("JOIN memory_nodes n ON n.id = d.rule_node_id AND n.scope = d.scope")) {
+      return {
+        rows: this.rows as T[],
+        rowCount: this.rows.length,
+      };
+    }
+
+    if (s.includes("INSERT INTO memory_execution_decisions") && s.includes("RETURNING id, created_at::text AS created_at")) {
+      return {
+        rows: [
+          {
+            id: String(params?.[0] ?? "00000000-0000-0000-0000-00000000f401"),
+            created_at: "2026-03-11T09:00:00.000Z",
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
+
+    throw new Error(`ToolsSelectFixturePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
   }
 }
 
@@ -2373,6 +2519,55 @@ async function run() {
   assert.equal(contextCostSignals.forgotten_items, 3);
   assert.equal(contextCostSignals.static_blocks_selected, 2);
   assert.equal(contextCostSignals.primary_savings_levers.includes("optimization_profile:aggressive"), true);
+  const planningSummary = buildPlanningSummary({
+    rules: { considered: 6, matched: 2 },
+    tools: {
+      selection: { selected: "kubectl" },
+      decision: { decision_id: "00000000-0000-0000-0000-00000000p101" },
+    },
+    layered_context: {
+      stats: { forgotten_items: 3 },
+      static_injection: { selected_blocks: 2 },
+    },
+    cost_signals: contextCostSignals,
+    context_est_tokens: 220,
+    context_compaction_profile: "aggressive",
+    optimization_profile: "aggressive",
+    recall_mode: "dense_edge",
+  });
+  assert.equal(planningSummary.summary_version, "planning_summary_v1");
+  assert.equal(planningSummary.selected_tool, "kubectl");
+  assert.equal(planningSummary.decision_id, "00000000-0000-0000-0000-00000000p101");
+  assert.equal(planningSummary.rules_considered, 6);
+  assert.equal(planningSummary.rules_matched, 2);
+  assert.equal(planningSummary.context_est_tokens, 220);
+  assert.equal(planningSummary.forgotten_items, 3);
+  assert.equal(planningSummary.static_blocks_selected, 2);
+  assert.equal(planningSummary.recall_mode, "dense_edge");
+  const assemblySummary = buildAssemblySummary({
+    rules: { considered: 4, matched: 1 },
+    tools: {
+      selection: { selected: "bash" },
+      decision: { decision_id: "00000000-0000-0000-0000-00000000a101" },
+    },
+    layered_context: {
+      stats: { forgotten_items: 2 },
+      static_injection: { selected_blocks: 1 },
+    },
+    cost_signals: contextCostSignals,
+    context_est_tokens: 180,
+    context_compaction_profile: "balanced",
+    optimization_profile: "aggressive",
+    recall_mode: null,
+    include_rules: true,
+  });
+  assert.equal(assemblySummary.summary_version, "assembly_summary_v1");
+  assert.equal(assemblySummary.selected_tool, "bash");
+  assert.equal(assemblySummary.decision_id, "00000000-0000-0000-0000-00000000a101");
+  assert.equal(assemblySummary.rules_considered, 4);
+  assert.equal(assemblySummary.rules_matched, 1);
+  assert.equal(assemblySummary.include_rules, true);
+  assert.equal(assemblySummary.context_est_tokens, 180);
   const layeredForgotten = assembleLayeredContext({
     recall: {
       context: {
@@ -2673,6 +2868,45 @@ async function run() {
       ),
     (err: any) => err instanceof HttpError && err.statusCode === 400 && err.code === "decision_run_id_mismatch",
   );
+
+  const toolsLifecycleClient = new ToolsLifecycleFixturePgClient();
+  const toolsDecisionOut = await getToolsDecisionById(
+    toolsLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      decision_id: "00000000-0000-0000-0000-00000000f201",
+    },
+    "default",
+    "default",
+  );
+  assert.equal((toolsDecisionOut as any).lifecycle_summary.summary_version, "tools_lifecycle_summary_v1");
+  assert.equal((toolsDecisionOut as any).lifecycle_summary.kind, "decision");
+  assert.equal((toolsDecisionOut as any).lifecycle_summary.selected_tool, "kubectl");
+  assert.equal((toolsDecisionOut as any).lifecycle_summary.candidate_count, 3);
+  assert.equal((toolsDecisionOut as any).lifecycle_summary.source_rule_count, 2);
+  assert.equal((toolsDecisionOut as any).lifecycle_summary.metadata_source, "contract_smoke");
+  assert.equal((toolsDecisionOut as any).lifecycle_summary.tool_conflicts.length, 2);
+
+  const toolsRunOut = await getToolsRunLifecycle(
+    toolsLifecycleClient as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      run_id: "run_tools_contract_1",
+      include_feedback: true,
+    },
+    "default",
+    "default",
+  );
+  assert.equal((toolsRunOut as any).lifecycle_summary.summary_version, "tools_lifecycle_summary_v1");
+  assert.equal((toolsRunOut as any).lifecycle_summary.kind, "run_lifecycle");
+  assert.equal((toolsRunOut as any).lifecycle_summary.status, "feedback_linked");
+  assert.equal((toolsRunOut as any).lifecycle_summary.decision_count, 2);
+  assert.equal((toolsRunOut as any).lifecycle_summary.feedback_total, 3);
+  assert.equal((toolsRunOut as any).lifecycle_summary.tools_feedback_count, 2);
+  assert.equal((toolsRunOut as any).lifecycle_summary.recent_decisions.length, 2);
+  assert.match((toolsRunOut as any).lifecycle_summary.recent_decisions[0], /kubectl @ 2026-03-11T08:00:00.000Z/);
 
   const seedEventId = "00000000-0000-0000-0000-000000000001";
   const seedTopicId = "00000000-0000-0000-0000-000000000002";
@@ -3999,6 +4233,13 @@ async function run() {
   assert.equal((rulesNoContext as any).agent_visibility_summary?.rule_scope?.filtered_by_lane, 1);
   assert.equal((rulesNoContext as any).agent_visibility_summary?.lane?.applied, true);
   assert.equal((rulesNoContext as any).agent_visibility_summary?.lane?.reason, "missing_agent_context_fail_closed");
+  assert.equal((rulesNoContext as any).evaluation_summary.summary_version, "rules_evaluation_summary_v1");
+  assert.equal((rulesNoContext as any).evaluation_summary.considered, 2);
+  assert.equal((rulesNoContext as any).evaluation_summary.matched, 1);
+  assert.equal((rulesNoContext as any).evaluation_summary.active_count, 1);
+  assert.equal((rulesNoContext as any).evaluation_summary.filtered_by_lane, 1);
+  assert.equal((rulesNoContext as any).evaluation_summary.selected_tool, "bash");
+  assert.equal((rulesNoContext as any).evaluation_summary.allowed_tool_count, 1);
 
   const rulesWithAgent = await evaluateRules(
     new RulesEvaluateFixturePgClient(ruleVisibilityRows) as any,
@@ -4011,6 +4252,12 @@ async function run() {
     ((rulesWithAgent as any).active ?? []).map((r: any) => r.rule_node_id).sort(),
     ["00000000-0000-0000-0000-00000000r101", "00000000-0000-0000-0000-00000000r102"],
   );
+  assert.equal((rulesWithAgent as any).evaluation_summary.summary_version, "rules_evaluation_summary_v1");
+  assert.equal((rulesWithAgent as any).evaluation_summary.matched, 2);
+  assert.equal((rulesWithAgent as any).evaluation_summary.active_count, 2);
+  assert.equal((rulesWithAgent as any).evaluation_summary.filtered_by_lane, 0);
+  assert.equal((rulesWithAgent as any).evaluation_summary.denied_tool_count, 1);
+  assert.equal((rulesWithAgent as any).evaluation_summary.selected_tool, "bash");
 
   const appliedOnlyNoContext = await evaluateRulesAppliedOnly(
     new RulesEvaluateFixturePgClient(ruleVisibilityRows) as any,
@@ -4028,6 +4275,30 @@ async function run() {
     ["00000000-0000-0000-0000-00000000r101"],
   );
   assert.equal((appliedOnlyNoContext as any).agent_visibility_summary?.rule_scope?.filtered_by_lane, 1);
+
+  const toolsSelectOut = await selectTools(
+    new ToolsSelectFixturePgClient(ruleVisibilityRows) as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      context: { agent: { id: "agent_a" } },
+      candidates: ["bash", "rm", "curl"],
+      include_shadow: true,
+      strict: false,
+      rules_limit: 10,
+      run_id: "run_tools_select_contract_1",
+    },
+    "default",
+    "default",
+  );
+  assert.equal((toolsSelectOut as any).selection_summary.summary_version, "tools_selection_summary_v1");
+  assert.equal((toolsSelectOut as any).selection_summary.selected_tool, "bash");
+  assert.equal((toolsSelectOut as any).selection_summary.candidate_count, 3);
+  assert.equal((toolsSelectOut as any).selection_summary.allowed_count, 1);
+  assert.equal((toolsSelectOut as any).selection_summary.denied_count, 2);
+  assert.equal((toolsSelectOut as any).selection_summary.matched_rules, 2);
+  assert.equal((toolsSelectOut as any).selection_summary.source_rule_count, 2);
+  assert.equal((toolsSelectOut as any).selection_summary.shadow_selected_tool, "bash");
 
   await assert.rejects(
     () =>

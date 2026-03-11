@@ -1,5 +1,6 @@
 import { buildRecallObservability, collectRecallTrajectoryUriLinks } from "../app/recall-observability.js";
 import { applyContextOptimizationProfile } from "../app/context-optimization-profile.js";
+import { buildAssemblySummary, buildPlanningSummary } from "../app/planning-summary.js";
 import { buildLayeredContextCostSignals } from "../memory/cost-signals.js";
 import { memoryRecallParsed } from "../memory/recall.js";
 import { ContextAssembleRequest, MemoryRecallRequest, MemoryRecallTextRequest, PlanningContextRequest } from "../memory/schemas.js";
@@ -742,6 +743,16 @@ export function registerMemoryContextRuntimeRoutes(args: {
       context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
       context_optimization_profile: planningOptimization.optimization_profile.requested,
     });
+    const planningSummary = buildPlanningSummary({
+      rules: out.rules,
+      tools: out.tools,
+      layered_context: layeredContext,
+      cost_signals: costSignals,
+      context_est_tokens: contextEstTokens,
+      context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
+      optimization_profile: planningOptimization.optimization_profile.requested,
+      recall_mode: explicitMode.mode,
+    });
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     try {
       await recordContextAssemblyTelemetryBestEffort({
@@ -768,6 +779,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       },
       rules: out.rules,
       tools: out.tools ?? undefined,
+      planning_summary: planningSummary,
       layered_context: layeredContext,
       cost_signals: costSignals,
     });
@@ -1064,6 +1076,17 @@ export function registerMemoryContextRuntimeRoutes(args: {
       context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
       context_optimization_profile: assembleOptimization.optimization_profile.requested,
     });
+    const assemblySummary = buildAssemblySummary({
+      rules: out.rules,
+      tools: out.tools,
+      layered_context: layeredContext,
+      cost_signals: costSignals,
+      context_est_tokens: contextEstTokens,
+      context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
+      optimization_profile: assembleOptimization.optimization_profile.requested,
+      recall_mode: explicitMode.mode,
+      include_rules: parsed.include_rules,
+    });
     const tenantIdOut = recallOut.tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID;
     try {
       await recordContextAssemblyTelemetryBestEffort({
@@ -1138,6 +1161,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       },
       rules: out.rules ?? undefined,
       tools: out.tools ?? undefined,
+      assembly_summary: assemblySummary,
       layered_context: layeredContext,
       cost_signals: costSignals,
     });

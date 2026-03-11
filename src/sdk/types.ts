@@ -752,6 +752,23 @@ export type ContextAssembleResponse = {
   recall: MemoryRecallResponse;
   rules?: RulesEvaluateResponse;
   tools?: ToolsSelectResponse;
+  assembly_summary?: {
+    summary_version: "assembly_summary_v1";
+    selected_tool: string | null;
+    decision_id: string | null;
+    rules_considered: number;
+    rules_matched: number;
+    include_rules: boolean;
+    context_est_tokens: number;
+    layered_output: boolean;
+    forgotten_items: number;
+    static_blocks_selected: number;
+    optimization_profile: "balanced" | "aggressive" | null;
+    context_compaction_profile: "balanced" | "aggressive";
+    recall_mode?: string | null;
+    primary_savings_levers: string[];
+    [k: string]: unknown;
+  };
   cost_signals?: {
     summary_version: "context_cost_signals_v1";
     layered_output: boolean;
@@ -1095,6 +1112,25 @@ export type RulesEvaluateResponse = {
   scope: string;
   considered: number;
   matched: number;
+  evaluation_summary?: {
+    summary_version: "rules_evaluation_summary_v1";
+    considered: number;
+    matched: number;
+    active_count: number;
+    shadow_count: number;
+    skipped_invalid_then: number;
+    filtered_by_scope: number;
+    filtered_by_lane: number;
+    filtered_by_condition: number;
+    lane_enforced: boolean;
+    lane_reason: string | null;
+    selected_tool?: string | null;
+    allowed_tool_count?: number;
+    denied_tool_count?: number;
+    preferred_tool_count?: number;
+    tool_conflicts?: string[];
+    [k: string]: unknown;
+  };
   active: Array<Record<string, unknown>>;
   shadow: Array<Record<string, unknown>>;
   applied: Record<string, unknown>;
@@ -1105,6 +1141,21 @@ export type ToolsSelectResponse = {
   tenant_id?: string;
   scope: string;
   candidates: string[];
+  selection_summary?: {
+    summary_version: "tools_selection_summary_v1";
+    selected_tool: string | null;
+    candidate_count: number;
+    allowed_count: number;
+    denied_count: number;
+    preferred_count: number;
+    matched_rules: number;
+    source_rule_count: number;
+    fallback_applied: boolean;
+    fallback_reason: string | null;
+    shadow_selected_tool?: string | null;
+    tool_conflicts?: string[];
+    [k: string]: unknown;
+  };
   selection: {
     candidates: string[];
     selected: string | null;
@@ -1131,6 +1182,21 @@ export type ToolsDecisionResponse = {
   tenant_id: string;
   scope: string;
   lookup_mode?: "decision_id" | "run_id_latest";
+  lifecycle_summary?: {
+    summary_version: "tools_lifecycle_summary_v1";
+    kind: "decision";
+    lookup_mode?: "decision_id" | "run_id_latest";
+    decision_id?: string | null;
+    run_id?: string | null;
+    decision_kind?: "tools_select";
+    selected_tool?: string | null;
+    candidate_count?: number;
+    source_rule_count?: number;
+    metadata_source?: string | null;
+    created_at?: string | null;
+    tool_conflicts?: string[];
+    [k: string]: unknown;
+  };
   decision: {
     decision_id: string;
     decision_uri?: string;
@@ -1154,6 +1220,19 @@ export type ToolsRunResponse = {
   tenant_id: string;
   scope: string;
   run_id: string;
+  lifecycle_summary?: {
+    summary_version: "tools_lifecycle_summary_v1";
+    kind: "run_lifecycle";
+    run_id?: string | null;
+    status?: "decision_recorded" | "feedback_linked";
+    decision_count?: number;
+    feedback_total?: number;
+    tools_feedback_count?: number;
+    latest_decision_at?: string | null;
+    latest_feedback_at?: string | null;
+    recent_decisions?: string[];
+    [k: string]: unknown;
+  };
   lifecycle: {
     status: "decision_recorded" | "feedback_linked";
     decision_count: number;

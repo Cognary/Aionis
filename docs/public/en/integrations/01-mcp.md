@@ -28,7 +28,9 @@ The current Dev MCP output policy also prefers bounded execution summaries over 
 
 1. sandbox tools surface `result_summary`
 2. replay-backed command steps record `result_summary`
-3. MCP text responses prefer those summaries first, then fall back to raw JSON only when needed
+3. tool lifecycle surfaces such as `tools/select`, `tools/decision`, and `tools/run` now also prefer compact lifecycle summaries over raw JSON blobs
+4. `tools/select` API responses expose `selection_summary`, and `tools/decision` / `tools/run` expose `lifecycle_summary`, so MCP can reuse the same summary-first surface instead of recomputing it ad hoc
+5. MCP text responses prefer those summaries first, then fall back to raw JSON only when needed
 
 ## Quick Start
 

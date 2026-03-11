@@ -52,6 +52,22 @@ const recallRes = await client.recallText({
 console.log(writeRes.commit_uri, recallRes.request_id);
 ```
 
+## Rule Evaluation Summary（TypeScript）
+
+`rulesEvaluate` 现在也可以先当紧凑的 policy inspection surface 来用；只有当 `evaluation_summary` 不够时，再去看完整的 `active / shadow / applied` 载荷。
+
+```ts
+const rules = await client.rulesEvaluate({
+  context: { agent: { id: "agent_a" } },
+  include_shadow: false,
+  limit: 50,
+});
+
+console.log(rules.evaluation_summary?.matched);
+console.log(rules.evaluation_summary?.filtered_by_lane);
+console.log(rules.evaluation_summary?.selected_tool);
+```
+
 ## Replay Dispatch（TypeScript）
 
 当你希望 Aionis 先尝试 deterministic replay，再在不命中时回退到普通 replay/planner，可以直接使用 replay dispatch 面。
@@ -107,6 +123,35 @@ const logs = await client.sandboxRunLogs({
 });
 
 console.log(logs.logs.summary.signals, logs.logs.summary.truncated);
+```
+
+## Tool Lifecycle Summary（TypeScript）
+
+`toolsDecision` 和 `toolsRun` 现在也可以先当紧凑的 lifecycle surface 来用；只有当 `lifecycle_summary` 不够时，再去看完整 payload。
+
+```ts
+const selected = await client.toolsSelect({
+  context: { intent: "deploy" },
+  candidates: ["kubectl", "bash", "python3"],
+});
+
+console.log(selected.selection_summary?.selected_tool);
+console.log(selected.selection_summary?.matched_rules);
+
+const decision = await client.toolsDecision({
+  decision_id: "22222222-2222-2222-2222-222222222222",
+});
+
+console.log(decision.lifecycle_summary?.selected_tool);
+console.log(decision.lifecycle_summary?.candidate_count);
+
+const lifecycle = await client.toolsRun({
+  run_id: "33333333-3333-3333-3333-333333333333",
+  include_feedback: true,
+});
+
+console.log(lifecycle.lifecycle_summary?.status);
+console.log(lifecycle.lifecycle_summary?.recent_decisions);
 ```
 
 ## Context Forgetting（TypeScript）

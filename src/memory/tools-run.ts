@@ -2,6 +2,7 @@ import type pg from "pg";
 import { HttpError } from "../util/http.js";
 import { ToolsRunRequest } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
+import { buildToolsRunLifecycleSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri } from "./uri.js";
 
 type DecisionRow = {
@@ -172,9 +173,10 @@ export async function getToolsRunLifecycle(
   const latestDecisionAt = countRes.rows[0]?.latest_decision_at ?? null;
   const latestFeedbackAt = feedbackSummary?.latest_feedback_at ?? null;
   const feedbackTotal = Number(feedbackSummary?.total ?? "0");
-  const lifecycleStatus = feedbackTotal > 0 ? "feedback_linked" : "decision_recorded";
+  const lifecycleStatus: "feedback_linked" | "decision_recorded" =
+    feedbackTotal > 0 ? "feedback_linked" : "decision_recorded";
 
-  return {
+  const response = {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
     run_id: parsed.run_id,
@@ -198,5 +200,14 @@ export async function getToolsRunLifecycle(
           recent: feedbackRows,
         }
       : undefined,
+  };
+  return {
+    ...response,
+    lifecycle_summary: buildToolsRunLifecycleSummary({
+      run_id: response.run_id,
+      lifecycle: response.lifecycle,
+      decisions: response.decisions,
+      feedback: response.feedback,
+    }),
   };
 }

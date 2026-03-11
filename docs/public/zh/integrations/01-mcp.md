@@ -28,7 +28,9 @@ Aionis 现在提供两套 MCP 服务：
 
 1. sandbox 工具会暴露 `result_summary`
 2. replay 记录的命令步骤会写入 `result_summary`
-3. MCP 文本响应会优先返回这些摘要，只有需要时才回退到原始 JSON
+3. `tools/select`、`tools/decision`、`tools/run` 这类 lifecycle surface 也会优先返回紧凑摘要
+4. `tools/select` 的 API 响应现在会带 `selection_summary`，`tools/decision` 和 `tools/run` 会带 `lifecycle_summary`，MCP 直接复用同一套 summary-first surface
+5. MCP 文本响应会优先返回这些摘要，只有需要时才回退到原始 JSON
 
 ## 快速开始
 

@@ -47,9 +47,11 @@ Memory 路由使用以下任一方式：
    - 每层 `forgotten_count`
    - `layered_context.static_injection`
    方便调用方知道哪些内容被主动排除、哪些静态块被选中。
-5. `recall_text`、`planning/context` 和 `context/assemble` 还支持实验性 `recall_class_aware=true|false`，方便调用方按请求显式打开或关闭 class-aware recall selector，做策略评估时不必起两套服务。
-6. `recall`、`recall_text`、`planning/context` 和 `context/assemble` 还支持 `recall_mode="dense_edge"`，作为显式 opt-in 的宽图召回模式。当前它会映射到 `quality_first` recall profile，适合愿意用更高延迟换取更宽关系覆盖的调用方。
-7. `planning/context` 和 `context/assemble` 也可以继承服务端配置的默认 `context_optimization_profile` 预设；如果请求里显式传了字段，请求值仍然优先。
+5. `planning/context` 响应现在还会带 `planning_summary`，方便 planner 侧先看紧凑摘要，再决定是否读取完整 `recall / rules / tools / layered_context` 载荷。
+6. `context/assemble` 响应现在还会带 `assembly_summary`，方便装配侧先看紧凑摘要，再决定是否读取完整 `recall / rules / tools / layered_context` 载荷。
+7. `recall_text`、`planning/context` 和 `context/assemble` 还支持实验性 `recall_class_aware=true|false`，方便调用方按请求显式打开或关闭 class-aware recall selector，做策略评估时不必起两套服务。
+8. `recall`、`recall_text`、`planning/context` 和 `context/assemble` 还支持 `recall_mode="dense_edge"`，作为显式 opt-in 的宽图召回模式。当前它会映射到 `quality_first` recall profile，适合愿意用更高延迟换取更宽关系覆盖的调用方。
+9. `planning/context` 和 `context/assemble` 也可以继承服务端配置的默认 `context_optimization_profile` 预设；如果请求里显式传了字段，请求值仍然优先。
 
 ### 策略与执行闭环
 
@@ -58,6 +60,12 @@ Memory 路由使用以下任一方式：
 3. `POST /v1/memory/tools/decision`
 4. `POST /v1/memory/tools/run`
 5. `POST /v1/memory/tools/feedback`
+
+说明：
+
+1. `rules/evaluate` 响应现在会带紧凑的 `evaluation_summary`，方便先做 summary-first 判断，再决定是否读取完整命中规则载荷。
+2. `tools/select` 响应现在会带紧凑的 `selection_summary`，方便先做 summary-first 判断，再决定是否读取完整 rule/policy 载荷。
+3. `tools/decision` 和 `tools/run` 响应现在都会带紧凑的 `lifecycle_summary`，方便先做 summary-first 判断，再决定是否读取完整 decision / feedback 载荷。
 
 ### 会话与事件
 

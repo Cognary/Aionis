@@ -5,6 +5,7 @@ import { buildAppliedPolicy, parsePolicyPatch, type PolicyPatch } from "./rule-p
 import { computeEffectiveToolPolicy } from "./tool-policy.js";
 import { resolveTenantScope } from "./tenant.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import { buildRulesEvaluationSummary } from "./tools-lifecycle-summary.js";
 
 type RuleRow = {
   rule_node_id: string;
@@ -484,7 +485,7 @@ export async function evaluateRules(
   const activeConflictExplain = buildConflictExplain(appliedActive.conflicts, activeSources, activeRankByRule);
   const shadowConflictExplain = buildConflictExplain(appliedShadow.conflicts, shadowSources, shadowRankByRule);
 
-  return {
+  const response = {
     scope: tenancy.scope,
     tenant_id: tenancy.tenant_id,
     considered: rows.length,
@@ -527,6 +528,10 @@ export async function evaluateRules(
           }
         : {}),
     },
+  };
+  return {
+    ...response,
+    evaluation_summary: buildRulesEvaluationSummary(response),
   };
 }
 
