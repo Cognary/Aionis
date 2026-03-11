@@ -173,7 +173,8 @@ Landed surfaces:
 2. `planning/context` and `context/assemble` responses expose machine-readable `cost_signals`
 3. `job:perf-benchmark` can now sample `context/assemble` baseline vs optimized runs
 4. benchmark artifacts now carry optimization summaries for estimated token reduction, forgotten items, static-block selection, and latency delta
-5. `job:perf-report` now renders a context-optimization section when those artifacts are present
+5. benchmark artifacts can also sample replay deterministic-eligibility and dispatch decision mix for an existing playbook
+6. `job:perf-report` now renders both context-optimization and replay-optimization sections when those artifacts are present
 
 Key code:
 
@@ -186,8 +187,9 @@ Key code:
 Current assessment:
 
 1. Aionis now has a first consolidated benchmark surface for context-optimization deltas
-2. the next gap is broader benchmark coverage across replay and summary-first execution paths
-3. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
+2. replay dispatch hit-rate and `result_summary` coverage now have a first artifact-level measurement path
+3. the next gap is broader benchmark coverage across non-replay summary-first execution paths
+4. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
 
 ## Overall Stage Assessment
 

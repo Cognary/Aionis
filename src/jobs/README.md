@@ -541,6 +541,21 @@ npm run job:perf-benchmark -- \
   --optimization-samples 12
 ```
 
+Optional replay-dispatch evidence sampling (collects deterministic replay eligibility, dispatch decisions, and `result_summary` coverage for one existing playbook):
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --replay-check true \
+  --replay-playbook-id "<playbook_uuid>" \
+  --replay-gate-matchers '{"tool":"kubectl"}' \
+  --replay-gate-policy-constraints '{"risk_profile":"low"}' \
+  --replay-samples 12
+```
+
 Auth handling:
 
 - for `MEMORY_AUTH_MODE=api_key` or `api_key_or_jwt`, script auto-picks the first key from `MEMORY_API_KEYS_JSON`

@@ -42,6 +42,26 @@ type BenchmarkJson = {
     };
     levers_frequency?: Record<string, number>;
   } | null;
+  replay?: {
+    enabled: boolean;
+    total_samples: number;
+    ok_samples: number;
+    failed_samples: number;
+    candidate?: {
+      eligible_ratio?: number;
+      recommended_mode_frequency?: Record<string, number>;
+      next_action_frequency?: Record<string, number>;
+      mismatch_frequency?: Record<string, number>;
+    };
+    dispatch?: {
+      decision_frequency?: Record<string, number>;
+      primary_inference_skipped_ratio?: number;
+      fallback_executed_ratio?: number;
+      estimated_primary_model_calls_avoided_mean?: number;
+      result_summary_present_ratio?: number;
+      latency_ms?: { p50: number; p95: number; mean: number };
+    };
+  } | null;
 };
 
 type SeedJson = {
@@ -227,6 +247,7 @@ async function main() {
   const failureLines: string[] = [];
   const recommendationLines: string[] = [];
   const optimizationLines: string[] = [];
+  const replayLines: string[] = [];
   const scalesCsv = scales.join(",");
   const anyRecallIssue = { v: false };
   const anyWriteIssue = { v: false };
@@ -334,6 +355,47 @@ async function main() {
       }
       if (levers) optimizationLines.push(`  - top savings levers: ${levers}`);
     }
+
+    const replay = bench?.replay;
+    if (replay?.enabled) {
+      const recommendedModes = Object.entries(replay.candidate?.recommended_mode_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      const nextActions = Object.entries(replay.candidate?.next_action_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      const mismatchReasons = Object.entries(replay.candidate?.mismatch_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .slice(0, 5)
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      const decisions = Object.entries(replay.dispatch?.decision_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      replayLines.push(`- scale=${scale}: ok_samples=${replay.ok_samples}/${replay.total_samples}`);
+      if (replay.candidate?.eligible_ratio !== undefined) {
+        replayLines.push(
+          `  - deterministic eligibility=${round(Number(replay.candidate.eligible_ratio) * 100, 2)}%; recommended_modes=${recommendedModes || "n/a"}; next_actions=${nextActions || "n/a"}`,
+        );
+      }
+      if (replay.dispatch) {
+        replayLines.push(
+          `  - decisions=${decisions || "n/a"}; primary_inference_skipped=${round(Number(replay.dispatch.primary_inference_skipped_ratio ?? 0) * 100, 2)}%; fallback_executed=${round(Number(replay.dispatch.fallback_executed_ratio ?? 0) * 100, 2)}%`,
+        );
+        replayLines.push(
+          `  - estimated_primary_model_calls_avoided_mean=${round(Number(replay.dispatch.estimated_primary_model_calls_avoided_mean ?? 0), 3)}; result_summary_present=${round(Number(replay.dispatch.result_summary_present_ratio ?? 0) * 100, 2)}%`,
+        );
+      }
+      if (replay.dispatch?.latency_ms) {
+        replayLines.push(
+          `  - replay dispatch latency p50=${round(replay.dispatch.latency_ms.p50)} ms p95=${round(replay.dispatch.latency_ms.p95)} ms mean=${round(replay.dispatch.latency_ms.mean)} ms`,
+        );
+      }
+      if (mismatchReasons) replayLines.push(`  - top mismatch reasons: ${mismatchReasons}`);
+    }
   }
 
   const explainLines: string[] = [];
@@ -396,6 +458,10 @@ ${failureLines.length > 0 ? failureLines.join("\n") : "- no failures observed in
 ## Context Optimization Signals
 
 ${optimizationLines.length > 0 ? optimizationLines.join("\n") : "- no optimization check data found in benchmark artifacts"}
+
+## Replay Optimization Signals
+
+${replayLines.length > 0 ? replayLines.join("\n") : "- no replay optimization data found in benchmark artifacts"}
 
 ## Explain Baseline
 

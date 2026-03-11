@@ -13,6 +13,7 @@ This page defines the reproducible performance baseline workflow for Aionis.
 3. Error rates by endpoint category
 4. Optional worker throughput metrics
 5. Optional context-optimization cost signals (`context/assemble` baseline vs optimized)
+6. Optional replay-optimization signals (`playbooks/candidate` + `playbooks/dispatch`)
 
 ## Preconditions
 
@@ -70,6 +71,21 @@ npm run job:perf-benchmark -- \
   --optimization-samples 12
 ```
 
+Add replay optimization evidence to the benchmark artifact:
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url "http://localhost:${PORT:-3001}" \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --replay-check true \
+  --replay-playbook-id "<playbook_uuid>" \
+  --replay-gate-matchers '{"tool":"kubectl"}' \
+  --replay-gate-policy-constraints '{"risk_profile":"low"}' \
+  --replay-samples 12
+```
+
 ## Output Fields
 
 1. `latency_ms.p50/p95/p99`
@@ -77,6 +93,7 @@ npm run job:perf-benchmark -- \
 3. `failed`
 4. `by_status`
 5. optional `optimization.summary.*` for estimated token reduction, forgotten items, static-block selection, and `context/assemble` p95 delta
+6. optional `replay.*` for deterministic eligibility ratio, dispatch decision mix, primary-inference-skipped ratio, and `result_summary` coverage
 
 ## Starter SLO Guidance
 

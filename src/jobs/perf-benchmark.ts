@@ -135,6 +135,38 @@ type OptimizationAggregate = {
   };
 };
 
+type ReplayOptimizationAggregate = {
+  enabled: boolean;
+  params: {
+    playbook_id: string;
+    version: number | null;
+    samples: number;
+    fallback_mode: "simulate" | "strict" | "guided";
+    execute_fallback: boolean;
+    gate_matchers: Record<string, unknown> | null;
+    gate_policy_constraints: Record<string, unknown> | null;
+  };
+  total_samples: number;
+  ok_samples: number;
+  failed_samples: number;
+  by_status: Record<string, number>;
+  transport_error_count: number;
+  candidate: {
+    eligible_ratio: number;
+    recommended_mode_frequency: Record<string, number>;
+    next_action_frequency: Record<string, number>;
+    mismatch_frequency: Record<string, number>;
+  };
+  dispatch: {
+    decision_frequency: Record<string, number>;
+    primary_inference_skipped_ratio: number;
+    fallback_executed_ratio: number;
+    estimated_primary_model_calls_avoided_mean: number;
+    result_summary_present_ratio: number;
+    latency_ms: { p50: number; p95: number; mean: number };
+  };
+};
+
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);
   if (i === -1) return null;
@@ -157,6 +189,20 @@ function quantile(sorted: number[], q: number): number {
 function round(v: number, d = 3): number {
   const f = 10 ** d;
   return Math.round(v * f) / f;
+}
+
+function parseJsonObjectArg(flag: string): Record<string, unknown> | null {
+  const raw = argValue(flag);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`${flag} must be a JSON object`);
+    }
+    return parsed as Record<string, unknown>;
+  } catch (err: any) {
+    throw new Error(`invalid ${flag}: ${String(err?.message ?? err)}`);
+  }
 }
 
 function summarizeSeries(values: number[]): { mean: number; p50: number; p95: number; min: number; max: number } {
@@ -283,10 +329,25 @@ async function main() {
   const optimizationProfileRaw = (argValue("--optimization-profile") ?? "aggressive").trim().toLowerCase();
   const optimizationProfile: "balanced" | "aggressive" = optimizationProfileRaw === "balanced" ? "balanced" : "aggressive";
   const optimizationQueryText = (argValue("--optimization-query-text") ?? "prepare production deploy context").trim();
+  const replayCheckRaw = (argValue("--replay-check") ?? "false").trim().toLowerCase();
+  const replayCheck = replayCheckRaw === "true";
+  const replayPlaybookId = (argValue("--replay-playbook-id") ?? "").trim();
+  const replayVersionRaw = argValue("--replay-version");
+  const replayVersion = replayVersionRaw ? clampInt(Number(replayVersionRaw), 1, 1_000_000) : null;
+  const replaySamples = clampInt(Number(argValue("--replay-samples") ?? "20"), 1, 2000);
+  const replayFallbackModeRaw = (argValue("--replay-fallback-mode") ?? "simulate").trim().toLowerCase();
+  const replayFallbackMode: "simulate" | "strict" | "guided" =
+    replayFallbackModeRaw === "strict" || replayFallbackModeRaw === "guided" ? replayFallbackModeRaw : "simulate";
+  const replayExecuteFallback = (argValue("--replay-execute-fallback") ?? "true").trim().toLowerCase() === "true";
+  const replayGateMatchers = parseJsonObjectArg("--replay-gate-matchers");
+  const replayGatePolicyConstraints = parseJsonObjectArg("--replay-gate-policy-constraints");
   const recallProfileRaw = (argValue("--recall-profile") ?? "").trim().toLowerCase();
   const recallProfile = parseRecallProfile(recallProfileRaw);
   if (recallProfileRaw.length > 0 && !recallProfile) {
     throw new Error("invalid --recall-profile; expected: legacy|strict_edges|quality_first|lite");
+  }
+  if (replayCheck && !replayPlaybookId) {
+    throw new Error("--replay-check requires --replay-playbook-id");
   }
   const recallProfileDefaults = recallProfile ? RECALL_PROFILE_DEFAULTS[recallProfile] : null;
   const recallDefaultLimit = recallProfileDefaults?.limit ?? 20;
@@ -687,6 +748,128 @@ async function main() {
     };
   }
 
+  let replay: ReplayOptimizationAggregate | null = null;
+  if (replayCheck) {
+    const replayByStatus: Record<string, number> = {};
+    const recommendedModeFrequency: Record<string, number> = {};
+    const nextActionFrequency: Record<string, number> = {};
+    const mismatchFrequency: Record<string, number> = {};
+    const decisionFrequency: Record<string, number> = {};
+    const dispatchLatency: number[] = [];
+    let transportErrorCount = 0;
+    let eligibleCount = 0;
+    let primaryInferenceSkippedCount = 0;
+    let fallbackExecutedCount = 0;
+    let resultSummaryPresentCount = 0;
+    let estimatedCallsAvoidedSum = 0;
+    let okSamples = 0;
+
+    const deterministicGate = {
+      enabled: true,
+      prefer_deterministic_execution: true,
+      on_mismatch: replayExecuteFallback ? "fallback" : "reject",
+      ...(replayGateMatchers ? { matchers: replayGateMatchers } : {}),
+      ...(replayGatePolicyConstraints ? { policy_constraints: replayGatePolicyConstraints } : {}),
+    };
+
+    for (let i = 0; i < replaySamples; i += 1) {
+      if (paceMs > 0) await sleepMs(paceMs);
+
+      const candidate = await timedRequestJson("/v1/memory/replay/playbooks/candidate", {
+        tenant_id: tenantId,
+        scope,
+        playbook_id: replayPlaybookId,
+        ...(replayVersion ? { version: replayVersion } : {}),
+        deterministic_gate: deterministicGate,
+      });
+      const candidateStatusKey = candidate.error ? `candidate:error:${candidate.error}` : `candidate:${candidate.status}`;
+      replayByStatus[candidateStatusKey] = (replayByStatus[candidateStatusKey] ?? 0) + 1;
+      if (candidate.error) transportErrorCount += 1;
+
+      const dispatch = await timedRequestJson("/v1/memory/replay/playbooks/dispatch", {
+        tenant_id: tenantId,
+        scope,
+        playbook_id: replayPlaybookId,
+        ...(replayVersion ? { version: replayVersion } : {}),
+        deterministic_gate: deterministicGate,
+        fallback_mode: replayFallbackMode,
+        execute_fallback: replayExecuteFallback,
+      });
+      const dispatchStatusKey = dispatch.error ? `dispatch:error:${dispatch.error}` : `dispatch:${dispatch.status}`;
+      replayByStatus[dispatchStatusKey] = (replayByStatus[dispatchStatusKey] ?? 0) + 1;
+      if (dispatch.error) transportErrorCount += 1;
+
+      if (!candidate.ok || !dispatch.ok) continue;
+      okSamples += 1;
+
+      const candidateBody = candidate.body ?? {};
+      const dispatchBody = dispatch.body ?? {};
+      const candidateInfo = candidateBody.candidate ?? {};
+      const dispatchInfo = dispatchBody.dispatch ?? {};
+      const replayCost = dispatchBody.cost_signals ?? {};
+      const replayPayload = dispatchBody.replay ?? null;
+      const recommendedMode = String(candidateInfo.recommended_mode ?? "").trim() || "unknown";
+      const nextAction = String(candidateInfo.next_action ?? "").trim() || "unknown";
+      const mismatches = Array.isArray(candidateInfo.mismatch_reasons) ? candidateInfo.mismatch_reasons : [];
+      const decision = String(dispatchInfo.decision ?? "").trim() || "unknown";
+      const replaySteps = Array.isArray(replayPayload?.steps) ? replayPayload.steps : [];
+      const hasResultSummary = replaySteps.some((step: any) => Boolean(step?.result_summary?.summary_version));
+
+      if (candidateInfo.eligible_for_deterministic_replay === true) eligibleCount += 1;
+      recommendedModeFrequency[recommendedMode] = (recommendedModeFrequency[recommendedMode] ?? 0) + 1;
+      nextActionFrequency[nextAction] = (nextActionFrequency[nextAction] ?? 0) + 1;
+      for (const reason of mismatches) {
+        const key = String(reason || "").trim();
+        if (!key) continue;
+        mismatchFrequency[key] = (mismatchFrequency[key] ?? 0) + 1;
+      }
+
+      decisionFrequency[decision] = (decisionFrequency[decision] ?? 0) + 1;
+      dispatchLatency.push(dispatch.ms);
+      if (dispatchInfo.primary_inference_skipped === true) primaryInferenceSkippedCount += 1;
+      if (dispatchInfo.fallback_executed === true) fallbackExecutedCount += 1;
+      if (hasResultSummary) resultSummaryPresentCount += 1;
+      estimatedCallsAvoidedSum += Number(replayCost.estimated_primary_model_calls_avoided ?? 0);
+    }
+
+    const dispatchLatencySummary = summarizeSeries(dispatchLatency);
+    replay = {
+      enabled: true,
+      params: {
+        playbook_id: replayPlaybookId,
+        version: replayVersion,
+        samples: replaySamples,
+        fallback_mode: replayFallbackMode,
+        execute_fallback: replayExecuteFallback,
+        gate_matchers: replayGateMatchers,
+        gate_policy_constraints: replayGatePolicyConstraints,
+      },
+      total_samples: replaySamples,
+      ok_samples: okSamples,
+      failed_samples: Math.max(0, replaySamples - okSamples),
+      by_status: replayByStatus,
+      transport_error_count: transportErrorCount,
+      candidate: {
+        eligible_ratio: okSamples > 0 ? round(eligibleCount / okSamples, 6) : 0,
+        recommended_mode_frequency: recommendedModeFrequency,
+        next_action_frequency: nextActionFrequency,
+        mismatch_frequency: mismatchFrequency,
+      },
+      dispatch: {
+        decision_frequency: decisionFrequency,
+        primary_inference_skipped_ratio: okSamples > 0 ? round(primaryInferenceSkippedCount / okSamples, 6) : 0,
+        fallback_executed_ratio: okSamples > 0 ? round(fallbackExecutedCount / okSamples, 6) : 0,
+        estimated_primary_model_calls_avoided_mean: okSamples > 0 ? round(estimatedCallsAvoidedSum / okSamples, 6) : 0,
+        result_summary_present_ratio: okSamples > 0 ? round(resultSummaryPresentCount / okSamples, 6) : 0,
+        latency_ms: {
+          p50: dispatchLatencySummary.p50,
+          p95: dispatchLatencySummary.p95,
+          mean: dispatchLatencySummary.mean,
+        },
+      },
+    };
+  }
+
   const caseSummaries = cases.map((c) => c.summary);
   const transportFailCases =
     failTransportRate === null || !Number.isFinite(failTransportRate)
@@ -734,6 +917,12 @@ async function main() {
           optimization_token_budget: optimizationTokenBudget,
           optimization_char_budget: optimizationCharBudget,
           optimization_profile: optimizationProfile,
+          replay_check: replayCheck,
+          replay_playbook_id: replayPlaybookId || null,
+          replay_version: replayVersion,
+          replay_samples: replaySamples,
+          replay_fallback_mode: replayFallbackMode,
+          replay_execute_fallback: replayExecuteFallback,
         },
         quality: {
           transport_error_gate: {
@@ -753,6 +942,7 @@ async function main() {
         cases: caseSummaries,
         compression,
         optimization,
+        replay,
       },
       null,
       2,
