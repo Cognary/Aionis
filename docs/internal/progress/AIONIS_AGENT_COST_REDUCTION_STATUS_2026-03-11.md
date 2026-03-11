@@ -33,7 +33,7 @@ The current state is best described as:
 | Write-time distillation | landed | medium-high | `/v1/memory/write` distill path |
 | Tool result summarization | phase 1 landed | medium | sandbox, replay, MCP consumer surfaces |
 | Default cost policy convergence | partial | medium-low | features exist, but not all are default-first |
-| Cost telemetry and benchmark proof | partial | low | enough instrumentation exists to begin measurement, but not yet a consolidated benchmark surface |
+| Cost telemetry and benchmark proof | partial | medium | machine-readable cost signals now exist in runtime responses and `job:perf-benchmark` can sample optimization deltas |
 
 ## Landed Work
 
@@ -163,6 +163,32 @@ Current assessment:
 2. this is not full coverage yet; it is the first high-value slice
 3. the next step is expanding summary-first behavior to more non-sandbox execution surfaces
 
+### 6. Cost Signals And Benchmark Evidence
+
+Cost-reduction signals are no longer only implicit in runtime behavior.
+
+Landed surfaces:
+
+1. replay `candidate / run / dispatch` responses expose machine-readable `cost_signals`
+2. `planning/context` and `context/assemble` responses expose machine-readable `cost_signals`
+3. `job:perf-benchmark` can now sample `context/assemble` baseline vs optimized runs
+4. benchmark artifacts now carry optimization summaries for estimated token reduction, forgotten items, static-block selection, and latency delta
+5. `job:perf-report` now renders a context-optimization section when those artifacts are present
+
+Key code:
+
+1. [/Users/lucio/Desktop/Aionis/src/memory/cost-signals.ts](/Users/lucio/Desktop/Aionis/src/memory/cost-signals.ts)
+2. [/Users/lucio/Desktop/Aionis/src/routes/memory-context-runtime.ts](/Users/lucio/Desktop/Aionis/src/routes/memory-context-runtime.ts)
+3. [/Users/lucio/Desktop/Aionis/src/memory/replay.ts](/Users/lucio/Desktop/Aionis/src/memory/replay.ts)
+4. [/Users/lucio/Desktop/Aionis/src/jobs/perf-benchmark.ts](/Users/lucio/Desktop/Aionis/src/jobs/perf-benchmark.ts)
+5. [/Users/lucio/Desktop/Aionis/src/jobs/perf-report.ts](/Users/lucio/Desktop/Aionis/src/jobs/perf-report.ts)
+
+Current assessment:
+
+1. Aionis now has a first consolidated benchmark surface for context-optimization deltas
+2. the next gap is broader benchmark coverage across replay and summary-first execution paths
+3. this is enough to start publishing cost-reduction evidence instead of relying only on architectural claims
+
 ## Overall Stage Assessment
 
 The roadmap is now in `delivery phase 1.5`.
@@ -180,7 +206,7 @@ Recommended order:
 
 1. expand tool-result summarization beyond sandbox-centric execution paths
 2. converge these features into more opinionated default runtime behavior
-3. add explicit cost telemetry and benchmark comparisons
+3. expand explicit cost telemetry and benchmark comparisons beyond the first context-optimization slice
 4. improve distillation quality while keeping raw evidence retrievable
 5. connect deterministic replay hit-rate, forgetting, and static injection into one measurable optimization profile
 
@@ -198,3 +224,4 @@ The next milestone should be considered complete only if Aionis can demonstrate 
 2. lower default injected context size for comparable workloads
 3. more runtime surfaces consuming summaries before raw outputs
 4. at least one measurable benchmark or telemetry report showing real cost reduction deltas
+5. benchmark artifacts expose optimization deltas in a way that can be compared across runs and profiles

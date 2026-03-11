@@ -12,6 +12,7 @@ This page defines the reproducible performance baseline workflow for Aionis.
 2. Write latency (`p50/p95/p99`)
 3. Error rates by endpoint category
 4. Optional worker throughput metrics
+5. Optional context-optimization cost signals (`context/assemble` baseline vs optimized)
 
 ## Preconditions
 
@@ -56,12 +57,26 @@ Or one-command matrix:
 npm run perf:production-matrix
 ```
 
+Add context optimization evidence to the benchmark artifact:
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url "http://localhost:${PORT:-3001}" \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --optimization-check true \
+  --optimization-profile aggressive \
+  --optimization-samples 12
+```
+
 ## Output Fields
 
 1. `latency_ms.p50/p95/p99`
 2. `rps`
 3. `failed`
 4. `by_status`
+5. optional `optimization.summary.*` for estimated token reduction, forgotten items, static-block selection, and `context/assemble` p95 delta
 
 ## Starter SLO Guidance
 

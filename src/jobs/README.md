@@ -528,6 +528,19 @@ npm run job:perf-benchmark -- --base-url http://localhost:3001 --scope perf --te
 
 `--recall-profile` supports: `legacy|strict_edges|quality_first|lite`.
 
+Optional context-optimization evidence sampling (collects `context/assemble` baseline vs optimized `cost_signals` into the benchmark artifact):
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --optimization-check true \
+  --optimization-profile aggressive \
+  --optimization-samples 12
+```
+
 Auth handling:
 
 - for `MEMORY_AUTH_MODE=api_key` or `api_key_or_jwt`, script auto-picks the first key from `MEMORY_API_KEYS_JSON`

@@ -25,6 +25,23 @@ type BenchmarkJson = {
   tenant_id: string;
   params: Record<string, unknown>;
   cases: PerfCase[];
+  optimization?: {
+    enabled: boolean;
+    total_pairs: number;
+    ok_pairs: number;
+    failed_pairs: number;
+    summary?: {
+      estimated_token_reduction?: { mean: number; p50: number; p95: number };
+      baseline_context_est_tokens?: { mean: number; p50: number; p95: number };
+      optimized_context_est_tokens?: { mean: number; p50: number; p95: number };
+      forgotten_items?: { mean: number; p50: number; p95: number };
+      static_blocks_selected?: { mean: number; p50: number; p95: number };
+      within_token_budget_ratio?: number;
+      optimization_profile_applied_ratio?: number;
+      latency_ms?: { baseline_p95: number; optimized_p95: number; delta_p95: number };
+    };
+    levers_frequency?: Record<string, number>;
+  } | null;
 };
 
 type SeedJson = {
@@ -209,6 +226,7 @@ async function main() {
   ];
   const failureLines: string[] = [];
   const recommendationLines: string[] = [];
+  const optimizationLines: string[] = [];
   const scalesCsv = scales.join(",");
   const anyRecallIssue = { v: false };
   const anyWriteIssue = { v: false };
@@ -279,6 +297,43 @@ async function main() {
         }
       }
     }
+
+    const optimization = bench?.optimization;
+    if (optimization?.enabled) {
+      const reduction = optimization.summary?.estimated_token_reduction;
+      const baselineTokens = optimization.summary?.baseline_context_est_tokens;
+      const optimizedTokens = optimization.summary?.optimized_context_est_tokens;
+      const forgotten = optimization.summary?.forgotten_items;
+      const staticBlocks = optimization.summary?.static_blocks_selected;
+      const latency = optimization.summary?.latency_ms;
+      const levers = Object.entries(optimization.levers_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .slice(0, 5)
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      optimizationLines.push(`- scale=${scale}: ok_pairs=${optimization.ok_pairs}/${optimization.total_pairs}`);
+      if (reduction && baselineTokens && optimizedTokens) {
+        optimizationLines.push(
+          `  - estimated token reduction mean=${round(reduction.mean * 100, 2)}% p95=${round(reduction.p95 * 100, 2)}%; baseline p95=${round(baselineTokens.p95)} tokens -> optimized p95=${round(optimizedTokens.p95)} tokens`,
+        );
+      }
+      if (forgotten && staticBlocks) {
+        optimizationLines.push(
+          `  - forgotten_items mean=${round(forgotten.mean, 3)} p95=${round(forgotten.p95, 3)}; static_blocks_selected mean=${round(staticBlocks.mean, 3)} p95=${round(staticBlocks.p95, 3)}`,
+        );
+      }
+      if (optimization.summary?.within_token_budget_ratio !== undefined) {
+        optimizationLines.push(
+          `  - within_token_budget_ratio=${round(Number(optimization.summary.within_token_budget_ratio) * 100, 2)}%; optimization_profile_applied_ratio=${round(Number(optimization.summary.optimization_profile_applied_ratio ?? 0) * 100, 2)}%`,
+        );
+      }
+      if (latency) {
+        optimizationLines.push(
+          `  - context assemble p95 baseline=${round(latency.baseline_p95)} ms optimized=${round(latency.optimized_p95)} ms delta=${round(latency.delta_p95)} ms`,
+        );
+      }
+      if (levers) optimizationLines.push(`  - top savings levers: ${levers}`);
+    }
   }
 
   const explainLines: string[] = [];
@@ -337,6 +392,10 @@ ${worker?.ok ? `- scope: \`${worker.scope}\`
 ## Failure Attribution
 
 ${failureLines.length > 0 ? failureLines.join("\n") : "- no failures observed in benchmark artifacts"}
+
+## Context Optimization Signals
+
+${optimizationLines.length > 0 ? optimizationLines.join("\n") : "- no optimization check data found in benchmark artifacts"}
 
 ## Explain Baseline
 

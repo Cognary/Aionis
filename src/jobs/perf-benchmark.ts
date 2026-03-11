@@ -107,6 +107,34 @@ type CompressionAggregate = {
   };
 };
 
+type OptimizationAggregate = {
+  enabled: boolean;
+  params: {
+    profile: "balanced" | "aggressive";
+    token_budget: number;
+    char_budget_total: number;
+    samples: number;
+    query_text: string;
+    tool_candidates: string[];
+  };
+  total_pairs: number;
+  ok_pairs: number;
+  failed_pairs: number;
+  by_status: Record<string, number>;
+  transport_error_count: number;
+  levers_frequency: Record<string, number>;
+  summary: {
+    estimated_token_reduction: { mean: number; p50: number; p95: number; min: number; max: number };
+    baseline_context_est_tokens: { mean: number; p50: number; p95: number };
+    optimized_context_est_tokens: { mean: number; p50: number; p95: number };
+    forgotten_items: { mean: number; p50: number; p95: number };
+    static_blocks_selected: { mean: number; p50: number; p95: number };
+    within_token_budget_ratio: number;
+    optimization_profile_applied_ratio: number;
+    latency_ms: { baseline_p95: number; optimized_p95: number; delta_p95: number };
+  };
+};
+
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);
   if (i === -1) return null;
@@ -247,6 +275,14 @@ async function main() {
   const compressionProfileRaw = (argValue("--compression-profile") ?? "aggressive").trim().toLowerCase();
   const compressionProfile: "balanced" | "aggressive" = compressionProfileRaw === "balanced" ? "balanced" : "aggressive";
   const compressionQueryText = (argValue("--compression-query-text") ?? "memory graph perf compression").trim();
+  const optimizationCheckRaw = (argValue("--optimization-check") ?? "false").trim().toLowerCase();
+  const optimizationCheck = optimizationCheckRaw === "true";
+  const optimizationSamples = clampInt(Number(argValue("--optimization-samples") ?? "20"), 1, 2000);
+  const optimizationTokenBudget = clampInt(Number(argValue("--optimization-token-budget") ?? "600"), 64, 256000);
+  const optimizationCharBudget = clampInt(Number(argValue("--optimization-char-budget") ?? "1800"), 200, 200000);
+  const optimizationProfileRaw = (argValue("--optimization-profile") ?? "aggressive").trim().toLowerCase();
+  const optimizationProfile: "balanced" | "aggressive" = optimizationProfileRaw === "balanced" ? "balanced" : "aggressive";
+  const optimizationQueryText = (argValue("--optimization-query-text") ?? "prepare production deploy context").trim();
   const recallProfileRaw = (argValue("--recall-profile") ?? "").trim().toLowerCase();
   const recallProfile = parseRecallProfile(recallProfileRaw);
   if (recallProfileRaw.length > 0 && !recallProfile) {
@@ -464,6 +500,193 @@ async function main() {
     };
   }
 
+  let optimization: OptimizationAggregate | null = null;
+  if (optimizationCheck) {
+    const optimizationByStatus: Record<string, number> = {};
+    const optimizationLeversFrequency: Record<string, number> = {};
+    const baselineTokens: number[] = [];
+    const optimizedTokens: number[] = [];
+    const tokenReductionRatios: number[] = [];
+    const forgottenItems: number[] = [];
+    const staticBlocksSelected: number[] = [];
+    const baselineLatency: number[] = [];
+    const optimizedLatency: number[] = [];
+    let transportErrorCount = 0;
+    let withinTokenBudgetCount = 0;
+    let optimizationProfileAppliedCount = 0;
+
+    const staticContextBlocks = [
+      {
+        id: "deploy_bootstrap",
+        title: "Deploy Bootstrap",
+        content: "Require approval before prod deploy, capture rollback refs, verify canary health, and confirm owner sign-off.",
+        intents: ["deploy"],
+        tools: ["kubectl"],
+        priority: 90,
+      },
+      {
+        id: "prod_change_guard",
+        title: "Prod Change Guard",
+        content: "Production changes must include blast-radius check, rollback path, and post-deploy verification commands.",
+        intents: ["deploy", "change"],
+        tags: ["prod", "safety"],
+        tools: ["kubectl", "bash"],
+        priority: 85,
+      },
+      {
+        id: "search_reindex_playbook",
+        title: "Search Reindex",
+        content: "Use reindex workflow for search clusters and verify shard movement before traffic cutover.",
+        intents: ["reindex"],
+        tools: ["curl"],
+        priority: 60,
+      },
+      {
+        id: "postgres_maintenance_window",
+        title: "Postgres Maintenance",
+        content: "Schedule psql maintenance during low traffic and confirm replication lag before vacuum or schema work.",
+        intents: ["database"],
+        tools: ["psql"],
+        priority: 55,
+      },
+    ];
+    const optimizationToolCandidates = ["kubectl", "bash"];
+    const baseAssemblePayload = () => ({
+      tenant_id: tenantId,
+      scope,
+      query_text: optimizationQueryText,
+      include_rules: false,
+      tool_candidates: optimizationToolCandidates,
+      return_layered_context: true,
+      context: {
+        intent: "deploy",
+        environment: "prod",
+        actor: "perf_benchmark",
+      },
+      context_token_budget: optimizationTokenBudget,
+      static_context_blocks: staticContextBlocks,
+    });
+
+    for (let i = 0; i < optimizationSamples; i += 1) {
+      if (paceMs > 0) await sleepMs(paceMs);
+
+      const baseline = await timedRequestJson("/v1/memory/context/assemble", {
+        ...baseAssemblePayload(),
+        context_compaction_profile: "balanced",
+        context_layers: {
+          enabled: ["facts", "episodes", "static", "tools", "citations"],
+          char_budget_total: optimizationCharBudget,
+          include_merge_trace: false,
+          forgetting_policy: { enabled: false },
+        },
+        static_injection: {
+          enabled: true,
+          max_blocks: staticContextBlocks.length,
+          min_score: 0,
+          include_selection_trace: false,
+        },
+      });
+      const baselineStatusKey = baseline.error ? `baseline:error:${baseline.error}` : `baseline:${baseline.status}`;
+      optimizationByStatus[baselineStatusKey] = (optimizationByStatus[baselineStatusKey] ?? 0) + 1;
+      if (baseline.error) transportErrorCount += 1;
+
+      const optimized = await timedRequestJson("/v1/memory/context/assemble", {
+        ...baseAssemblePayload(),
+        context_optimization_profile: optimizationProfile,
+        context_layers: {
+          enabled: ["facts", "episodes", "static", "tools", "citations"],
+          char_budget_total: optimizationCharBudget,
+          include_merge_trace: false,
+        },
+      });
+      const optimizedStatusKey = optimized.error ? `optimized:error:${optimized.error}` : `optimized:${optimized.status}`;
+      optimizationByStatus[optimizedStatusKey] = (optimizationByStatus[optimizedStatusKey] ?? 0) + 1;
+      if (optimized.error) transportErrorCount += 1;
+
+      if (!baseline.ok || !optimized.ok) continue;
+
+      const baselineCost = baseline.body?.cost_signals ?? null;
+      const optimizedCost = optimized.body?.cost_signals ?? null;
+      const baselineContextTokens = Number(baselineCost?.context_est_tokens ?? 0);
+      const optimizedContextTokens = Number(optimizedCost?.context_est_tokens ?? 0);
+      if (!(baselineContextTokens > 0)) continue;
+
+      baselineTokens.push(baselineContextTokens);
+      optimizedTokens.push(Math.max(0, optimizedContextTokens));
+      tokenReductionRatios.push(Math.max(0, 1 - Math.max(0, optimizedContextTokens) / baselineContextTokens));
+      forgottenItems.push(Math.max(0, Number(optimizedCost?.forgotten_items ?? 0)));
+      staticBlocksSelected.push(Math.max(0, Number(optimizedCost?.static_blocks_selected ?? 0)));
+      baselineLatency.push(baseline.ms);
+      optimizedLatency.push(optimized.ms);
+
+      if (optimizedCost?.within_token_budget === true) withinTokenBudgetCount += 1;
+      if (optimized.body?.layered_context?.optimization_profile?.applied === true) optimizationProfileAppliedCount += 1;
+      const levers = Array.isArray(optimizedCost?.primary_savings_levers) ? optimizedCost.primary_savings_levers : [];
+      for (const lever of levers) {
+        const key = String(lever || "").trim();
+        if (!key) continue;
+        optimizationLeversFrequency[key] = (optimizationLeversFrequency[key] ?? 0) + 1;
+      }
+    }
+
+    const baselineTokenSummary = summarizeSeries(baselineTokens);
+    const optimizedTokenSummary = summarizeSeries(optimizedTokens);
+    const reductionSummary = summarizeSeries(tokenReductionRatios);
+    const forgottenSummary = summarizeSeries(forgottenItems);
+    const staticBlocksSummary = summarizeSeries(staticBlocksSelected);
+    const baselineLatencySummary = summarizeSeries(baselineLatency);
+    const optimizedLatencySummary = summarizeSeries(optimizedLatency);
+    const okPairs = tokenReductionRatios.length;
+
+    optimization = {
+      enabled: true,
+      params: {
+        profile: optimizationProfile,
+        token_budget: optimizationTokenBudget,
+        char_budget_total: optimizationCharBudget,
+        samples: optimizationSamples,
+        query_text: optimizationQueryText,
+        tool_candidates: optimizationToolCandidates,
+      },
+      total_pairs: optimizationSamples,
+      ok_pairs: okPairs,
+      failed_pairs: Math.max(0, optimizationSamples - okPairs),
+      by_status: optimizationByStatus,
+      transport_error_count: transportErrorCount,
+      levers_frequency: optimizationLeversFrequency,
+      summary: {
+        estimated_token_reduction: reductionSummary,
+        baseline_context_est_tokens: {
+          mean: baselineTokenSummary.mean,
+          p50: baselineTokenSummary.p50,
+          p95: baselineTokenSummary.p95,
+        },
+        optimized_context_est_tokens: {
+          mean: optimizedTokenSummary.mean,
+          p50: optimizedTokenSummary.p50,
+          p95: optimizedTokenSummary.p95,
+        },
+        forgotten_items: {
+          mean: forgottenSummary.mean,
+          p50: forgottenSummary.p50,
+          p95: forgottenSummary.p95,
+        },
+        static_blocks_selected: {
+          mean: staticBlocksSummary.mean,
+          p50: staticBlocksSummary.p50,
+          p95: staticBlocksSummary.p95,
+        },
+        within_token_budget_ratio: okPairs > 0 ? round(withinTokenBudgetCount / okPairs, 6) : 0,
+        optimization_profile_applied_ratio: okPairs > 0 ? round(optimizationProfileAppliedCount / okPairs, 6) : 0,
+        latency_ms: {
+          baseline_p95: baselineLatencySummary.p95,
+          optimized_p95: optimizedLatencySummary.p95,
+          delta_p95: round(optimizedLatencySummary.p95 - baselineLatencySummary.p95, 6),
+        },
+      },
+    };
+  }
+
   const caseSummaries = cases.map((c) => c.summary);
   const transportFailCases =
     failTransportRate === null || !Number.isFinite(failTransportRate)
@@ -506,6 +729,11 @@ async function main() {
           compression_samples: compressionSamples,
           compression_token_budget: compressionTokenBudget,
           compression_profile: compressionProfile,
+          optimization_check: optimizationCheck,
+          optimization_samples: optimizationSamples,
+          optimization_token_budget: optimizationTokenBudget,
+          optimization_char_budget: optimizationCharBudget,
+          optimization_profile: optimizationProfile,
         },
         quality: {
           transport_error_gate: {
@@ -524,6 +752,7 @@ async function main() {
         },
         cases: caseSummaries,
         compression,
+        optimization,
       },
       null,
       2,
