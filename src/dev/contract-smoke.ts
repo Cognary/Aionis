@@ -2028,6 +2028,19 @@ async function run() {
         min_salience: 0.2,
       },
     },
+    static_context_blocks: [
+      {
+        id: "deploy_bootstrap",
+        title: "Deploy Bootstrap",
+        content: "Require approval before prod deploy and collect rollback refs.",
+        intents: ["deploy"],
+        tools: ["kubectl"],
+      },
+    ],
+    static_injection: {
+      max_blocks: 2,
+      min_score: 40,
+    },
   });
   assert.equal(assembleReq.include_rules, true);
   assert.equal(assembleReq.include_shadow, false);
@@ -2036,6 +2049,9 @@ async function run() {
   assert.deepEqual(assembleReq.context_layers?.forgetting_policy?.allowed_tiers, ["hot", "warm"]);
   assert.equal(assembleReq.context_layers?.forgetting_policy?.exclude_archived, true);
   assert.equal(assembleReq.context_layers?.forgetting_policy?.min_salience, 0.2);
+  assert.equal(assembleReq.static_context_blocks?.[0]?.id, "deploy_bootstrap");
+  assert.equal(assembleReq.static_injection?.max_blocks, 2);
+  assert.equal(assembleReq.static_injection?.min_score, 40);
   assert.throws(
     () =>
       ContextAssembleRequest.parse({
@@ -2079,6 +2095,45 @@ async function run() {
   assert.equal(layeredForgotten.forgetting?.dropped_by_reason?.tier, 2);
   assert.equal(layeredForgotten.forgetting?.dropped_by_reason?.lifecycle, 1);
   assert.equal(layeredForgotten.forgetting?.dropped_by_reason?.salience, 1);
+  const layeredStatic = assembleLayeredContext({
+    recall: { context: { items: [], citations: [] } },
+    rules: {},
+    tools: {},
+    query_text: "prepare production deploy plan",
+    execution_context: { intent: "deploy", environment: "prod" },
+    tool_candidates: ["kubectl", "bash"],
+    static_blocks: [
+      {
+        id: "deploy_bootstrap",
+        title: "Deploy Bootstrap",
+        content: "Require approval before prod deploy and collect rollback refs.",
+        intents: ["deploy"],
+        tools: ["kubectl"],
+        priority: 70,
+      },
+      {
+        id: "support_playbook",
+        title: "Support Bootstrap",
+        content: "Escalate severe tickets to support lead.",
+        intents: ["support"],
+        tools: ["jira"],
+        priority: 60,
+      },
+    ],
+    static_injection: {
+      max_blocks: 1,
+      min_score: 50,
+      include_selection_trace: true,
+    },
+    config: {
+      enabled: ["static"],
+    },
+  });
+  assert.match(layeredStatic.merged_text, /Deploy Bootstrap/);
+  assert.doesNotMatch(layeredStatic.merged_text, /Support Bootstrap/);
+  assert.equal(layeredStatic.static_injection?.selected_blocks, 1);
+  assert.equal(layeredStatic.static_injection?.rejected_blocks, 1);
+  assert.deepEqual(layeredStatic.static_injection?.selected_ids, ["deploy_bootstrap"]);
   const packExportDefaults = MemoryPackExportRequest.parse({});
   assert.equal(packExportDefaults.include_decisions, false);
   const packImportWithDecisions = MemoryPackImportRequest.parse({

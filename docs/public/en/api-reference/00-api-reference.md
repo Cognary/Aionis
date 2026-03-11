@@ -41,7 +41,12 @@ Notes:
    - `allowed_tiers` defaults to `["hot", "warm"]`
    - `exclude_archived` defaults to `true`
    - `min_salience` can drop low-value recall items before they enter merged context
-3. Layered responses include `layered_context.forgetting` and per-layer `forgotten_count` so callers can see what was intentionally excluded.
+3. `static_context_blocks` lets callers pass addressable static bootstrap/config/instruction blocks, and `static_injection` lets Aionis select only the relevant subset.
+4. Layered responses include:
+   - `layered_context.forgetting`
+   - per-layer `forgotten_count`
+   - `layered_context.static_injection`
+   so callers can see what was intentionally excluded or selected.
 
 ### Policy and Execution Loop
 

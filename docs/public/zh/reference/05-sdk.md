@@ -136,6 +136,46 @@ console.log(
 2. 它不会自己删除 memory graph，也不会直接归档节点。
 3. 默认策略是保守的：保留 `hot/warm`、排除 archived，只有显式配置 `min_salience` 才会做低 salience 过滤。
 
+## Selective Static Injection（TypeScript）
+
+如果你的 Agent 有很大的 bootstrap/config/system blocks，但每轮只需要其中一部分，可以把这些块交给 Aionis 在 assemble 阶段按需选择。
+
+```ts
+const assembled = await client.contextAssemble({
+  query_text: "prepare production deploy plan",
+  context: { intent: "deploy", environment: "prod" },
+  tool_candidates: ["kubectl", "bash"],
+  return_layered_context: true,
+  context_layers: {
+    enabled: ["facts", "rules", "static", "tools", "citations"],
+  },
+  static_context_blocks: [
+    {
+      id: "deploy_bootstrap",
+      title: "Deploy Bootstrap",
+      content: "Require approval before prod deploy and collect rollback refs.",
+      intents: ["deploy"],
+      tools: ["kubectl"],
+      priority: 70,
+    },
+    {
+      id: "support_bootstrap",
+      title: "Support Bootstrap",
+      content: "Escalate severe tickets to support lead.",
+      intents: ["support"],
+      tools: ["jira"],
+      priority: 60,
+    },
+  ],
+  static_injection: {
+    max_blocks: 2,
+    min_score: 50,
+  },
+});
+
+console.log(assembled.layered_context?.static_injection, assembled.layered_context?.merged_text);
+```
+
 ## 相关页面
 
 1. [英文版 SDK Guide](../../en/reference/05-sdk.md)

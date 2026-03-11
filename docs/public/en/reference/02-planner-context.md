@@ -33,6 +33,7 @@ Planner context is the normalized runtime input used by Aionis policy and tool-s
 3. Use the same context object for both rule evaluation and tool selection.
 4. Include `run.id` in every policy decision flow.
 5. Keep `run.id` stable from `tools/select` to `tools/feedback` and `tools/run`.
+6. If you use `static_context_blocks`, keep `intent`, `agent`, `tool`, and request metadata normalized so static block selection can match on stable signals instead of free-form prompt text.
 
 ## Minimal Example
 

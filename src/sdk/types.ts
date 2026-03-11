@@ -787,6 +787,17 @@ export type ContextAssembleResponse = {
       dropped_by_reason?: Record<string, number>;
       [k: string]: unknown;
     };
+    static_injection?: {
+      enabled?: boolean;
+      supplied_blocks?: number;
+      selected_blocks?: number;
+      rejected_blocks?: number;
+      max_blocks?: number;
+      min_score?: number;
+      selected_ids?: string[];
+      selection_trace?: Array<Record<string, unknown>>;
+      [k: string]: unknown;
+    };
     [k: string]: unknown;
   };
   [k: string]: unknown;

@@ -461,6 +461,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         context_compaction_profile: { type: "string", enum: ["balanced", "aggressive"] },
         return_layered_context: { type: "boolean" },
         context_layers: { type: "object" },
+        static_context_blocks: { type: "array", items: { type: "object" } },
+        static_injection: { type: "object" },
       },
       ["query_text", "context", "tool_candidates"],
     ),

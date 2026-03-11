@@ -648,6 +648,11 @@ export function registerMemoryContextRuntimeRoutes(args: {
           recall: recallOut,
           rules: out.rules,
           tools: out.tools,
+          query_text: parsed.query_text,
+          execution_context: parsed.context,
+          tool_candidates: parsed.tool_candidates,
+          static_blocks: parsed.static_context_blocks ?? null,
+          static_injection: parsed.static_injection ?? null,
           config: parsed.context_layers ?? null,
         })
       : undefined;
@@ -928,6 +933,11 @@ export function registerMemoryContextRuntimeRoutes(args: {
           recall: recallOut,
           rules: out.rules,
           tools: out.tools,
+          query_text: parsed.query_text,
+          execution_context: parsed.context,
+          tool_candidates: parsed.tool_candidates,
+          static_blocks: parsed.static_context_blocks ?? null,
+          static_injection: parsed.static_injection ?? null,
           config: parsed.context_layers ?? null,
         })
       : undefined;

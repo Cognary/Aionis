@@ -13,6 +13,7 @@ title: "上下文编排"
 | `facts` | 稳定事实片段 |
 | `episodes` | 最近或场景相关事件 |
 | `rules` | 策略约束与决策提示 |
+| `static` | 经过选择的 bootstrap/config/instruction blocks |
 | `decisions` | 历史执行决策依据 |
 | `tools` | 工具路由相关上下文 |
 | `citations` | 可解释引用与追踪信息 |
@@ -24,6 +25,8 @@ title: "上下文编排"
 3. 分层预算 `char_budget_by_layer`。
 4. 分层条目上限 `max_items_by_layer`。
 5. 合并/丢弃轨迹 `include_merge_trace`。
+6. 使用 `static_context_blocks` + `static_injection` 对静态 bootstrap/config blocks 做按需注入。
+7. 使用 `context_layers.forgetting_policy` 默认排除 cold/archive 记忆。
 
 ## 预设
 
@@ -41,17 +44,37 @@ title: "上下文编排"
   "scope": "default",
   "query_text": "Assemble context before tool selection",
   "return_layered_context": true,
+  "tool_candidates": ["kubectl", "bash"],
   "context_layers": {
-    "enabled": ["facts", "episodes", "rules", "tools", "citations"],
+    "enabled": ["facts", "episodes", "rules", "static", "tools", "citations"],
     "char_budget_total": 1800,
     "max_items_by_layer": {
       "facts": 8,
       "episodes": 4,
       "rules": 6,
+      "static": 3,
       "tools": 4,
       "citations": 8
     },
-    "include_merge_trace": true
+    "include_merge_trace": true,
+    "forgetting_policy": {
+      "allowed_tiers": ["hot", "warm"],
+      "exclude_archived": true
+    }
+  },
+  "static_context_blocks": [
+    {
+      "id": "deploy_bootstrap",
+      "title": "Deploy Bootstrap",
+      "content": "Require approval before prod deploy and collect rollback refs.",
+      "intents": ["deploy"],
+      "tools": ["kubectl"],
+      "priority": 70
+    }
+  ],
+  "static_injection": {
+    "max_blocks": 2,
+    "min_score": 50
   }
 }
 ```
@@ -62,6 +85,7 @@ title: "上下文编排"
 2. 预算紧张时的分层丢弃率。
 3. 关键流程中的策略层覆盖率。
 4. 不同预设下的端到端延迟。
+5. 静态块选择命中率与误选率。
 
 ## 从这里开始
 

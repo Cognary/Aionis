@@ -1,4 +1,4 @@
-export type ContextLayerName = "facts" | "episodes" | "rules" | "decisions" | "tools" | "citations";
+export type ContextLayerName = "facts" | "episodes" | "rules" | "static" | "decisions" | "tools" | "citations";
 type MemoryTier = "hot" | "warm" | "cold" | "archive";
 type ForgetReason = "tier" | "lifecycle" | "salience";
 
@@ -18,12 +18,31 @@ export type ContextLayerConfig = {
   forgetting_policy?: ContextForgettingPolicyConfig;
 };
 
-const DEFAULT_LAYER_ORDER: ContextLayerName[] = ["facts", "episodes", "rules", "decisions", "tools", "citations"];
+export type StaticContextBlockInput = {
+  id: string;
+  title?: string;
+  content: string;
+  tags?: string[];
+  intents?: string[];
+  tools?: string[];
+  priority?: number;
+  always_include?: boolean;
+};
+
+export type StaticInjectionPolicyConfig = {
+  enabled?: boolean;
+  max_blocks?: number;
+  min_score?: number;
+  include_selection_trace?: boolean;
+};
+
+const DEFAULT_LAYER_ORDER: ContextLayerName[] = ["facts", "episodes", "rules", "static", "decisions", "tools", "citations"];
 
 const DEFAULT_CHAR_BUDGET_BY_LAYER: Record<ContextLayerName, number> = {
   facts: 1200,
   episodes: 1600,
   rules: 1000,
+  static: 1200,
   decisions: 700,
   tools: 700,
   citations: 1000,
@@ -33,6 +52,7 @@ const DEFAULT_MAX_ITEMS_BY_LAYER: Record<ContextLayerName, number> = {
   facts: 16,
   episodes: 20,
   rules: 16,
+  static: 6,
   decisions: 10,
   tools: 10,
   citations: 24,
@@ -106,6 +126,7 @@ function collectLayerCandidates(recall: any, rules: any, tools: any): Record<Con
     facts: [],
     episodes: [],
     rules: [],
+    static: [],
     decisions: [],
     tools: [],
     citations: [],
@@ -180,6 +201,7 @@ function buildLayerHeader(layer: ContextLayerName): string {
   if (layer === "facts") return "# Facts";
   if (layer === "episodes") return "# Episodes";
   if (layer === "rules") return "# Rules";
+  if (layer === "static") return "# Static Context";
   if (layer === "decisions") return "# Decisions";
   if (layer === "tools") return "# Tools";
   return "# Citations";
@@ -217,16 +239,207 @@ function evaluateForgetting(policy: ReturnType<typeof resolveForgettingPolicy>, 
   return null;
 }
 
+function tokenize(input: string): string[] {
+  return String(input || "")
+    .toLowerCase()
+    .split(/[^a-z0-9_:/.-]+/i)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 3);
+}
+
+function collectContextStrings(input: unknown, limit = 32): string[] {
+  const out: string[] = [];
+  const queue: unknown[] = [input];
+  while (queue.length > 0 && out.length < limit) {
+    const next = queue.shift();
+    if (typeof next === "string") {
+      const v = next.trim();
+      if (v) out.push(v);
+      continue;
+    }
+    if (Array.isArray(next)) {
+      for (const item of next.slice(0, limit - out.length)) queue.push(item);
+      continue;
+    }
+    if (next && typeof next === "object") {
+      for (const value of Object.values(next as Record<string, unknown>).slice(0, limit - out.length)) queue.push(value);
+    }
+  }
+  return out;
+}
+
+function resolveStaticInjectionPolicy(policy?: StaticInjectionPolicyConfig | null) {
+  return {
+    enabled: policy?.enabled !== false,
+    maxBlocks: parseBoundedInt(policy?.max_blocks, 4, 1, 32),
+    minScore: parseBoundedInt(policy?.min_score, 50, 0, 500),
+    includeSelectionTrace: policy?.include_selection_trace !== false,
+  };
+}
+
+function scoreStaticContextBlock(args: {
+  block: StaticContextBlockInput;
+  signalTokens: Set<string>;
+  queryTokens: Set<string>;
+  toolNames: Set<string>;
+}): { score: number; reasons: string[] } {
+  const { block, signalTokens, queryTokens, toolNames } = args;
+  let score = Math.max(0, Math.min(100, Math.trunc(Number(block.priority ?? 50))));
+  const reasons: string[] = [];
+
+  if (block.always_include) {
+    score += 100;
+    reasons.push("always_include");
+  }
+
+  const intents = Array.isArray(block.intents) ? block.intents : [];
+  const intentHits = intents.filter((item) => signalTokens.has(String(item).trim().toLowerCase()));
+  if (intentHits.length > 0) {
+    score += Math.min(60, intentHits.length * 30);
+    reasons.push(`intent_match:${intentHits.join(",")}`);
+  }
+
+  const tags = Array.isArray(block.tags) ? block.tags : [];
+  const tagHits = tags.filter((item) => signalTokens.has(String(item).trim().toLowerCase()));
+  if (tagHits.length > 0) {
+    score += Math.min(45, tagHits.length * 15);
+    reasons.push(`tag_match:${tagHits.join(",")}`);
+  }
+
+  const tools = Array.isArray(block.tools) ? block.tools : [];
+  const toolHits = tools.filter((item) => toolNames.has(String(item).trim().toLowerCase()));
+  if (toolHits.length > 0) {
+    score += Math.min(80, toolHits.length * 40);
+    reasons.push(`tool_match:${toolHits.join(",")}`);
+  }
+
+  const textTokens = new Set([
+    ...tokenize(block.id),
+    ...tokenize(block.title ?? ""),
+    ...tokenize(block.content),
+  ]);
+  const lexicalHits = Array.from(queryTokens).filter((token) => textTokens.has(token));
+  if (lexicalHits.length > 0) {
+    score += Math.min(25, lexicalHits.length * 5);
+    reasons.push(`lexical_match:${lexicalHits.slice(0, 5).join(",")}`);
+  }
+
+  return { score, reasons };
+}
+
+function collectStaticContextCandidates(args: {
+  queryText?: string | null;
+  executionContext?: unknown;
+  toolCandidates?: string[] | null;
+  staticBlocks?: StaticContextBlockInput[] | null;
+  staticInjection?: StaticInjectionPolicyConfig | null;
+}): {
+  lines: LayerCandidateLine[];
+  summary: {
+    enabled: boolean;
+    supplied_blocks: number;
+    selected_blocks: number;
+    rejected_blocks: number;
+    max_blocks: number;
+    min_score: number;
+    selected_ids: string[];
+    selection_trace?: Array<{ id: string; score: number; selected: boolean; reasons: string[] }>;
+  };
+} {
+  const blocks = Array.isArray(args.staticBlocks) ? args.staticBlocks : [];
+  const policy = resolveStaticInjectionPolicy(args.staticInjection);
+  if (!policy.enabled || blocks.length === 0) {
+    return {
+      lines: [],
+      summary: {
+        enabled: policy.enabled,
+        supplied_blocks: blocks.length,
+        selected_blocks: 0,
+        rejected_blocks: blocks.length,
+        max_blocks: policy.maxBlocks,
+        min_score: policy.minScore,
+        selected_ids: [],
+        ...(policy.includeSelectionTrace ? { selection_trace: [] } : {}),
+      },
+    };
+  }
+
+  const signalTokens = new Set<string>();
+  for (const token of tokenize(args.queryText ?? "")) signalTokens.add(token);
+  for (const value of collectContextStrings(args.executionContext)) {
+    for (const token of tokenize(value)) signalTokens.add(token);
+  }
+  const toolNames = new Set((Array.isArray(args.toolCandidates) ? args.toolCandidates : []).map((tool) => String(tool).trim().toLowerCase()).filter(Boolean));
+  for (const tool of toolNames) signalTokens.add(tool);
+  const queryTokens = new Set(tokenize(args.queryText ?? ""));
+
+  const ranked = blocks
+    .map((block) => {
+      const scored = scoreStaticContextBlock({ block, signalTokens, queryTokens, toolNames });
+      const selected = block.always_include === true || scored.score >= policy.minScore;
+      return {
+        block,
+        score: scored.score,
+        reasons: scored.reasons,
+        selected,
+      };
+    })
+    .sort((a, b) => b.score - a.score || Number(b.block.priority ?? 50) - Number(a.block.priority ?? 50) || a.block.id.localeCompare(b.block.id));
+
+  const selected = ranked.filter((entry) => entry.selected).slice(0, policy.maxBlocks);
+  const selectedIds = new Set(selected.map((entry) => entry.block.id));
+  return {
+    lines: selected.map((entry) => ({
+      text: `${entry.block.title?.trim() ? `${entry.block.title.trim()}: ` : ""}${entry.block.content} (block:${entry.block.id})`,
+      tier: null,
+      salience: null,
+      lifecycle_state: null,
+    })),
+    summary: {
+      enabled: true,
+      supplied_blocks: blocks.length,
+      selected_blocks: selected.length,
+      rejected_blocks: blocks.length - selected.length,
+      max_blocks: policy.maxBlocks,
+      min_score: policy.minScore,
+      selected_ids: Array.from(selectedIds),
+      ...(policy.includeSelectionTrace
+        ? {
+            selection_trace: ranked.map((entry) => ({
+              id: entry.block.id,
+              score: entry.score,
+              selected: selectedIds.has(entry.block.id),
+              reasons: entry.reasons,
+            })),
+          }
+        : {}),
+    },
+  };
+}
+
 export function assembleLayeredContext(args: {
   recall: any;
   rules: any;
   tools: any;
+  query_text?: string | null;
+  execution_context?: unknown;
+  tool_candidates?: string[] | null;
+  static_blocks?: StaticContextBlockInput[] | null;
+  static_injection?: StaticInjectionPolicyConfig | null;
   config?: ContextLayerConfig | null;
 }) {
   const cfg = args.config ?? {};
   const order = normalizeLayerOrder(cfg.enabled);
   const raw = collectLayerCandidates(args.recall, args.rules, args.tools);
   const forgetting = resolveForgettingPolicy(cfg);
+  const staticCandidates = collectStaticContextCandidates({
+    queryText: args.query_text ?? null,
+    executionContext: args.execution_context,
+    toolCandidates: args.tool_candidates ?? null,
+    staticBlocks: args.static_blocks ?? null,
+    staticInjection: args.static_injection ?? null,
+  });
+  raw.static = staticCandidates.lines;
   const totalBudget = parseBoundedInt(cfg.char_budget_total, 4000, 200, 200000);
   const includeMergeTrace = cfg.include_merge_trace !== false;
 
@@ -352,5 +565,6 @@ export function assembleLayeredContext(args: {
       dropped_items: forgottenItems,
       dropped_by_reason: forgottenByReason,
     },
+    static_injection: staticCandidates.summary,
   };
 }

@@ -65,7 +65,7 @@ export const CodexPlanningContextArgsSchema = z.object({
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
   return_layered_context: z.boolean().optional(),
   context_layers: z.object({
-    enabled: z.array(z.enum(["facts", "episodes", "rules", "decisions", "tools", "citations"])).min(1).max(6).optional(),
+    enabled: z.array(z.enum(["facts", "episodes", "rules", "static", "decisions", "tools", "citations"])).min(1).max(7).optional(),
     char_budget_total: z.number().int().positive().max(200_000).optional(),
     char_budget_by_layer: z.record(z.number().int().positive().max(200_000)).optional(),
     max_items_by_layer: z.record(z.number().int().positive().max(500)).optional(),
@@ -76,6 +76,22 @@ export const CodexPlanningContextArgsSchema = z.object({
       exclude_archived: z.boolean().optional(),
       min_salience: z.number().min(0).max(1).optional(),
     }).optional(),
+  }).optional(),
+  static_context_blocks: z.array(z.object({
+    id: z.string().min(1).max(128),
+    title: z.string().min(1).max(200).optional(),
+    content: z.string().min(1).max(20_000),
+    tags: z.array(z.string().min(1).max(64)).max(32).optional(),
+    intents: z.array(z.string().min(1).max(64)).max(32).optional(),
+    tools: z.array(z.string().min(1).max(128)).max(64).optional(),
+    priority: z.number().int().min(0).max(100).optional(),
+    always_include: z.boolean().optional(),
+  })).max(100).optional(),
+  static_injection: z.object({
+    enabled: z.boolean().optional(),
+    max_blocks: z.number().int().positive().max(32).optional(),
+    min_score: z.number().int().min(0).max(500).optional(),
+    include_selection_trace: z.boolean().optional(),
   }).optional(),
 });
 

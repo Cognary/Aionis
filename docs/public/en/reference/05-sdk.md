@@ -164,6 +164,46 @@ console.log(assembled.layered_context?.forgetting, assembled.layered_context?.la
 2. It does not delete memory graph objects or archive them by itself.
 3. The default policy is intentionally conservative: keep `hot/warm`, exclude archived, and only apply salience filtering when you opt in.
 
+## Selective Static Injection (TypeScript)
+
+Use this when your agent has large bootstrap/config blocks but only some of them are relevant to the current task.
+
+```ts
+const assembled = await client.contextAssemble({
+  query_text: "prepare production deploy plan",
+  context: { intent: "deploy", environment: "prod" },
+  tool_candidates: ["kubectl", "bash"],
+  return_layered_context: true,
+  context_layers: {
+    enabled: ["facts", "rules", "static", "tools", "citations"],
+  },
+  static_context_blocks: [
+    {
+      id: "deploy_bootstrap",
+      title: "Deploy Bootstrap",
+      content: "Require approval before prod deploy and collect rollback refs.",
+      intents: ["deploy"],
+      tools: ["kubectl"],
+      priority: 70,
+    },
+    {
+      id: "support_bootstrap",
+      title: "Support Bootstrap",
+      content: "Escalate severe tickets to support lead.",
+      intents: ["support"],
+      tools: ["jira"],
+      priority: 60,
+    },
+  ],
+  static_injection: {
+    max_blocks: 2,
+    min_score: 50,
+  },
+});
+
+console.log(assembled.layered_context?.static_injection, assembled.layered_context?.merged_text);
+```
+
 ## Error Handling Baseline
 
 1. Retry transient network and `429` errors.

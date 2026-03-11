@@ -41,7 +41,12 @@ Memory 路由使用以下任一方式：
    - `allowed_tiers` 默认是 `["hot", "warm"]`
    - `exclude_archived` 默认是 `true`
    - `min_salience` 可在注入前过滤低价值 recall 项
-3. layered 响应会返回 `layered_context.forgetting` 和每层的 `forgotten_count`，方便调用方知道哪些内容被主动排除了。
+3. `static_context_blocks` 允许调用方传入可寻址的静态 bootstrap/config/instruction blocks，再由 `static_injection` 选择真正需要注入的那部分。
+4. layered 响应会返回：
+   - `layered_context.forgetting`
+   - 每层 `forgotten_count`
+   - `layered_context.static_injection`
+   方便调用方知道哪些内容被主动排除、哪些静态块被选中。
 
 ### 策略与执行闭环
 

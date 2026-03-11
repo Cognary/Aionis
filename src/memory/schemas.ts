@@ -170,7 +170,7 @@ export type MemoryRecallInput = z.infer<typeof MemoryRecallRequest>;
 export type MemoryRecallTextInput = z.infer<typeof MemoryRecallTextRequest>;
 export type MemoryWriteInput = z.infer<typeof MemoryWriteRequest>;
 
-export const ContextLayerName = z.enum(["facts", "episodes", "rules", "decisions", "tools", "citations"]);
+export const ContextLayerName = z.enum(["facts", "episodes", "rules", "static", "decisions", "tools", "citations"]);
 export const MemoryTier = z.enum(["hot", "warm", "cold", "archive"]);
 
 export const ContextForgettingPolicy = z.object({
@@ -181,12 +181,30 @@ export const ContextForgettingPolicy = z.object({
 });
 
 export const ContextLayerConfig = z.object({
-  enabled: z.array(ContextLayerName).min(1).max(6).optional(),
+  enabled: z.array(ContextLayerName).min(1).max(7).optional(),
   char_budget_total: z.number().int().positive().max(200000).optional(),
   char_budget_by_layer: z.record(z.string(), z.number().int().positive().max(200000)).optional(),
   max_items_by_layer: z.record(z.string(), z.number().int().positive().max(500)).optional(),
   include_merge_trace: z.boolean().default(true),
   forgetting_policy: ContextForgettingPolicy.optional(),
+});
+
+export const StaticContextBlock = z.object({
+  id: z.string().min(1).max(128),
+  title: z.string().min(1).max(200).optional(),
+  content: z.string().min(1).max(20000),
+  tags: z.array(z.string().min(1).max(64)).max(32).optional(),
+  intents: z.array(z.string().min(1).max(64)).max(32).optional(),
+  tools: z.array(z.string().min(1).max(128)).max(64).optional(),
+  priority: z.number().int().min(0).max(100).default(50),
+  always_include: z.boolean().default(false),
+});
+
+export const StaticInjectionPolicy = z.object({
+  enabled: z.boolean().default(true),
+  max_blocks: z.number().int().positive().max(32).default(4),
+  min_score: z.number().int().min(0).max(500).default(50),
+  include_selection_trace: z.boolean().default(true),
 });
 
 export const PlanningContextRequest = z.object({
@@ -222,6 +240,8 @@ export const PlanningContextRequest = z.object({
   // Experimental: return explicit multi-layer context assembly (facts/episodes/rules/decisions/tools/citations).
   return_layered_context: z.boolean().default(false),
   context_layers: ContextLayerConfig.optional(),
+  static_context_blocks: z.array(StaticContextBlock).max(100).optional(),
+  static_injection: StaticInjectionPolicy.optional(),
 });
 
 export type ContextLayerConfigInput = z.infer<typeof ContextLayerConfig>;
@@ -258,6 +278,8 @@ export const ContextAssembleRequest = z.object({
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
   return_layered_context: z.boolean().default(true),
   context_layers: ContextLayerConfig.optional(),
+  static_context_blocks: z.array(StaticContextBlock).max(100).optional(),
+  static_injection: StaticInjectionPolicy.optional(),
 });
 
 export type ContextAssembleInput = z.infer<typeof ContextAssembleRequest>;
