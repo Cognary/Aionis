@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Lite Public Beta Boundary
+    url: https://doc.aionisos.com/public/en/getting-started/05-lite-public-beta-boundary
+    about: Read what Lite supports, what stays server-only, and when to move to Server.
+  - name: Lite Troubleshooting and Feedback
+    url: https://doc.aionisos.com/public/en/getting-started/06-lite-troubleshooting-and-feedback
+    about: Follow the startup, health, memory_lane, pack-token, and lite:dogfood triage path before filing feedback.
+  - name: Lite 运维与排障
+    url: https://doc.aionisos.com/public/zh/getting-started/06-lite-troubleshooting-and-feedback
+    about: 中文排障入口，包含启动、health、memory_lane、pack token 和 lite:dogfood 检查路径。
