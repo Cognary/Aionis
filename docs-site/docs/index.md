@@ -56,6 +56,7 @@ aside: false
 <ul class="mint-quick-nav">
   <li><a href="/guide/lite-public-beta">Try Lite in 5 minutes</a></li>
   <li><a href="/guide/choose-lite-or-server">Choose Lite or Server</a></li>
+  <li><a href="/guide/evidence">See the evidence</a></li>
   <li><a href="/guide/codex-local-profile">Use it with Codex</a></li>
   <li><a href="/guide/overview">Understand why it works</a></li>
   <li><a href="/api/">Integrate the APIs</a></li>
@@ -72,6 +73,15 @@ aside: false
 2. They need durable execution memory instead of fragile prompt history.
 3. They need replayable workflows for incidents, regressions, and reuse.
 4. They need evidence and identifiers they can inspect later.
+
+## Evidence at a glance
+
+1. Real continuation test on `pallets/click`
+2. Output tokens down **77%**
+3. Total tokens down **33%**
+4. Lite is already available as a public beta local path
+
+Read [Evidence](/guide/evidence) for the public proof points behind those claims.
 
 ## Pick your path
 
@@ -119,6 +129,15 @@ aside: false
     <div class="card-body">
       <h3>Use it with Codex</h3>
       <p>Run Codex with Aionis Lite or the tracked standalone profile and keep continuity across local coding sessions.</p>
+    </div>
+  </a>
+  <a class="home-card" href="/guide/evidence">
+    <div class="card-icon-panel">
+      <IoStatsUpSquare class="card-icon" width="22" height="22" stroke-width="1.7" />
+    </div>
+    <div class="card-body">
+      <h3>See the Evidence</h3>
+      <p>Read the public proof points behind continuity, replay reuse, exact handoff recovery, and Lite public beta readiness.</p>
     </div>
   </a>
   <a class="home-card" href="/api/">

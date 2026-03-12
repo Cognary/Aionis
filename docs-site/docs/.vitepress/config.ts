@@ -15,6 +15,7 @@ const pageDescriptionOverrides: Record<string, string> = {
   '/guide/quickstart': 'Try Aionis quickly with Lite or Server and validate write, recall, and replayable identifiers.',
   '/guide/choose-lite-or-server': 'Choose Lite for the fastest local path or Server for the self-hosted production path.',
   '/guide/lite-public-beta': 'Run Aionis Lite as a local SQLite-backed public beta with clear boundaries and troubleshooting.',
+  '/guide/evidence': 'See the public evidence behind continuity, token reduction, replay, and Lite public beta readiness.',
   '/guide/core-concepts': 'Learn the core concepts behind events, memory lanes, replay execution, and decision provenance.',
   '/guide/memory-policy-loop': 'Implement the memory-policy-action loop with replayability and operational guardrails.',
   '/guide/api-guide': 'Integrate Aionis through REST APIs for memory write, recall, policy, and replay operations.',
@@ -141,6 +142,7 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Try Lite', link: '/guide/lite-public-beta' },
       { text: 'Choose Lite or Server', link: '/guide/choose-lite-or-server' },
+      { text: 'See the Evidence', link: '/guide/evidence' },
       { text: 'Use with Codex', link: '/guide/codex-local-profile' },
       { text: 'Blog', link: blogSiteUrl },
       {
@@ -165,6 +167,7 @@ export default defineConfig({
             { text: 'Overview', link: '/guide/overview' },
             { text: 'Choose Lite or Server', link: '/guide/choose-lite-or-server' },
             { text: 'Lite Public Beta', link: '/guide/lite-public-beta' },
+            { text: 'Evidence', link: '/guide/evidence' },
             { text: 'Quickstart', link: '/guide/quickstart' },
             { text: 'Role-based Paths', link: '/guide/role-based-paths' }
           ]
