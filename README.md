@@ -35,7 +35,9 @@ That is the product: less rediscovery, more continuation.
 
 ## What Aionis Adds
 
-Aionis turns execution into reusable runtime assets:
+Aionis is not a prompt cache and not a memory plugin with better branding.
+
+It turns execution into reusable runtime assets:
 
 1. execution memory
 2. bounded context assembly
@@ -52,6 +54,23 @@ Replayable Execution
 ↓
 Governed Repair / Review
 ```
+
+---
+
+## Why It Is More Than Token Savings
+
+Token savings matter, but they are not the core idea.
+
+The real value is that Aionis changes what survives between sessions:
+
+1. **execution history becomes reusable state**, not lost chat context
+2. **handoffs become recoverable artifacts**, not free-text notes buried in logs
+3. **successful runs become replayable playbooks**, not one-off wins
+4. **runtime decisions become auditable evidence**, not hidden chain-of-thought
+
+That is why Aionis can reduce cost without being "just a cost optimizer".
+
+It helps agents resume work, recover exact handoff, reuse execution, and keep a reviewable trail of how the result was produced.
 
 ---
 
@@ -102,6 +121,8 @@ Recent larger-project A/B evidence in this repository showed:
 3. about `33.24%` lower total tokens
 
 for cross-session task continuation with Aionis-backed recovery.
+
+That is a result of better continuity, not the whole product thesis.
 
 ---
 
@@ -193,7 +214,7 @@ Recommended evidence pages:
 
 Most systems store information.
 
-Aionis stores how work gets done.
+Aionis stores how work gets done, how it can be resumed, and how it can be reused.
 
 ---
 
