@@ -4,17 +4,17 @@ title: "Aionis Docs"
 
 hero:
   name: "Aionis"
-  text: "Cost-Aware Runtime Kernel for Agents"
-  tagline: "Execution memory, bounded context, replay reuse, and governance surfaces across Lite, Server, and managed Cloud direction."
+  text: "Execution Memory for Coding Agents"
+  tagline: "Stop making agents reread repositories, rebuild context, and restate the same reasoning every new session."
   actions:
     - theme: brand
       text: Start in 5 Minutes
       link: /public/en/getting-started/02-onboarding-5min
     - theme: alt
-      text: API Reference
-      link: /public/en/api-reference/00-api-reference
+      text: Choose Lite or Server
+      link: /public/en/getting-started/07-choose-lite-vs-server
     - theme: alt
-      text: Benchmark Snapshot
+      text: See the Evidence
       link: /public/en/benchmarks/02-benchmark-snapshot-public
     - theme: alt
       text: GitHub
@@ -31,41 +31,58 @@ features:
 
 <div class="aionis-kpi-grid">
   <article>
-    <span>Scale Snapshot</span>
-    <strong>100k events</strong>
+    <span>`pallets/click` A/B</span>
+    <strong>Output -77%</strong>
   </article>
   <article>
-    <span>Recall p95</span>
-    <strong>51.42 ms</strong>
+    <span>Total Tokens</span>
+    <strong>-33.24%</strong>
   </article>
   <article>
-    <span>Write p95</span>
-    <strong>182.5 ms</strong>
+    <span>Lite Status</span>
+    <strong>Public Beta</strong>
   </article>
   <article>
-    <span>Policy-loop Lift</span>
-    <strong>0.50 -> 1.00</strong>
+    <span>Primary Workflow</span>
+    <strong>Continue, don't restart</strong>
   </article>
+</div>
+
+## Why People Try Aionis
+
+<div class="aionis-home-grid">
+  <a class="aionis-home-card" href="/public/en/benchmarks/02-benchmark-snapshot-public">
+    <h3>Real Token Savings</h3>
+    <p>See larger-project continuation tests instead of hand-wavy positioning. Aionis already has evidence-backed cost reduction.</p>
+    <span>Evidence first</span>
+  </a>
+  <a class="aionis-home-card" href="/public/en/getting-started/02-onboarding-5min">
+    <h3>Start Fast with Lite</h3>
+    <p>Run a local SQLite-backed Aionis in minutes and test write, recall, replay, and context continuation right away.</p>
+    <span>Lite path</span>
+  </a>
+  <a class="aionis-home-card" href="/public/en/integrations/05-codex-local">
+    <h3>Use It with Codex</h3>
+    <p>Connect Aionis to Codex or MCP workflows and verify cross-session continuity in a real coding loop.</p>
+    <span>Agent integration</span>
+  </a>
 </div>
 
 ## Choose Your Product Path
 
-<div class="aionis-home-grid">
-  <a class="aionis-home-card" href="/public/en/getting-started/07-choose-lite-vs-server">
-    <h3>Choose Lite or Server</h3>
-    <p>Start with the right edition first. Lite is local single-user beta; Server is the self-hosted production path.</p>
-    <span>Edition guide</span>
-  </a>
-  <a class="aionis-home-card" href="/public/en/getting-started/02-onboarding-5min">
-    <h3>Start in 5 Minutes</h3>
-    <p>Run your first write, recall, and context loop quickly.</p>
-    <span>Fast onboarding</span>
-  </a>
-  <a class="aionis-home-card" href="/public/en/integrations/05-codex-local">
-    <h3>Use with Codex</h3>
-    <p>Connect Aionis to Codex and MCP-based workflows with a supported local profile.</p>
-    <span>Integration path</span>
-  </a>
+<div class="aionis-signal-grid">
+  <article class="aionis-signal-card">
+    <h3>Lite</h3>
+    <p>Local, single-user, SQLite-backed, and the fastest way to try Aionis today.</p>
+  </article>
+  <article class="aionis-signal-card">
+    <h3>Server</h3>
+    <p>Self-hosted open-core runtime for teams that need production ownership and operational control.</p>
+  </article>
+  <article class="aionis-signal-card">
+    <h3>Cloud</h3>
+    <p>Managed direction for hosted control-plane, tenant governance, and operator-facing workflows.</p>
+  </article>
 </div>
 
 ## Why Teams Choose Aionis
@@ -77,7 +94,7 @@ features:
   </article>
   <article class="aionis-signal-card">
     <h3>Lower Repeated Agent Cost</h3>
-    <p>Budgeted recall and replayable execution reduce repeated reasoning work and keep context growth inside explicit limits.</p>
+    <p>Budgeted recall, handoff recovery, and replayable execution cut repeated reasoning work and keep context growth inside explicit limits.</p>
   </article>
   <article class="aionis-signal-card">
     <h3>Governable for Production Teams</h3>

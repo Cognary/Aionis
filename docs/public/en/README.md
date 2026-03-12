@@ -4,7 +4,15 @@ title: "Aionis Public Docs"
 
 # Aionis Docs
 
-Aionis is a **memory-centered runtime kernel** for agent systems: execution memory, layered context assembly, replay reuse, and governance-first controls in one product boundary.
+Aionis gives coding agents execution memory, so the next session can continue the work instead of rereading the repository and reconstructing the same reasoning from scratch.
+
+Recent larger-project evidence in this repository showed:
+
+1. about `30.03%` lower input tokens
+2. about `77%` lower output tokens
+3. about `33.24%` lower total tokens
+
+for cross-session continuation with Aionis-backed recovery.
 
 ## Start Here
 
@@ -15,7 +23,7 @@ Aionis is a **memory-centered runtime kernel** for agent systems: execution memo
 5. [Playground](/public/en/guides/02-playground)
 6. [Docs Navigation Map](/public/en/overview/02-docs-navigation)
 
-## Product Paths
+## Choose Your Product Path
 
 1. **Lite**: local single-user SQLite-backed edition in controlled public beta
 2. **Server**: self-hosted open-core runtime for production-oriented deployment

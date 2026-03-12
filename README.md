@@ -8,31 +8,28 @@
 [![GHCR](https://img.shields.io/badge/ghcr-ghcr.io%2Fcognary%2Faionis-2496ed?logo=docker&logoColor=white)](https://ghcr.io/cognary/aionis)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-## Memory-Centered Runtime Kernel for Agents
+## Stop Making Agents Rediscover the Same Work
 
-Aionis is an open-core, cost-aware runtime kernel for agents.
-
-**Agents keep rediscovering the same work.**
+Aionis is execution memory for coding agents.
 
 New session.  
 Read the repo again.  
 Rebuild the mental model.  
 Explain the reasoning again.  
 
-Thousands of tokens just to get back where the last session stopped.
+Thousands of tokens burned just to get back to the last useful state.
 
-**Aionis gives agents execution memory.**
-
-So the next session resumes the work instead of starting from zero.
+**Aionis lets the next session continue the work instead of rediscovering it.**
 
 **Real continuation test on `pallets/click` (open source):**
 
-1. output tokens down **77%**
-2. total tokens down **33%**
+1. input tokens down **30.03%**
+2. output tokens down **77%**
+3. total tokens down **33.24%**
 
-Less rediscovery. More continuation.
+That is the product: less rediscovery, more continuation.
 
-[Quickstart](./docs/public/en/getting-started/01-get-started.md) · [Docs](https://doc.aionisos.com) · [Lite Public Beta](./docs/public/en/getting-started/05-lite-public-beta-boundary.md)
+[Start in 5 Minutes](./docs/public/en/getting-started/02-onboarding-5min.md) · [Choose Lite or Server](./docs/public/en/getting-started/07-choose-lite-vs-server.md) · [Docs](https://doc.aionisos.com) · [Lite Public Beta](./docs/public/en/getting-started/05-lite-public-beta-boundary.md)
 
 ---
 
@@ -68,7 +65,7 @@ Use Lite if you want:
 2. SQLite-backed memory, replay, and context workflows
 3. the fastest path to evaluate Aionis without Docker + Postgres
 
-Lite is currently in controlled public beta.
+Lite is the fastest way to try Aionis today. It runs locally, uses SQLite, and is currently in controlled public beta.
 
 ### Server
 
@@ -90,7 +87,7 @@ Cloud is not part of the public open repository surface.
 
 ## Why It Reduces Agent Cost
 
-Aionis does not compress model internals directly.
+Aionis does not magically compress the model. It removes repeated work around the model.
 
 It reduces:
 
@@ -101,7 +98,8 @@ It reduces:
 Recent larger-project A/B evidence in this repository showed:
 
 1. about `30.03%` lower input tokens
-2. about `33.24%` lower total tokens
+2. about `77%` lower output tokens
+3. about `33.24%` lower total tokens
 
 for cross-session task continuation with Aionis-backed recovery.
 
