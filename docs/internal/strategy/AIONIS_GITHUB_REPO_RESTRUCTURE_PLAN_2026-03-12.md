@@ -158,6 +158,7 @@ Current status:
 2. commercial strategy ownership moved to `aionis-cloud`
 3. business-facing release material ownership moved to `aionis-cloud`
 4. public repo now keeps redirect stubs for those two documents
+5. Batch 2 candidate selection and Cloud control-plane scaffold started in `aionis-cloud`
 
 ### Phase D: Move First Code Slice
 
