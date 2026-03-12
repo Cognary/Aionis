@@ -1,7 +1,7 @@
 # Aionis Lite Beta Gate v1
 
 Date: `2026-03-12`
-Status: `defined_not_passing`
+Status: `passing`
 
 Related:
 
@@ -48,19 +48,17 @@ It only checks whether the repository has crossed the minimum threshold for:
 
 Current artifact verdict:
 
-1. `fail`
+1. `pass`
 
 Current failing gates:
 
-1. `repeated_successful_dogfood_present`
-2. `repeated_stable_dogfood_present`
+1. none
 
-This is expected.
-
-The repository currently has only two successful script-level dogfood artifacts:
+The repository now has three successful and stable script-level dogfood artifacts:
 
 1. [dogfood_20260312_112412](/Users/lucio/Desktop/Aionis/artifacts/lite/dogfood_20260312_112412)
 2. [dogfood_20260312_114014](/Users/lucio/Desktop/Aionis/artifacts/lite/dogfood_20260312_114014)
+3. [dogfood_20260312_115851](/Users/lucio/Desktop/Aionis/artifacts/lite/dogfood_20260312_115851)
 
 ## Interpretation
 
@@ -71,24 +69,22 @@ It means:
 1. Lite alpha capability is strong enough
 2. operator docs are now present
 3. startup and dogfood path are repeatable
-4. but beta posture should still wait for one more clean repeated dogfood run
+4. the current repository snapshot satisfies beta gate v1
 
-So the current release posture remains:
+So the current release posture can now move from:
 
 1. `approved_for_internal_alpha`
-2. not yet `beta_ready`
+
+to:
+
+1. `beta_candidate_by_v1_gate`
 
 ## Immediate Next Step
 
-The shortest path to a passing beta gate v1 is:
+Passing beta gate v1 should not immediately be interpreted as "ship broad beta".
 
-1. run one more clean `npm run -s lite:dogfood`
-2. verify a third `dogfood_*/summary.json` appears and is fully green
-3. rerun `npm run -s job:lite-beta-gate`
+The next phase should be:
 
-If that passes, the next phase should not be "declare beta immediately".
-
-It should be:
-
-1. decide whether repeated local dogfood is enough
-2. or whether beta should also require startup/troubleshooting UX checks beyond current script evidence
+1. decide whether v1 evidence is enough for a true Lite beta label
+2. or whether beta gate v2 should add startup/troubleshooting UX checks beyond current script evidence
+3. collect at least one more real operator-style run outside the canonical scripted path

@@ -130,7 +130,7 @@ That beta-gate definition now exists as:
 Current result:
 
 1. defined
-2. intentionally failing on repeated dogfood count
+2. currently passing on the repository snapshot after the third stable dogfood run
 3. not blocked on kernel capability or startup packaging
 
 ## Final Release Position

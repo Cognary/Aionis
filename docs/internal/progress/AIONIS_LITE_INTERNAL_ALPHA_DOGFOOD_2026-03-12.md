@@ -6,6 +6,7 @@ Branch baseline:
 1. first pass: `main@1561a10`
 2. second pass: `main@000dd37`
 3. third pass: `main@833bc6e`
+4. fourth pass: `main@8b4160b`
 
 ## Summary
 
@@ -148,6 +149,31 @@ Interpretation:
 
 1. the canonical dogfood workflow is now stable on current `main`
 2. publishing operator guidance did not reveal a new Lite runtime regression
+
+## Fourth Pass Findings
+
+The fourth pass reran the same canonical script after beta gate v1 was added to the repository.
+
+Command:
+
+- `npm run -s lite:dogfood`
+
+Observed behavior:
+
+1. the script completed with `ok = true`
+2. all HTTP checks again returned `200`
+3. inline embedding backfill remained green
+4. replay lifecycle remained green
+5. the new artifact was enough to satisfy the repeated-dogfood threshold in beta gate v1
+
+Artifact:
+
+- [dogfood_20260312_115851](/Users/lucio/Desktop/Aionis/artifacts/lite/dogfood_20260312_115851)
+
+Interpretation:
+
+1. Lite now has three consecutive green script-level real-process dogfood artifacts
+2. that is enough for the current beta gate v1 definition to pass
 
 ## Remaining Frictions
 

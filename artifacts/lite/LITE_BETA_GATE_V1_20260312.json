@@ -1,6 +1,6 @@
 {
-  "ok": false,
-  "generated_at": "2026-03-12T03:47:24.998Z",
+  "ok": true,
+  "generated_at": "2026-03-12T03:59:07.362Z",
   "package_json": "/Users/lucio/Desktop/Aionis/package.json",
   "output": "/Users/lucio/Desktop/Aionis/artifacts/lite/LITE_BETA_GATE_V1_20260312.md",
   "output_json": "/Users/lucio/Desktop/Aionis/artifacts/lite/LITE_BETA_GATE_V1_20260312.json",
@@ -11,13 +11,10 @@
     "alpha_gate_present": true,
     "operator_docs_present": true,
     "onboarding_links_operator_docs": true,
-    "repeated_successful_dogfood_present": false,
-    "repeated_stable_dogfood_present": false
+    "repeated_successful_dogfood_present": true,
+    "repeated_stable_dogfood_present": true
   },
-  "failing_gates": [
-    "repeated_successful_dogfood_present",
-    "repeated_stable_dogfood_present"
-  ],
+  "failing_gates": [],
   "public_operator_docs": [
     "/Users/lucio/Desktop/Aionis/docs/public/en/getting-started/04-lite-operator-notes.md",
     "/Users/lucio/Desktop/Aionis/docs/public/zh/getting-started/04-lite-operator-notes.md"
@@ -44,11 +41,19 @@
       "backend_ok": true,
       "inline_backfill_ok": true,
       "replay_ok": true
+    },
+    {
+      "run": "dogfood_20260312_115851",
+      "file": "/Users/lucio/Desktop/Aionis/artifacts/lite/dogfood_20260312_115851/summary.json",
+      "ok": true,
+      "backend_ok": true,
+      "inline_backfill_ok": true,
+      "replay_ok": true
     }
   ],
-  "successful_dogfood_runs": 2,
-  "stable_dogfood_runs": 2,
+  "successful_dogfood_runs": 3,
+  "stable_dogfood_runs": 3,
   "recommendations": [
-    "Run more real-process Lite dogfood passes until at least 3 successful and stable summaries exist under artifacts/lite/dogfood_*/summary.json."
+    "Lite beta gate v1 is satisfied for the current repository snapshot."
   ]
 }

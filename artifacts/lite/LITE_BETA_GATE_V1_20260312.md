@@ -1,6 +1,6 @@
 # Lite Beta Gate v1
 
-Generated at: `2026-03-12T03:47:24.998Z`
+Generated at: `2026-03-12T03:59:07.362Z`
 
 ## Inputs
 
@@ -16,8 +16,8 @@ Generated at: `2026-03-12T03:47:24.998Z`
 | alpha_gate_present | pass |
 | operator_docs_present | pass |
 | onboarding_links_operator_docs | pass |
-| repeated_successful_dogfood_present | fail |
-| repeated_stable_dogfood_present | fail |
+| repeated_successful_dogfood_present | pass |
+| repeated_stable_dogfood_present | pass |
 
 ## Public Operator Docs
 
@@ -36,14 +36,15 @@ Generated at: `2026-03-12T03:47:24.998Z`
 | --- | --- | --- | --- | --- |
 | dogfood_20260312_112412 | pass | pass | pass | pass |
 | dogfood_20260312_114014 | pass | pass | pass | pass |
+| dogfood_20260312_115851 | pass | pass | pass | pass |
 
 ## Verdict
 
-- successful dogfood runs: 2
-- stable dogfood runs: 2
-- failing gates: repeated_successful_dogfood_present, repeated_stable_dogfood_present
-- final verdict: fail
+- successful dogfood runs: 3
+- stable dogfood runs: 3
+- failing gates: none
+- final verdict: pass
 
 ## Recommendations
 
-- Run more real-process Lite dogfood passes until at least 3 successful and stable summaries exist under artifacts/lite/dogfood_*/summary.json.
+- Lite beta gate v1 is satisfied for the current repository snapshot.

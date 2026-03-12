@@ -119,11 +119,10 @@ Current status:
 3. `resolve(edge)` has a Lite path
 4. `resolve(commit)` has a Lite path
 
-Current explicit limitation:
+Current status:
 
-1. `resolve(decision)` remains unsupported in Lite and currently returns stable `501 decision_resolve_not_supported_in_lite`
-
-This is an acceptable temporary boundary, but it keeps Lite below release-readiness.
+1. `resolve(decision)` now also has a Lite path
+2. graph inspection is no longer missing the decision surface
 
 ## 4. What Is Not Finished Yet
 
@@ -171,7 +170,7 @@ Specifically, Lite still needs:
 
 1. a cleaner public statement of which surfaces are fully supported vs intentionally `501`
 2. stronger startup/distribution ergonomics beyond internal scripts
-3. additional alpha-to-beta hardening once real users start exercising the local path
+3. additional post-beta hardening once real users start exercising the local path
 
 ## 5. Current Readiness Judgment
 
@@ -185,7 +184,7 @@ It is now reasonable to say:
 4. multiple kernel-required paths already run locally without Postgres-shaped runtime assumptions
 5. internal alpha dogfooding now validates fresh-write recallability and replay lifecycle in a real Lite process
 6. repeated real-process dogfooding now has a canonical green script path on `main`
-7. Lite beta gate v1 now exists and currently fails only on repeated-dogfood count
+7. Lite beta gate v1 now exists and passes on the current repository snapshot
 
 ### 5.2 What We Cannot Say Yet
 
@@ -205,7 +204,7 @@ It is still not yet reasonable to say:
 
 Working estimate:
 
-1. overall Lite line is roughly `75%` complete
+1. overall Lite line is roughly `80%` complete
 
 Why it is already this high:
 
@@ -216,7 +215,7 @@ Why it is not higher:
 
 1. operator/runtime polish is still incomplete
 2. capability matrix still needs clearer external product framing
-3. release hardening beyond alpha is not yet satisfied
+3. release hardening beyond the current beta-candidate gate is not yet satisfied
 
 ## 6. Release Gates Still Missing
 
@@ -240,6 +239,7 @@ Current implementation note:
 6. repeated internal operator validation now has a canonical script: `npm run -s lite:dogfood`
 7. public operator guidance now exists in EN/ZH getting-started docs
 8. beta-gate v1 now exists as `npm run -s job:lite-beta-gate`
+9. current beta gate v1 artifact now passes
 
 ## 7. Recommended Next Steps
 
@@ -252,10 +252,10 @@ Recommended order:
 
 The highest-value next implementation targets are:
 
-1. repeated real-process dogfood over multiple runs and environments
+1. startup and troubleshooting polish beyond the current operator notes
 2. memory-lane visibility guidance for local inspection examples
-3. startup and troubleshooting polish beyond the current operator notes
-4. beta-grade hardening gates
+3. beta-gate v2 design
+4. post-beta hardening gates
 
 ## 8. Final Judgment
 
@@ -270,4 +270,4 @@ The project has already demonstrated:
 
 So the right interpretation is:
 
-> Lite is real, technically viable, and now alpha-gated; the remaining work is no longer core capability bring-up, but packaging polish and post-alpha hardening.
+> Lite is real, technically viable, and now beyond alpha-only gating; the remaining work is no longer core capability bring-up, but packaging polish and post-beta hardening.
