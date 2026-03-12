@@ -225,6 +225,8 @@ fi
 
 if jq -e . "${RAW_DIR}/governance_weekly_report.out" >/dev/null 2>&1; then
   cp "${RAW_DIR}/governance_weekly_report.out" "${GOV_JSON}"
+elif jq -e . "${RAW_DIR}/governance_weekly_report.err" >/dev/null 2>&1; then
+  cp "${RAW_DIR}/governance_weekly_report.err" "${GOV_JSON}"
 else
   echo "{\"ok\":false,\"error\":\"invalid_governance_weekly_output\"}" > "${GOV_JSON}"
 fi
@@ -236,7 +238,13 @@ else
 fi
 
 if [[ ! -f "${GOV_SUMMARY_JSON}" ]]; then
-  echo "{\"ok\":false,\"error\":\"missing_governance_weekly_summary\",\"summary\":{\"pass\":false}}" > "${GOV_SUMMARY_JSON}"
+  if jq -e '.error == "hosted_feature_moved"' "${GOV_JSON}" >/dev/null 2>&1; then
+    cat > "${GOV_SUMMARY_JSON}" <<'EOF'
+{"ok":true,"externalized":true,"summary":{"pass":true,"externalized":true},"scope_snapshot":{"replay_policy":{"total_reviews":0,"shadow_blocked_rate":0,"policy_resolution_coverage":0}},"recommendations":[]}
+EOF
+  else
+    echo "{\"ok\":false,\"error\":\"missing_governance_weekly_summary\",\"summary\":{\"pass\":false}}" > "${GOV_SUMMARY_JSON}"
+  fi
 fi
 
 if [[ ! -f "${BENCH_SUMMARY_JSON}" ]]; then

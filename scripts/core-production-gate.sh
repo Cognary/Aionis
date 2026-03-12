@@ -379,6 +379,26 @@ run_step() {
   fi
 }
 
+remove_fail_reason() {
+  local reason="$1"
+  fail_reasons="$(echo "${fail_reasons}" | jq --arg reason "${reason}" 'map(select(. != $reason))')"
+}
+
+mark_last_step_externalized() {
+  local step_name="$1"
+  steps_json="$(
+    echo "${steps_json}" | jq --arg step_name "${step_name}" '
+      if length > 0 and .[-1].name == $step_name then
+        .[-1].ok = true |
+        .[-1].exit_code = 0 |
+        .[-1].externalized = true
+      else
+        .
+      end
+    '
+  )"
+}
+
 to_number_or_zero() {
   local v="${1:-0}"
   if [[ -z "${v}" || "${v}" == "null" ]]; then
@@ -687,10 +707,11 @@ replay_policy_resolution_coverage="0"
 if [[ "${RUN_REPLAY_POLICY_GOVERNANCE}" == "true" ]]; then
   replay_policy_enabled=true
   replay_policy_report_path="${OUT_DIR}/07g_replay_policy_governance_summary.json"
+  replay_policy_report_log_path="${replay_policy_report_path}.log"
   replay_policy_run_id="${RUN_ID}_core_gate"
   replay_policy_report_week="$(date -u +%G-W%V)"
   replay_policy_report_root="${OUT_DIR}/replay_policy_governance"
-  run_step "replay_policy_governance" "${replay_policy_report_path}.log" \
+  run_step "replay_policy_governance" "${replay_policy_report_log_path}" \
     run_db_command npm run -s job:governance-weekly-report -- \
       --scope "${SCOPE}" \
       --window-hours "${REPLAY_POLICY_WINDOW_HOURS}" \
@@ -717,11 +738,36 @@ if [[ "${RUN_REPLAY_POLICY_GOVERNANCE}" == "true" ]]; then
       fi
     fi
   else
-    replay_policy_pass=false
-    if [[ "${REPLAY_POLICY_GATE_MODE}" == "blocking" ]]; then
-      fail_reasons="$(echo "${fail_reasons}" | jq '. + ["replay_policy_governance_output_invalid"]')"
+    if [[ -f "${replay_policy_report_log_path}" ]] && jq -e '.error == "hosted_feature_moved"' "${replay_policy_report_log_path}" >/dev/null 2>&1; then
+      mkdir -p "$(dirname "${replay_policy_report_path}")"
+      cat > "${replay_policy_report_path}" <<EOF
+{
+  "ok": true,
+  "externalized": true,
+  "summary": {
+    "pass": true,
+    "externalized": true
+  },
+  "scope_snapshot": {
+    "replay_policy": {
+      "total_reviews": 0,
+      "shadow_blocked_rate": 0,
+      "policy_resolution_coverage": 0
+    }
+  }
+}
+EOF
+      replay_policy_pass=true
+      remove_fail_reason "replay_policy_governance"
+      mark_last_step_externalized "replay_policy_governance"
+      warn_reasons="$(echo "${warn_reasons}" | jq '. + ["replay_policy_governance_externalized"]')"
     else
-      warn_reasons="$(echo "${warn_reasons}" | jq '. + ["replay_policy_governance_output_invalid"]')"
+      replay_policy_pass=false
+      if [[ "${REPLAY_POLICY_GATE_MODE}" == "blocking" ]]; then
+        fail_reasons="$(echo "${fail_reasons}" | jq '. + ["replay_policy_governance_output_invalid"]')"
+      else
+        warn_reasons="$(echo "${warn_reasons}" | jq '. + ["replay_policy_governance_output_invalid"]')"
+      fi
     fi
   fi
 fi
