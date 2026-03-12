@@ -1,15 +1,14 @@
 ---
 title: Overview
-description: Understand what Aionis is, why it exists, and when to use it in production AI systems.
+description: Understand why Aionis exists, how it preserves execution continuity, and when to use Lite or Server.
 ---
 
 <div class="doc-hero doc-hero-overview">
   <span class="status-pill stable">Product Overview</span>
   <h1>Overview</h1>
   <p class="doc-hero-subtitle">
-    Aionis is execution memory and replay infrastructure for production AI agents.
-    It records what agents actually did, preserves the IDs behind those decisions,
-    and makes the workflow replayable later.
+    Aionis is execution memory for agents that need to continue work across sessions
+    instead of rediscovering the same repo, reasoning, and patch plan every time.
   </p>
   <div class="doc-hero-strip">
     <span>Memory graph</span>
@@ -34,11 +33,11 @@ description: Understand what Aionis is, why it exists, and when to use it in pro
 
 ## What Aionis is
 
-Aionis sits between your agent runtime and your operational controls. It stores execution memory as durable graph data, helps assemble context for later requests, applies policy before actions run, and preserves the identifiers required to replay the same workflow later.
+Aionis sits between your agent runtime and your operational controls. It stores execution memory as durable graph data, helps recover exact handoffs and evidence, assembles context for later requests, applies policy before actions run, and preserves the identifiers required to replay the same workflow later.
 
 ## What makes it different
 
-Aionis is not just a retrieval layer. It combines memory, policy, provenance, and replay in one operational model. That matters when teams need to answer questions like:
+Aionis is not just a retrieval layer and not just a token optimization feature. It combines memory, policy, provenance, handoff recovery, and replay in one operational model. That matters when teams need to answer questions like:
 
 1. What did the agent actually do?
 2. Why was this tool selected?
@@ -47,12 +46,28 @@ Aionis is not just a retrieval layer. It combines memory, policy, provenance, an
 
 ## Why Aionis exists
 
-Most memory systems stop at retrieval. Production systems need more than retrieval quality:
+Most agent stacks still restart from near-zero every new session. Aionis exists to reduce that rediscovery cost while keeping the work inspectable and reusable:
 
-1. Traceability across requests, runs, decisions, and commits.
+1. Continuity across requests, runs, decisions, and commits.
 2. Policy control before tools and actions are executed.
-3. Replay workflows for incidents, regressions, and release evidence.
+3. Replay workflows for incidents, regressions, and reuse.
 4. Operational discipline for rollout and auditability.
+
+## Product paths
+
+Use **Lite** when you want:
+
+1. the fastest local path
+2. single-user SQLite-backed runtime
+3. Codex or MCP integration with low setup friction
+
+Use **Server** when you want:
+
+1. self-hosted production deployment
+2. admin and automation surfaces
+3. stronger operational governance
+
+See [Choose Lite or Server](choose-lite-or-server) for the direct path.
 
 ## Key capabilities
 
@@ -107,11 +122,12 @@ Think of Aionis as four connected layers:
 
 ## Recommended reading order
 
-1. [Quickstart](quickstart)
-2. [Core Concepts](core-concepts)
-3. [Memory and Policy Loop](memory-policy-loop)
-4. [API Guide](api-guide)
-5. [Operations and Gates](operations-and-gates)
+1. [Choose Lite or Server](choose-lite-or-server)
+2. [Quickstart](quickstart)
+3. [Core Concepts](core-concepts)
+4. [Memory and Policy Loop](memory-policy-loop)
+5. [API Guide](api-guide)
+6. [Operations and Gates](operations-and-gates)
 
 ## Role-based reading paths
 

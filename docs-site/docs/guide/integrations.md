@@ -2,6 +2,8 @@
 
 This page maps Aionis into common runtime and framework environments.
 
+If your first goal is local evaluation, start with [Lite Public Beta](lite-public-beta) or [Codex Local Profile](codex-local-profile) before wiring deeper framework integrations.
+
 ## How to use this page
 
 1. Pick the runtime or toolchain you already use.

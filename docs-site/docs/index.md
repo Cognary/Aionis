@@ -1,34 +1,34 @@
 ---
 layout: doc
 title: Aionis
-description: Execution memory and replay infrastructure for production AI agents.
+description: Execution memory for agents that continue work instead of rediscovering it.
 sidebar: false
 aside: false
 ---
 
 <div class="mint-header">
-  <span class="status-pill stable">Production Docs</span>
-  <p class="hero-kicker">Execution memory infrastructure for production AI agents</p>
+  <span class="status-pill stable">Lite Public Beta + Server Core</span>
+  <p class="hero-kicker">Agents keep rediscovering the same work.</p>
   <h1>Aionis</h1>
   <p class="mint-subtitle">
-    Aionis records what AI agents actually did and allows workflows to be replayed later.
+    Aionis gives agents execution memory so the next session continues the work instead of starting from zero.
   </p>
   <p class="hero-support">
-    Use it when prompt traces and ad hoc logs are no longer enough to explain, debug,
-    and reuse workflow behavior in production.
+    In a real continuation test on <code>pallets/click</code>, Aionis reduced output tokens by <strong>77%</strong>
+    and total tokens by <strong>33%</strong> by avoiding repeated rediscovery.
   </p>
   <div class="hero-highlights">
     <div class="hero-highlight">
-      <span class="hero-highlight-label">Record</span>
-      <span class="hero-highlight-text">Persist execution facts, decisions, and artifacts.</span>
+      <span class="hero-highlight-label">Continue</span>
+      <span class="hero-highlight-text">Resume work across sessions instead of rebuilding context.</span>
     </div>
     <div class="hero-highlight">
-      <span class="hero-highlight-label">Trace</span>
-      <span class="hero-highlight-text">Link runs with request, decision, and commit identifiers.</span>
+      <span class="hero-highlight-label">Recover</span>
+      <span class="hero-highlight-text">Bring back exact handoffs, evidence, and replayable steps.</span>
     </div>
     <div class="hero-highlight">
       <span class="hero-highlight-label">Replay</span>
-      <span class="hero-highlight-text">Reconstruct workflows for incidents, regressions, and reuse.</span>
+      <span class="hero-highlight-text">Reuse successful execution instead of rediscovering it every time.</span>
     </div>
   </div>
   <DragScroller>
@@ -54,11 +54,11 @@ aside: false
   <span>Start here</span>
 </div>
 <ul class="mint-quick-nav">
-  <li><a href="/guide/overview">Understand the product</a></li>
-  <li><a href="/guide/quickstart">Run the quickstart</a></li>
-  <li><a href="/guide/codex-local-profile">Set up Codex Local Profile</a></li>
+  <li><a href="/guide/lite-public-beta">Try Lite in 5 minutes</a></li>
+  <li><a href="/guide/choose-lite-or-server">Choose Lite or Server</a></li>
+  <li><a href="/guide/codex-local-profile">Use it with Codex</a></li>
+  <li><a href="/guide/overview">Understand why it works</a></li>
   <li><a href="/api/">Integrate the APIs</a></li>
-  <li><a href="/operations/">Prepare for production</a></li>
 </ul>
 
 <div class="home-section-lead">
@@ -68,14 +68,32 @@ aside: false
 
 ## Why teams use Aionis
 
-1. They need durable execution memory instead of fragile prompt history.
-2. They need policy-aware tool selection with inspectable decisions.
-3. They need replayable workflows for incidents, regressions, and release evidence.
-4. They need stable identifiers such as `request_id`, `run_id`, `decision_id`, and `commit_uri`.
+1. They are tired of agents re-reading the same repo and re-explaining the same reasoning.
+2. They need durable execution memory instead of fragile prompt history.
+3. They need replayable workflows for incidents, regressions, and reuse.
+4. They need evidence and identifiers they can inspect later.
 
 ## Pick your path
 
 <div class="home-cards">
+  <a class="home-card" href="/guide/lite-public-beta">
+    <div class="card-icon-panel">
+      <IoFlash class="card-icon" width="22" height="22" stroke-width="1.7" />
+    </div>
+    <div class="card-body">
+      <h3>Try Lite</h3>
+      <p>Run Aionis locally with SQLite, validate the core workflow fast, and start with the lowest-friction path.</p>
+    </div>
+  </a>
+  <a class="home-card" href="/guide/choose-lite-or-server">
+    <div class="card-icon-panel">
+      <IoGitCompare class="card-icon" width="22" height="22" stroke-width="1.7" />
+    </div>
+    <div class="card-body">
+      <h3>Choose Lite or Server</h3>
+      <p>Pick the right entrypoint for local evaluation, Codex workflows, or self-hosted production deployments.</p>
+    </div>
+  </a>
   <a class="home-card" href="/guide/overview">
     <div class="card-icon-panel">
       <IoJournalPage class="card-icon" width="22" height="22" stroke-width="1.7" />
@@ -99,8 +117,8 @@ aside: false
       <IoTerminal class="card-icon" width="22" height="22" stroke-width="1.7" />
     </div>
     <div class="card-body">
-      <h3>Codex Local Profile</h3>
-      <p>Run Codex with the built-in Dev MCP, standalone Docker, and a tracked local replay loop.</p>
+      <h3>Use it with Codex</h3>
+      <p>Run Codex with Aionis Lite or the tracked standalone profile and keep continuity across local coding sessions.</p>
     </div>
   </a>
   <a class="home-card" href="/api/">
@@ -143,22 +161,22 @@ aside: false
 
 ## What you can accomplish in the first hour
 
-1. Get a local or hosted environment responding to `/health`.
-2. Write and recall a real memory event.
-3. Run the policy flow with a stable `run_id`.
-4. Keep the identifiers needed for replay and incident debugging.
-5. Decide whether to continue through Guide, API, Tutorials, or Operations.
+1. Start Lite locally and confirm `/health`.
+2. Write one memory and recall it later.
+3. Use Codex or MCP with a real Aionis-backed flow.
+4. Keep the identifiers needed for replay and exact handoff recovery.
+5. Decide whether to stay local with Lite or move to Server.
 
 ## Recommended first success path
 
-1. Read [Overview](/guide/overview).
-2. Run [Quickstart](/guide/quickstart).
-3. Implement the flow in [Memory and Policy Loop](/guide/memory-policy-loop).
+1. Read [Choose Lite or Server](/guide/choose-lite-or-server).
+2. Start with [Lite Public Beta](/guide/lite-public-beta) or [Quickstart](/guide/quickstart).
+3. Use [Codex + Aionis](/guide/codex-local-profile) if your first use case is coding agents.
 4. Use [API Guide](/guide/api-guide) and [API Reference](/api/) during integration.
-5. Validate the rollout with [Operations and Gates](/guide/operations-and-gates).
+5. Move to [Operations and Gates](/guide/operations-and-gates) when you need the Server production path.
 
 ## If you only read three pages
 
-1. [Overview](/guide/overview) for the product model.
-2. [Quickstart](/guide/quickstart) for the first working integration.
-3. [Operations and Gates](/guide/operations-and-gates) for the production baseline.
+1. [Lite Public Beta](/guide/lite-public-beta) for the fastest way to try it.
+2. [Choose Lite or Server](/guide/choose-lite-or-server) for the right product path.
+3. [Overview](/guide/overview) for the product model.

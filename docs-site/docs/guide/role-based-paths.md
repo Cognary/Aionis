@@ -8,6 +8,8 @@ Use this page to choose the fastest reading path for your role.
 2. Read in order instead of jumping randomly between sections.
 3. Use the tutorials linked at the end of each path when you need a working sequence.
 
+If you are evaluating Aionis for the first time, start with [Choose Lite or Server](choose-lite-or-server) before picking a deeper path.
+
 ## Developer path (integration first)
 
 Goal:

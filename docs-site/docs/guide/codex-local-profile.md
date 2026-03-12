@@ -1,6 +1,6 @@
 ---
 title: Codex Local Profile
-description: Run Codex with Aionis Dev MCP, standalone Docker, and a tracked local replay loop.
+description: Run Codex with Aionis Lite or the tracked standalone profile and keep execution continuity across sessions.
 ---
 
 <div class="doc-hero doc-hero-start">
@@ -8,12 +8,12 @@ description: Run Codex with Aionis Dev MCP, standalone Docker, and a tracked loc
   <h1>Codex Local Profile</h1>
   <p class="doc-hero-subtitle">
     Aionis Codex Local Profile is the official local integration path for Codex users.
-    It combines Aionis Dev MCP, standalone Docker, and a tracked agent wrapper into one local workflow.
+    Start with Lite for the fastest local path, or use the tracked standalone profile when you want the legacy Docker-shaped route.
   </p>
   <div class="doc-hero-strip">
-    <span>Dev MCP</span>
-    <span>Standalone Docker</span>
-    <span>Tracked local loop</span>
+    <span>Lite + Dev MCP</span>
+    <span>Tracked standalone</span>
+    <span>Continuation-first coding loop</span>
   </div>
   <div class="doc-hero-panel">
     <div class="doc-hero-grid">
@@ -33,31 +33,30 @@ description: Run Codex with Aionis Dev MCP, standalone Docker, and a tracked loc
 
 ## What this profile is
 
-This profile packages three things together:
+This profile gives Codex an Aionis-backed local workflow. You can use it in two modes:
 
-1. `Aionis Dev MCP` as the MCP tool surface for Codex.
-2. standalone Docker as the local Aionis runtime.
-3. a tracked launcher that records local sessions and command steps.
+1. **Lite + Dev MCP** for the shortest local path
+2. **Tracked standalone profile** for the older Docker-shaped local loop
 
-Use this path when you want more than a raw MCP endpoint. The goal is to make local coding tasks replayable and inspectable by default.
+In both cases, the goal is the same: local coding tasks should be replayable, inspectable, and easier to continue later.
 
 ## Who should use it
 
 Use Codex Local Profile when you want:
 
-1. Codex to access Aionis memory, replay, planning, and learn-from-run capabilities.
-2. local coding sessions to preserve a stable `run_id` and step trail.
-3. build, test, and lint commands to show up as replayable local execution steps.
-4. one productized path instead of hand-assembling scripts, Docker commands, and MCP config.
+1. Codex to access Aionis memory, replay, planning, and learn-from-run capabilities
+2. local coding sessions to preserve a stable `run_id` and step trail
+3. build, test, and lint commands to show up as replayable local execution steps
+4. one productized path instead of hand-assembling scripts, Docker commands, and MCP config
 
 ## What happens by default
 
 When you launch Codex through `codex-aionis`, the local loop becomes:
 
-1. Aionis starts a tracked run.
-2. planning context is assembled for the session.
-3. local command steps can be recorded into replay history.
-4. the run is closed automatically at session end.
+1. Aionis starts a tracked run
+2. planning context is assembled for the session
+3. local command steps can be recorded into replay history
+4. the run is closed automatically at session end
 
 That gives local development a usable provenance chain instead of ad hoc shell history.
 
@@ -68,23 +67,44 @@ flowchart LR
   U["Developer"] --> C["codex-aionis"]
   C --> M["Aionis Dev MCP"]
   C --> W["Tracked local wrapper"]
-  M --> A["Aionis standalone"]
+  M --> A["Aionis Lite or standalone"]
   W --> A
   W --> R["Replay runs and steps"]
 ```
 
 ## 3-minute setup
 
-### 1. Start standalone
+### 1. Fastest path: Lite + Dev MCP
+
+Start Lite:
 
 ```bash
-cd /path/to/Aionis
+npm run build
+npm run start:lite
+```
+
+Check health:
+
+```bash
+curl -fsS http://localhost:3001/health | jq '{aionis_edition,memory_store_backend}'
+```
+
+Expected:
+
+1. `aionis_edition = "lite"`
+2. `memory_store_backend = "lite_sqlite"`
+
+### 2. Tracked standalone path
+
+Use this when you want the Docker-shaped tracked profile:
+
+```bash
 npm run -s mcp:aionis:dev:standalone:oneclick
 ```
 
 This starts a local standalone runtime, waits for health, and validates the built-in Dev MCP path.
 
-### 2. Generate Codex setup guidance
+### 3. Generate Codex setup guidance
 
 ```bash
 npm run -s aionis:setup:codex
@@ -96,7 +116,7 @@ This prints:
 2. the recommended local launcher command
 3. the environment values currently expected by the profile
 
-### 3. Install and verify the local launcher
+### 4. Install and verify the local launcher
 
 ```bash
 npm run -s aionis:install:codex-launcher
@@ -156,18 +176,20 @@ These helpers are useful when you want the local replay trace to reflect what ac
 
 This profile is designed for local use:
 
-1. Aionis runs in standalone Docker.
-2. Codex runs on the host.
-3. the MCP client starts the built-in Dev MCP through the host launcher.
-4. the local wrapper coordinates session start, step recording, and session end.
+1. Aionis runs as Lite or standalone Docker
+2. Codex runs on the host
+3. the MCP client starts the built-in Dev MCP through the host launcher
+4. the local wrapper coordinates session start, step recording, and session end
 
 This is a productized local workflow, not a remote multi-tenant MCP gateway.
+
+If your first goal is simply to try Aionis locally, start with [Lite Public Beta](lite-public-beta) before choosing the tracked standalone path.
 
 ## Troubleshooting
 
 If the profile does not behave as expected, check these first:
 
-1. the standalone container is running
+1. the runtime is actually running
 2. `codex-aionis-doctor` passes
 3. `codex mcp list` shows `aionis-dev`
 
@@ -180,7 +202,7 @@ codex mcp list
 
 ## Related pages
 
-1. [Integrations](integrations)
-2. [Quickstart](quickstart)
-3. [API Guide](api-guide)
-4. [Operations and Gates](operations-and-gates)
+1. [Lite Public Beta](lite-public-beta)
+2. [Choose Lite or Server](choose-lite-or-server)
+3. [Integrations](integrations)
+4. [Quickstart](quickstart)

@@ -2,6 +2,8 @@
 
 Use this page when the system is reachable but behavior is wrong, incomplete, or unstable.
 
+If you are running Lite specifically, read [Lite Public Beta](lite-public-beta) first so you do not misread expected edition boundaries as failures.
+
 ## Triage order
 
 1. Confirm the request reached the correct environment and auth mode.

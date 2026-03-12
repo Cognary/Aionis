@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Set up Aionis quickly and follow the first end-to-end memory-to-replay workflow.
+description: Try Aionis quickly with Lite or Server and validate write, recall, and replayable identifiers.
 ---
 
 <div class="doc-hero doc-hero-start">
@@ -8,7 +8,7 @@ description: Set up Aionis quickly and follow the first end-to-end memory-to-rep
   <h1>Quickstart</h1>
   <p class="doc-hero-subtitle">
     This page gets you to a working Aionis integration in minutes.
-    Run one write, one recall, and leave with the identifiers you need for replay and debugging.
+    Start with Lite for the shortest path, or use Server if you are validating the self-hosted production route.
   </p>
   <div class="doc-hero-strip">
     <span>Health check</span>
@@ -41,15 +41,16 @@ description: Set up Aionis quickly and follow the first end-to-end memory-to-rep
 
 ## Before you start
 
-1. Docker and Docker Compose for local setup.
-2. Node.js `>=18` if you plan to run repository scripts.
+1. Node.js `>=22` for Lite.
+2. Docker and Docker Compose if you want the Server-oriented local path.
 3. `curl` and `jq` for the validation steps below.
 
 ## Choose your path
 
-1. Use the local quickstart if you want the fastest hands-on validation from this repository.
-2. Use the hosted quickstart if you already have a running Aionis environment and credentials.
-3. If you are evaluating the product instead of integrating today, read [Overview](overview) first and come back here.
+1. Use **Lite** if you want the fastest hands-on validation from this repository.
+2. Use **Server** if you want the self-hosted production-shaped local path.
+3. Use the hosted quickstart if you already have a running Aionis environment and credentials.
+4. If you are evaluating the product first, read [Choose Lite or Server](choose-lite-or-server) and [Overview](overview).
 
 ## End-to-end flow
 
@@ -62,7 +63,9 @@ flowchart LR
   E --> F["Persist decision"]
 ```
 
-## Local quickstart
+## Lite quickstart
+
+Use Lite if you want the shortest route to a real Aionis workflow:
 
 Clone and configure the repository:
 
@@ -76,14 +79,14 @@ Use these local `.env` defaults for a first smoke path:
 
 ```bash
 PORT=3001
-MEMORY_AUTH_MODE=off
-EMBEDDING_PROVIDER=fake
+AIONIS_EDITION=lite
 ```
 
-Start the stack and confirm health:
+Start Lite and confirm health:
 
 ```bash
-make stack-up
+npm run build
+npm run start:lite
 curl -fsS http://localhost:3001/health | jq
 ```
 
@@ -103,6 +106,37 @@ curl -sS http://localhost:3001/v1/memory/write \
 curl -sS http://localhost:3001/v1/memory/recall_text \
   -H 'content-type: application/json' \
   -d '{"tenant_id":"default","scope":"default","query_text":"preferred follow-up channel","limit":5}' | jq
+```
+
+Canonical Lite validation:
+
+```bash
+npm run -s lite:dogfood
+```
+
+## Server quickstart
+
+Use Server if you want the self-hosted production-shaped local path:
+
+```bash
+git clone https://github.com/Cognary/Aionis.git
+cd Aionis
+cp .env.example .env
+```
+
+Use these local `.env` defaults:
+
+```bash
+PORT=3001
+MEMORY_AUTH_MODE=off
+EMBEDDING_PROVIDER=fake
+```
+
+Start the stack and confirm health:
+
+```bash
+make stack-up
+curl -fsS http://localhost:3001/health | jq
 ```
 
 Stop services when finished:
@@ -150,10 +184,11 @@ curl -sS "$BASE_URL/v1/memory/write" \
 
 ## What to read next
 
-1. [Core Concepts](core-concepts)
-2. [Memory and Policy Loop](memory-policy-loop)
-3. [API Guide](api-guide)
-4. [SDK Guide](sdk-guide) if you do not want to stay at raw HTTP level
+1. [Choose Lite or Server](choose-lite-or-server)
+2. [Core Concepts](core-concepts)
+3. [Memory and Policy Loop](memory-policy-loop)
+4. [API Guide](api-guide)
+5. [SDK Guide](sdk-guide) if you do not want to stay at raw HTTP level
 
 ## If you are a Codex user
 
@@ -161,6 +196,6 @@ If your goal is to run Codex locally with the built-in Dev MCP and a tracked rep
 
 Use [Codex Local Profile](codex-local-profile) for the productized path that combines:
 
-1. standalone Docker
+1. Aionis Lite or standalone Docker
 2. Aionis Dev MCP
 3. `codex-aionis` as the tracked launcher
