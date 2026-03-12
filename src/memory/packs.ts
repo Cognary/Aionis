@@ -6,6 +6,7 @@ import { resolveTenantScope } from "./tenant.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 import { createPostgresWriteStoreAccess } from "../store/write-access.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { MemoryPackExportRequest, MemoryPackImportRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { buildAionisUri } from "./uri.js";
@@ -21,6 +22,7 @@ type PackOptions = {
   writeAccessShadowMirrorV2: boolean;
   embedder: EmbeddingProvider | null;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
+  liteWriteStore?: LiteWriteStore | null;
 };
 
 type ExportNodeRow = {
@@ -179,6 +181,27 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
     edgesHasMore = snapshot.truncated.edges;
     commitsHasMore = snapshot.truncated.commits;
     decisionsHasMore = snapshot.truncated.decisions;
+  } else if (opts.liteWriteStore) {
+    const snapshot = await opts.liteWriteStore.exportPackSnapshot({
+      scope: tenancy.scope_key,
+      includeNodes: parsed.include_nodes,
+      includeEdges: parsed.include_edges,
+      includeCommits: parsed.include_commits,
+      includeDecisions: parsed.include_decisions,
+      maxRows,
+    });
+    nodes = snapshot.nodes;
+    edges = snapshot.edges.map((e) => ({
+      ...e,
+      src_type: null,
+      dst_type: null,
+    }));
+    commits = snapshot.commits;
+    decisions = [];
+    nodesHasMore = snapshot.truncated.nodes;
+    edgesHasMore = snapshot.truncated.edges;
+    commitsHasMore = snapshot.truncated.commits;
+    decisionsHasMore = snapshot.truncated.decisions;
   } else if (parsed.include_nodes) {
     const rr = await client.query<ExportNodeRow>(
       `
@@ -213,7 +236,7 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
     nodes = nodesHasMore ? rr.rows.slice(0, maxRows) : rr.rows;
   }
 
-  if (!opts.embeddedRuntime && parsed.include_edges) {
+  if (!opts.embeddedRuntime && !opts.liteWriteStore && parsed.include_edges) {
     const rr = await client.query<ExportEdgeRow>(
       `
       SELECT
@@ -243,7 +266,7 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
     edges = edgesHasMore ? rr.rows.slice(0, maxRows) : rr.rows;
   }
 
-  if (!opts.embeddedRuntime && parsed.include_commits) {
+  if (!opts.embeddedRuntime && !opts.liteWriteStore && parsed.include_commits) {
     const rr = await client.query<ExportCommitRow>(
       `
       SELECT
@@ -266,7 +289,7 @@ export async function exportMemoryPack(client: pg.PoolClient, body: unknown, opt
     commits = commitsHasMore ? rr.rows.slice(0, maxRows) : rr.rows;
   }
 
-  if (!opts.embeddedRuntime && parsed.include_decisions) {
+  if (!opts.embeddedRuntime && !opts.liteWriteStore && parsed.include_decisions) {
     const rr = await client.query<ExportDecisionRow>(
       `
       SELECT
@@ -614,16 +637,25 @@ export async function importMemoryPack(client: pg.PoolClient, body: unknown, opt
     },
     opts.embedder,
   );
-  const out = await applyMemoryWrite(client, prepared, {
-    maxTextLen: opts.maxTextLen,
-    piiRedaction: opts.piiRedaction,
-    allowCrossScopeEdges: opts.allowCrossScopeEdges,
-    shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
-    shadowDualWriteStrict: opts.shadowDualWriteStrict,
-    write_access: createPostgresWriteStoreAccess(client, {
-      capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
-    }),
-  });
+  const out = opts.liteWriteStore
+    ? await opts.liteWriteStore.withTx(() => applyMemoryWrite({} as any, prepared, {
+        maxTextLen: opts.maxTextLen,
+        piiRedaction: opts.piiRedaction,
+        allowCrossScopeEdges: opts.allowCrossScopeEdges,
+        shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
+        shadowDualWriteStrict: opts.shadowDualWriteStrict,
+        write_access: opts.liteWriteStore as any,
+      }))
+    : await applyMemoryWrite(client, prepared, {
+        maxTextLen: opts.maxTextLen,
+        piiRedaction: opts.piiRedaction,
+        allowCrossScopeEdges: opts.allowCrossScopeEdges,
+        shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
+        shadowDualWriteStrict: opts.shadowDualWriteStrict,
+        write_access: createPostgresWriteStoreAccess(client, {
+          capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
+        }),
+      });
   if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
 
   return {

@@ -1,7 +1,7 @@
 import type { Env } from "../config.js";
-import { memoryFind } from "../memory/find.js";
+import { memoryFind, memoryFindLite } from "../memory/find.js";
 import { exportMemoryPack, importMemoryPack } from "../memory/packs.js";
-import { memoryResolve } from "../memory/resolve.js";
+import { memoryResolve, memoryResolveLite } from "../memory/resolve.js";
 import { createSession, listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 
 type StoreLike = {
@@ -147,7 +147,9 @@ export function registerMemoryAccessRoutes(args: {
     const gate = await acquireInflightSlot("recall");
     let out: any;
     try {
-      out = await store.withClient((client) => exportMemoryPack(client, body, writeDefaults));
+      out = liteWriteStore
+        ? await exportMemoryPack({} as any, body, writeDefaults)
+        : await store.withClient((client) => exportMemoryPack(client, body, writeDefaults));
     } finally {
       gate.release();
     }
@@ -163,7 +165,9 @@ export function registerMemoryAccessRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) => importMemoryPack(client, body, writeDefaults));
+      out = liteWriteStore
+        ? await importMemoryPack({} as any, body, writeDefaults)
+        : await store.withTx((client) => importMemoryPack(client, body, writeDefaults));
     } finally {
       gate.release();
     }
@@ -178,7 +182,9 @@ export function registerMemoryAccessRoutes(args: {
     const gate = await acquireInflightSlot("recall");
     let out: any;
     try {
-      out = await store.withClient((client) => memoryFind(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID));
+      out = liteWriteStore
+        ? await memoryFindLite(liteWriteStore, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID)
+        : await store.withClient((client) => memoryFind(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID));
     } finally {
       gate.release();
     }
@@ -193,7 +199,9 @@ export function registerMemoryAccessRoutes(args: {
     const gate = await acquireInflightSlot("recall");
     let out: any;
     try {
-      out = await store.withClient((client) => memoryResolve(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID));
+      out = liteWriteStore
+        ? await memoryResolveLite(liteWriteStore, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID)
+        : await store.withClient((client) => memoryResolve(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID));
     } finally {
       gate.release();
     }

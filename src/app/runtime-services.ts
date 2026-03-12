@@ -4,6 +4,7 @@ import {
   createApiKeyPrincipalResolver,
   createTenantQuotaResolver,
 } from "../control-plane.js";
+import { createNoopDb } from "../db.js";
 import { createEmbeddingProviderFromEnv } from "../embeddings/index.js";
 import {
   SandboxExecutor,
@@ -16,6 +17,7 @@ import {
 import { createLiteRecallStore } from "../store/lite-recall-store.js";
 import { createPostgresReplayStoreAccess } from "../store/replay-access.js";
 import { createLiteReplayStore } from "../store/lite-replay-store.js";
+import { createLiteHostStore } from "../store/lite-host-store.js";
 import { createEmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import {
   asPostgresMemoryStore,
@@ -127,17 +129,20 @@ function databaseTargetHash(databaseUrl: string): string | null {
 }
 
 export async function createRuntimeServices(env: Env) {
+  const liteEdition = env.AIONIS_EDITION === "lite";
   const sandboxRemoteAllowedHosts = parseSandboxRemoteAllowedHosts(env.SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON);
   const sandboxRemoteAllowedCidrs = parseSandboxRemoteAllowedCidrs(env.SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON);
   const sandboxAllowedCommands = parseAllowedSandboxCommands(env.SANDBOX_ALLOWED_COMMANDS_JSON);
-  const store = createMemoryStore({
-    backend: env.MEMORY_STORE_BACKEND,
-    databaseUrl: env.DATABASE_URL,
-    embeddedExperimentalEnabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
-  });
-  const db = asPostgresMemoryStore(store).db;
+  const store = liteEdition
+    ? createLiteHostStore()
+    : createMemoryStore({
+        backend: env.MEMORY_STORE_BACKEND,
+        databaseUrl: env.DATABASE_URL,
+        embeddedExperimentalEnabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
+      });
+  const db = liteEdition ? createNoopDb() : asPostgresMemoryStore(store).db;
   const embeddedRuntime =
-    env.MEMORY_STORE_BACKEND === "embedded"
+    !liteEdition && env.MEMORY_STORE_BACKEND === "embedded"
       ? createEmbeddedMemoryRuntime({
           snapshotPath: env.MEMORY_STORE_EMBEDDED_SNAPSHOT_PATH,
           autoPersist: env.MEMORY_STORE_EMBEDDED_AUTOSAVE,
@@ -153,14 +158,14 @@ export async function createRuntimeServices(env: Env) {
   if (embeddedRuntime) {
     await embeddedRuntime.loadSnapshot();
   }
-  const liteReplayStore = env.AIONIS_EDITION === "lite"
+  const liteReplayStore = liteEdition
     ? createLiteReplayStore(env.LITE_REPLAY_SQLITE_PATH)
     : null;
   const liteReplayAccess = liteReplayStore?.createReplayAccess() ?? null;
-  const liteWriteStore = env.AIONIS_EDITION === "lite"
+  const liteWriteStore = liteEdition
     ? createLiteWriteStore(env.LITE_WRITE_SQLITE_PATH)
     : null;
-  const liteRecallStore = env.AIONIS_EDITION === "lite"
+  const liteRecallStore = liteEdition
     ? createLiteRecallStore(env.LITE_WRITE_SQLITE_PATH)
     : null;
   const liteRecallAccess = liteRecallStore?.createRecallAccess() ?? null;
@@ -201,18 +206,18 @@ export async function createRuntimeServices(env: Env) {
     jwtRequireExp: env.APP_ENV === "prod",
   });
 
-  const healthDatabaseTargetHash = databaseTargetHash(env.DATABASE_URL);
+  const healthDatabaseTargetHash = liteEdition ? null : databaseTargetHash(env.DATABASE_URL);
   const recallStoreCapabilities: RecallStoreCapabilities = {
-    debug_embeddings: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED,
-    audit_insert: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED,
+    debug_embeddings: liteEdition || env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_RECALL_DEBUG_EMBEDDINGS_ENABLED,
+    audit_insert: liteEdition || env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_RECALL_AUDIT_ENABLED,
   };
   const writeStoreCapabilities: WriteStoreCapabilities = {
-    shadow_mirror_v2: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED,
+    shadow_mirror_v2: liteEdition ? false : env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_SHADOW_MIRROR_ENABLED,
   };
   const storeFeatureCapabilities = {
-    sessions_graph: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED,
-    packs_export: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED,
-    packs_import: env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED,
+    sessions_graph: liteEdition || env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_SESSION_GRAPH_ENABLED,
+    packs_export: liteEdition || env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_PACK_EXPORT_ENABLED,
+    packs_import: liteEdition || env.MEMORY_STORE_BACKEND === "postgres" || env.MEMORY_STORE_EMBEDDED_PACK_IMPORT_ENABLED,
   } as const;
 
   const recallAccessForClient = (client: any) => {
@@ -223,6 +228,7 @@ export async function createRuntimeServices(env: Env) {
     });
   };
   const writeAccessForClient = (client: any) => {
+    if (liteWriteStore) return liteWriteStore;
     return createPostgresWriteStoreAccess(client, {
       capabilities: writeStoreCapabilities,
     });
@@ -292,24 +298,30 @@ export async function createRuntimeServices(env: Env) {
       })
     : null;
 
-  const resolveControlPlaneApiKeyPrincipal = createApiKeyPrincipalResolver(db, {
-    negative_ttl_ms: 10_000,
-    cache_positive: false,
-  });
+  const tenantQuotaDefaults = {
+    recall_rps: env.TENANT_RECALL_RATE_LIMIT_RPS,
+    recall_burst: env.TENANT_RECALL_RATE_LIMIT_BURST,
+    write_rps: env.TENANT_WRITE_RATE_LIMIT_RPS,
+    write_burst: env.TENANT_WRITE_RATE_LIMIT_BURST,
+    write_max_wait_ms: env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS,
+    debug_embed_rps: env.TENANT_DEBUG_EMBED_RATE_LIMIT_RPS,
+    debug_embed_burst: env.TENANT_DEBUG_EMBED_RATE_LIMIT_BURST,
+    recall_text_embed_rps: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
+    recall_text_embed_burst: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_BURST,
+    recall_text_embed_max_wait_ms: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS,
+  };
+  const resolveControlPlaneApiKeyPrincipal = liteEdition
+    ? Object.assign(async () => null, {
+        invalidate() {},
+        clear() {},
+      })
+    : createApiKeyPrincipalResolver(db, {
+        negative_ttl_ms: 10_000,
+        cache_positive: false,
+      });
   const tenantQuotaResolver = createTenantQuotaResolver(db, {
     cache_ttl_ms: env.CONTROL_TENANT_QUOTA_CACHE_TTL_MS,
-    defaults: {
-      recall_rps: env.TENANT_RECALL_RATE_LIMIT_RPS,
-      recall_burst: env.TENANT_RECALL_RATE_LIMIT_BURST,
-      write_rps: env.TENANT_WRITE_RATE_LIMIT_RPS,
-      write_burst: env.TENANT_WRITE_RATE_LIMIT_BURST,
-      write_max_wait_ms: env.TENANT_WRITE_RATE_LIMIT_MAX_WAIT_MS,
-      debug_embed_rps: env.TENANT_DEBUG_EMBED_RATE_LIMIT_RPS,
-      debug_embed_burst: env.TENANT_DEBUG_EMBED_RATE_LIMIT_BURST,
-      recall_text_embed_rps: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_RPS,
-      recall_text_embed_burst: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_BURST,
-      recall_text_embed_max_wait_ms: env.TENANT_RECALL_TEXT_EMBED_RATE_LIMIT_MAX_WAIT_MS,
-    },
+    defaults: tenantQuotaDefaults,
   });
   const sandboxTenantBudgetPolicy = parseSandboxTenantBudgetPolicy(env.SANDBOX_TENANT_BUDGET_POLICY_JSON);
 

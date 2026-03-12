@@ -4,7 +4,7 @@ title: "Get Started"
 
 # Get Started
 
-This guide gets a new team from zero to first production-ready integration path.
+This guide gets a new user or team from zero to first working integration path.
 
 ## Outcome Targets
 
@@ -36,9 +36,19 @@ flowchart LR
 
 | Profile | Recommended for | Next step |
 | --- | --- | --- |
+| Lite Alpha | single-user local runtime without Docker | run 5-minute onboarding with `npm run start:lite` |
 | Local/Dev | fast local validation | run 5-minute onboarding |
 | Service | production baseline | run core gate before traffic |
 | HA | scaled production | run go-live gate and drills |
+
+Lite Alpha is the local SQLite-backed edition profile.
+
+Current intentional Lite boundary:
+
+1. `/v1/admin/control/*` stays server-only
+2. `/v1/automations/*` stays server-only
+
+Those route groups return stable `501 server_only_in_lite`.
 
 ## Step 2: Validate Core APIs
 

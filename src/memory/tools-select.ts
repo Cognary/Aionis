@@ -11,6 +11,7 @@ import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { applyToolPolicy } from "./tool-selector.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { buildToolsSelectionSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri } from "./uri.js";
 
@@ -32,11 +33,14 @@ function summarizeToolConflicts(explain: any): string[] {
 }
 
 export async function selectTools(
-  client: pg.PoolClient,
+  client: pg.PoolClient | null,
   body: unknown,
   defaultScope: string,
   defaultTenantId: string,
-  opts: { embeddedRuntime?: EmbeddedMemoryRuntime | null } = {},
+  opts: {
+    embeddedRuntime?: EmbeddedMemoryRuntime | null;
+    liteWriteStore?: Pick<LiteWriteStore, "insertExecutionDecision" | "listRuleCandidates"> | null;
+  } = {},
 ) {
   const parsed = ToolsSelectRequest.parse(body);
   const tenancy = resolveTenantScope(
@@ -45,14 +49,17 @@ export async function selectTools(
   );
   const normalizedCandidates = normalizeToolCandidates(parsed.candidates);
 
-  const rules = await evaluateRulesAppliedOnly(client, {
+  const rules = await evaluateRulesAppliedOnly((client ?? ({} as pg.PoolClient)), {
     scope: tenancy.scope,
     tenant_id: tenancy.tenant_id,
     default_tenant_id: defaultTenantId,
     context: parsed.context,
     include_shadow: parsed.include_shadow,
     limit: parsed.rules_limit,
-  }, { embeddedRuntime: opts.embeddedRuntime ?? null });
+  }, {
+    embeddedRuntime: opts.embeddedRuntime ?? null,
+    liteWriteStore: opts.liteWriteStore ?? null,
+  });
 
   const selection = applyToolPolicy(normalizedCandidates, rules.applied.policy, { strict: parsed.strict });
 
@@ -69,35 +76,49 @@ export async function selectTools(
   const decision_id = randomUUID();
   const context_sha256 = hashExecutionContext(parsed.context);
   const policy_sha256 = hashPolicy((rules.applied as any)?.policy ?? {});
-
-  const decisionRes = await client.query<{ id: string; created_at: string }>(
-    `
-    INSERT INTO memory_execution_decisions
-      (id, scope, decision_kind, run_id, selected_tool, candidates_json, context_sha256, policy_sha256, source_rule_ids, metadata_json)
-    VALUES
-      ($1, $2, 'tools_select', $3, $4, $5::jsonb, $6, $7, $8::uuid[], $9::jsonb)
-    RETURNING id, created_at::text AS created_at
-    `,
-    [
-      decision_id,
-      tenancy.scope_key,
-      parsed.run_id ?? null,
-      selection.selected ?? null,
-      JSON.stringify(selection.candidates),
-      context_sha256,
-      policy_sha256,
-      source_rule_ids,
-      JSON.stringify({
-        strict: parsed.strict,
-        include_shadow: parsed.include_shadow,
-        rules_limit: parsed.rules_limit,
-        matched_rules: rules.matched,
-        tool_conflicts_summary,
-        ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
-      }),
-    ],
-  );
-  const decision_created_at = decisionRes.rows[0]?.created_at ?? null;
+  const decisionMetadata = {
+    strict: parsed.strict,
+    include_shadow: parsed.include_shadow,
+    rules_limit: parsed.rules_limit,
+    matched_rules: rules.matched,
+    tool_conflicts_summary,
+    ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
+  };
+  const decisionRes: { id: string; created_at: string } = opts.liteWriteStore
+    ? await opts.liteWriteStore.insertExecutionDecision({
+        id: decision_id,
+        scope: tenancy.scope_key,
+        decisionKind: "tools_select",
+        runId: parsed.run_id ?? null,
+        selectedTool: selection.selected ?? null,
+        candidatesJson: selection.candidates,
+        contextSha256: context_sha256,
+        policySha256: policy_sha256,
+        sourceRuleIds: source_rule_ids,
+        metadataJson: decisionMetadata,
+        commitId: null,
+      })
+    : await client!.query<{ id: string; created_at: string }>(
+        `
+        INSERT INTO memory_execution_decisions
+          (id, scope, decision_kind, run_id, selected_tool, candidates_json, context_sha256, policy_sha256, source_rule_ids, metadata_json)
+        VALUES
+          ($1, $2, 'tools_select', $3, $4, $5::jsonb, $6, $7, $8::uuid[], $9::jsonb)
+        RETURNING id, created_at::text AS created_at
+        `,
+        [
+          decision_id,
+          tenancy.scope_key,
+          parsed.run_id ?? null,
+          selection.selected ?? null,
+          JSON.stringify(selection.candidates),
+          context_sha256,
+          policy_sha256,
+          source_rule_ids,
+          JSON.stringify(decisionMetadata),
+        ],
+      ).then((res) => res.rows[0]!);
+  const decision_created_at = decisionRes.created_at ?? null;
 
   if (opts.embeddedRuntime && decision_created_at) {
     await opts.embeddedRuntime.syncExecutionDecisions([

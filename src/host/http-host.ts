@@ -28,6 +28,10 @@ import { registerMemoryWriteRoutes } from "../routes/memory-write.js";
 import { buildLiteRouteMatrix, registerLiteServerOnlyRoutes } from "./lite-edition.js";
 import { HttpError } from "../util/http.js";
 
+function resolveRuntimeMemoryStoreBackend(env: Env): string {
+  return env.AIONIS_EDITION === "lite" ? "lite_sqlite" : env.MEMORY_STORE_BACKEND;
+}
+
 export function registerHostErrorHandler(app: any) {
   app.setErrorHandler((err: unknown, req: any, reply: any) => {
     if (err instanceof ZodError) {
@@ -84,7 +88,8 @@ export function logMemoryApiConfig(args: {
       embedding_dim: embedder?.dim ?? null,
       scope: env.MEMORY_SCOPE,
       tenant_id: env.MEMORY_TENANT_ID,
-      memory_store_backend: env.MEMORY_STORE_BACKEND,
+      memory_store_backend: resolveRuntimeMemoryStoreBackend(env),
+      memory_store_config_backend: env.MEMORY_STORE_BACKEND,
       memory_store_embedded_experimental_enabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
       memory_store_embedded_runtime: embeddedRuntime ? "in_memory_v1" : null,
       memory_store_embedded_snapshot_path: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_PATH : null,
@@ -228,6 +233,7 @@ export function registerHostRequestHooks(args: {
   });
 
   app.addHook("onResponse", async (req: any, reply: any) => {
+    if (!db) return;
     const endpoint = telemetryEndpointFromRequest(req);
     if (!endpoint) return;
     const t0 = Number((req as any).aionis_t0_ms ?? Number.NaN);
@@ -283,7 +289,8 @@ export function registerHealthRoute(args: {
     ok: true,
     aionis_edition: env.AIONIS_EDITION,
     database_target_hash: healthDatabaseTargetHash,
-    memory_store_backend: env.MEMORY_STORE_BACKEND,
+    memory_store_backend: resolveRuntimeMemoryStoreBackend(env),
+    memory_store_config_backend: env.MEMORY_STORE_BACKEND,
     memory_store_embedded_experimental_enabled: env.MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED,
     memory_store_embedded_runtime: embeddedRuntime ? "in_memory_v1" : null,
     memory_store_embedded_snapshot_path: embeddedRuntime ? env.MEMORY_STORE_EMBEDDED_SNAPSHOT_PATH : null,
@@ -499,6 +506,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     store,
     embedder,
     embeddedRuntime,
+    liteWriteStore,
     recallTextEmbedBatcher,
     recallAccessForClient,
     requireMemoryPrincipal,
@@ -529,6 +537,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     env,
     store,
     embeddedRuntime,
+    liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,

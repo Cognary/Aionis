@@ -4,6 +4,7 @@ import { ToolsRunRequest } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildToolsRunLifecycleSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri } from "./uri.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 
 type DecisionRow = {
   id: string;
@@ -72,10 +73,13 @@ function toDecisionPayload(row: DecisionRow, tenantId: string, scope: string) {
 }
 
 export async function getToolsRunLifecycle(
-  client: pg.PoolClient,
+  client: pg.PoolClient | null,
   body: unknown,
   defaultScope: string,
   defaultTenantId: string,
+  opts: {
+    liteWriteStore?: Pick<LiteWriteStore, "listExecutionDecisionsByRun" | "listRuleFeedbackByRun"> | null;
+  } = {},
 ) {
   const parsed = ToolsRunRequest.parse(body);
   const tenancy = resolveTenantScope(
@@ -84,18 +88,33 @@ export async function getToolsRunLifecycle(
   );
   const scope = tenancy.scope_key;
 
-  const countRes = await client.query<{ count: string; latest_decision_at: string | null }>(
-    `
-    SELECT
-      count(*)::text AS count,
-      max(created_at)::text AS latest_decision_at
-    FROM memory_execution_decisions
-    WHERE scope = $1
-      AND run_id = $2
-    `,
-    [scope, parsed.run_id],
-  );
-  const decisionCount = Number(countRes.rows[0]?.count ?? "0");
+  const liteRun = opts.liteWriteStore
+    ? await opts.liteWriteStore.listExecutionDecisionsByRun({
+        scope,
+        runId: parsed.run_id,
+        limit: parsed.decision_limit,
+      })
+    : null;
+  const countRes = liteRun
+    ? {
+        count: liteRun.count,
+        latest_decision_at: liteRun.latest_created_at,
+      }
+    : await client!.query<{ count: string; latest_decision_at: string | null }>(
+        `
+        SELECT
+          count(*)::text AS count,
+          max(created_at)::text AS latest_decision_at
+        FROM memory_execution_decisions
+        WHERE scope = $1
+          AND run_id = $2
+        `,
+        [scope, parsed.run_id],
+      ).then((res) => ({
+        count: Number(res.rows[0]?.count ?? "0"),
+        latest_decision_at: res.rows[0]?.latest_decision_at ?? null,
+      }));
+  const decisionCount = Number(countRes.count ?? 0);
   if (decisionCount <= 0) {
     throw new HttpError(404, "run_not_found_in_scope", "run_id was not found in this scope", {
       run_id: parsed.run_id,
@@ -104,73 +123,93 @@ export async function getToolsRunLifecycle(
     });
   }
 
-  const decisionsRes = await client.query<DecisionRow>(
-    `
-    SELECT
-      id::text,
-      decision_kind::text AS decision_kind,
-      run_id,
-      selected_tool,
-      candidates_json,
-      context_sha256,
-      policy_sha256,
-      source_rule_ids::text[] AS source_rule_ids,
-      metadata_json,
-      created_at::text AS created_at,
-      commit_id::text AS commit_id
-    FROM memory_execution_decisions
-    WHERE scope = $1
-      AND run_id = $2
-    ORDER BY created_at DESC
-    LIMIT $3
-    `,
-    [scope, parsed.run_id, parsed.decision_limit],
-  );
+  const decisionsRows = liteRun
+    ? liteRun.rows
+    : await client!.query<DecisionRow>(
+        `
+        SELECT
+          id::text,
+          decision_kind::text AS decision_kind,
+          run_id,
+          selected_tool,
+          candidates_json,
+          context_sha256,
+          policy_sha256,
+          source_rule_ids::text[] AS source_rule_ids,
+          metadata_json,
+          created_at::text AS created_at,
+          commit_id::text AS commit_id
+        FROM memory_execution_decisions
+        WHERE scope = $1
+          AND run_id = $2
+        ORDER BY created_at DESC
+        LIMIT $3
+        `,
+        [scope, parsed.run_id, parsed.decision_limit],
+      ).then((res) => res.rows);
 
   let feedbackSummary: FeedbackSummaryRow | null = null;
   let feedbackRows: FeedbackRow[] = [];
   if (parsed.include_feedback) {
-    const summaryRes = await client.query<FeedbackSummaryRow>(
-      `
-      SELECT
-        count(*)::text AS total,
-        count(*) FILTER (WHERE outcome = 'positive')::text AS positive,
-        count(*) FILTER (WHERE outcome = 'negative')::text AS negative,
-        count(*) FILTER (WHERE outcome = 'neutral')::text AS neutral,
-        count(*) FILTER (WHERE decision_id IS NOT NULL)::text AS linked_decision_count,
-        count(*) FILTER (WHERE source = 'tools_feedback')::text AS tools_feedback_count,
-        max(created_at)::text AS latest_feedback_at
-      FROM memory_rule_feedback
-      WHERE scope = $1
-        AND run_id = $2
-      `,
-      [scope, parsed.run_id],
-    );
-    feedbackSummary = summaryRes.rows[0] ?? null;
+    if (opts.liteWriteStore) {
+      const liteFeedback = await opts.liteWriteStore.listRuleFeedbackByRun({
+        scope,
+        runId: parsed.run_id,
+        limit: parsed.feedback_limit,
+      });
+      feedbackSummary = {
+        total: String(liteFeedback.total),
+        positive: String(liteFeedback.positive),
+        negative: String(liteFeedback.negative),
+        neutral: String(liteFeedback.neutral),
+        linked_decision_count: String(liteFeedback.linked_decision_count),
+        tools_feedback_count: String(liteFeedback.tools_feedback_count),
+        latest_feedback_at: liteFeedback.latest_feedback_at,
+      };
+      feedbackRows = liteFeedback.rows as FeedbackRow[];
+    } else {
+      const summaryRes = await client!.query<FeedbackSummaryRow>(
+        `
+        SELECT
+          count(*)::text AS total,
+          count(*) FILTER (WHERE outcome = 'positive')::text AS positive,
+          count(*) FILTER (WHERE outcome = 'negative')::text AS negative,
+          count(*) FILTER (WHERE outcome = 'neutral')::text AS neutral,
+          count(*) FILTER (WHERE decision_id IS NOT NULL)::text AS linked_decision_count,
+          count(*) FILTER (WHERE source = 'tools_feedback')::text AS tools_feedback_count,
+          max(created_at)::text AS latest_feedback_at
+        FROM memory_rule_feedback
+        WHERE scope = $1
+          AND run_id = $2
+        `,
+        [scope, parsed.run_id],
+      );
+      feedbackSummary = summaryRes.rows[0] ?? null;
 
-    const feedbackRes = await client.query<FeedbackRow>(
-      `
-      SELECT
-        id::text,
-        rule_node_id::text,
-        outcome::text AS outcome,
-        note,
-        source::text AS source,
-        decision_id::text AS decision_id,
-        commit_id::text AS commit_id,
-        created_at::text AS created_at
-      FROM memory_rule_feedback
-      WHERE scope = $1
-        AND run_id = $2
-      ORDER BY created_at DESC
-      LIMIT $3
-      `,
-      [scope, parsed.run_id, parsed.feedback_limit],
-    );
-    feedbackRows = feedbackRes.rows;
+      const feedbackRes = await client!.query<FeedbackRow>(
+        `
+        SELECT
+          id::text,
+          rule_node_id::text,
+          outcome::text AS outcome,
+          note,
+          source::text AS source,
+          decision_id::text AS decision_id,
+          commit_id::text AS commit_id,
+          created_at::text AS created_at
+        FROM memory_rule_feedback
+        WHERE scope = $1
+          AND run_id = $2
+        ORDER BY created_at DESC
+        LIMIT $3
+        `,
+        [scope, parsed.run_id, parsed.feedback_limit],
+      );
+      feedbackRows = feedbackRes.rows;
+    }
   }
 
-  const latestDecisionAt = countRes.rows[0]?.latest_decision_at ?? null;
+  const latestDecisionAt = countRes.latest_decision_at ?? null;
   const latestFeedbackAt = feedbackSummary?.latest_feedback_at ?? null;
   const feedbackTotal = Number(feedbackSummary?.total ?? "0");
   const lifecycleStatus: "feedback_linked" | "decision_recorded" =
@@ -186,7 +225,7 @@ export async function getToolsRunLifecycle(
       latest_decision_at: latestDecisionAt,
       latest_feedback_at: latestFeedbackAt,
     },
-    decisions: decisionsRes.rows.map((row) => toDecisionPayload(row, tenancy.tenant_id, tenancy.scope)),
+    decisions: decisionsRows.map((row) => toDecisionPayload(row, tenancy.tenant_id, tenancy.scope)),
     feedback: parsed.include_feedback
       ? {
           total: feedbackTotal,

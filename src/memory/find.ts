@@ -1,4 +1,5 @@
 import type pg from "pg";
+import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
 import { badRequest } from "../util/http.js";
 import { MemoryFindRequest, type MemoryFindInput } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
@@ -335,6 +336,65 @@ export async function memoryFind(client: pg.PoolClient, body: unknown, defaultSc
       offset: input.offset,
       returned: rows.length,
       has_more: hasMore,
+    },
+  };
+}
+
+export async function memoryFindLite(
+  liteWriteStore: LiteWriteStore,
+  body: unknown,
+  defaultScope: string,
+  defaultTenantId: string,
+) {
+  const parsed = MemoryFindRequest.parse(body);
+  const input = normalizeFindInput(parsed);
+  const tenancy = resolveTenantScope(
+    {
+      scope: input.scope,
+      tenant_id: input.tenant_id,
+    },
+    { defaultScope, defaultTenantId },
+  );
+
+  const out = await liteWriteStore.findNodes({
+    scope: tenancy.scope_key,
+    id: input.id ?? null,
+    type: input.type ?? null,
+    clientId: input.client_id ?? null,
+    titleContains: input.title_contains ?? null,
+    textContains: input.text_contains ?? null,
+    memoryLane: input.memory_lane ?? null,
+    slotsContains: input.slots_contains ?? null,
+    consumerAgentId: input.consumer_agent_id ?? null,
+    consumerTeamId: input.consumer_team_id ?? null,
+    limit: input.limit,
+    offset: input.offset,
+  });
+  const rows = out.rows as LiteFindNodeRow[];
+
+  return {
+    tenant_id: tenancy.tenant_id,
+    scope: tenancy.scope,
+    mode: "find",
+    filters: {
+      uri: parsed.uri ?? null,
+      id: input.id ?? null,
+      client_id: input.client_id ?? null,
+      type: input.type ?? null,
+      title_contains: input.title_contains ?? null,
+      text_contains: input.text_contains ?? null,
+      memory_lane: input.memory_lane ?? null,
+      slots_contains: input.slots_contains ?? null,
+      consumer_agent_id: input.consumer_agent_id ?? null,
+      consumer_team_id: input.consumer_team_id ?? null,
+    },
+    nodes: rows.map((row) => toNodeDto(row, tenancy.scope, tenancy.tenant_id, input)),
+    find_summary: buildFindSummary(rows, input, parsed, out.has_more),
+    page: {
+      limit: input.limit,
+      offset: input.offset,
+      returned: rows.length,
+      has_more: out.has_more,
     },
   };
 }

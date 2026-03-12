@@ -5,6 +5,7 @@ import { buildAppliedPolicy, parsePolicyPatch, type PolicyPatch } from "./rule-p
 import { computeEffectiveToolPolicy } from "./tool-policy.js";
 import { resolveTenantScope } from "./tenant.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import type { LiteRuleCandidateRow, LiteWriteStore } from "../store/lite-write-store.js";
 import { buildRulesEvaluationSummary } from "./tools-lifecycle-summary.js";
 
 type RuleRow = {
@@ -38,6 +39,7 @@ type RuleRankMeta = {
 
 type EvaluateRulesOptions = {
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
+  liteWriteStore?: Pick<LiteWriteStore, "listRuleCandidates"> | null;
 };
 
 function isPlainObject(v: any): v is Record<string, any> {
@@ -282,7 +284,33 @@ async function loadRuleRows(
   scope: string,
   limit: number,
   embeddedRuntime: EmbeddedMemoryRuntime | null | undefined,
+  liteWriteStore: Pick<LiteWriteStore, "listRuleCandidates"> | null | undefined,
 ): Promise<RuleRow[]> {
+  if (liteWriteStore) {
+    return (await liteWriteStore.listRuleCandidates({
+      scope,
+      limit,
+      states: ["shadow", "active"],
+    })).map((r: LiteRuleCandidateRow) => ({
+      rule_node_id: r.rule_node_id,
+      state: r.state,
+      rule_scope: r.rule_scope,
+      target_agent_id: r.target_agent_id,
+      target_team_id: r.target_team_id,
+      rule_memory_lane: r.rule_memory_lane,
+      rule_owner_agent_id: r.rule_owner_agent_id,
+      rule_owner_team_id: r.rule_owner_team_id,
+      if_json: r.if_json,
+      then_json: r.then_json,
+      exceptions_json: r.exceptions_json,
+      positive_count: r.positive_count,
+      negative_count: r.negative_count,
+      rule_commit_id: r.rule_commit_id,
+      rule_summary: r.rule_summary,
+      rule_slots: r.rule_slots,
+      updated_at: r.updated_at,
+    }));
+  }
   if (embeddedRuntime) {
     return embeddedRuntime
       .listRuleCandidates({
@@ -327,7 +355,7 @@ export async function evaluateRules(
   );
   const scope = tenancy.scope_key;
 
-  const rows = await loadRuleRows(client, scope, parsed.limit, opts.embeddedRuntime);
+  const rows = await loadRuleRows(client, scope, parsed.limit, opts.embeddedRuntime, opts.liteWriteStore);
 
   const ctx = parsed.context;
   const ctxAgentId = contextAgentId(ctx);
@@ -549,7 +577,7 @@ export async function evaluateRulesAppliedOnly(
   const ctxAgentId = contextAgentId(params.context);
   const ctxTeamId = contextTeamId(params.context);
   const laneStatus = laneEnforcementStatus(ctxAgentId, ctxTeamId);
-  const rows = await loadRuleRows(client, scope, params.limit, opts.embeddedRuntime);
+  const rows = await loadRuleRows(client, scope, params.limit, opts.embeddedRuntime, opts.liteWriteStore);
 
   const activeForMerge: Array<{ rule_node_id: string; commit_id: string; rank: RuleRankMeta; then_patch: PolicyPatch }> = [];
   const shadowForMerge: Array<{ rule_node_id: string; commit_id: string; rank: RuleRankMeta; then_patch: PolicyPatch }> = [];

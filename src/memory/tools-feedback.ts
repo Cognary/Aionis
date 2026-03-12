@@ -21,11 +21,24 @@ import type {
   EmbeddedRuleDefSyncInput,
   EmbeddedRuleFeedbackSyncInput,
 } from "../store/embedded-memory-runtime.js";
+import type { LiteRuleCandidateRow, LiteWriteStore } from "../store/lite-write-store.js";
 
 type FeedbackOptions = {
   maxTextLen: number;
   piiRedaction: boolean;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
+  liteWriteStore?: Pick<
+    LiteWriteStore,
+    | "findExecutionDecisionForFeedback"
+    | "getExecutionDecision"
+    | "insertExecutionDecision"
+    | "latestCommit"
+    | "insertCommit"
+    | "insertRuleFeedback"
+    | "updateExecutionDecisionLink"
+    | "updateRuleFeedbackAggregates"
+    | "listRuleCandidates"
+  > | null;
 };
 
 type DecisionRow = {
@@ -223,7 +236,7 @@ function assertDecisionCompatible(
 }
 
 export async function toolSelectionFeedback(
-  client: pg.PoolClient,
+  client: pg.PoolClient | null,
   body: unknown,
   defaultScope: string,
   defaultTenantId: string,
@@ -273,14 +286,17 @@ export async function toolSelectionFeedback(
   const note = opts.piiRedaction && noteNorm ? redactPII(noteNorm).text : noteNorm;
 
   // Re-evaluate rules for attribution to avoid trusting client-provided sources.
-  const rules = await evaluateRulesAppliedOnly(client, {
+  const rules = await evaluateRulesAppliedOnly((client ?? ({} as pg.PoolClient)), {
     scope: tenancy.scope,
     tenant_id: parsed.tenant_id,
     default_tenant_id: defaultTenantId,
     context: parsed.context,
     include_shadow: parsed.include_shadow,
     limit: parsed.rules_limit,
-  }, { embeddedRuntime: opts.embeddedRuntime ?? null });
+  }, {
+    embeddedRuntime: opts.embeddedRuntime ?? null,
+    liteWriteStore: opts.liteWriteStore ?? null,
+  });
 
   const activeSources: Array<{ rule_node_id: string; state: "active" | "shadow"; commit_id: string; touched_paths: string[] }> =
     ((rules.applied as any)?.sources as any[]) ?? [];
@@ -314,6 +330,161 @@ export async function toolSelectionFeedback(
   const contextSha256 = hashExecutionContext(parsed.context);
   const policySha256 = hashPolicy((rules.applied as any)?.policy ?? {});
   const candidatesJson = JSON.stringify(normalizedCandidates);
+
+  if (opts.liteWriteStore) {
+    let decision = linkedDecisionId
+      ? await opts.liteWriteStore.getExecutionDecision({ scope, id: linkedDecisionId })
+      : await opts.liteWriteStore.findExecutionDecisionForFeedback({
+          scope,
+          runId: parsed.run_id ?? null,
+          selectedTool,
+          candidatesJson: normalizedCandidates,
+          contextSha256,
+        });
+    let decision_link_mode: "provided" | "inferred" | "created_from_feedback" = linkedDecisionId ? "provided" : "inferred";
+
+    if (linkedDecisionId && !decision) {
+      badRequest("decision_not_found_in_scope", "decision_id was not found in this scope", {
+        decision_id: linkedDecisionId,
+        scope: tenancy.scope,
+        tenant_id: tenancy.tenant_id,
+      });
+    }
+
+    if (!decision) {
+      const created = await opts.liteWriteStore.insertExecutionDecision({
+        id: randomUUID(),
+        scope,
+        decisionKind: "tools_select",
+        runId: parsed.run_id ?? null,
+        selectedTool,
+        candidatesJson: normalizedCandidates,
+        contextSha256,
+        policySha256,
+        sourceRuleIds: uniq,
+        metadataJson: { source: "feedback_derived" },
+        commitId: null,
+      });
+      decision = await opts.liteWriteStore.getExecutionDecision({ scope, id: created.id });
+      decision_link_mode = "created_from_feedback";
+    }
+
+    assertDecisionCompatible(decision!, parsed, normalizedCandidates);
+
+    if (parsed.run_id && !decision!.run_id) {
+      decision = await opts.liteWriteStore.updateExecutionDecisionLink({
+        scope,
+        id: decision!.id,
+        runId: parsed.run_id,
+      });
+      assertDecisionCompatible(decision!, parsed, normalizedCandidates);
+    }
+
+    const parent = await opts.liteWriteStore.latestCommit(scope);
+    const parentHash = parent?.commit_hash ?? "";
+    const parentId = parent?.id ?? null;
+    const diff = {
+      tool_feedback: [
+        {
+          decision_id: decision!.id,
+          decision_link_mode,
+          run_id: parsed.run_id ?? null,
+          outcome: parsed.outcome,
+          selected_tool: selectedTool,
+          candidates: normalizedCandidates,
+          rule_node_ids: uniq,
+          target: parsed.target,
+        },
+      ],
+    };
+    const diffSha = sha256Hex(stableStringify(diff));
+    const commitHash = sha256Hex(stableStringify({ parentHash, inputSha, diffSha, scope, actor, kind: "tool_feedback" }));
+    const commit_id = await opts.liteWriteStore.insertCommit({
+      scope,
+      parentCommitId: parentId,
+      inputSha256: inputSha,
+      diffJson: JSON.stringify(diff),
+      actor,
+      modelVersion: null,
+      promptVersion: null,
+      commitHash,
+    });
+
+    decision = await opts.liteWriteStore.updateExecutionDecisionLink({
+      scope,
+      id: decision!.id,
+      commitId: commit_id,
+    });
+
+    const feedbackCreatedAt = new Date().toISOString();
+    for (const rule_node_id of uniq) {
+      await opts.liteWriteStore.insertRuleFeedback({
+        id: randomUUID(),
+        scope,
+        ruleNodeId: rule_node_id,
+        runId: parsed.run_id ?? null,
+        outcome: parsed.outcome,
+        note: note ?? null,
+        source: "tools_feedback",
+        decisionId: decision!.id,
+        commitId: commit_id,
+        createdAt: feedbackCreatedAt,
+      });
+    }
+    const updatedRows = await opts.liteWriteStore.updateRuleFeedbackAggregates({
+      scope,
+      outcome: parsed.outcome,
+      ruleNodeIds: uniq,
+    });
+
+    if (opts.embeddedRuntime && updatedRows.length > 0) {
+      const embeddedRows: EmbeddedRuleDefSyncInput[] = updatedRows.map((row: LiteRuleCandidateRow) => ({
+        scope,
+        rule_node_id: row.rule_node_id,
+        state: row.state,
+        rule_scope: row.rule_scope,
+        target_agent_id: row.target_agent_id,
+        target_team_id: row.target_team_id,
+        if_json: row.if_json,
+        then_json: row.then_json,
+        exceptions_json: row.exceptions_json,
+        positive_count: row.positive_count,
+        negative_count: row.negative_count,
+        commit_id: row.rule_commit_id,
+        updated_at: row.updated_at,
+      }));
+      await opts.embeddedRuntime.syncRuleDefs(embeddedRows);
+    }
+
+    return {
+      ok: true,
+      scope: tenancy.scope,
+      tenant_id: tenancy.tenant_id,
+      updated_rules: uniq.length,
+      rule_node_ids: uniq,
+      commit_id,
+      commit_uri: buildAionisUri({
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        type: "commit",
+        id: commit_id,
+      }),
+      commit_hash: commitHash,
+      decision_id: decision!.id,
+      decision_uri: buildAionisUri({
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        type: "decision",
+        id: decision!.id,
+      }),
+      decision_link_mode,
+      decision_policy_sha256: decision!.policy_sha256,
+    };
+  }
+
+  if (!client) {
+    throw new Error("toolSelectionFeedback requires a pg client outside lite mode");
+  }
 
   let decision: DecisionRow | null = null;
   if (linkedDecisionId) {

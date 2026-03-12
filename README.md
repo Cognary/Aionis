@@ -208,6 +208,38 @@ curl -sS "$BASE_URL/v1/memory/recall_text" \
   -d '{"tenant_id":"default","scope":"default","query_text":"preferred follow-up channel","limit":5}'
 ```
 
+## Lite Alpha Quickstart
+
+For a single-user local runtime without Docker or external Postgres:
+
+```bash
+git clone https://github.com/Cognary/Aionis.git
+cd Aionis
+cp .env.example .env
+npm install
+npm run build
+npm run start:lite
+```
+
+In another shell:
+
+```bash
+curl -fsS http://localhost:3001/health | jq '{ok,aionis_edition,memory_store_backend,lite_write_store,lite_recall_store}'
+```
+
+Expected Lite health shape:
+
+- `aionis_edition = "lite"`
+- `memory_store_backend = "lite_sqlite"`
+- `lite_write_store` and `lite_recall_store` present
+
+Current Lite alpha intentionally keeps some outer surfaces server-only:
+
+- `/v1/admin/control/*`
+- `/v1/automations/*`
+
+Those routes return stable `501 server_only_in_lite`.
+
 ## SDKs and Distribution
 
 1. TypeScript SDK: [`@aionis/sdk`](https://www.npmjs.com/package/@aionis/sdk)

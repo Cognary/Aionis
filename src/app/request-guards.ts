@@ -91,7 +91,7 @@ type IdentityRequestKind =
 
 type CreateRequestGuardsArgs = {
   env: Env;
-  db: Db;
+  db: Db | null;
   embedder: { embed: (texts: string[]) => Promise<number[][]> } | null;
   authResolver: AuthResolver;
   resolveControlPlaneApiKeyPrincipal: ApiKeyPrincipalResolver;
@@ -277,6 +277,7 @@ export function createRequestGuards({
     },
   ) => {
     try {
+      if (!db) return;
       await recordControlAuditEvent(db, {
         actor: "admin_token",
         action: input.action,

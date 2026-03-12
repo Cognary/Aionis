@@ -190,6 +190,7 @@ export function createHttpObservabilityHelpers(args: {
     layered_output: boolean;
     layered_context: any;
   }) {
+    if (!db) return;
     const isLayeredOutput = args.layered_output === true;
     const layerRows = isLayeredOutput ? collectLayeredContextTelemetryRows(args.layered_context) : [];
     await recordMemoryContextAssemblyTelemetry(db, {

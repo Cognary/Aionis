@@ -28,6 +28,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
   store: StoreLike;
   embedder: any;
   embeddedRuntime: any;
+  liteWriteStore?: any;
   recallTextEmbedBatcher: any;
   recallAccessForClient: (client: any) => any;
   requireMemoryPrincipal: (req: any) => Promise<any>;
@@ -79,6 +80,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     store,
     embedder,
     embeddedRuntime,
+    liteWriteStore,
     recallTextEmbedBatcher,
     recallAccessForClient,
     requireMemoryPrincipal,
@@ -103,6 +105,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     mapRecallTextEmbeddingError,
     recordContextAssemblyTelemetryBestEffort,
   } = args;
+  const liteModeActive = env.AIONIS_EDITION === "lite" && !!liteWriteStore;
 
   app.post("/v1/memory/recall_text", async (req: any, reply: any) => {
     if (!embedder) {
@@ -236,9 +239,9 @@ export function registerMemoryContextRuntimeRoutes(args: {
       });
       const wantDebugEmbeddings = recallParsed.return_debug && recallParsed.include_embeddings;
       const auth = buildRecallAuth(req, wantDebugEmbeddings);
-      out = await store.withClient(async (client) => {
+      if (liteModeActive) {
         const base = await memoryRecallParsed(
-          client,
+          {} as any,
           recallParsed,
           env.MEMORY_SCOPE,
           env.MEMORY_TENANT_ID,
@@ -251,13 +254,13 @@ export function registerMemoryContextRuntimeRoutes(args: {
           "recall_text",
           {
             stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
-            recall_access: recallAccessForClient(client),
+            recall_access: recallAccessForClient({} as any),
           },
         );
 
         if (recallParsed.rules_context !== undefined && recallParsed.rules_context !== null) {
           const rulesRes = await evaluateRules(
-            client,
+            {} as any,
             {
               scope: recallParsed.scope ?? env.MEMORY_SCOPE,
               tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
@@ -267,7 +270,10 @@ export function registerMemoryContextRuntimeRoutes(args: {
             },
             env.MEMORY_SCOPE,
             env.MEMORY_TENANT_ID,
-            { embeddedRuntime },
+            {
+              embeddedRuntime,
+              liteWriteStore,
+            },
           );
           (base as any).rules = {
             scope: rulesRes.scope,
@@ -279,8 +285,54 @@ export function registerMemoryContextRuntimeRoutes(args: {
           };
         }
 
-        return base as any;
-      });
+        out = base as any;
+      } else {
+        out = await store.withClient(async (client) => {
+          const base = await memoryRecallParsed(
+            client,
+            recallParsed,
+            env.MEMORY_SCOPE,
+            env.MEMORY_TENANT_ID,
+            auth,
+            {
+              timing: (stage, ms) => {
+                timings[stage] = (timings[stage] ?? 0) + ms;
+              },
+            },
+            "recall_text",
+            {
+              stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
+              recall_access: recallAccessForClient(client),
+            },
+          );
+
+          if (recallParsed.rules_context !== undefined && recallParsed.rules_context !== null) {
+            const rulesRes = await evaluateRules(
+              client,
+              {
+                scope: recallParsed.scope ?? env.MEMORY_SCOPE,
+                tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+                context: recallParsed.rules_context,
+                include_shadow: recallParsed.rules_include_shadow,
+                limit: recallParsed.rules_limit,
+              },
+              env.MEMORY_SCOPE,
+              env.MEMORY_TENANT_ID,
+              { embeddedRuntime },
+            );
+            (base as any).rules = {
+              scope: rulesRes.scope,
+              considered: rulesRes.considered,
+              matched: rulesRes.matched,
+              skipped_invalid_then: rulesRes.skipped_invalid_then,
+              invalid_then_sample: rulesRes.invalid_then_sample,
+              applied: rulesRes.applied,
+            };
+          }
+
+          return base as any;
+        });
+      }
     } finally {
       gate.release();
     }
@@ -550,9 +602,9 @@ export function registerMemoryContextRuntimeRoutes(args: {
       });
       const auth = buildRecallAuth(req, wantDebugEmbeddings);
 
-      out = await store.withClient(async (client) => {
+      if (liteModeActive) {
         const recall = await memoryRecallParsed(
-          client,
+          {} as any,
           recallParsed,
           env.MEMORY_SCOPE,
           env.MEMORY_TENANT_ID,
@@ -565,12 +617,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
           "planning_context",
           {
             stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
-            recall_access: recallAccessForClient(client),
+            recall_access: recallAccessForClient({} as any),
           },
         );
 
         const rules = await evaluateRules(
-          client,
+          {} as any,
           {
             scope: recallParsed.scope ?? env.MEMORY_SCOPE,
             tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
@@ -580,13 +632,16 @@ export function registerMemoryContextRuntimeRoutes(args: {
           },
           env.MEMORY_SCOPE,
           env.MEMORY_TENANT_ID,
-          { embeddedRuntime },
+          {
+            embeddedRuntime,
+            liteWriteStore,
+          },
         );
 
         let tools: any = null;
         if (Array.isArray(parsed.tool_candidates) && parsed.tool_candidates.length > 0) {
           tools = await selectTools(
-            client,
+            null,
             {
               scope: recallParsed.scope ?? env.MEMORY_SCOPE,
               tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
@@ -599,12 +654,71 @@ export function registerMemoryContextRuntimeRoutes(args: {
             },
             env.MEMORY_SCOPE,
             env.MEMORY_TENANT_ID,
-            { embeddedRuntime },
+            {
+              embeddedRuntime,
+              liteWriteStore,
+            },
           );
         }
 
-        return { recall, rules, tools };
-      });
+        out = { recall, rules, tools };
+      } else {
+        out = await store.withClient(async (client) => {
+          const recall = await memoryRecallParsed(
+            client,
+            recallParsed,
+            env.MEMORY_SCOPE,
+            env.MEMORY_TENANT_ID,
+            auth,
+            {
+              timing: (stage, ms) => {
+                timings[stage] = (timings[stage] ?? 0) + ms;
+              },
+            },
+            "planning_context",
+            {
+              stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
+              recall_access: recallAccessForClient(client),
+            },
+          );
+
+          const rules = await evaluateRules(
+            client,
+            {
+              scope: recallParsed.scope ?? env.MEMORY_SCOPE,
+              tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+              context: parsed.context,
+              include_shadow: parsed.include_shadow,
+              limit: parsed.rules_limit,
+            },
+            env.MEMORY_SCOPE,
+            env.MEMORY_TENANT_ID,
+            { embeddedRuntime },
+          );
+
+          let tools: any = null;
+          if (Array.isArray(parsed.tool_candidates) && parsed.tool_candidates.length > 0) {
+            tools = await selectTools(
+              client,
+              {
+                scope: recallParsed.scope ?? env.MEMORY_SCOPE,
+                tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+                run_id: parsed.run_id,
+                context: parsed.context,
+                candidates: parsed.tool_candidates,
+                include_shadow: parsed.include_shadow,
+                rules_limit: parsed.rules_limit,
+                strict: parsed.tool_strict,
+              },
+              env.MEMORY_SCOPE,
+              env.MEMORY_TENANT_ID,
+              { embeddedRuntime },
+            );
+          }
+
+          return { recall, rules, tools };
+        });
+      }
     } finally {
       gate.release();
     }
@@ -926,9 +1040,9 @@ export function registerMemoryContextRuntimeRoutes(args: {
       const executionContext =
         parsed.context && typeof parsed.context === "object" && !Array.isArray(parsed.context) ? parsed.context : {};
 
-      out = await store.withClient(async (client) => {
+      if (liteModeActive) {
         const recall = await memoryRecallParsed(
-          client,
+          {} as any,
           recallParsed,
           env.MEMORY_SCOPE,
           env.MEMORY_TENANT_ID,
@@ -941,14 +1055,14 @@ export function registerMemoryContextRuntimeRoutes(args: {
           "context_assemble",
           {
             stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
-            recall_access: recallAccessForClient(client),
+            recall_access: recallAccessForClient({} as any),
           },
         );
 
         let rules: any = null;
         if (parsed.include_rules) {
           rules = await evaluateRules(
-            client,
+            {} as any,
             {
               scope: recallParsed.scope ?? env.MEMORY_SCOPE,
               tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
@@ -958,14 +1072,17 @@ export function registerMemoryContextRuntimeRoutes(args: {
             },
             env.MEMORY_SCOPE,
             env.MEMORY_TENANT_ID,
-            { embeddedRuntime },
+            {
+              embeddedRuntime,
+              liteWriteStore,
+            },
           );
         }
 
         let tools: any = null;
         if (Array.isArray(parsed.tool_candidates) && parsed.tool_candidates.length > 0) {
           tools = await selectTools(
-            client,
+            null,
             {
               scope: recallParsed.scope ?? env.MEMORY_SCOPE,
               tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
@@ -977,12 +1094,73 @@ export function registerMemoryContextRuntimeRoutes(args: {
             },
             env.MEMORY_SCOPE,
             env.MEMORY_TENANT_ID,
-            { embeddedRuntime },
+            {
+              embeddedRuntime,
+              liteWriteStore,
+            },
           );
         }
 
-        return { recall, rules, tools };
-      });
+        out = { recall, rules, tools };
+      } else {
+        out = await store.withClient(async (client) => {
+          const recall = await memoryRecallParsed(
+            client,
+            recallParsed,
+            env.MEMORY_SCOPE,
+            env.MEMORY_TENANT_ID,
+            auth,
+            {
+              timing: (stage, ms) => {
+                timings[stage] = (timings[stage] ?? 0) + ms;
+              },
+            },
+            "context_assemble",
+            {
+              stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
+              recall_access: recallAccessForClient(client),
+            },
+          );
+
+          let rules: any = null;
+          if (parsed.include_rules) {
+            rules = await evaluateRules(
+              client,
+              {
+                scope: recallParsed.scope ?? env.MEMORY_SCOPE,
+                tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+                context: executionContext,
+                include_shadow: parsed.include_shadow,
+                limit: parsed.rules_limit,
+              },
+              env.MEMORY_SCOPE,
+              env.MEMORY_TENANT_ID,
+              { embeddedRuntime },
+            );
+          }
+
+          let tools: any = null;
+          if (Array.isArray(parsed.tool_candidates) && parsed.tool_candidates.length > 0) {
+            tools = await selectTools(
+              client,
+              {
+                scope: recallParsed.scope ?? env.MEMORY_SCOPE,
+                tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
+                context: executionContext,
+                candidates: parsed.tool_candidates,
+                include_shadow: parsed.include_shadow,
+                rules_limit: parsed.rules_limit,
+                strict: parsed.tool_strict,
+              },
+              env.MEMORY_SCOPE,
+              env.MEMORY_TENANT_ID,
+              { embeddedRuntime },
+            );
+          }
+
+          return { recall, rules, tools };
+        });
+      }
     } finally {
       gate.release();
     }

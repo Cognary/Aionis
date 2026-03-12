@@ -1300,7 +1300,7 @@ async function run() {
   await withEnv(
     {
       APP_ENV: "dev",
-      DATABASE_URL: "postgres://aionis:aionis@127.0.0.1:5432/aionis_memory",
+      DATABASE_URL: "",
       MEMORY_STORE_BACKEND: "postgres",
       MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: "false",
       MEMORY_RECALL_PROFILE: "lite",
@@ -1309,6 +1309,8 @@ async function run() {
       MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT: "balanced",
       MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT: "aggressive",
       AIONIS_EDITION: "lite",
+      TENANT_QUOTA_ENABLED: "",
+      MEMORY_AUTH_MODE: "",
       LITE_WRITE_SQLITE_PATH: ".tmp/custom-lite-write.sqlite",
       MEMORY_RECALL_PROFILE_POLICY_JSON: JSON.stringify({
         endpoint: { recall: "lite", recall_text: "strict_edges" },
@@ -1327,6 +1329,8 @@ async function run() {
       assert.equal(env.MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT, "aggressive");
       assert.equal(env.AIONIS_EDITION, "lite");
       assert.equal(env.LITE_WRITE_SQLITE_PATH, ".tmp/custom-lite-write.sqlite");
+      assert.equal(env.TENANT_QUOTA_ENABLED, false);
+      assert.equal(env.MEMORY_AUTH_MODE, "off");
     },
   );
   await withEnv(

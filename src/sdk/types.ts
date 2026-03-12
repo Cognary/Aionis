@@ -638,6 +638,7 @@ export type HealthResponse = {
   replay_store_access_capability_version?: number;
   write_store_access_capability_version?: number;
   memory_store_backend?: string;
+  memory_store_config_backend?: string;
   memory_store_recall_capabilities?: Record<string, boolean>;
   memory_store_write_capabilities?: Record<string, boolean>;
   memory_store_feature_capabilities?: Record<string, boolean>;
