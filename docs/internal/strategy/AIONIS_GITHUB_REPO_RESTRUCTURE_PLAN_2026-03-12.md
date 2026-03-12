@@ -159,6 +159,7 @@ Current status:
 3. business-facing release material ownership moved to `aionis-cloud`
 4. public repo now keeps redirect stubs for those two documents
 5. Batch 2 candidate selection and Cloud control-plane scaffold started in `aionis-cloud`
+6. Batch 3 started with the first real Cloud-only runtime slice: `hosted-alert-delivery-replay`
 
 ### Phase D: Move First Code Slice
 
