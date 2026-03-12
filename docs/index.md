@@ -4,8 +4,8 @@ title: "Aionis Docs"
 
 hero:
   name: "Aionis"
-  text: "Memory-Centered Runtime Kernel for Agents"
-  tagline: "Execution memory, layered context assembly, replay reuse, and governance-first controls for production agent systems."
+  text: "Cost-Aware Runtime Kernel for Agents"
+  tagline: "Execution memory, bounded context, replay reuse, and governance surfaces across Lite, Server, and managed Cloud direction."
   actions:
     - theme: brand
       text: Start in 5 Minutes
@@ -48,6 +48,26 @@ features:
   </article>
 </div>
 
+## Choose Your Product Path
+
+<div class="aionis-home-grid">
+  <a class="aionis-home-card" href="/public/en/getting-started/07-choose-lite-vs-server">
+    <h3>Choose Lite or Server</h3>
+    <p>Start with the right edition first. Lite is local single-user beta; Server is the self-hosted production path.</p>
+    <span>Edition guide</span>
+  </a>
+  <a class="aionis-home-card" href="/public/en/getting-started/02-onboarding-5min">
+    <h3>Start in 5 Minutes</h3>
+    <p>Run your first write, recall, and context loop quickly.</p>
+    <span>Fast onboarding</span>
+  </a>
+  <a class="aionis-home-card" href="/public/en/integrations/05-codex-local">
+    <h3>Use with Codex</h3>
+    <p>Connect Aionis to Codex and MCP-based workflows with a supported local profile.</p>
+    <span>Integration path</span>
+  </a>
+</div>
+
 ## Why Teams Choose Aionis
 
 <div class="aionis-signal-grid">
@@ -68,10 +88,10 @@ features:
 ## Build and Launch Paths
 
 <div class="aionis-home-grid">
-  <a class="aionis-home-card" href="/public/en/getting-started/02-onboarding-5min">
-    <h3>Start Fast</h3>
-    <p>Bring up Aionis quickly with Docker and run your first write/recall flow.</p>
-    <span>5-minute onboarding</span>
+  <a class="aionis-home-card" href="/public/en/getting-started/07-choose-lite-vs-server">
+    <h3>Pick an Edition</h3>
+    <p>Decide whether Lite or Server is the right runtime path before you start wiring memory into your system.</p>
+    <span>Lite vs Server</span>
   </a>
   <a class="aionis-home-card" href="/public/en/guides/01-build-memory">
     <h3>Build Runtime Memory Flows</h3>
@@ -127,10 +147,10 @@ features:
 
 ## Recommended Reading Sequence
 
-1. [Get Started](/public/en/getting-started/01-get-started)
-2. [Core Concepts](/public/en/core-concepts/00-core-concepts)
-3. [Architecture](/public/en/architecture/01-architecture)
-4. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
-5. [Policy & Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
-6. [Operate & Production](/public/en/operate-production/00-operate-production)
+1. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)
+2. [Get Started](/public/en/getting-started/01-get-started)
+3. [Core Concepts](/public/en/core-concepts/00-core-concepts)
+4. [Architecture](/public/en/architecture/01-architecture)
+5. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
+6. [Policy & Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
 7. [Benchmarks](/public/en/benchmarks/01-benchmarks)

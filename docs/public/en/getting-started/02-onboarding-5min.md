@@ -64,7 +64,7 @@ If your deployment uses JWT auth instead of API key, replace `X-Api-Key` with:
 -H "authorization: Bearer $BEARER_TOKEN"
 ```
 
-## Option B: Lite Alpha (Single User, No Docker)
+## Option B: Lite Public Beta (Single User, No Docker)
 
 ```bash
 git clone https://github.com/Cognary/Aionis.git
@@ -99,7 +99,7 @@ curl -sS http://localhost:3001/v1/memory/recall_text \
   -d '{"tenant_id":"default","scope":"default","query_text":"hello","limit":5}' | jq
 ```
 
-Current Lite alpha intentionally rejects these outer surfaces:
+Current Lite intentionally rejects these outer surfaces:
 
 1. `/v1/admin/control/*`
 2. `/v1/automations/*`

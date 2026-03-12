@@ -4,134 +4,81 @@ title: "Get Started"
 
 # Get Started
 
-This guide gets a new user or team from zero to first working integration path.
+Use this page to choose the fastest working path into Aionis.
 
-## Outcome Targets
+## What Success Looks Like
 
-In the first 30 minutes, you should be able to:
+In your first session, you should be able to do one of these:
 
-1. Run one `write -> recall_text` loop.
-2. Confirm your embedding provider is active.
-3. Run one policy route (`rules/evaluate` or `tools/select`).
-4. Capture `request_id` and `commit_uri` from responses.
+1. Start Lite locally and complete one `write -> recall_text` loop.
+2. Point an app or agent to Aionis and complete one `write -> recall_text -> planning/context` loop.
+3. Identify whether your path is Lite, self-hosted Server, or later Cloud.
 
-## Quick Path
+## Pick Your Path
 
-1. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
-2. [Embedding Setup](/public/en/getting-started/03-embedding-setup)
+### Path A: Local Lite
+
+Best for:
+
+1. single-user local evaluation
+2. Codex or MCP workflows
+3. testing continuity, replay, and context assembly with low setup friction
+
+Start here:
+
+1. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)
+2. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
 3. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
 4. [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
 5. [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)
-6. [Playground](/public/en/guides/02-playground)
 
-## Integration Flow
+### Path B: Integrate Aionis Into Agents
 
-```mermaid
-flowchart LR
-  A["Deploy Aionis"] --> B["Configure Embeddings"]
-  B --> C["Write First Memory"]
-  C --> D["Recall Context"]
-  D --> E["Enable Policy Route"]
-  E --> F["Capture IDs and Observe"]
-```
+Best for:
 
-## Step 1: Choose Runtime Profile
+1. API and SDK integration
+2. Codex / MCP integration
+3. teams validating memory, replay, and policy loops in a real runtime
 
-| Profile | Recommended for | Next step |
-| --- | --- | --- |
-| Lite Alpha | single-user local runtime without Docker | run 5-minute onboarding with `npm run start:lite` |
-| Local/Dev | fast local validation | run 5-minute onboarding |
-| Service | production baseline | run core gate before traffic |
-| HA | scaled production | run go-live gate and drills |
+Start here:
 
-Lite Alpha is the local SQLite-backed edition profile.
+1. [Build Memory Workflows](/public/en/guides/01-build-memory)
+2. [API Reference](/public/en/api-reference/00-api-reference)
+3. [SDK Guide](/public/en/reference/05-sdk)
+4. [Integrations Overview](/public/en/integrations/00-overview)
+5. [Codex Local](/public/en/integrations/05-codex-local)
 
-Current intentional Lite boundary:
+### Path C: Self-Hosted Server
 
-1. `/v1/admin/control/*` stays server-only
-2. `/v1/automations/*` stays server-only
+Best for:
 
-Those route groups return stable `501 server_only_in_lite`.
+1. production self-hosting
+2. teams that need full Server topology
+3. operating Aionis beyond local Lite boundaries
 
-Before debugging Lite behavior, also read:
+Start here:
 
-1. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
-2. [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
-3. [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)
-
-## Step 2: Validate Core APIs
-
-Minimum functional sequence:
-
-1. `POST /v1/memory/write`
-2. `POST /v1/memory/recall_text`
-3. `POST /v1/memory/context/assemble` (optional but recommended)
-
-Minimal write example:
-
-```json
-{
-  "tenant_id": "default",
-  "scope": "default",
-  "input_text": "Customer prefers email follow-up",
-  "memory_lane": "shared",
-  "nodes": [
-    {
-      "type": "event",
-      "memory_lane": "shared",
-      "text_summary": "Customer prefers email follow-up"
-    }
-  ]
-}
-```
-
-If `nodes` is empty, `/v1/memory/write` may return `warnings[].code=write_no_nodes` and recall will not include newly written content.
-
-Minimal recall example:
-
-```json
-{
-  "tenant_id": "default",
-  "scope": "default",
-  "query_text": "preferred follow-up channel",
-  "limit": 5
-}
-```
-
-## Step 3: Add Policy Loop
-
-Once memory retrieval works, add policy execution:
-
-1. `POST /v1/memory/rules/evaluate`
-2. `POST /v1/memory/tools/select`
-3. `POST /v1/memory/tools/decision`
-4. `POST /v1/memory/tools/run`
-5. `POST /v1/memory/tools/feedback`
-
-This enables governed routing and measurable behavior adaptation.
-
-## Step 4: Wire Observability Early
-
-Persist and expose these fields in your app telemetry:
-
-1. `request_id`
-2. `run_id`
-3. `decision_id`
-4. `commit_uri`
-
-These are required for incident replay and release diagnostics.
-
-## Step 5: Production Readiness Entry
-
-Before production traffic:
-
-1. [Production Core Gate](/public/en/operations/03-production-core-gate)
-2. [Production Go-Live Gate](/public/en/operations/04-prod-go-live-gate)
+1. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)
+2. [Operate and Production](/public/en/operate-production/00-operate-production)
 3. [Operator Runbook](/public/en/operations/02-operator-runbook)
+4. [Production Core Gate](/public/en/operations/03-production-core-gate)
+5. [Standalone to HA Runbook](/public/en/operations/06-standalone-to-ha-runbook)
 
-## Suggested Learning Order
+## Minimal Runtime Checklist
 
-1. [Architecture](/public/en/architecture/01-architecture)
-2. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)
-3. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
-4. [API Reference](/public/en/api-reference/00-api-reference)
+No matter which path you choose, confirm these early:
+
+1. `/health` returns `ok`
+2. your embedding provider is configured
+3. one `write` request returns a `request_id`
+4. one `recall_text` request returns recallable seeds or context
+5. if you are using Lite, `/health.aionis_edition = "lite"` and `/health.memory_store_backend = "lite_sqlite"`
+
+## Read This Next
+
+After your first successful loop, continue with:
+
+1. [Docs Navigation Map](/public/en/overview/02-docs-navigation)
+2. [Role-Based Reading Paths](/public/en/overview/03-role-based-paths)
+3. [Architecture](/public/en/architecture/01-architecture)
+4. [Context Orchestration](/public/en/context-orchestration/00-context-orchestration)

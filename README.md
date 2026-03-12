@@ -8,25 +8,38 @@
 [![GHCR](https://img.shields.io/badge/ghcr-ghcr.io%2Fcognary%2Faionis-2496ed?logo=docker&logoColor=white)](https://ghcr.io/cognary/aionis)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-## Memory-Centered Runtime Kernel for Agents
+## Cost-Aware Runtime Kernel for Agents
 
-Aionis is a runtime kernel that turns agent execution into reusable, governable system behavior.
+Aionis is an open-core runtime kernel for agents.
 
-It records execution memory, assembles bounded context, compiles successful runs into replayable playbooks, and wraps the loop with review, control, and operator surfaces.
+It turns execution into reusable runtime assets:
+
+1. execution memory
+2. bounded context assembly
+3. replayable playbooks
+4. governed repair and review
+5. operator-facing evidence and control surfaces
+
+Today, Aionis is best understood as three product paths:
+
+1. **Lite**: local single-user SQLite-backed edition
+2. **Server**: self-hosted production-oriented open-core runtime
+3. **Cloud**: managed control-plane direction
 
 ---
 
-## The Problem
+## Why It Exists
 
-Most memory systems store text:
+Most memory systems can store text, vectors, or entities.
 
-- conversation history
-- embeddings
-- entity memory
+They still do not preserve how work gets done.
 
-But they do not remember how work gets done.
+That means new sessions still:
 
-Agents still re-reason every task.
+1. reread files
+2. rebuild context
+3. repeat reasoning
+4. lose prior execution structure
 
 ---
 
@@ -44,24 +57,62 @@ Replayable Execution
 Governed Repair / Review
 ```
 
-That gives teams a single loop for:
+That gives teams one system for:
 
-- memory and recall
-- context budgets and compaction
-- replay and playbook reuse
-- repair, review, and promotion
-- operator governance and control-plane visibility
+1. memory and recall
+2. context budgets and compaction
+3. replay and playbook reuse
+4. repair, review, and promotion
+5. operator governance and evidence
 
 ---
 
+## Product Paths
+
+### Lite
+
+Use Lite if you want:
+
+1. local single-user runtime
+2. SQLite-backed memory, replay, and context workflows
+3. the fastest path to evaluate Aionis without Docker + Postgres
+
+Lite is currently in controlled public beta.
+
+### Server
+
+Use Server if you want:
+
+1. self-hosted production runtime
+2. team and operational ownership
+3. full open-core memory, replay, policy, and integration surfaces
+
+### Cloud
+
+Cloud is the managed direction for:
+
+1. hosted control-plane
+2. tenant governance
+3. operator-facing managed workflows
+
+Cloud is not part of the public open repository surface.
+
 ## Why It Reduces Agent Cost
 
-Aionis does not compress model internals directly. It reduces:
+Aionis does not compress model internals directly.
 
-- repeated reasoning on tasks that already have successful execution history
-- context inflation through explicit budgeted recall and layered context assembly
+It reduces:
 
-This is why Aionis is best understood as a runtime kernel, not only a retrieval layer.
+1. repeated reasoning on tasks that already have successful execution history
+2. context inflation through explicit budgeted recall and layered context assembly
+3. rework between sessions by restoring structured execution handoff
+
+Recent larger-project A/B evidence in this repository showed:
+
+1. about `30.03%` lower input tokens
+2. about `33.24%` lower total tokens
+
+for cross-session task continuation with Aionis-backed recovery.
 
 ---
 
@@ -122,18 +173,20 @@ See the public Automation API docs for the current surface:
 
 ---
 
-## Benchmark
+## Proof, Not Only Positioning
 
-Real workflow benchmark (100 runs):
+The repository now contains reproducible product evidence for:
 
-- Baseline success rate: `98%`
-- Replay success rate: `98%`
-- Replay stability: `98%`
+1. cross-session continuity
+2. replay and playbook reuse
+3. Lite runtime viability
+4. token and context cost reduction
 
-Latency improvement:
+Recommended evidence pages:
 
-- `9.21x` faster on `replay1`
-- `19.29x` faster on `replay2`
+1. [Benchmark Snapshot](https://doc.aionisos.com/public/en/benchmarks/02-benchmark-snapshot-public)
+2. [Differentiation Evidence](https://doc.aionisos.com/public/en/benchmarks/03-differentiation-evidence)
+3. [Performance Baseline](https://doc.aionisos.com/public/en/benchmarks/05-performance-baseline)
 
 ---
 
@@ -176,9 +229,21 @@ Aionis is a memory-centered runtime kernel inside the agent stack.
 
 ## In One Sentence
 
-Aionis turns successful agent runs into replayable, governable runtime assets.
+Aionis turns successful agent work into replayable, governable, evidence-backed runtime assets.
 
-## 3-Minute Quickstart
+## Start Fast
+
+Choose one path:
+
+1. **Lite** for local beta evaluation
+2. **Server** for self-hosted runtime setup
+
+Product path guide:
+
+1. [Choose Lite vs Server](https://doc.aionisos.com/public/en/getting-started/07-choose-lite-vs-server)
+2. [5-Minute Onboarding](https://doc.aionisos.com/public/en/getting-started/02-onboarding-5min)
+
+## Server Quickstart
 
 ```bash
 git clone https://github.com/Cognary/Aionis.git
@@ -208,7 +273,7 @@ curl -sS "$BASE_URL/v1/memory/recall_text" \
   -d '{"tenant_id":"default","scope":"default","query_text":"preferred follow-up channel","limit":5}'
 ```
 
-## Lite Alpha Quickstart
+## Lite Quickstart
 
 For a single-user local runtime without Docker or external Postgres:
 
@@ -221,7 +286,7 @@ npm run build
 npm run start:lite
 ```
 
-Before treating Lite as anything beyond a local evaluation path:
+Before treating Lite as anything beyond a local beta path:
 
 - English: `doc.aionisos.com/public/en/getting-started/05-lite-public-beta-boundary`
 - 中文: `doc.aionisos.com/public/zh/getting-started/05-lite-public-beta-boundary`
@@ -238,7 +303,7 @@ Expected Lite health shape:
 - `memory_store_backend = "lite_sqlite"`
 - `lite_write_store` and `lite_recall_store` present
 
-Current Lite alpha intentionally keeps some outer surfaces server-only:
+Current Lite intentionally keeps some outer surfaces server-only:
 
 - `/v1/admin/control/*`
 - `/v1/automations/*`
@@ -258,7 +323,7 @@ If you try Lite beta, please:
    [github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml](https://github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml)
 3. if it works, successful-run feedback is still useful
 
-## SDKs and Distribution
+## Integrations and Distribution
 
 1. TypeScript SDK: [`@aionis/sdk`](https://www.npmjs.com/package/@aionis/sdk)
 2. Python SDK: [`aionis-sdk`](https://pypi.org/project/aionis-sdk/)
@@ -338,11 +403,11 @@ Public benchmark snapshot and reproduction commands:
 
 ## Recommended Reading Path
 
-1. [Get Started](https://doc.aionisos.com/public/en/getting-started/01-get-started)
-2. [Build Memory Workflows](https://doc.aionisos.com/public/en/guides/01-build-memory)
-3. [Control and Policy](https://doc.aionisos.com/public/en/control/01-control-policy)
-4. [Operate and Production](https://doc.aionisos.com/public/en/operate-production/00-operate-production)
-5. [Integrations](https://doc.aionisos.com/public/en/integrations/00-overview)
+1. [Choose Lite vs Server](https://doc.aionisos.com/public/en/getting-started/07-choose-lite-vs-server)
+2. [Get Started](https://doc.aionisos.com/public/en/getting-started/01-get-started)
+3. [Build Memory Workflows](https://doc.aionisos.com/public/en/guides/01-build-memory)
+4. [Integrations](https://doc.aionisos.com/public/en/integrations/00-overview)
+5. [Operate and Production](https://doc.aionisos.com/public/en/operate-production/00-operate-production)
 6. [Reference](https://doc.aionisos.com/public/en/reference/01-reference)
 7. [Benchmarks](https://doc.aionisos.com/public/en/benchmarks/01-benchmarks)
 

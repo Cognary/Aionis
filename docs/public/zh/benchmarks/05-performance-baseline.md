@@ -4,7 +4,19 @@ title: "性能基线"
 
 # 性能基线
 
-本页定义 Aionis 的可复现性能基线流程。
+本页定义 Aionis 的可复现性能与优化基线流程。
+
+如果你想复现实验，或者自己生成一份证据包，就从这页开始。
+
+## 这页的作用
+
+这页不只是测原始延迟，它还是公开证据背后的执行配方，用来支持：
+
+1. 基线 API 性能
+2. context optimization 行为
+3. replay optimization 行为
+4. summary-first execution 行为
+5. recall profile 对比与 selector rollout 判断
 
 ## 测什么
 
@@ -156,8 +168,17 @@ npm run job:perf-selector-rollout-gate -- \
 
 `artifacts/perf/<run_id>/`
 
+## 如何读结果
+
+建议按三层看：
+
+1. `latency_ms` 和 `failed`：看基础性能
+2. `optimization.summary.*`、`replay.*`、`sandbox.*`：看成本感知行为
+3. `ann.*`：看 recall profile 和 selector 策略判断
+
 ## 相关页面
 
-1. [英文版 Performance Baseline](../../en/benchmarks/05-performance-baseline.md)
+1. [基准测试](/public/zh/benchmarks/01-benchmarks)
 2. [公开基准快照](./02-benchmark-snapshot-public.md)
-3. [AionisBench v0.1](./06-aionis-bench-v01.md)
+3. [差异化证据](./03-differentiation-evidence.md)
+4. [AionisBench v0.1](./06-aionis-bench-v01.md)

@@ -42,9 +42,10 @@ flowchart LR
 
 ## 从这里开始
 
-1. [5 分钟上手](/public/zh/getting-started/02-onboarding-5min)
-2. [构建记忆工作流](/public/zh/guides/01-build-memory)
-3. [API 参考](/public/zh/api-reference/00-api-reference)
+1. [先选 Lite 还是 Server](/public/zh/getting-started/07-choose-lite-vs-server)
+2. [5 分钟上手](/public/zh/getting-started/02-onboarding-5min)
+3. [构建记忆工作流](/public/zh/guides/01-build-memory)
+4. [API 参考](/public/zh/api-reference/00-api-reference)
 
 ## 下一步
 
@@ -52,3 +53,4 @@ flowchart LR
 2. [架构](/public/zh/architecture/01-architecture)
 3. [运维与生产](/public/zh/operate-production/00-operate-production)
 4. [文档导航图](/public/zh/overview/02-docs-navigation)
+5. [先选 Lite 还是 Server](/public/zh/getting-started/07-choose-lite-vs-server)

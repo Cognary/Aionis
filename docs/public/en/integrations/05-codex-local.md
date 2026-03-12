@@ -6,18 +6,59 @@ title: "Codex Local Profile"
 
 `Aionis Codex Local Profile` is the official local integration path for Codex users.
 
-It combines:
+There are currently two useful local modes.
+
+## Mode A: Pure Lite + Dev MCP
+
+Best for:
+
+1. project-scoped local memory and replay
+2. low-friction testing with SQLite-backed Lite
+3. users who want Codex CLI sessions to opt into Aionis explicitly
+
+This mode combines:
+
+1. `start:lite` as the local runtime
+2. `aionis-dev-mcp` as the MCP surface
+3. project-scoped launchers such as `codex-aionis-project`
+
+Start with:
+
+```bash
+npm run build
+npm run start:lite
+```
+
+Then launch a project-scoped Codex session:
+
+```bash
+codex-aionis-project -C /path/to/project
+```
+
+What this gives you:
+
+1. Lite-backed memory and replay
+2. project-derived `scope`
+3. explicit opt-in instead of global Codex attachment
+
+## Mode B: Tracked Standalone Profile
+
+Best for:
+
+1. teams that want the full tracked wrapper path
+2. local coding tasks that should automatically record replay runs and steps
+3. users who want the older standalone Docker profile
+
+This mode combines:
 
 1. `Aionis Dev MCP` as the MCP tool surface
 2. standalone Docker as the local Aionis runtime
 3. a tracked agent wrapper that records replay runs and steps
 
-## Who It Is For
+## Who Should Use Which Mode
 
-This profile is for users who want:
-
-1. Codex to access Aionis memory, replay, planning, and learn-from-run capabilities
-2. local coding tasks to flow through a tracked `run_start -> step record -> run_end` loop
+1. Choose **Pure Lite + Dev MCP** if you want the simplest local path and project-scoped sessions.
+2. Choose **Tracked Standalone Profile** if you want the full wrapper-driven replay lifecycle around Codex tasks.
 
 ## What Happens By Default
 
@@ -28,7 +69,7 @@ After you enable this profile, every task launched through `codex-aionis` goes t
 3. replay step capture for local command steps
 4. automatic run end recording
 
-## 3-Minute Setup
+## Tracked Standalone Setup
 
 1. Start standalone:
 
@@ -63,7 +104,7 @@ codex-aionis \
 
 ## What Users Need To Remember
 
-For most users, there are only two commands:
+For most standalone users, there are only two commands:
 
 1. `codex-aionis` to start a tracked Codex session
 2. `codex-aionis-doctor` to verify the local runtime, launcher, and replay loop
@@ -91,7 +132,7 @@ If `codex-aionis` does not behave as expected, check these first:
 2. `codex-aionis-doctor` passes
 3. Codex has loaded the `aionis-dev` MCP entry
 
-The shortest checks are:
+The shortest standalone checks are:
 
 ```bash
 codex-aionis-doctor
@@ -110,3 +151,5 @@ The lower-level commands are still available for advanced integration and debugg
 ## Related
 
 1. [MCP Integration](/public/en/integrations/01-mcp)
+2. [Get Started](/public/en/getting-started/01-get-started)
+3. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)

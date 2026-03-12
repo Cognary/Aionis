@@ -4,7 +4,18 @@ title: "Architecture"
 
 # Architecture
 
-Aionis architecture is designed for reliability, replayability, and controlled execution.
+This page focuses on system shape, not product positioning.
+
+If you are still choosing between editions or entry paths, start with:
+
+1. [Get Started](/public/en/getting-started/01-get-started)
+2. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)
+
+Aionis architecture is built around three concerns:
+
+1. reliable state
+2. replayable execution
+3. controlled runtime behavior
 
 ## System Components
 
@@ -15,6 +26,8 @@ Aionis architecture is designed for reliability, replayability, and controlled e
 | Derived workers | async embedding/topic/compression processing |
 | Control jobs | consistency, quality, and release checks |
 | Operator tooling | monitoring, replay, and gated operations |
+
+The public open-core tree covers Lite and Server paths. Some hosted control-plane capabilities live outside the public distribution.
 
 ## Request Paths
 
@@ -49,8 +62,8 @@ Aionis architecture is designed for reliability, replayability, and controlled e
 
 ## Deployment Profiles
 
-1. Standalone: local development and smoke validation.
-2. Service: production baseline profile.
+1. Lite: local SQLite-backed runtime for single-user and beta use.
+2. Service: self-hosted production baseline.
 3. HA: multi-replica topology with resilience workflows.
 
 ## Start Here

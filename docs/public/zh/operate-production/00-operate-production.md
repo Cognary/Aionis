@@ -4,6 +4,19 @@ title: "运维与生产"
 
 # 运维与生产
 
+这一页是 Server 侧的生产路径，不是 Lite 本地路径。
+
+适合：
+
+1. 团队自托管运维
+2. 生产上线准备
+3. HA 扩展和演练
+
+如果你现在还在本地评估 Lite，先回去看：
+
+1. [选择 Lite 还是 Server](/public/zh/getting-started/07-choose-lite-vs-server)
+2. [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
+
 Aionis 的生产运维围绕一个可重复闭环：
 
 ```mermaid
@@ -42,3 +55,9 @@ flowchart LR
 2. [生产核心门禁](/public/zh/operations/03-production-core-gate)
 3. [运维手册](/public/zh/operations/02-operator-runbook)
 4. [Standalone 到 HA 手册](/public/zh/operations/06-standalone-to-ha-runbook)
+
+## 实际阅读顺序
+
+1. 先跑生产核心门禁。
+2. 第一次接流量前先读运维手册。
+3. 只有在离开基线部署形态时，再进入 HA 手册。

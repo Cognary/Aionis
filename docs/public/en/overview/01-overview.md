@@ -42,9 +42,10 @@ flowchart LR
 
 ## Start Here
 
-1. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
-2. [Build Memory Workflows](/public/en/guides/01-build-memory)
-3. [API Reference](/public/en/api-reference/00-api-reference)
+1. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)
+2. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
+3. [Build Memory Workflows](/public/en/guides/01-build-memory)
+4. [API Reference](/public/en/api-reference/00-api-reference)
 
 ## Next Steps
 
@@ -52,3 +53,4 @@ flowchart LR
 2. [Architecture](/public/en/architecture/01-architecture)
 3. [Operate and Production](/public/en/operate-production/00-operate-production)
 4. [Docs Navigation Map](/public/en/overview/02-docs-navigation)
+5. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)

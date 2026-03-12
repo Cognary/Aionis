@@ -63,7 +63,7 @@ curl -sS "$BASE_URL/v1/memory/recall_text" \
 -H "authorization: Bearer $BEARER_TOKEN"
 ```
 
-## 方案 B：Lite Alpha（单用户、本地、无 Docker）
+## 方案 B：Lite Public Beta（单用户、本地、无 Docker）
 
 ```bash
 git clone https://github.com/Cognary/Aionis.git
@@ -98,7 +98,7 @@ curl -sS http://localhost:3001/v1/memory/recall_text \
   -d '{"tenant_id":"default","scope":"default","query_text":"hello","limit":5}' | jq
 ```
 
-Lite Alpha 当前有意保留这两个 server-only 外层面：
+Lite 当前有意保留这两个 server-only 外层面：
 
 1. `/v1/admin/control/*`
 2. `/v1/automations/*`

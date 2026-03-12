@@ -4,15 +4,26 @@ title: "Benchmarks"
 
 # Benchmarks
 
-This section provides external, reproducible evidence for Aionis performance and policy-loop behavior.
+This section is the public evidence layer for Aionis.
 
-## Included Reports
+Use it when you want proof, not only architecture or product language.
+
+## What This Section Proves
+
+The benchmark section is meant to answer four questions:
+
+1. Does Aionis run with predictable latency and failure rates?
+2. Does the policy loop create measurable behavior changes?
+3. Does context optimization produce cost-sensitive runtime behavior?
+4. Can teams reproduce those claims instead of taking them on faith?
+
+## Start With These Pages
 
 1. [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public)
-2. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
-3. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
-4. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)
-5. [AionisBench v0.1](/public/en/benchmarks/06-aionis-bench-v01)
+2. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)
+3. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
+4. [AionisBench v0.1](/public/en/benchmarks/06-aionis-bench-v01)
+5. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
 
 ## Evidence Dimensions
 
@@ -20,6 +31,7 @@ This section provides external, reproducible evidence for Aionis performance and
 2. Reliability: reproducible runs and stable outputs.
 3. Controllability: policy-loop observability and decision traceability.
 4. Operability: gate-friendly evidence bundles for production reviews.
+5. Cost awareness: context and replay optimization behavior under measured profiles.
 
 ## Reproducibility
 
@@ -34,8 +46,8 @@ Every benchmark page includes:
 ## Start Here
 
 1. Read [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public).
-2. Run one documented command in your environment.
-3. Compare your output with published artifact expectations.
+2. Read [Performance Baseline](/public/en/benchmarks/05-performance-baseline) if you want to run the same workflows yourself.
+3. Compare your local output with the published snapshot instead of relying on narrative claims.
 
 ## Next Steps
 

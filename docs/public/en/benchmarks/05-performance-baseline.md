@@ -4,7 +4,19 @@ title: "Performance Baseline"
 
 # Performance Baseline
 
-This page defines the reproducible performance baseline workflow for Aionis.
+This page defines the reproducible performance and optimization baseline workflow for Aionis.
+
+Use it when you want to reproduce public evidence or generate your own evidence bundle.
+
+## What This Page Is For
+
+This page is not only for raw latency measurement. It is the operational recipe behind public evidence for:
+
+1. baseline API performance
+2. context optimization behavior
+3. replay optimization behavior
+4. summary-first execution behavior
+5. recall profile comparison and selector rollout decisions
 
 ## What Is Measured
 
@@ -227,7 +239,17 @@ This rollout recommendation is intentionally narrower than a global runtime defa
 
 `artifacts/perf/<run_id>/`
 
+## How To Read Results
+
+Use the outputs in three layers:
+
+1. `latency_ms` and `failed` for baseline performance
+2. `optimization.summary.*`, `replay.*`, and `sandbox.*` for cost-aware runtime behavior
+3. `ann.*` for recall-profile and selector policy decisions
+
 ## Related
 
-1. [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public)
-2. [AionisBench v0.1](/public/en/benchmarks/06-aionis-bench-v01)
+1. [Benchmarks](/public/en/benchmarks/01-benchmarks)
+2. [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public)
+3. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
+4. [AionisBench v0.1](/public/en/benchmarks/06-aionis-bench-v01)

@@ -4,11 +4,17 @@ title: "Core Concepts"
 
 # Core Concepts
 
-This section defines the model behind Aionis as a Memory Kernel.
+This section explains the runtime model behind Aionis after you already know which product path you are on.
+
+If you still need product positioning first, read:
+
+1. [Overview](/public/en/overview/01-overview)
+2. [Get Started](/public/en/getting-started/01-get-started)
+3. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)
 
 ## Mental Model
 
-Aionis combines four concepts:
+Aionis runtime behavior is easier to understand through four concepts:
 
 1. Verifiable memory state.
 2. Derived asynchronous processing.
@@ -32,6 +38,13 @@ flowchart TD
 2. [Derived Artifacts](/public/en/core-concepts/02-derived-artifacts)
 3. [Scope and Tenant Isolation](/public/en/core-concepts/03-scope-and-tenant)
 4. [Decision and Run Model](/public/en/core-concepts/04-decision-and-run-model)
+
+These four concepts explain why Aionis can:
+
+1. preserve project memory across sessions
+2. assemble bounded planner context
+3. track decisions and runs as first-class objects
+4. recover or replay execution later
 
 ## Key Terms
 

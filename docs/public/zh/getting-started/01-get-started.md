@@ -4,57 +4,81 @@ title: "快速开始"
 
 # 快速开始
 
-如果你第一次接入 Aionis，从这里开始。
+用这页选择最短的 Aionis 上手路径。
 
-这个入口同时覆盖两种路径：
+## 什么叫成功上手
 
-1. `Lite Alpha`：单用户、本地 SQLite、无需 Docker
-2. `Server`：面向团队和生产拓扑
+第一次接触 Aionis，至少完成下面一件事：
 
-## 1) 首次跑通路径
+1. 本地启动 Lite，并跑通一条 `write -> recall_text` 链路。
+2. 把应用或 Agent 接到 Aionis，并跑通一条 `write -> recall_text -> planning/context` 链路。
+3. 明确自己当前应该走 Lite、自托管 Server，还是后续再看 Cloud。
 
-1. [5 分钟上手](/public/zh/getting-started/02-onboarding-5min)
-2. [Embedding 配置](/public/zh/getting-started/03-embedding-setup)
+## 选择你的路径
+
+### 路径 A：本地 Lite
+
+适合：
+
+1. 单用户本地评估
+2. Codex / MCP 工作流
+3. 低摩擦验证 continuity、replay 和 context assembly
+
+从这里开始：
+
+1. [选择 Lite 还是 Server](/public/zh/getting-started/07-choose-lite-vs-server)
+2. [5 分钟上手](/public/zh/getting-started/02-onboarding-5min)
 3. [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
 4. [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
 5. [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)
-6. [Playground](/public/zh/guides/02-playground)
 
-## 2) 运行时选择
+### 路径 B：把 Aionis 接进 Agent
 
-| Profile | 适合谁 | 下一步 |
-| --- | --- | --- |
-| Lite Alpha | 单用户、本地 Agent、无 Docker 快速验证 | 用 `npm run start:lite` 跑通 5 分钟上手 |
-| Local / Dev | 本地联调、仍使用完整服务拓扑 | 跑 5 分钟上手 |
-| Service | 团队生产基线 | 先跑生产核心门禁 |
-| HA | 高可用生产 | 跑上线门禁和故障演练 |
+适合：
 
-Lite Alpha 当前的明确边界：
+1. API / SDK 接入
+2. Codex / MCP 集成
+3. 在真实 runtime 里验证 memory、replay 和 policy loop
 
-1. `/v1/admin/control/*` 仍然是 server-only
-2. `/v1/automations/*` 仍然是 server-only
+从这里开始：
 
-这些路由会稳定返回 `501 server_only_in_lite`。
+1. [构建记忆工作流](/public/zh/guides/01-build-memory)
+2. [API 参考](/public/zh/api-reference/00-api-reference)
+3. [SDK 指南](/public/zh/reference/05-sdk)
+4. [集成总览](/public/zh/integrations/00-overview)
+5. [Codex 本地集成](/public/zh/integrations/05-codex-local)
 
-在排查 Lite 本地行为前，建议先看：
+### 路径 C：自托管 Server
 
-1. [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
-2. [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
-3. [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)
+适合：
 
-## 3) 必要概念（最小集）
+1. 生产自托管
+2. 需要完整 Server 拓扑的团队
+3. 超出 Lite 边界的运行场景
 
-1. [架构](/public/zh/concepts/02-architecture)
-2. [Aionis 一页说明](/public/zh/about/02-aionis-onepage)
+从这里开始：
 
-## 4) 生产可用入口
-
-1. [生产核心门禁](/public/zh/operations/03-production-core-gate)
-2. [生产上线门禁](/public/zh/operations/04-prod-go-live-gate)
+1. [选择 Lite 还是 Server](/public/zh/getting-started/07-choose-lite-vs-server)
+2. [运维与生产](/public/zh/operate-production/00-operate-production)
 3. [运维手册](/public/zh/operations/02-operator-runbook)
+4. [生产核心门禁](/public/zh/operations/03-production-core-gate)
+5. [Standalone 到 HA 手册](/public/zh/operations/06-standalone-to-ha-runbook)
 
-## 30 分钟目标
+## 最小运行检查表
 
-1. 跑通一次成功的 `write -> recall_text` 闭环。
-2. 确认当前 Embedding 提供方生效（fake/OpenAI/MiniMax）。
-3. 在 Playground 里跑通一次策略路径（`rules/evaluate` 或 `tools/select`）。
+不管选哪条路径，先确认这些：
+
+1. `/health` 返回 `ok`
+2. embedding provider 已配置
+3. 一次 `write` 返回 `request_id`
+4. 一次 `recall_text` 返回可用 seeds 或 context
+5. 如果你跑的是 Lite，`/health.aionis_edition = "lite"` 且 `/health.memory_store_backend = "lite_sqlite"`
+
+## 下一步阅读
+
+跑通第一条链路之后，继续看：
+
+1. [文档导航图](/public/zh/overview/02-docs-navigation)
+2. [按角色阅读路径](/public/zh/overview/03-role-based-paths)
+3. [架构](/public/zh/architecture/01-architecture)
+4. [上下文编排](/public/zh/context-orchestration/00-context-orchestration)

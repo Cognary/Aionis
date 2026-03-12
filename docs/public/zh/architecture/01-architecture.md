@@ -4,7 +4,18 @@ title: "架构"
 
 # 架构
 
-Aionis 架构围绕三点设计：可靠性、可回放、可控执行。
+这页只讲系统形状，不再重复产品定位。
+
+如果你还在选版本或入口，先看：
+
+1. [快速开始](/public/zh/getting-started/01-get-started)
+2. [选择 Lite 还是 Server](/public/zh/getting-started/07-choose-lite-vs-server)
+
+Aionis 架构围绕三点设计：
+
+1. 可靠状态
+2. 可回放执行
+3. 可控运行时行为
 
 ## 系统组件
 
@@ -15,6 +26,8 @@ Aionis 架构围绕三点设计：可靠性、可回放、可控执行。
 | 派生 Worker | 异步执行 embedding/topic/compression |
 | 控制任务 | 一致性、质量、发布门禁检查 |
 | 运维工具 | 监控、回放、门禁操作 |
+
+公开 open-core 仓库覆盖 Lite 和 Server 路径；部分托管 control-plane 能力不在公开发行面内。
 
 ## 请求路径
 
@@ -49,8 +62,8 @@ Aionis 架构围绕三点设计：可靠性、可回放、可控执行。
 
 ## 部署形态
 
-1. Standalone：本地开发与冒烟。
-2. Service：生产基线。
+1. Lite：本地 SQLite-backed 运行时，适合单用户和 beta 使用。
+2. Service：自托管生产基线。
 3. HA：多副本高可用与韧性演练。
 
 ## 从这里开始

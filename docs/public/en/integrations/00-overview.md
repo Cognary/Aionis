@@ -4,15 +4,54 @@ title: "Integrations"
 
 # Integrations
 
-Aionis integrates with agent runtimes and orchestration frameworks through stable API contracts.
+Aionis integrates with agent runtimes through stable API contracts and one core model:
 
-## Official Integrations
+1. write durable memory
+2. recall or assemble bounded context
+3. apply policy and tool routing
+4. record replayable execution state
+
+## Choose Your Integration Path
+
+### Path A: MCP and Coding Agents
+
+Best for:
+
+1. Codex and local coding workflows
+2. agent tooling that already speaks MCP
+3. teams that want Aionis memory, replay, and policy surfaces without writing a full SDK wrapper
+
+Start here:
+
+1. [MCP Integration](/public/en/integrations/01-mcp)
+2. [Codex Local Profile](/public/en/integrations/05-codex-local)
+
+### Path B: SDK and API Integration
+
+Best for:
+
+1. application teams embedding Aionis into existing products
+2. service-to-service integrations
+3. teams that want explicit control over HTTP and SDK calls
+
+Start here:
+
+1. [API Reference](/public/en/api-reference/00-api-reference)
+2. [SDK Guide](/public/en/reference/05-sdk)
+
+### Path C: Framework Adapters
+
+Best for:
+
+1. users already committed to orchestration frameworks
+2. teams validating Aionis inside existing agent stacks
+
+Use one of these:
 
 1. [MCP Integration](/public/en/integrations/01-mcp)
 2. [OpenWork Integration](/public/en/integrations/02-openwork)
 3. [LangGraph Integration](/public/en/integrations/03-langgraph)
 4. [OpenClaw Integration](/public/en/integrations/04-openclaw)
-5. [Codex Local Profile](/public/en/integrations/05-codex-local)
 
 ## Recommended Rollout Path
 
@@ -34,9 +73,10 @@ For production integrations, persist and propagate:
 
 ## Start Here
 
-1. Pick one integration runtime (MCP, OpenWork, LangGraph, or OpenClaw).
-2. Validate write and recall with your production auth mode.
-3. Add policy loop endpoints after retrieval is stable.
+1. Choose one integration path, not all of them.
+2. Validate write and recall first.
+3. Add policy loop after retrieval is stable.
+4. Add replay surfaces when you want traceability and reuse.
 
 ## Next Steps
 
@@ -51,3 +91,4 @@ For production integrations, persist and propagate:
 1. [API Reference](/public/en/api-reference/00-api-reference)
 2. [API Contract](/public/en/api/01-api-contract)
 3. [SDK Guide](/public/en/reference/05-sdk)
+4. [Get Started](/public/en/getting-started/01-get-started)

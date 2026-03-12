@@ -4,7 +4,13 @@ title: "上下文编排"
 
 # 上下文编排
 
-上下文编排用于在明确预算和分层控制下，生成稳定、可规划、可解释的上下文。
+上下文编排是 Aionis 里的一个核心运行时能力。这一页只解释这项能力如何工作，以及应该怎么使用。
+
+如果你还在理解 Aionis 整体是什么，先看：
+
+1. [Aionis 一页说明](/public/zh/about/02-aionis-onepage)
+2. [核心概念](/public/zh/core-concepts/00-core-concepts)
+3. [架构](/public/zh/architecture/01-architecture)
 
 ## 分层模型
 
@@ -36,6 +42,11 @@ title: "上下文编排"
 | Compact | 低延迟链路 | 上下文深度较低 |
 | Balanced | 默认生产使用 | 成本与质量均衡 |
 | Policy-first | 策略强约束场景 | 叙事信息相对减少 |
+
+按当前公开产品语言，最值得关注的是：
+
+1. `balanced`：更稳的默认路径
+2. `aggressive`：更偏节省成本，但会更强地压缩上下文
 
 ## 示例请求
 

@@ -4,6 +4,19 @@ title: "Operate and Production"
 
 # Operate and Production
 
+This page is the Server-side production path, not the local Lite path.
+
+Use it when you are:
+
+1. operating self-hosted Aionis for a team
+2. preparing production rollout or HA expansion
+3. validating gates, drills, and operator runbooks
+
+If you are still evaluating Lite locally, go back to:
+
+1. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)
+2. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
+
 Aionis production operation is built around a repeatable loop:
 
 ```mermaid
@@ -42,3 +55,9 @@ flowchart LR
 2. [Production Core Gate](/public/en/operations/03-production-core-gate)
 3. [Operator Runbook](/public/en/operations/02-operator-runbook)
 4. [Standalone to HA Runbook](/public/en/operations/06-standalone-to-ha-runbook)
+
+## Practical Reading Order
+
+1. Run the core gate first.
+2. Read the operator runbook before first traffic.
+3. Use the HA runbook only when you are leaving the baseline deployment profile.

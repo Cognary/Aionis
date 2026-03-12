@@ -4,7 +4,13 @@ title: "Context Orchestration"
 
 # Context Orchestration
 
-Context orchestration assembles deterministic, planner-ready context with explicit layer and budget controls.
+Context orchestration is one runtime capability inside Aionis. This page explains how that capability works and how to operate it.
+
+If you are still trying to understand what Aionis is overall, read:
+
+1. [Aionis One-Page](/public/en/about/02-aionis-onepage)
+2. [Core Concepts](/public/en/core-concepts/00-core-concepts)
+3. [Architecture](/public/en/architecture/01-architecture)
 
 ## Layer Model
 
@@ -36,6 +42,11 @@ Context orchestration assembles deterministic, planner-ready context with explic
 | Compact | low-latency paths | lower context depth |
 | Balanced | default production usage | balanced cost/quality |
 | Policy-first | strict routing control | less narrative context |
+
+In current public product language, the presets most worth thinking about are:
+
+1. `balanced`: the safe default path
+2. `aggressive`: the stronger cost-saving path when you can accept tighter context packing
 
 ## Example Request
 
