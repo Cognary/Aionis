@@ -21,6 +21,7 @@ export function registerMemoryFeedbackToolRoutes(args: {
   env: Env;
   store: StoreLike;
   embeddedRuntime: any;
+  liteWriteStore?: any;
   requireMemoryPrincipal: (req: any) => Promise<any>;
   withIdentityFromRequest: (req: any, body: unknown, principal: any, kind: any) => any;
   enforceRateLimit: (req: any, reply: any, kind: "write" | "recall") => Promise<void>;
@@ -33,6 +34,7 @@ export function registerMemoryFeedbackToolRoutes(args: {
     env,
     store,
     embeddedRuntime,
+    liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,
@@ -77,9 +79,14 @@ export function registerMemoryFeedbackToolRoutes(args: {
     const gate = await acquireInflightSlot("recall");
     let out: any;
     try {
-      out = await store.withClient((client) =>
-        evaluateRules(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, { embeddedRuntime }),
-      );
+      out = liteWriteStore
+        ? await evaluateRules({} as any, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+            embeddedRuntime,
+            liteWriteStore,
+          })
+        : await store.withClient((client) =>
+            evaluateRules(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, { embeddedRuntime }),
+          );
     } finally {
       gate.release();
     }
@@ -94,9 +101,14 @@ export function registerMemoryFeedbackToolRoutes(args: {
     const gate = await acquireInflightSlot("recall");
     let out: any;
     try {
-      out = await store.withClient((client) =>
-        selectTools(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, { embeddedRuntime }),
-      );
+      out = liteWriteStore
+        ? await selectTools(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+            embeddedRuntime,
+            liteWriteStore,
+          })
+        : await store.withClient((client) =>
+            selectTools(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, { embeddedRuntime }),
+          );
     } finally {
       gate.release();
     }
@@ -111,9 +123,13 @@ export function registerMemoryFeedbackToolRoutes(args: {
     const gate = await acquireInflightSlot("recall");
     let out: any;
     try {
-      out = await store.withClient((client) =>
-        getToolsDecisionById(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
-      );
+      out = liteWriteStore
+        ? await getToolsDecisionById(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+            liteWriteStore,
+          })
+        : await store.withClient((client) =>
+            getToolsDecisionById(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
+          );
     } finally {
       gate.release();
     }
@@ -128,9 +144,13 @@ export function registerMemoryFeedbackToolRoutes(args: {
     const gate = await acquireInflightSlot("recall");
     let out: any;
     try {
-      out = await store.withClient((client) =>
-        getToolsRunLifecycle(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
-      );
+      out = liteWriteStore
+        ? await getToolsRunLifecycle(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+            liteWriteStore,
+          })
+        : await store.withClient((client) =>
+            getToolsRunLifecycle(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
+          );
     } finally {
       gate.release();
     }
@@ -142,13 +162,22 @@ export function registerMemoryFeedbackToolRoutes(args: {
     const body = withIdentityFromRequest(req, req.body, principal, "tools_feedback");
     await enforceRateLimit(req, reply, "write");
     await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
-    const out = await store.withTx((client) =>
-      toolSelectionFeedback(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
-        maxTextLen: env.MAX_TEXT_LEN,
-        piiRedaction: env.PII_REDACTION,
-        embeddedRuntime,
-      }),
-    );
+    const out = liteWriteStore
+      ? await liteWriteStore.withTx(() =>
+          toolSelectionFeedback(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+            maxTextLen: env.MAX_TEXT_LEN,
+            piiRedaction: env.PII_REDACTION,
+            embeddedRuntime,
+            liteWriteStore,
+          }),
+        )
+      : await store.withTx((client) =>
+          toolSelectionFeedback(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+            maxTextLen: env.MAX_TEXT_LEN,
+            piiRedaction: env.PII_REDACTION,
+            embeddedRuntime,
+          }),
+        );
     return reply.code(200).send(out);
   });
 }

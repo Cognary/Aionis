@@ -31,6 +31,28 @@ export function createDb(databaseUrl: string, opts: DbPoolOptions = {}): Db {
   return { pool };
 }
 
+export function createNoopDb(): Db {
+  const fakeClient = {
+    async query() {
+      return { rows: [], rowCount: 0 };
+    },
+    release() {},
+  };
+  return {
+    pool: {
+      async query() {
+        return { rows: [], rowCount: 0 };
+      },
+      async connect() {
+        return fakeClient;
+      },
+      async end() {
+        return;
+      },
+    } as unknown as pg.Pool,
+  };
+}
+
 export async function withClient<T>(db: Db, fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
   const client = await db.pool.connect();
   try {

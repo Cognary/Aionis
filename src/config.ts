@@ -121,7 +121,7 @@ const EnvSchema = z.object({
     .transform((v) => (v ?? "false").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: z.string().default(""),
   MEMORY_STORE_BACKEND: z.enum(["postgres", "embedded"]).default("postgres"),
   MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: z
     .string()
@@ -662,13 +662,31 @@ function withAbstractionPolicyDefaults(source: NodeJS.ProcessEnv): NodeJS.Proces
   return out;
 }
 
+function withEditionDefaults(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = { ...source };
+  const editionInput = String(source.AIONIS_EDITION ?? "server").trim().toLowerCase();
+  const parsed = EditionSchema.safeParse(editionInput);
+  if (!parsed.success) return out;
+  out.AIONIS_EDITION = parsed.data;
+  if (parsed.data !== "lite") return out;
+  if (!out.AIONIS_MODE || out.AIONIS_MODE.trim().length === 0) out.AIONIS_MODE = "local";
+  out.MEMORY_AUTH_MODE = "off";
+  out.TENANT_QUOTA_ENABLED = "false";
+  out.RATE_LIMIT_BYPASS_LOOPBACK = "true";
+  return out;
+}
+
 export function loadEnv(): Env {
   const modeApplied = withModeDefaults(process.env);
-  const applied = withAbstractionPolicyDefaults(modeApplied);
+  const editionApplied = withEditionDefaults(modeApplied);
+  const applied = withAbstractionPolicyDefaults(editionApplied);
   const parsed = EnvSchema.safeParse(applied);
   if (!parsed.success) {
     const msg = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment:\n${msg}`);
+  }
+  if (parsed.data.AIONIS_EDITION !== "lite" && parsed.data.DATABASE_URL.trim().length === 0) {
+    throw new Error("DATABASE_URL is required unless AIONIS_EDITION=lite");
   }
   if (parsed.data.EMBEDDING_DIM !== 1536) {
     throw new Error(`EMBEDDING_DIM must be 1536 for text-embedding-3-small; got ${parsed.data.EMBEDDING_DIM}`);

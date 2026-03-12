@@ -4,6 +4,7 @@ import { ToolsDecisionRequest } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildToolsDecisionLifecycleSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 
 type DecisionRow = {
   id: string;
@@ -21,10 +22,11 @@ type DecisionRow = {
 };
 
 export async function getToolsDecisionById(
-  client: pg.PoolClient,
+  client: pg.PoolClient | null,
   body: unknown,
   defaultScope: string,
   defaultTenantId: string,
+  opts: { liteWriteStore?: Pick<LiteWriteStore, "getExecutionDecision"> | null } = {},
 ) {
   const parsed = ToolsDecisionRequest.parse(body);
   const tenancy = resolveTenantScope(
@@ -63,53 +65,57 @@ export async function getToolsDecisionById(
     throw new HttpError(400, "invalid_request", "decision_id, decision_uri, or run_id is required");
   }
 
-  const res = decisionId
-    ? await client.query<DecisionRow>(
-        `
-        SELECT
-          id::text,
-          scope,
-          decision_kind::text AS decision_kind,
-          run_id,
-          selected_tool,
-          candidates_json,
-          context_sha256,
-          policy_sha256,
-          source_rule_ids::text[] AS source_rule_ids,
-          metadata_json,
-          created_at::text AS created_at,
-          commit_id::text AS commit_id
-        FROM memory_execution_decisions
-        WHERE scope = $1
-          AND id = $2
-        LIMIT 1
-        `,
-        [scope, decisionId],
-      )
-    : await client.query<DecisionRow>(
-        `
-        SELECT
-          id::text,
-          scope,
-          decision_kind::text AS decision_kind,
-          run_id,
-          selected_tool,
-          candidates_json,
-          context_sha256,
-          policy_sha256,
-          source_rule_ids::text[] AS source_rule_ids,
-          metadata_json,
-          created_at::text AS created_at,
-          commit_id::text AS commit_id
-        FROM memory_execution_decisions
-        WHERE scope = $1
-          AND run_id = $2
-        ORDER BY created_at DESC
-        LIMIT 1
-        `,
-        [scope, runId],
-      );
-  const row = res.rows[0] ?? null;
+  const row = opts.liteWriteStore
+    ? await opts.liteWriteStore.getExecutionDecision({
+        scope,
+        ...(decisionId ? { id: decisionId } : { runId }),
+      })
+    : decisionId
+      ? await client!.query<DecisionRow>(
+          `
+          SELECT
+            id::text,
+            scope,
+            decision_kind::text AS decision_kind,
+            run_id,
+            selected_tool,
+            candidates_json,
+            context_sha256,
+            policy_sha256,
+            source_rule_ids::text[] AS source_rule_ids,
+            metadata_json,
+            created_at::text AS created_at,
+            commit_id::text AS commit_id
+          FROM memory_execution_decisions
+          WHERE scope = $1
+            AND id = $2
+          LIMIT 1
+          `,
+          [scope, decisionId],
+        ).then((res) => res.rows[0] ?? null)
+      : await client!.query<DecisionRow>(
+          `
+          SELECT
+            id::text,
+            scope,
+            decision_kind::text AS decision_kind,
+            run_id,
+            selected_tool,
+            candidates_json,
+            context_sha256,
+            policy_sha256,
+            source_rule_ids::text[] AS source_rule_ids,
+            metadata_json,
+            created_at::text AS created_at,
+            commit_id::text AS commit_id
+          FROM memory_execution_decisions
+          WHERE scope = $1
+            AND run_id = $2
+          ORDER BY created_at DESC
+          LIMIT 1
+          `,
+          [scope, runId],
+        ).then((res) => res.rows[0] ?? null);
   if (!row) {
     if (decisionId) {
       throw new HttpError(404, "decision_not_found_in_scope", "decision_id was not found in this scope", {

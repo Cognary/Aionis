@@ -64,7 +64,49 @@ If your deployment uses JWT auth instead of API key, replace `X-Api-Key` with:
 -H "authorization: Bearer $BEARER_TOKEN"
 ```
 
-## Option B: Self-Host (Docker)
+## Option B: Lite Alpha (Single User, No Docker)
+
+```bash
+git clone https://github.com/Cognary/Aionis.git
+cd Aionis
+cp .env.example .env
+npm install
+npm run build
+npm run start:lite
+```
+
+Health check:
+
+```bash
+curl -fsS http://localhost:3001/health | jq '{ok,aionis_edition,memory_store_backend,lite_write_store,lite_recall_store}'
+```
+
+Expected response shape:
+
+1. `aionis_edition = "lite"`
+2. `memory_store_backend = "lite_sqlite"`
+3. `lite_write_store` and `lite_recall_store` are present
+
+Run write + recall:
+
+```bash
+curl -sS http://localhost:3001/v1/memory/write \
+  -H 'content-type: application/json' \
+  -d '{"tenant_id":"default","scope":"default","input_text":"hello from lite onboarding","memory_lane":"shared","nodes":[{"type":"event","memory_lane":"shared","text_summary":"hello from lite onboarding"}]}' | jq
+
+curl -sS http://localhost:3001/v1/memory/recall_text \
+  -H 'content-type: application/json' \
+  -d '{"tenant_id":"default","scope":"default","query_text":"hello","limit":5}' | jq
+```
+
+Current Lite alpha intentionally rejects these outer surfaces:
+
+1. `/v1/admin/control/*`
+2. `/v1/automations/*`
+
+Those route groups return stable `501 server_only_in_lite`.
+
+## Option C: Self-Host (Docker)
 
 ```bash
 git clone https://github.com/Cognary/Aionis.git
@@ -108,8 +150,9 @@ make stack-down
 Your onboarding is complete when:
 
 1. `/health` returns `ok`.
-2. `write` returns `request_id` and write metadata.
-3. `recall_text` returns non-empty context or seeds.
+2. If using Lite, `/health.aionis_edition = "lite"` and `/health.memory_store_backend = "lite_sqlite"`.
+3. `write` returns `request_id` and write metadata.
+4. `recall_text` returns non-empty context or seeds.
 
 ## Common Errors
 
