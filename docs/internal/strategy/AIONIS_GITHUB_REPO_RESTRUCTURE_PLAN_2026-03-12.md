@@ -152,6 +152,13 @@ Status: `working plan`
 2. Cloud-only 架构说明
 3. control-plane 责任说明
 
+Current status:
+
+1. Batch 1 completed
+2. commercial strategy ownership moved to `aionis-cloud`
+3. business-facing release material ownership moved to `aionis-cloud`
+4. public repo now keeps redirect stubs for those two documents
+
 ### Phase D: Move First Code Slice
 
 第一批代码迁移应优先选：
