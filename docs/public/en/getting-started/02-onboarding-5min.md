@@ -112,6 +112,13 @@ If you are operating Lite locally, read:
 2. [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
 3. [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)
 
+If you are trying Lite public beta:
+
+1. run `npm run -s lite:dogfood`
+2. if anything is confusing or broken, open a `Lite Beta Feedback` issue:
+   [github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml](https://github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml)
+3. if everything works, successful-run feedback is still helpful
+
 ## Option C: Self-Host (Docker)
 
 ```bash

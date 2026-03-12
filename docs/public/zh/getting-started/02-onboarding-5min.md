@@ -111,6 +111,13 @@ Lite Alpha 当前有意保留这两个 server-only 外层面：
 2. [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
 3. [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)
 
+如果你正在试 Lite public beta：
+
+1. 先跑 `npm run -s lite:dogfood`
+2. 如果有任何不对劲或不清楚，提交 `Lite Beta Feedback` issue：
+   [github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml](https://github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml)
+3. 如果一切正常，也欢迎提交成功路径反馈
+
 ## 方案 C：Self-Host（Docker）
 
 ```bash

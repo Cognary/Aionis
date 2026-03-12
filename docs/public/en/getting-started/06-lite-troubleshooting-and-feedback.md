@@ -147,7 +147,13 @@ Use the GitHub `Lite Beta Feedback` issue template and include:
 5. whether the issue is startup, visibility, replay, or packs
 6. the smallest request payload that reproduces it
 
+Open the template directly:
+
+[github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml](https://github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml)
+
 If you are unsure whether the behavior is expected, report it anyway. Public beta is for hardening operator UX, not only for catching crashes.
+
+If the run was successful, that is still useful feedback. Successful reports help confirm which startup and operator paths are already stable.
 
 ## Next Reading
 

@@ -147,7 +147,13 @@ npm run -s lite:dogfood
 5. 问题属于 startup、visibility、replay 还是 packs
 6. 最小可复现请求
 
+模板直达：
+
+[github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml](https://github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml)
+
 如果你不确定这是不是预期行为，也照样提。public beta 的目标就是把 operator UX 打磨到不靠猜。
+
+如果这次运行是成功的，也一样值得反馈。成功路径反馈能帮助我们确认哪些启动和运维路径已经稳定。
 
 ## 下一步阅读
 

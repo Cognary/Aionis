@@ -251,6 +251,13 @@ Operator notes and troubleshooting:
 - [Lite Public Beta Boundary](https://doc.aionisos.com/public/en/getting-started/05-lite-public-beta-boundary)
 - [Lite Troubleshooting and Feedback](https://doc.aionisos.com/public/en/getting-started/06-lite-troubleshooting-and-feedback)
 
+If you try Lite beta, please:
+
+1. run `npm run -s lite:dogfood`
+2. if anything feels wrong, open a `Lite Beta Feedback` issue:
+   [github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml](https://github.com/Cognary/Aionis/issues/new?template=lite-beta-feedback.yml)
+3. if it works, successful-run feedback is still useful
+
 ## SDKs and Distribution
 
 1. TypeScript SDK: [`@aionis/sdk`](https://www.npmjs.com/package/@aionis/sdk)
