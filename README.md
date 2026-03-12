@@ -8,44 +8,43 @@
 [![GHCR](https://img.shields.io/badge/ghcr-ghcr.io%2Fcognary%2Faionis-2496ed?logo=docker&logoColor=white)](https://ghcr.io/cognary/aionis)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-## Cost-Aware Runtime Kernel for Agents
+## Memory-Centered Runtime Kernel for Agents
 
-Aionis is an open-core runtime kernel for agents.
+Aionis is an open-core, cost-aware runtime kernel for agents.
 
-It turns execution into reusable runtime assets:
+**Agents keep rediscovering the same work.**
+
+New session.  
+Read the repo again.  
+Rebuild the mental model.  
+Explain the reasoning again.  
+
+Thousands of tokens just to get back where the last session stopped.
+
+**Aionis gives agents execution memory.**
+
+So the next session resumes the work instead of starting from zero.
+
+**Real continuation test on `pallets/click` (open source):**
+
+1. output tokens down **77%**
+2. total tokens down **33%**
+
+Less rediscovery. More continuation.
+
+[Quickstart](./docs/public/en/getting-started/01-get-started.md) · [Docs](https://doc.aionisos.com) · [Lite Public Beta](./docs/public/en/getting-started/05-lite-public-beta-boundary.md)
+
+---
+
+## What Aionis Adds
+
+Aionis turns execution into reusable runtime assets:
 
 1. execution memory
 2. bounded context assembly
 3. replayable playbooks
 4. governed repair and review
 5. operator-facing evidence and control surfaces
-
-Today, Aionis is best understood as three product paths:
-
-1. **Lite**: local single-user SQLite-backed edition
-2. **Server**: self-hosted production-oriented open-core runtime
-3. **Cloud**: managed control-plane direction
-
----
-
-## Why It Exists
-
-Most memory systems can store text, vectors, or entities.
-
-They still do not preserve how work gets done.
-
-That means new sessions still:
-
-1. reread files
-2. rebuild context
-3. repeat reasoning
-4. lose prior execution structure
-
----
-
-## What Aionis Adds
-
-Aionis centers the runtime around execution memory.
 
 ```text
 Memory Write
@@ -56,14 +55,6 @@ Replayable Execution
 ↓
 Governed Repair / Review
 ```
-
-That gives teams one system for:
-
-1. memory and recall
-2. context budgets and compaction
-3. replay and playbook reuse
-4. repair, review, and promotion
-5. operator governance and evidence
 
 ---
 
