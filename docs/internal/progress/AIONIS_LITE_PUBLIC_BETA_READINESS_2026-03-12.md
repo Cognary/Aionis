@@ -1,7 +1,7 @@
 # Aionis Lite Public Beta Readiness
 
 Date: `2026-03-12`  
-Status: `in_progress`
+Status: `completed_for_controlled_public_beta`
 
 Related:
 
@@ -13,6 +13,7 @@ Related:
 6. [Lite Troubleshooting and Feedback (EN)](/Users/lucio/Desktop/Aionis/docs/public/en/getting-started/06-lite-troubleshooting-and-feedback.md)
 7. [Lite 排障与反馈 (ZH)](/Users/lucio/Desktop/Aionis/docs/public/zh/getting-started/06-lite-troubleshooting-and-feedback.md)
 8. [AIONIS_LITE_PUBLIC_BETA_DECISION_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_PUBLIC_BETA_DECISION_2026-03-12.md)
+9. [AIONIS_LITE_PUBLIC_BETA_DOGFOOD_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_PUBLIC_BETA_DOGFOOD_2026-03-12.md)
 
 ## Purpose
 
@@ -72,4 +73,4 @@ The next highest-value items after the public beta boundary page are:
 2. a concise public troubleshooting/feedback loop
 3. a beta decision memo that explicitly approves or withholds public beta launch
 
-That decision memo now exists and currently recommends a controlled public beta rather than a GA posture.
+That decision memo now exists and now approves a controlled public beta rather than a GA posture.

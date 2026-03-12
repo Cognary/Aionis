@@ -1,7 +1,7 @@
 # Aionis Lite Public Beta Decision
 
 Date: `2026-03-12`  
-Status: `recommended_for_controlled_public_beta`
+Status: `approved_for_controlled_public_beta`
 
 Related:
 
@@ -10,10 +10,11 @@ Related:
 3. [AIONIS_LITE_BETA_GATE_V2_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_BETA_GATE_V2_2026-03-12.md)
 4. [Lite Public Beta Boundary (EN)](/Users/lucio/Desktop/Aionis/docs/public/en/getting-started/05-lite-public-beta-boundary.md)
 5. [Lite Troubleshooting and Feedback (EN)](/Users/lucio/Desktop/Aionis/docs/public/en/getting-started/06-lite-troubleshooting-and-feedback.md)
+6. [AIONIS_LITE_PUBLIC_BETA_DOGFOOD_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_PUBLIC_BETA_DOGFOOD_2026-03-12.md)
 
 ## Decision
 
-Lite is now suitable for a controlled public beta.
+Lite is now approved for a controlled public beta.
 
 This is not a GA decision.
 
@@ -23,6 +24,7 @@ It means:
 2. the public support boundary is explicit
 3. public operator notes and troubleshooting entrypoints exist
 4. there is a structured feedback path for beta users
+5. a non-scripted public-beta-style dogfood pass is green
 
 It does not mean:
 
@@ -50,6 +52,7 @@ That gap is materially smaller now because:
 1. Lite public beta boundary pages exist in EN and ZH
 2. public troubleshooting and feedback pages exist in EN and ZH
 3. GitHub issue intake now has a Lite beta feedback template
+4. a non-scripted public-beta-style run now validates the manual operator path end to end
 
 ## Controlled Public Beta Scope
 
