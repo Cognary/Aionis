@@ -1,6 +1,5 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { stableUuid } from "../util/uuid.js";
 import type {
   WriteCommitInsertArgs,
@@ -12,6 +11,7 @@ import type {
   WriteStoreAccess,
 } from "./write-access.js";
 import { WRITE_STORE_ACCESS_CAPABILITY_VERSION } from "./write-access.js";
+import { createSqliteDatabase } from "./sqlite-compat.js";
 
 type LiteSessionNodeView = {
   id: string;
@@ -403,7 +403,7 @@ function jsonContains(actual: unknown, expected: unknown): boolean {
 
 export function createLiteWriteStore(path: string): LiteWriteStore {
   mkdirSync(dirname(path), { recursive: true });
-  const db = new DatabaseSync(path);
+  const db = createSqliteDatabase(path);
   let txDepth = 0;
   db.exec(`
     PRAGMA journal_mode = WAL;

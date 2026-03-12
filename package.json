@@ -81,7 +81,7 @@
     "job:automation-shadow-validator": "tsx src/jobs/automation-shadow-validator.ts",
     "job:hosted-automation-shadow-validator": "tsx src/jobs/hosted-automation-shadow-validator.ts",
     "sdk:tools-feedback-smoke": "tsx src/dev/sdk-tools-feedback-smoke.ts",
-    "test:ci-probes": "node --test scripts/ci/*.test.mjs",
+    "test:ci-probes": "bash scripts/ci/run-ci-probes.sh",
     "test:ops-smoke": "node --test scripts/ci/ops-*.test.mjs",
     "test:contract": "npm run -s build && node dist/dev/contract-smoke.js",
     "test:kernel-contract": "node --test scripts/ci/kernel-contract.test.mjs",

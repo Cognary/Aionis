@@ -1,6 +1,5 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { toVectorLiteral } from "../util/pgvector.js";
 import type {
   RecallAuditInsertParams,
@@ -16,6 +15,7 @@ import type {
   RecallStoreCapabilities,
 } from "./recall-access.js";
 import { RECALL_STORE_ACCESS_CAPABILITY_VERSION } from "./recall-access.js";
+import { createSqliteDatabase } from "./sqlite-compat.js";
 
 type LiteRecallNodeRow = {
   id: string;
@@ -204,7 +204,7 @@ export function createLiteRecallStore(
   opts: { capabilities?: Partial<RecallStoreCapabilities> } = {},
 ): LiteRecallStore {
   mkdirSync(dirname(path), { recursive: true });
-  const db = new DatabaseSync(path);
+  const db = createSqliteDatabase(path);
   const capabilities = resolveRecallCapabilities(opts.capabilities);
 
   db.exec(`

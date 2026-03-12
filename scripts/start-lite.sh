@@ -17,6 +17,14 @@ fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+if ! node -e 'try { require("node:sqlite"); } catch { process.exit(1); }' >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+start:lite requires Node.js with node:sqlite support.
+Use Node 22+ for Lite alpha.
+EOF
+  exit 1
+fi
+
 export AIONIS_EDITION="${AIONIS_EDITION:-lite}"
 export AIONIS_MODE="${AIONIS_MODE:-local}"
 export MEMORY_AUTH_MODE="${MEMORY_AUTH_MODE:-off}"

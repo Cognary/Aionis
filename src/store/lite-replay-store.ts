@@ -1,6 +1,5 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import type {
   ReplayNodeRow,
   ReplayPlaybookRow,
@@ -9,6 +8,7 @@ import type {
 } from "./replay-access.js";
 import { REPLAY_STORE_ACCESS_CAPABILITY_VERSION } from "./replay-access.js";
 import type { ReplayMirrorNodeRecord, ReplayWriteMirror } from "../memory/replay-write.js";
+import { createSqliteDatabase } from "./sqlite-compat.js";
 
 type LiteReplayRow = {
   node_id: string;
@@ -67,7 +67,7 @@ export type LiteReplayStore = ReplayWriteMirror & {
 
 export function createLiteReplayStore(path: string): LiteReplayStore {
   mkdirSync(dirname(path), { recursive: true });
-  const db = new DatabaseSync(path);
+  const db = createSqliteDatabase(path);
   db.exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS lite_replay_nodes (

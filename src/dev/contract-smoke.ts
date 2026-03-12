@@ -97,6 +97,7 @@ import {
 } from "../store/replay-access.js";
 import { createLiteReplayStore } from "../store/lite-replay-store.js";
 import { createLiteWriteStore } from "../store/lite-write-store.js";
+import { hasNodeSqliteSupport } from "../store/sqlite-compat.js";
 import {
   WRITE_STORE_ACCESS_CAPABILITY_VERSION,
   assertWriteStoreAccessContract,
@@ -1751,12 +1752,13 @@ async function run() {
   assert.equal((await replayAdapter.listReplayPlaybookVersions("default", "pb-1"))[0]?.version_num, 2);
   assert.equal((await replayAdapter.getReplayPlaybookVersion("default", "pb-1", 2))?.playbook_status, "active");
 
-  const liteReplayDir = await fs.mkdtemp(path.join(os.tmpdir(), "aionis-lite-replay-"));
-  const liteReplayPath = path.join(liteReplayDir, "replay.sqlite");
-  const liteReplayStore = createLiteReplayStore(liteReplayPath);
-  const liteReplayAccess = liteReplayStore.createReplayAccess();
-  assert.doesNotThrow(() => assertReplayStoreAccessContract(liteReplayAccess));
-  await liteReplayStore.upsertReplayNodes([
+  if (hasNodeSqliteSupport()) {
+    const liteReplayDir = await fs.mkdtemp(path.join(os.tmpdir(), "aionis-lite-replay-"));
+    const liteReplayPath = path.join(liteReplayDir, "replay.sqlite");
+    const liteReplayStore = createLiteReplayStore(liteReplayPath);
+    const liteReplayAccess = liteReplayStore.createReplayAccess();
+    assert.doesNotThrow(() => assertReplayStoreAccessContract(liteReplayAccess));
+    await liteReplayStore.upsertReplayNodes([
     {
       node_id: "00000000-0000-0000-0000-000000000b01",
       scope: "default",
@@ -1793,198 +1795,199 @@ async function run() {
       updated_at: "2026-03-11T00:00:01.000Z",
       commit_id: "00000000-0000-0000-0000-000000000bc2",
     },
-  ]);
-  assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite"))?.title, "lite run");
-  assert.equal((await liteReplayAccess.listReplayPlaybookVersions("default", "pb-lite"))[0]?.version_num, 3);
+    ]);
+    assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite"))?.title, "lite run");
+    assert.equal((await liteReplayAccess.listReplayPlaybookVersions("default", "pb-lite"))[0]?.version_num, 3);
 
-  const replayWriteFixture = new WriteAccessFixturePgClient();
-  await applyReplayMemoryWrite(
-    replayWriteFixture as any,
-    {
-      tenant_id: "default",
-      scope: "default",
-      actor: "tester",
-      input_text: "start replay run",
-      auto_embed: false,
-      nodes: [
-        {
-          client_id: "replay:run:run-lite-helper",
-          type: "event",
-          title: "Replay Run",
-          text_summary: "Replay run helper",
-          slots: {
-            replay_kind: "run",
-            run_id: "run-lite-helper",
-            goal: "helper",
-            status: "started",
-          },
-        },
-      ],
-      edges: [],
-    },
-    {
-      defaultScope: "default",
-      defaultTenantId: "default",
-      maxTextLen: 4096,
-      piiRedaction: false,
-      allowCrossScopeEdges: false,
-      shadowDualWriteEnabled: false,
-      shadowDualWriteStrict: false,
-      writeAccessShadowMirrorV2: true,
-      embedder: null,
-      replayMirror: liteReplayStore,
-    },
-  );
-  assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite-helper"))?.text_summary, "Replay run helper");
-  await liteReplayStore.close();
-  await fs.rm(liteReplayDir, { recursive: true, force: true });
-
-  const liteWriteDir = await fs.mkdtemp(path.join(os.tmpdir(), "aionis-lite-write-"));
-  const liteWritePath = path.join(liteWriteDir, "write.sqlite");
-  const liteWriteStore = createLiteWriteStore(liteWritePath);
-  assert.doesNotThrow(() => assertWriteStoreAccessContract(liteWriteStore));
-  assert.equal(liteWriteStore.capabilities.shadow_mirror_v2, false);
-  const liteCommitId = await liteWriteStore.insertCommit({
-    scope: "default",
-    parentCommitId: null,
-    inputSha256: "abc123",
-    diffJson: JSON.stringify({ nodes: [], edges: [] }),
-    actor: "contract_smoke",
-    modelVersion: null,
-    promptVersion: null,
-    commitHash: "lite-write-commit-hash",
-  });
-  await liteWriteStore.insertNode({
-    id: "00000000-0000-0000-0000-000000000c11",
-    scope: "default",
-    clientId: "lite_node",
-    type: "event",
-    tier: "hot",
-    title: "lite node",
-    textSummary: "lite node summary",
-    slotsJson: JSON.stringify({ k: 1 }),
-    rawRef: null,
-    evidenceRef: null,
-    embeddingVector: JSON.stringify(Array.from({ length: 1536 }, () => 0)),
-    embeddingModel: "client",
-    memoryLane: "shared",
-    producerAgentId: null,
-    ownerAgentId: null,
-    ownerTeamId: null,
-    embeddingStatus: "ready",
-    embeddingLastError: null,
-    salience: 0.6,
-    importance: 0.7,
-    confidence: 0.8,
-    redactionVersion: 1,
-    commitId: liteCommitId,
-  });
-  await liteWriteStore.insertRuleDef({
-    scope: "default",
-    ruleNodeId: "00000000-0000-0000-0000-000000000c12",
-    ifJson: JSON.stringify({ if: true }),
-    thenJson: JSON.stringify({ tool: "echo" }),
-    exceptionsJson: JSON.stringify([]),
-    ruleScope: "global",
-    targetAgentId: null,
-    targetTeamId: null,
-    commitId: liteCommitId,
-  });
-  await liteWriteStore.upsertEdge({
-    id: "00000000-0000-0000-0000-000000000ce1",
-    scope: "default",
-    type: "part_of",
-    srcId: "00000000-0000-0000-0000-000000000c11",
-    dstId: "00000000-0000-0000-0000-000000000c12",
-    weight: 0.5,
-    confidence: 0.5,
-    decayRate: 0.01,
-    commitId: liteCommitId,
-  });
-  await liteWriteStore.upsertEdge({
-    id: "00000000-0000-0000-0000-000000000ce2",
-    scope: "default",
-    type: "part_of",
-    srcId: "00000000-0000-0000-0000-000000000c11",
-    dstId: "00000000-0000-0000-0000-000000000c12",
-    weight: 0.9,
-    confidence: 0.8,
-    decayRate: 0.01,
-    commitId: liteCommitId,
-  });
-  await liteWriteStore.insertOutboxEvent({
-    scope: "default",
-    commitId: liteCommitId,
-    eventType: "embed_nodes",
-    jobKey: "lite-write-job",
-    payloadSha256: "payload-sha",
-    payloadJson: JSON.stringify({ nodes: [{ id: "00000000-0000-0000-0000-000000000c11" }] }),
-  });
-  await liteWriteStore.appendAfterTopicClusterEventIds(
-    "default",
-    liteCommitId,
-    JSON.stringify(["00000000-0000-0000-0000-000000000c11"]),
-  );
-  const liteNodeScopes = await liteWriteStore.nodeScopesByIds(["00000000-0000-0000-0000-000000000c11"]);
-  assert.equal(liteNodeScopes.get("00000000-0000-0000-0000-000000000c11"), "default");
-  assert.equal(await liteWriteStore.parentCommitHash("default", liteCommitId), "lite-write-commit-hash");
-  const liteReadyIds = await liteWriteStore.readyEmbeddingNodeIds("default", ["00000000-0000-0000-0000-000000000c11"]);
-  assert.ok(liteReadyIds.has("00000000-0000-0000-0000-000000000c11"));
-  let rolledBackCommitId = "";
-  await assert.rejects(
-    () => liteWriteStore.withTx(async () => {
-      rolledBackCommitId = await liteWriteStore.insertCommit({
+    const replayWriteFixture = new WriteAccessFixturePgClient();
+    await applyReplayMemoryWrite(
+      replayWriteFixture as any,
+      {
+        tenant_id: "default",
         scope: "default",
-        parentCommitId: null,
-        inputSha256: "rollback-sha",
-        diffJson: JSON.stringify({ nodes: [{ id: "rollback" }], edges: [] }),
-        actor: "contract_smoke",
-        modelVersion: null,
-        promptVersion: null,
-        commitHash: "lite-write-rollback-hash",
-      });
-      throw new Error("rollback me");
-    }),
-    /rollback me/i,
-  );
-  assert.equal(await liteWriteStore.parentCommitHash("default", rolledBackCommitId), null);
-  await assert.rejects(
-    () => liteWriteStore.mirrorCommitArtifactsToShadowV2("default", liteCommitId),
-    /write capability unsupported: shadow_mirror_v2/i,
-  );
-  const liteRecallStore = createLiteRecallStore(liteWritePath);
-  const liteRecallAccess = liteRecallStore.createRecallAccess();
-  assert.doesNotThrow(() => assertRecallStoreAccessContract(liteRecallAccess));
-  const liteRecallSeeds = await liteRecallAccess.stage1CandidatesAnn({
-    queryEmbedding: Array.from({ length: 1536 }, () => 0),
-    scope: "default",
-    oversample: 4,
-    limit: 2,
-    consumerAgentId: null,
-    consumerTeamId: null,
-  });
-  assert.ok(liteRecallSeeds.some((row) => row.id === "00000000-0000-0000-0000-000000000c11"));
-  const liteRecallNodes = await liteRecallAccess.stage2Nodes({
-    scope: "default",
-    nodeIds: ["00000000-0000-0000-0000-000000000c11"],
-    consumerAgentId: null,
-    consumerTeamId: null,
-    includeSlots: true,
-  });
-  assert.equal(liteRecallNodes.length, 1);
-  await liteRecallAccess.insertRecallAudit({
-    scope: "default",
-    endpoint: "recall",
-    consumerAgentId: null,
-    consumerTeamId: null,
-    querySha256: "audit-sha",
-    seedCount: 1,
-    nodeCount: 1,
-    edgeCount: 1,
-  });
-  await liteRecallStore.close();
-  await liteWriteStore.close();
-  await fs.rm(liteWriteDir, { recursive: true, force: true });
+        actor: "tester",
+        input_text: "start replay run",
+        auto_embed: false,
+        nodes: [
+          {
+            client_id: "replay:run:run-lite-helper",
+            type: "event",
+            title: "Replay Run",
+            text_summary: "Replay run helper",
+            slots: {
+              replay_kind: "run",
+              run_id: "run-lite-helper",
+              goal: "helper",
+              status: "started",
+            },
+          },
+        ],
+        edges: [],
+      },
+      {
+        defaultScope: "default",
+        defaultTenantId: "default",
+        maxTextLen: 4096,
+        piiRedaction: false,
+        allowCrossScopeEdges: false,
+        shadowDualWriteEnabled: false,
+        shadowDualWriteStrict: false,
+        writeAccessShadowMirrorV2: true,
+        embedder: null,
+        replayMirror: liteReplayStore,
+      },
+    );
+    assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite-helper"))?.text_summary, "Replay run helper");
+    await liteReplayStore.close();
+    await fs.rm(liteReplayDir, { recursive: true, force: true });
+
+    const liteWriteDir = await fs.mkdtemp(path.join(os.tmpdir(), "aionis-lite-write-"));
+    const liteWritePath = path.join(liteWriteDir, "write.sqlite");
+    const liteWriteStore = createLiteWriteStore(liteWritePath);
+    assert.doesNotThrow(() => assertWriteStoreAccessContract(liteWriteStore));
+    assert.equal(liteWriteStore.capabilities.shadow_mirror_v2, false);
+    const liteCommitId = await liteWriteStore.insertCommit({
+      scope: "default",
+      parentCommitId: null,
+      inputSha256: "abc123",
+      diffJson: JSON.stringify({ nodes: [], edges: [] }),
+      actor: "contract_smoke",
+      modelVersion: null,
+      promptVersion: null,
+      commitHash: "lite-write-commit-hash",
+    });
+    await liteWriteStore.insertNode({
+      id: "00000000-0000-0000-0000-000000000c11",
+      scope: "default",
+      clientId: "lite_node",
+      type: "event",
+      tier: "hot",
+      title: "lite node",
+      textSummary: "lite node summary",
+      slotsJson: JSON.stringify({ k: 1 }),
+      rawRef: null,
+      evidenceRef: null,
+      embeddingVector: JSON.stringify(Array.from({ length: 1536 }, () => 0)),
+      embeddingModel: "client",
+      memoryLane: "shared",
+      producerAgentId: null,
+      ownerAgentId: null,
+      ownerTeamId: null,
+      embeddingStatus: "ready",
+      embeddingLastError: null,
+      salience: 0.6,
+      importance: 0.7,
+      confidence: 0.8,
+      redactionVersion: 1,
+      commitId: liteCommitId,
+    });
+    await liteWriteStore.insertRuleDef({
+      scope: "default",
+      ruleNodeId: "00000000-0000-0000-0000-000000000c12",
+      ifJson: JSON.stringify({ if: true }),
+      thenJson: JSON.stringify({ tool: "echo" }),
+      exceptionsJson: JSON.stringify([]),
+      ruleScope: "global",
+      targetAgentId: null,
+      targetTeamId: null,
+      commitId: liteCommitId,
+    });
+    await liteWriteStore.upsertEdge({
+      id: "00000000-0000-0000-0000-000000000ce1",
+      scope: "default",
+      type: "part_of",
+      srcId: "00000000-0000-0000-0000-000000000c11",
+      dstId: "00000000-0000-0000-0000-000000000c12",
+      weight: 0.5,
+      confidence: 0.5,
+      decayRate: 0.01,
+      commitId: liteCommitId,
+    });
+    await liteWriteStore.upsertEdge({
+      id: "00000000-0000-0000-0000-000000000ce2",
+      scope: "default",
+      type: "part_of",
+      srcId: "00000000-0000-0000-0000-000000000c11",
+      dstId: "00000000-0000-0000-0000-000000000c12",
+      weight: 0.9,
+      confidence: 0.8,
+      decayRate: 0.01,
+      commitId: liteCommitId,
+    });
+    await liteWriteStore.insertOutboxEvent({
+      scope: "default",
+      commitId: liteCommitId,
+      eventType: "embed_nodes",
+      jobKey: "lite-write-job",
+      payloadSha256: "payload-sha",
+      payloadJson: JSON.stringify({ nodes: [{ id: "00000000-0000-0000-0000-000000000c11" }] }),
+    });
+    await liteWriteStore.appendAfterTopicClusterEventIds(
+      "default",
+      liteCommitId,
+      JSON.stringify(["00000000-0000-0000-0000-000000000c11"]),
+    );
+    const liteNodeScopes = await liteWriteStore.nodeScopesByIds(["00000000-0000-0000-0000-000000000c11"]);
+    assert.equal(liteNodeScopes.get("00000000-0000-0000-0000-000000000c11"), "default");
+    assert.equal(await liteWriteStore.parentCommitHash("default", liteCommitId), "lite-write-commit-hash");
+    const liteReadyIds = await liteWriteStore.readyEmbeddingNodeIds("default", ["00000000-0000-0000-0000-000000000c11"]);
+    assert.ok(liteReadyIds.has("00000000-0000-0000-0000-000000000c11"));
+    let rolledBackCommitId = "";
+    await assert.rejects(
+      () => liteWriteStore.withTx(async () => {
+        rolledBackCommitId = await liteWriteStore.insertCommit({
+          scope: "default",
+          parentCommitId: null,
+          inputSha256: "rollback-sha",
+          diffJson: JSON.stringify({ nodes: [{ id: "rollback" }], edges: [] }),
+          actor: "contract_smoke",
+          modelVersion: null,
+          promptVersion: null,
+          commitHash: "lite-write-rollback-hash",
+        });
+        throw new Error("rollback me");
+      }),
+      /rollback me/i,
+    );
+    assert.equal(await liteWriteStore.parentCommitHash("default", rolledBackCommitId), null);
+    await assert.rejects(
+      () => liteWriteStore.mirrorCommitArtifactsToShadowV2("default", liteCommitId),
+      /write capability unsupported: shadow_mirror_v2/i,
+    );
+    const liteRecallStore = createLiteRecallStore(liteWritePath);
+    const liteRecallAccess = liteRecallStore.createRecallAccess();
+    assert.doesNotThrow(() => assertRecallStoreAccessContract(liteRecallAccess));
+    const liteRecallSeeds = await liteRecallAccess.stage1CandidatesAnn({
+      queryEmbedding: Array.from({ length: 1536 }, () => 0),
+      scope: "default",
+      oversample: 4,
+      limit: 2,
+      consumerAgentId: null,
+      consumerTeamId: null,
+    });
+    assert.ok(liteRecallSeeds.some((row) => row.id === "00000000-0000-0000-0000-000000000c11"));
+    const liteRecallNodes = await liteRecallAccess.stage2Nodes({
+      scope: "default",
+      nodeIds: ["00000000-0000-0000-0000-000000000c11"],
+      consumerAgentId: null,
+      consumerTeamId: null,
+      includeSlots: true,
+    });
+    assert.equal(liteRecallNodes.length, 1);
+    await liteRecallAccess.insertRecallAudit({
+      scope: "default",
+      endpoint: "recall",
+      consumerAgentId: null,
+      consumerTeamId: null,
+      querySha256: "audit-sha",
+      seedCount: 1,
+      nodeCount: 1,
+      edgeCount: 1,
+    });
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+    await fs.rm(liteWriteDir, { recursive: true, force: true });
+  }
 
   const writeAccessFixture = new WriteAccessFixturePgClient({ throwEnsureScope: true });
   const writeAdapter = createPostgresWriteStoreAccess(writeAccessFixture as any);
