@@ -32,7 +32,7 @@ Audience materials:
 
 - [Technical Release Material](./RELEASE_MATERIAL_TECHNICAL.md)
 - [Product Release Material](./RELEASE_MATERIAL_PRODUCT.md)
-- [Business Release Material](./RELEASE_MATERIAL_BUSINESS.md)
+- Business-facing release materials are maintained outside the open-core repository.
 
 ## Messaging Guardrail
 

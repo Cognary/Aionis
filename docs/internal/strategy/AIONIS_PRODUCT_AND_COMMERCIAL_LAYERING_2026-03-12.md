@@ -165,8 +165,7 @@ flowchart TD
 1. Aionis 的差异化价值在 kernel，如果内核不开，市场很难形成心智
 2. Lite 是最强 adoption 入口，不适合做闭源试用器
 3. Server core 开源能形成标准化和自托管入口
-4. 这符合当前的 `Kernel Standard + Managed Service + Execution Control` 策略  
-   见 [COMMERCIAL_STRATEGY.md](/Users/lucio/Desktop/Aionis/docs/internal/strategy/COMMERCIAL_STRATEGY.md)
+4. 这符合当前的 `Kernel Standard + Managed Service + Execution Control` 策略
 
 ### 5.2 Commercial / Closed
 

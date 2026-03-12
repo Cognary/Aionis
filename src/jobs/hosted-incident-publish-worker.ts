@@ -12,7 +12,7 @@ console.error(
       message:
         "This hosted automation job is maintained outside this repository.",
       next_step:
-        "Run this job from the private aionis-cloud control-plane repository with the required environment and secrets.",
+        "Run this job from the private hosted control-plane distribution with the required environment and secrets.",
     },
     null,
     2,
