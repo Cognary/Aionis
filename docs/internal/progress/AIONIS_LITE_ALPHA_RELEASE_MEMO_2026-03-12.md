@@ -126,12 +126,19 @@ It is:
 That beta-gate definition now exists as:
 
 1. `npm run -s job:lite-beta-gate`
+2. `npm run -s job:lite-beta-gate-v2`
 
 Current result:
 
 1. defined
 2. currently passing on the repository snapshot after the third stable dogfood run
-3. not blocked on kernel capability or startup packaging
+3. v2 also passes with startup UX and operator troubleshooting checks
+4. not blocked on kernel capability or startup packaging
+
+Current stronger gate artifacts:
+
+1. [LITE_BETA_GATE_V1_20260312.md](/Users/lucio/Desktop/Aionis/artifacts/lite/LITE_BETA_GATE_V1_20260312.md)
+2. [LITE_BETA_GATE_V2_20260312.md](/Users/lucio/Desktop/Aionis/artifacts/lite/LITE_BETA_GATE_V2_20260312.md)
 
 ## Final Release Position
 
