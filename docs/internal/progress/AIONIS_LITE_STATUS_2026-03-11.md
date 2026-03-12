@@ -9,6 +9,7 @@ Related docs:
 - [AIONIS_LITE_ALPHA_RELEASE_MEMO_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_ALPHA_RELEASE_MEMO_2026-03-12.md)
 - [AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md)
 - [AIONIS_LITE_BETA_GATE_V1_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_BETA_GATE_V1_2026-03-12.md)
+- [AIONIS_LITE_BETA_GATE_V2_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_BETA_GATE_V2_2026-03-12.md)
 - [Lite Operator Notes (EN)](/Users/lucio/Desktop/Aionis/docs/public/en/getting-started/04-lite-operator-notes.md)
 - [Lite 运维说明 (ZH)](/Users/lucio/Desktop/Aionis/docs/public/zh/getting-started/04-lite-operator-notes.md)
 
@@ -185,6 +186,7 @@ It is now reasonable to say:
 5. internal alpha dogfooding now validates fresh-write recallability and replay lifecycle in a real Lite process
 6. repeated real-process dogfooding now has a canonical green script path on `main`
 7. Lite beta gate v1 now exists and passes on the current repository snapshot
+8. Lite beta gate v2 now exists and passes on the current repository snapshot
 
 ### 5.2 What We Cannot Say Yet
 
@@ -193,6 +195,7 @@ It is now reasonable to say:
 1. Lite is alpha-ready by the repository gate currently defined
 2. Lite preserves the kernel-required local path for single-user execution
 3. the major first-pass dogfood blockers have been closed
+4. Lite is now a stronger beta-candidate by repository gates v1 and v2
 
 It is still not yet reasonable to say:
 
@@ -240,6 +243,8 @@ Current implementation note:
 7. public operator guidance now exists in EN/ZH getting-started docs
 8. beta-gate v1 now exists as `npm run -s job:lite-beta-gate`
 9. current beta gate v1 artifact now passes
+10. beta-gate v2 now exists as `npm run -s job:lite-beta-gate-v2`
+11. current beta gate v2 artifact now passes
 
 ## 7. Recommended Next Steps
 
@@ -254,8 +259,8 @@ The highest-value next implementation targets are:
 
 1. startup and troubleshooting polish beyond the current operator notes
 2. memory-lane visibility guidance for local inspection examples
-3. beta-gate v2 design
-4. post-beta hardening gates
+3. post-beta hardening gates
+4. broader operator UX evidence beyond the canonical dogfood script
 
 ## 8. Final Judgment
 
