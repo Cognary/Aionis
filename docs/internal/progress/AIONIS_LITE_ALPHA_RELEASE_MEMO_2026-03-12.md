@@ -123,6 +123,16 @@ It is:
 3. post-alpha hardening
 4. beta gate definition
 
+That beta-gate definition now exists as:
+
+1. `npm run -s job:lite-beta-gate`
+
+Current result:
+
+1. defined
+2. intentionally failing on repeated dogfood count
+3. not blocked on kernel capability or startup packaging
+
 ## Final Release Position
 
 The correct internal positioning now is:
