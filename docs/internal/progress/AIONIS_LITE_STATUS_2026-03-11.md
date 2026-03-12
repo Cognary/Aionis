@@ -7,6 +7,7 @@ Related docs:
 - [LITE_SINGLE_USER_KERNEL_IMPLEMENTATION_SPEC.md](/Users/lucio/Desktop/Aionis/docs/LITE_SINGLE_USER_KERNEL_IMPLEMENTATION_SPEC.md)
 - [AIONIS_LITE_VS_SERVER_ARCHITECTURE_ANALYSIS_2026-03-11.md](/Users/lucio/Desktop/Aionis/docs/internal/architecture/AIONIS_LITE_VS_SERVER_ARCHITECTURE_ANALYSIS_2026-03-11.md)
 - [AIONIS_LITE_ALPHA_RELEASE_MEMO_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_ALPHA_RELEASE_MEMO_2026-03-12.md)
+- [AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md)
 
 ## 1. Executive Summary
 
@@ -179,6 +180,7 @@ It is now reasonable to say:
 2. SQLite is viable for Lite kernel persistence
 3. replay can survive the edition split
 4. multiple kernel-required paths already run locally without Postgres-shaped runtime assumptions
+5. internal alpha dogfooding now validates fresh-write recallability and replay lifecycle in a real Lite process
 
 ### 5.2 What We Cannot Say Yet
 
@@ -186,6 +188,7 @@ It is now reasonable to say:
 
 1. Lite is alpha-ready by the repository gate currently defined
 2. Lite preserves the kernel-required local path for single-user execution
+3. the major first-pass dogfood blockers have been closed
 
 It is still not yet reasonable to say:
 
@@ -197,7 +200,7 @@ It is still not yet reasonable to say:
 
 Working estimate:
 
-1. overall Lite line is roughly `70%` complete
+1. overall Lite line is roughly `75%` complete
 
 Why it is already this high:
 
@@ -206,7 +209,7 @@ Why it is already this high:
 
 Why it is not higher:
 
-1. policy/context surfaces are still not done
+1. operator/runtime polish is still incomplete
 2. capability matrix still needs clearer external product framing
 3. release hardening beyond alpha is not yet satisfied
 
@@ -220,6 +223,7 @@ Lite should not be called broadly release-ready until all of the following are t
 4. pack promotion path remains stable
 5. SQLite-backed local write/recall/replay/session/inspection paths remain green under contract smoke
 6. upper policy/context surfaces are either implemented or intentionally excluded from the Lite alpha contract
+7. repeated real-process dogfood runs stay green through the same startup and replay workflow
 
 Current implementation note:
 
@@ -228,6 +232,7 @@ Current implementation note:
 3. current gate artifact: [LITE_ALPHA_GATE_V1_20260311.md](/Users/lucio/Desktop/Aionis/artifacts/lite/LITE_ALPHA_GATE_V1_20260311.md)
 4. current gate now passes with no failing items
 5. release-position summary now exists in [AIONIS_LITE_ALPHA_RELEASE_MEMO_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_ALPHA_RELEASE_MEMO_2026-03-12.md)
+6. repeated internal operator validation now has a canonical script: `npm run -s lite:dogfood`
 
 ## 7. Recommended Next Steps
 
@@ -236,13 +241,13 @@ Recommended order:
 1. keep Lite startup packaging stable and documented
 2. harden alpha capability framing for external/operator use
 3. collect real usage evidence before widening rollout
-4. then write a formal Lite alpha release memo
+4. define the beta gate from repeated operator evidence, not repository bring-up alone
 
 The highest-value next implementation targets are:
 
-1. `start:lite` packaging polish
-2. Lite operator/developer docs
-3. real alpha usage evidence
+1. Lite operator/developer docs
+2. memory-lane visibility guidance for local inspection
+3. repeated real-process dogfood and troubleshooting polish
 4. beta-grade hardening gates
 
 ## 8. Final Judgment
