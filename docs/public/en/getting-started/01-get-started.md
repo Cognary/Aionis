@@ -19,7 +19,8 @@ In the first 30 minutes, you should be able to:
 
 1. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
 2. [Embedding Setup](/public/en/getting-started/03-embedding-setup)
-3. [Playground](/public/en/guides/02-playground)
+3. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
+4. [Playground](/public/en/guides/02-playground)
 
 ## Integration Flow
 
@@ -49,6 +50,10 @@ Current intentional Lite boundary:
 2. `/v1/automations/*` stays server-only
 
 Those route groups return stable `501 server_only_in_lite`.
+
+Before debugging Lite behavior, also read:
+
+1. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
 
 ## Step 2: Validate Core APIs
 

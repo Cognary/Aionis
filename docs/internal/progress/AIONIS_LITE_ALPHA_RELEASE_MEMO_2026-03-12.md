@@ -67,6 +67,11 @@ The current alpha decision is backed by these repository facts:
    - fresh-write recallability
    - `planning/context` and `context/assemble` usefulness after local write
    - replay lifecycle through `run/start -> step -> run/end -> runs/get`
+7. a repeatable script-level dogfood pass now also runs green from `main` via:
+   - `npm run -s lite:dogfood`
+8. public Lite operator guidance now exists in:
+   - [Lite Operator Notes (EN)](/Users/lucio/Desktop/Aionis/docs/public/en/getting-started/04-lite-operator-notes.md)
+   - [Lite 运维说明 (ZH)](/Users/lucio/Desktop/Aionis/docs/public/zh/getting-started/04-lite-operator-notes.md)
 
 ## Current Known Limits
 
