@@ -4,58 +4,72 @@ title: "Differentiation Evidence"
 
 # Differentiation Evidence
 
-This page explains how to prove Aionis advantages over retrieval-only memory stacks.
+This page explains how to prove that Aionis is more than a retrieval-only memory layer.
 
-## Claims Under Test
+## What Needs to Be Proven
 
-1. Higher task success with policy loop enabled
-2. Better stability under repeated runs
-3. Stronger controllability via traceable decisions and feedback links
+To justify Aionis as a product, the evidence needs to show at least four things:
 
-## Benchmark Method
+1. agents continue work across sessions instead of restarting from scratch
+2. repeated execution can be replayed and reused, not only recalled
+3. runtime behavior stays reviewable and governable
+4. the continuity loop reduces repeated token cost in real work
 
-Run the Aionis benchmark suite with XMB scenarios:
+## Evidence Types That Matter
 
-```bash
-npm run -s bench:aionis:v01 -- --suites xmb
-```
+### 1. Continuity Evidence
 
-Primary artifact outputs:
+The strongest public differentiation is not a synthetic benchmark first. It is a real continuation workflow:
 
-1. `details.json`
-2. `summary.json`
-3. `report.md`
+1. one session writes or hands off work
+2. another session resumes it
+3. the result proves the system avoided rediscovery
 
-## Key Metrics
+This is why Codex + MCP integration matters in the public story.
 
-1. `success_rate_gain`
-2. `selection_switch_reduction`
-3. `feedback_link_coverage`
-4. `source_rule_coverage`
+### 2. Replay and Reuse Evidence
 
-Interpretation:
+Aionis should show that successful execution can turn into:
 
-1. Positive success-rate delta supports policy-loop effectiveness.
-2. Lower switch count supports stability improvements.
-3. High coverage metrics support governance and replay visibility.
+1. replay runs
+2. playbooks
+3. governed reuse paths
 
-## Weekly Evidence Pack
+If it only recalls text, the system is still too close to a memory plugin.
 
-```bash
-npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
-```
+### 3. Cost Reduction Evidence
 
-Use this for release-review evidence bundles.
+Token reduction matters, but it should be framed as the output of better continuity:
 
-Expected bundle highlights:
+1. less rereading
+2. less repeated reasoning
+3. less repeated explanation
+4. less output wasted reconstructing task state
 
-1. governance weekly snapshot (`governance_weekly/summary.json`)
-2. execution-loop gate output (`raw/execution_loop_gate.json`)
-3. sandbox probe artifact (`raw/sandbox_api_probe.json`)
-4. benchmark summary/report (`bench_xmb/summary.json`, `bench_xmb/report.md`)
+### 4. Governance Evidence
 
-## Related
+Aionis is also differentiated by what survives review:
+
+1. decisions
+2. feedback links
+3. replay traces
+4. review and promotion surfaces
+
+## Public Reading Sequence
 
 1. [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public)
-2. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
+2. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)
 3. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
+4. [Codex Local](/public/en/integrations/05-codex-local)
+
+## What This Means for the Product Story
+
+If the public evidence can show:
+
+1. real cross-session continuation
+2. replayable and reviewable execution reuse
+3. measurable cost reduction
+
+then Aionis is not just "memory for agents".
+
+It is execution memory for agent systems.

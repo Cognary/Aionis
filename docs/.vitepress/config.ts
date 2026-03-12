@@ -4,7 +4,7 @@ export default defineConfig({
   lang: "en-US",
   site: "https://doc.aionisos.com",
   title: "Aionis Docs",
-  description: "A verifiable, operable memory kernel for agent systems.",
+  description: "Execution memory for coding agents: continue work instead of rediscovering it.",
   base: "/",
   cleanUrls: true,
   lastUpdated: true,
@@ -40,9 +40,10 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/index" },
       {
-        text: "Product",
+        text: "Why Aionis",
         items: [
           { text: "Overview", link: "/public/en/overview/01-overview" },
+          { text: "Choose Lite or Server", link: "/public/en/getting-started/07-choose-lite-vs-server" },
           { text: "Core Concepts", link: "/public/en/core-concepts/00-core-concepts" },
           { text: "Architecture", link: "/public/en/architecture/01-architecture" },
           { text: "Context Orchestration", link: "/public/en/context-orchestration/00-context-orchestration" },
@@ -52,8 +53,10 @@ export default defineConfig({
       {
         text: "Build",
         items: [
+          { text: "Choose Lite or Server", link: "/public/en/getting-started/07-choose-lite-vs-server" },
           { text: "Get Started", link: "/public/en/getting-started/01-get-started" },
           { text: "5-Minute Onboarding", link: "/public/en/getting-started/02-onboarding-5min" },
+          { text: "Codex Local", link: "/public/en/integrations/05-codex-local" },
           { text: "Build Memory", link: "/public/en/guides/01-build-memory" },
           { text: "Playground", link: "/public/en/guides/02-playground" },
           { text: "SDK Guide", link: "/public/en/reference/05-sdk" },
@@ -87,6 +90,7 @@ export default defineConfig({
           { text: "Overview", link: "/public/en/overview/01-overview" },
           { text: "Docs Navigation Map", link: "/public/en/overview/02-docs-navigation" },
           { text: "Role-Based Reading Paths", link: "/public/en/overview/03-role-based-paths" },
+          { text: "Choose Lite vs Server", link: "/public/en/getting-started/07-choose-lite-vs-server" },
           { text: "Core Differentiators", link: "/public/en/about/01-core-differentiators" },
           { text: "Aionis One-Page", link: "/public/en/about/02-aionis-onepage" },
         ],
@@ -94,6 +98,7 @@ export default defineConfig({
       {
         text: "Get Started",
         items: [
+          { text: "Choose Lite vs Server", link: "/public/en/getting-started/07-choose-lite-vs-server" },
           { text: "Get Started", link: "/public/en/getting-started/01-get-started" },
           { text: "5-Minute Onboarding", link: "/public/en/getting-started/02-onboarding-5min" },
           { text: "Embedding Setup", link: "/public/en/getting-started/03-embedding-setup" },
@@ -159,6 +164,7 @@ export default defineConfig({
         text: "Integrations",
         items: [
           { text: "Integrations", link: "/public/en/integrations/00-overview" },
+          { text: "Codex Local", link: "/public/en/integrations/05-codex-local" },
           { text: "MCP Integration", link: "/public/en/integrations/01-mcp" },
           { text: "OpenWork", link: "/public/en/integrations/02-openwork" },
           { text: "LangGraph", link: "/public/en/integrations/03-langgraph" },

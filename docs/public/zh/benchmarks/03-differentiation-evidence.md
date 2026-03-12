@@ -4,56 +4,72 @@ title: "差异化证据"
 
 # 差异化证据
 
-本页说明如何证明 Aionis 相比“仅检索记忆”方案的差异化优势。
+本页说明如何证明：Aionis 不是“更强一点的检索记忆”，而是更完整的执行记忆产品。
 
-## 待验证主张
+## 真正需要证明什么
 
-1. 在启用 policy loop 时任务成功率更高
-2. 重复运行稳定性更好
-3. 通过可追溯决策与反馈链实现更强可控性
+如果要把 Aionis 讲成产品，而不是一个架构概念，公开证据至少要证明四件事：
 
-## Benchmark 方法
+1. 新会话可以继续任务，而不是重新开始
+2. 成功执行可以 replay 和复用，而不只是被回忆
+3. 运行过程是可审计、可治理的
+4. 这种连续性会在真实任务里减少重复 token 成本
 
-运行 Aionis 基准套件（XMB 场景）：
+## 重要的证据类型
 
-```bash
-npm run -s bench:aionis:v01 -- --suites xmb
-```
+### 1. 连续性证据
 
-核心产物：
+最强的公开差异化，不应该先从 synthetic benchmark 开始，而应该先证明：
 
-1. `details.json`
-2. `summary.json`
-3. `report.md`
+1. 一个会话把工作写下或交接
+2. 另一个会话可以恢复并继续
+3. 结果证明系统避免了 rediscovery
 
-## 关键指标
+这也是为什么 Codex + MCP 这条路径很重要。
 
-1. `success_rate_gain`
-2. `selection_switch_reduction`
-3. `feedback_link_coverage`
-4. `source_rule_coverage`
+### 2. Replay 与复用证据
 
-解读方式：
+Aionis 还要证明成功执行会沉淀成：
 
-1. 成功率增益为正，说明 policy loop 有效
-2. 切换次数降低，说明稳定性提升
-3. 覆盖率高，说明治理与回放可见性更强
+1. replay run
+2. playbook
+3. 可治理的复用路径
 
-## 周证据包
+如果它只能回忆文本，它就还太像 memory plugin。
 
-```bash
-npm run -s evidence:weekly -- --scope default --window-hours 168 --strict
-```
+### 3. 成本下降证据
 
-证据包重点：
+token 下降重要，但应被解释为“连续性改善带来的结果”：
 
-1. 治理周报（`governance_weekly/summary.json`）
-2. 执行闭环 gate 输出（`raw/execution_loop_gate.json`）
-3. sandbox 探针产物（`raw/sandbox_api_probe.json`）
-4. benchmark 摘要与报告（`bench_xmb/summary.json`, `bench_xmb/report.md`）
+1. 少重新读
+2. 少重新想
+3. 少重新解释
+4. 少把输出浪费在恢复任务状态上
 
-## 相关页面
+### 4. 治理证据
+
+Aionis 的另一个差异化，在于这些东西都能留下来：
+
+1. 决策
+2. feedback link
+3. replay trace
+4. review / promotion surface
+
+## 公开阅读顺序
 
 1. [Benchmark 快照（公开版）](/public/zh/benchmarks/02-benchmark-snapshot-public)
-2. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
+2. [性能基线](/public/zh/benchmarks/05-performance-baseline)
 3. [策略与执行闭环](/public/zh/policy-execution/00-policy-execution-loop)
+4. [Codex Local](/public/zh/integrations/05-codex-local)
+
+## 这对产品叙事意味着什么
+
+如果公开证据能证明：
+
+1. 真实跨会话续做
+2. replayable、可治理的执行复用
+3. 可量化的成本下降
+
+那 Aionis 就不只是“Agent 记忆系统”。
+
+它是 Agent 的执行记忆。
