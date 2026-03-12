@@ -48,6 +48,13 @@ function invalidArgs(error: z.ZodError): ToolResult {
   };
 }
 
+function sanitizeToolArgs(rawArgs: unknown): Record<string, unknown> {
+  if (!rawArgs || typeof rawArgs !== "object") return {};
+  const args = { ...(rawArgs as Record<string, unknown>) };
+  delete args._meta;
+  return args;
+}
+
 function stringifyResult(toolName: string, result: unknown, env: AionisDevEnv): string {
   const summary = extractToolResultSummary(result);
   if (summary) {
@@ -865,7 +872,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: "aionis_replay_run_get",
     title: "Aionis Replay Run Get",
     description: "Fetch a replay run and optionally its steps and artifacts.",
-    path: "/v1/memory/replay/run/get",
+    path: "/v1/memory/replay/runs/get",
     argsSchema: ReplayRunGetArgs,
     inputSchema: schemaObject({ tenant_id: { type: "string" }, scope: { type: "string" }, run_id: { type: "string" }, include_steps: { type: "boolean" }, include_artifacts: { type: "boolean" } }, ["run_id"]),
   },
@@ -979,7 +986,7 @@ export async function invokeTool(
     return { isError: true, content: [{ type: "text", text: `unknown_tool: ${name}` }] };
   }
 
-  const args = rawArgs && typeof rawArgs === "object" ? (rawArgs as Record<string, unknown>) : {};
+  const args = sanitizeToolArgs(rawArgs);
   const parsed = tool.argsSchema.safeParse(args);
   if (!parsed.success) {
     return invalidArgs(parsed.error);

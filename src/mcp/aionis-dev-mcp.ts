@@ -77,13 +77,18 @@ async function handle(request: JsonRpcRequest): Promise<void> {
   }
 
   if (method === "tools/call") {
+    const toolCallParams =
+      request.params && typeof request.params === "object"
+        ? Object.fromEntries(Object.entries(request.params as Record<string, unknown>).filter(([key]) => key !== "_meta"))
+        : request.params;
+
     const parsed = z
       .object({
         name: z.string().min(1),
         arguments: z.unknown().optional(),
       })
       .strict()
-      .safeParse(request.params);
+      .safeParse(toolCallParams);
 
     if (!parsed.success) {
       if (!isNotification) {
