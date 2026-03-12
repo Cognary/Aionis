@@ -106,6 +106,10 @@ Current Lite alpha intentionally rejects these outer surfaces:
 
 Those route groups return stable `501 server_only_in_lite`.
 
+If you are operating Lite locally, read:
+
+1. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
+
 ## Option C: Self-Host (Docker)
 
 ```bash
@@ -160,9 +164,12 @@ Your onboarding is complete when:
 2. `400 invalid_request`: required fields missing or invalid JSON shape.
 3. Empty recall: newly written content may need brief indexing time.
 4. `warnings[0].code=write_no_nodes`: write committed with `nodes=0`, so no recallable node was added.
+5. Empty `find` after a private write: this may be memory-lane visibility, not a broken Lite store.
+6. Pack route failure in Lite: check `ADMIN_TOKEN` at startup and `X-Admin-Token` on the request.
 
 ## Next Steps
 
 1. Configure production embeddings: [Embedding Setup](/public/en/getting-started/03-embedding-setup)
-2. Build a full memory workflow: [Build Memory Workflows](/public/en/guides/01-build-memory)
-3. Explore API contracts: [API Reference](/public/en/api-reference/00-api-reference)
+2. Run the Lite operator checklist: [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
+3. Build a full memory workflow: [Build Memory Workflows](/public/en/guides/01-build-memory)
+4. Explore API contracts: [API Reference](/public/en/api-reference/00-api-reference)

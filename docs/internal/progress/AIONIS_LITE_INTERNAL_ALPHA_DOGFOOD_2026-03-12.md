@@ -5,6 +5,7 @@ Branch baseline:
 
 1. first pass: `main@1561a10`
 2. second pass: `main@000dd37`
+3. third pass: `main@833bc6e`
 
 ## Summary
 
@@ -16,7 +17,8 @@ Current conclusion:
 2. Fresh-write recallability is now restored in a real Lite process.
 3. Replay lifecycle is now restored in a real Lite process.
 4. Pack export/import remains usable as the Lite-to-Server bridge.
-5. The main remaining frictions are operator polish, not kernel bring-up.
+5. A repeatable real-process dogfood script is now green on `main`.
+6. The main remaining frictions are operator polish, not kernel bring-up.
 
 ## Environment
 
@@ -120,6 +122,33 @@ For dogfooding conclusions, this means:
 1. operator workflows should use shared-lane examples unless consumer identity is part of the scenario
 2. any perceived `find` regression must be checked against memory-lane visibility first
 
+## Third Pass Findings
+
+The third pass reran the canonical script path after publishing Lite operator notes.
+
+Command:
+
+- `npm run -s lite:dogfood`
+
+Observed behavior:
+
+1. the script completed with `ok = true`
+2. all HTTP checks returned `200`
+3. fresh write still returned `lite_embedding_backfill_completed_inline`
+4. `find` returned one shared-lane node
+5. `recall_text`, `planning/context`, and `context/assemble` all remained non-empty
+6. pack export/import remained green
+7. replay lifecycle remained green
+
+Artifact:
+
+- [dogfood_20260312_114014](/Users/lucio/Desktop/Aionis/artifacts/lite/dogfood_20260312_114014)
+
+Interpretation:
+
+1. the canonical dogfood workflow is now stable on current `main`
+2. publishing operator guidance did not reveal a new Lite runtime regression
+
 ## Remaining Frictions
 
 ### 1. Pack operator friction remains
@@ -145,6 +174,11 @@ The second pass confirmed that ad hoc manual verification is now strong enough t
 To reduce drift, the repository now includes:
 
 - `npm run -s lite:dogfood`
+
+Public operator guidance now also exists at:
+
+1. [Lite Operator Notes (EN)](/Users/lucio/Desktop/Aionis/docs/public/en/getting-started/04-lite-operator-notes.md)
+2. [Lite 运维说明 (ZH)](/Users/lucio/Desktop/Aionis/docs/public/zh/getting-started/04-lite-operator-notes.md)
 
 That script exercises the same real-process workflow:
 

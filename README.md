@@ -240,6 +240,10 @@ Current Lite alpha intentionally keeps some outer surfaces server-only:
 
 Those routes return stable `501 server_only_in_lite`.
 
+Operator notes and troubleshooting:
+
+- [Lite Operator Notes](https://doc.aionisos.com/public/en/getting-started/04-lite-operator-notes)
+
 ## SDKs and Distribution
 
 1. TypeScript SDK: [`@aionis/sdk`](https://www.npmjs.com/package/@aionis/sdk)

@@ -105,6 +105,10 @@ Lite Alpha 当前有意保留这两个 server-only 外层面：
 
 它们会稳定返回 `501 server_only_in_lite`。
 
+如果你要本地长期跑 Lite，建议继续看：
+
+1. [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
+
 ## 方案 C：Self-Host（Docker）
 
 ```bash
@@ -164,12 +168,18 @@ make stack-down
    新写入内容可能还没形成可召回节点，或 `nodes` 本身为空。
 4. `warnings[0].code=write_no_nodes`
    commit 成功了，但没有真正写入可召回 node。
+5. private write 之后 `find` 为空
+   这可能是 memory lane 可见性，不一定是 Lite store 出错。
+6. Lite 下 pack 路由失败
+   先检查启动时是否设置了 `ADMIN_TOKEN`，以及请求里是否带了 `X-Admin-Token`。
 
 ## 下一步
 
 1. 配置正式 Embedding：
    [Embedding 配置](/public/zh/getting-started/03-embedding-setup)
-2. 继续搭完整 memory workflow：
+2. 跑一遍 Lite 运维清单：
+   [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
+3. 继续搭完整 memory workflow：
    [构建 Memory Workflow](/public/zh/guides/01-build-memory)
-3. 查看 API 契约：
+4. 查看 API 契约：
    [API Reference](/public/zh/api-reference/00-api-reference)

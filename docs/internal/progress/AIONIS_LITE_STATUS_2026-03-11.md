@@ -8,6 +8,9 @@ Related docs:
 - [AIONIS_LITE_VS_SERVER_ARCHITECTURE_ANALYSIS_2026-03-11.md](/Users/lucio/Desktop/Aionis/docs/internal/architecture/AIONIS_LITE_VS_SERVER_ARCHITECTURE_ANALYSIS_2026-03-11.md)
 - [AIONIS_LITE_ALPHA_RELEASE_MEMO_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_ALPHA_RELEASE_MEMO_2026-03-12.md)
 - [AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md)
+- [AIONIS_LITE_BETA_GATE_V1_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_BETA_GATE_V1_2026-03-12.md)
+- [Lite Operator Notes (EN)](/Users/lucio/Desktop/Aionis/docs/public/en/getting-started/04-lite-operator-notes.md)
+- [Lite 运维说明 (ZH)](/Users/lucio/Desktop/Aionis/docs/public/zh/getting-started/04-lite-operator-notes.md)
 
 ## 1. Executive Summary
 
@@ -181,6 +184,8 @@ It is now reasonable to say:
 3. replay can survive the edition split
 4. multiple kernel-required paths already run locally without Postgres-shaped runtime assumptions
 5. internal alpha dogfooding now validates fresh-write recallability and replay lifecycle in a real Lite process
+6. repeated real-process dogfooding now has a canonical green script path on `main`
+7. Lite beta gate v1 now exists and currently fails only on repeated-dogfood count
 
 ### 5.2 What We Cannot Say Yet
 
@@ -233,6 +238,8 @@ Current implementation note:
 4. current gate now passes with no failing items
 5. release-position summary now exists in [AIONIS_LITE_ALPHA_RELEASE_MEMO_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_ALPHA_RELEASE_MEMO_2026-03-12.md)
 6. repeated internal operator validation now has a canonical script: `npm run -s lite:dogfood`
+7. public operator guidance now exists in EN/ZH getting-started docs
+8. beta-gate v1 now exists as `npm run -s job:lite-beta-gate`
 
 ## 7. Recommended Next Steps
 
@@ -245,9 +252,9 @@ Recommended order:
 
 The highest-value next implementation targets are:
 
-1. Lite operator/developer docs
-2. memory-lane visibility guidance for local inspection
-3. repeated real-process dogfood and troubleshooting polish
+1. repeated real-process dogfood over multiple runs and environments
+2. memory-lane visibility guidance for local inspection examples
+3. startup and troubleshooting polish beyond the current operator notes
 4. beta-grade hardening gates
 
 ## 8. Final Judgment
