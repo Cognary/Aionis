@@ -6,48 +6,58 @@ sidebar: false
 aside: false
 ---
 
-<div class="mint-header">
-  <span class="status-pill stable">Lite Public Beta + Server Core</span>
-  <p class="hero-kicker">Agents keep rediscovering the same work.</p>
-  <h1>Aionis</h1>
-  <p class="mint-subtitle">
-    Aionis gives agents execution memory so the next session continues the work instead of starting from zero.
-  </p>
-  <p class="hero-support">
-    In a real continuation test on <code>pallets/click</code>, Aionis reduced output tokens by <strong>77%</strong>
-    and total tokens by <strong>33%</strong> by avoiding repeated rediscovery.
-  </p>
-  <div class="hero-highlights">
-    <div class="hero-highlight">
-      <span class="hero-highlight-label">Continue</span>
-      <span class="hero-highlight-text">Resume work across sessions instead of rebuilding context.</span>
+<div class="landing-hero">
+  <div class="landing-hero-copy">
+    <span class="status-pill stable">Lite Public Beta + Server Core</span>
+    <p class="hero-kicker">Agents keep rediscovering the same work.</p>
+    <h1>Aionis gives agents execution memory.</h1>
+    <p class="mint-subtitle">
+      The next session resumes the work instead of rereading the repo, rebuilding the mental model, and re-explaining the same reasoning.
+    </p>
+    <p class="hero-support">
+      Aionis is execution continuity for agents: durable memory, exact handoff recovery, replayable workflows, and inspectable evidence.
+    </p>
+    <div class="landing-cta-row">
+      <a class="landing-cta primary" href="/guide/lite-public-beta">Try Lite in 5 minutes</a>
+      <a class="landing-cta" href="/guide/choose-lite-or-server">Choose Lite or Server</a>
+      <a class="landing-cta" href="/guide/codex-local-profile">Use with Codex</a>
     </div>
-    <div class="hero-highlight">
-      <span class="hero-highlight-label">Recover</span>
-      <span class="hero-highlight-text">Bring back exact handoffs, evidence, and replayable steps.</span>
-    </div>
-    <div class="hero-highlight">
-      <span class="hero-highlight-label">Replay</span>
-      <span class="hero-highlight-text">Reuse successful execution instead of rediscovering it every time.</span>
+    <div class="landing-proof-strip">
+      <span>Execution continuity</span>
+      <span>Exact handoff recovery</span>
+      <span>Replayable workflows</span>
+      <span>Auditable evidence</span>
     </div>
   </div>
-  <DragScroller>
-    <div class="hero-flow" aria-hidden="true">
-      <span>memory.write</span>
-      <span>context.assemble</span>
-      <span>policy.select</span>
-      <span>decision.persist</span>
-      <span>replay.run</span>
+  <div class="landing-proof-panel">
+    <div class="proof-card featured">
+      <p class="proof-label">Real continuation test</p>
+      <h2><code>pallets/click</code></h2>
+      <p class="proof-summary">
+        Aionis resumed a real repository task from stored execution memory instead of starting from zero.
+      </p>
+      <div class="proof-metrics">
+        <div>
+          <span class="metric-value">77%</span>
+          <span class="metric-label">lower output tokens</span>
+        </div>
+        <div>
+          <span class="metric-value">33%</span>
+          <span class="metric-label">lower total tokens</span>
+        </div>
+      </div>
+      <a class="proof-link" href="/guide/evidence">See the public evidence</a>
     </div>
-  </DragScroller>
-  <DragScroller>
-    <div class="hero-meta">
-      <span>request_id</span>
-      <span>run_id</span>
-      <span>decision_id</span>
-      <span>commit_uri</span>
+    <div class="proof-card compact">
+      <p class="proof-label">What changes</p>
+      <ul class="proof-list">
+        <li>Less rediscovery across sessions</li>
+        <li>Less repeated prompt rebuilding</li>
+        <li>More exact recovery of prior work</li>
+        <li>More reusable execution paths</li>
+      </ul>
     </div>
-  </DragScroller>
+  </div>
 </div>
 
 <div class="home-section-lead">
@@ -63,117 +73,89 @@ aside: false
 </ul>
 
 <div class="home-section-lead">
-  <span>Core operating loop</span>
+  <span>Why teams switch</span>
+</div>
+<div class="landing-value-grid">
+  <div class="landing-value-card">
+    <h3>Continue</h3>
+    <p>New sessions resume work from stored execution state instead of rebuilding context from scratch.</p>
+  </div>
+  <div class="landing-value-card">
+    <h3>Recover</h3>
+    <p>Exact handoffs, evidence, and prior decisions can be brought back when continuity matters.</p>
+  </div>
+  <div class="landing-value-card">
+    <h3>Replay</h3>
+    <p>Successful runs can become reusable playbooks instead of one-off prompt history.</p>
+  </div>
+</div>
+
+<div class="home-section-lead">
+  <span>How it works</span>
 </div>
 <AnimatedFlow />
 
-## Why teams use Aionis
-
-1. They are tired of agents re-reading the same repo and re-explaining the same reasoning.
-2. They need durable execution memory instead of fragile prompt history.
-3. They need replayable workflows for incidents, regressions, and reuse.
-4. They need evidence and identifiers they can inspect later.
-
-## Evidence at a glance
-
-1. Real continuation test on `pallets/click`
-2. Output tokens down **77%**
-3. Total tokens down **33%**
-4. Lite is already available as a public beta local path
-
-Read [Evidence](/guide/evidence) for the public proof points behind those claims.
+<div class="home-section-lead">
+  <span>Evidence, not promises</span>
+</div>
+<div class="landing-evidence-grid">
+  <a class="landing-evidence-card" href="/guide/evidence">
+    <span class="evidence-tag">Continuity</span>
+    <h3>Cross-session work continues instead of resetting</h3>
+    <p>Public A/B runs already show the difference between restarting from prompt history and resuming from execution memory.</p>
+  </a>
+  <a class="landing-evidence-card" href="/guide/evidence">
+    <span class="evidence-tag">Cost</span>
+    <h3>Real token reduction on a larger open-source repo</h3>
+    <p><code>pallets/click</code> showed 77% lower output tokens and 33% lower total tokens in continuation-sensitive work.</p>
+  </a>
+  <a class="landing-evidence-card" href="/guide/lite-public-beta">
+    <span class="evidence-tag">Product</span>
+    <h3>Lite is real, local, and usable now</h3>
+    <p>Lite is not a concept demo. It is the fastest path to trying Aionis locally with a repeatable beta workflow.</p>
+  </a>
+</div>
 
 ## Pick your path
 
-<div class="home-cards">
-  <a class="home-card" href="/guide/lite-public-beta">
-    <div class="card-icon-panel">
-      <IoFlash class="card-icon" width="22" height="22" stroke-width="1.7" />
-    </div>
-    <div class="card-body">
-      <h3>Try Lite</h3>
-      <p>Run Aionis locally with SQLite, validate the core workflow fast, and start with the lowest-friction path.</p>
-    </div>
+<div class="landing-path-grid">
+  <a class="landing-path-card lite" href="/guide/lite-public-beta">
+    <span class="path-pill">Fastest path</span>
+    <h3>Start with Lite</h3>
+    <p>Run Aionis locally with SQLite, validate continuity, replay, and handoff recovery, and get to first value quickly.</p>
+    <strong>Best for local evaluation, single-user workflows, and Codex + MCP.</strong>
   </a>
-  <a class="home-card" href="/guide/choose-lite-or-server">
-    <div class="card-icon-panel">
-      <IoGitCompare class="card-icon" width="22" height="22" stroke-width="1.7" />
-    </div>
-    <div class="card-body">
-      <h3>Choose Lite or Server</h3>
-      <p>Pick the right entrypoint for local evaluation, Codex workflows, or self-hosted production deployments.</p>
-    </div>
+  <a class="landing-path-card server" href="/guide/choose-lite-or-server">
+    <span class="path-pill">Production path</span>
+    <h3>Move to Server</h3>
+    <p>Adopt the self-hosted production path when you need stronger deployment discipline, operations, and team-facing runtime behavior.</p>
+    <strong>Best for self-hosted production and operational rollout.</strong>
   </a>
+</div>
+
+<div class="home-cards compact">
   <a class="home-card" href="/guide/overview">
-    <div class="card-icon-panel">
-      <IoJournalPage class="card-icon" width="22" height="22" stroke-width="1.7" />
-    </div>
     <div class="card-body">
       <h3>Overview</h3>
-      <p>Understand what Aionis is, why it exists, and when it should be part of your agent stack.</p>
+      <p>Understand what Aionis is, why it exists, and why it is more than token optimization.</p>
     </div>
   </a>
   <a class="home-card" href="/guide/quickstart">
-    <div class="card-icon-panel">
-      <IoPlay class="card-icon" width="22" height="22" stroke-width="1.7" />
-    </div>
     <div class="card-body">
       <h3>Quickstart</h3>
-      <p>Get to a working write and recall flow fast, then keep the IDs required for later replay.</p>
+      <p>Get to a working write and recall flow fast, then keep the identifiers required for later replay.</p>
     </div>
   </a>
   <a class="home-card" href="/guide/codex-local-profile">
-    <div class="card-icon-panel">
-      <IoTerminal class="card-icon" width="22" height="22" stroke-width="1.7" />
-    </div>
     <div class="card-body">
       <h3>Use it with Codex</h3>
-      <p>Run Codex with Aionis Lite or the tracked standalone profile and keep continuity across local coding sessions.</p>
-    </div>
-  </a>
-  <a class="home-card" href="/guide/evidence">
-    <div class="card-icon-panel">
-      <IoStatsUpSquare class="card-icon" width="22" height="22" stroke-width="1.7" />
-    </div>
-    <div class="card-body">
-      <h3>See the Evidence</h3>
-      <p>Read the public proof points behind continuity, replay reuse, exact handoff recovery, and Lite public beta readiness.</p>
+      <p>Run Codex with Aionis Lite and keep continuity across local coding sessions.</p>
     </div>
   </a>
   <a class="home-card" href="/api/">
-    <div class="card-icon-panel">
-      <IoCodeBrackets class="card-icon" width="22" height="22" stroke-width="1.7" />
-    </div>
     <div class="card-body">
       <h3>API Reference</h3>
-      <p>Use the memory, policy, replay, and endpoint reference pages when wiring production contracts.</p>
-    </div>
-  </a>
-  <a class="home-card" href="/guide/tutorials/">
-    <div class="card-icon-panel">
-      <IoOpenBook class="card-icon" width="22" height="22" stroke-width="1.7" />
-    </div>
-    <div class="card-body">
-      <h3>Tutorials</h3>
-      <p>Follow full, task-based walkthroughs for agent integration, replay, release gates, and policy tuning.</p>
-    </div>
-  </a>
-  <a class="home-card" href="/operations/">
-    <div class="card-icon-panel">
-      <IoShieldCheck class="card-icon" width="22" height="22" stroke-width="1.7" />
-    </div>
-    <div class="card-body">
-      <h3>Operations</h3>
-      <p>Run go-live checks, monitoring, incident response, and repeatable runbooks for production traffic.</p>
-    </div>
-  </a>
-  <a class="home-card" href="/reference/">
-    <div class="card-icon-panel">
-      <IoMultiplePages class="card-icon" width="22" height="22" stroke-width="1.7" />
-    </div>
-    <div class="card-body">
-      <h3>Reference</h3>
-      <p>Check configuration, security baseline, FAQ, changelog, and roadmap when standardizing your rollout.</p>
+      <p>Use memory, policy, replay, and endpoint contracts when wiring production integrations.</p>
     </div>
   </a>
 </div>
