@@ -9,6 +9,7 @@ Related:
 2. [LITE_SINGLE_USER_KERNEL_IMPLEMENTATION_SPEC.md](/Users/lucio/Desktop/Aionis/docs/LITE_SINGLE_USER_KERNEL_IMPLEMENTATION_SPEC.md)
 3. [LITE_ALPHA_GATE_V1_20260311.md](/Users/lucio/Desktop/Aionis/artifacts/lite/LITE_ALPHA_GATE_V1_20260311.md)
 4. [scripts/start-lite.sh](/Users/lucio/Desktop/Aionis/scripts/start-lite.sh)
+5. [AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md)
 
 ## Decision
 
@@ -62,6 +63,10 @@ The current alpha decision is backed by these repository facts:
    - `aionis_edition = "lite"`
    - `memory_store_backend = "lite_sqlite"`
    - Lite write/recall store presence
+6. A second real-process dogfood pass now validates:
+   - fresh-write recallability
+   - `planning/context` and `context/assemble` usefulness after local write
+   - replay lifecycle through `run/start -> step -> run/end -> runs/get`
 
 ## Current Known Limits
 
@@ -88,6 +93,12 @@ cp .env.example .env
 npm install
 npm run build
 npm run start:lite
+```
+
+Canonical internal dogfood path:
+
+```bash
+npm run lite:dogfood
 ```
 
 Recommended health check:

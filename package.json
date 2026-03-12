@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "start:lite": "bash scripts/start-lite.sh",
+    "lite:dogfood": "bash scripts/lite-dogfood.sh",
     "fake-embed": "tsx src/dev/fake-embed.ts",
     "sdk:build": "tsc -p packages/sdk/tsconfig.build.json",
     "sdk:pack-dry-run": "npm --prefix packages/sdk run pack:dry-run",
