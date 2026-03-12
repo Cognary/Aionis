@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z, type ZodTypeAny } from "zod";
 import { type AionisDevEnv, HttpError, clipText, postJson } from "./client.js";
 import { type ToolResultSummary } from "../../memory/tool-result-summary.js";
@@ -101,6 +102,59 @@ function summarizeRecallText(result: any, env: AionisDevEnv): string {
   return clipText(text, env.AIONIS_MAX_TOOL_TEXT_CHARS);
 }
 
+function summarizeMemoryFind(result: any, env: AionisDevEnv): string {
+  const summary = result?.find_summary;
+  if (summary && typeof summary === "object" && summary.summary_version === "find_summary_v1") {
+    return clipText(
+      [
+        "memory_find result",
+        Number.isFinite(Number(summary.returned_nodes)) ? `returned_nodes: ${Number(summary.returned_nodes)}` : null,
+        summary.has_more === true ? "has_more: true" : "has_more: false",
+        Array.isArray(summary.filters_applied) && summary.filters_applied.length > 0
+          ? `filters_applied: ${summary.filters_applied.join(", ")}`
+          : null,
+        summary.type_counts && typeof summary.type_counts === "object"
+          ? `type_counts: ${Object.entries(summary.type_counts).map(([k, v]) => `${k}=${v}`).join(", ")}`
+          : null,
+        Array.isArray(result?.nodes) && result.nodes.length > 0
+          ? `top_nodes: ${result.nodes
+              .slice(0, 3)
+              .map((node: any) => node?.uri ?? node?.id ?? "<unknown>")
+              .join(" | ")}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      env.AIONIS_MAX_TOOL_TEXT_CHARS,
+    );
+  }
+  return clipText(`memory_find result\n${JSON.stringify(result, null, 2)}`, env.AIONIS_MAX_TOOL_TEXT_CHARS);
+}
+
+function summarizeMemoryResolve(result: any, env: AionisDevEnv): string {
+  const summary = result?.resolve_summary;
+  if (summary && typeof summary === "object" && summary.summary_version === "resolve_summary_v1") {
+    return clipText(
+      [
+        "memory_resolve result",
+        typeof summary.payload_kind === "string" ? `payload_kind: ${summary.payload_kind}` : null,
+        typeof summary.resolved_type === "string" ? `resolved_type: ${summary.resolved_type}` : null,
+        Number.isFinite(Number(summary.related_uri_count)) ? `related_uri_count: ${Number(summary.related_uri_count)}` : null,
+        Array.isArray(summary.related_uris) && summary.related_uris.length > 0
+          ? `related_uris: ${summary.related_uris.slice(0, 4).join(" | ")}`
+          : null,
+        Array.isArray(summary.object_keys) && summary.object_keys.length > 0
+          ? `object_keys: ${summary.object_keys.join(", ")}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      env.AIONIS_MAX_TOOL_TEXT_CHARS,
+    );
+  }
+  return clipText(`memory_resolve result\n${JSON.stringify(result, null, 2)}`, env.AIONIS_MAX_TOOL_TEXT_CHARS);
+}
+
 function summarizePlanningContext(result: any, env: AionisDevEnv): string {
   const planningSummary = result?.planning_summary;
   const selected =
@@ -141,6 +195,60 @@ function summarizePlanningContext(result: any, env: AionisDevEnv): string {
     ]
       .filter(Boolean)
       .join("\n\n"),
+    env.AIONIS_MAX_TOOL_TEXT_CHARS,
+  );
+}
+
+function summarizeStoreHandoff(result: any, env: AionisDevEnv): string {
+  const node = Array.isArray(result?.nodes) ? result.nodes[0] : null;
+  return clipText(
+    [
+      "handoff_store result",
+      typeof result?.commit_id === "string" ? `commit_id: ${result.commit_id}` : null,
+      typeof result?.commit_uri === "string" ? `commit_uri: ${result.commit_uri}` : null,
+      typeof node?.id === "string" ? `node_id: ${node.id}` : null,
+      typeof node?.uri === "string" ? `node_uri: ${node.uri}` : null,
+      typeof result?.scope === "string" ? `scope: ${result.scope}` : null,
+      typeof result?.tenant_id === "string" ? `tenant_id: ${result.tenant_id}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    env.AIONIS_MAX_TOOL_TEXT_CHARS,
+  );
+}
+
+function summarizeRecoveredHandoff(payload: {
+  recall: unknown;
+  find: any;
+  resolve: any;
+}, env: AionisDevEnv): string {
+  const recallText = typeof (payload.recall as any)?.context?.text === "string"
+    ? (payload.recall as any).context.text
+    : null;
+  const node = payload.resolve?.node ?? {};
+  const slots = node?.slots && typeof node.slots === "object" ? node.slots : {};
+  const acceptanceChecks = Array.isArray(slots.acceptance_checks) ? slots.acceptance_checks : [];
+
+  return clipText(
+    [
+      "handoff_recover result",
+      typeof slots.handoff_kind === "string" ? `handoff_kind: ${slots.handoff_kind}` : null,
+      typeof slots.anchor === "string" ? `anchor: ${slots.anchor}` : null,
+      typeof slots.file_path === "string" ? `file_path: ${slots.file_path}` : null,
+      typeof slots.symbol === "string" ? `symbol: ${slots.symbol}` : null,
+      typeof slots.risk === "string" ? `risk: ${slots.risk}` : null,
+      typeof node?.text_summary === "string" ? `summary: ${node.text_summary}` : null,
+      typeof slots.handoff_text === "string" ? `handoff_text: ${slots.handoff_text}` : null,
+      acceptanceChecks.length > 0 ? `acceptance_checks: ${acceptanceChecks.join(" | ")}` : null,
+      typeof node?.uri === "string" ? `source_uri: ${node.uri}` : null,
+      typeof node?.commit_id === "string" ? `commit_id: ${node.commit_id}` : null,
+      recallText ? `supporting_recall: ${recallText}` : null,
+      payload.find?.find_summary && typeof payload.find.find_summary === "object"
+        ? `matched_nodes: ${Number(payload.find.find_summary.returned_nodes ?? 0)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
     env.AIONIS_MAX_TOOL_TEXT_CHARS,
   );
 }
@@ -356,6 +464,69 @@ const MemoryRecallTextArgs = z.object({
   rules_context: z.unknown().optional(),
   rules_include_shadow: z.boolean().optional(),
   rules_limit: z.number().int().min(1).max(200).optional(),
+});
+
+const MemoryFindArgs = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  uri: z.string().min(1).optional(),
+  type: z.string().min(1).optional(),
+  id: z.string().min(1).optional(),
+  client_id: z.string().min(1).optional(),
+  title_contains: z.string().min(1).optional(),
+  text_contains: z.string().min(1).optional(),
+  memory_lane: z.enum(["private", "shared"]).optional(),
+  slots_contains: JsonRecord.optional(),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+  offset: z.number().int().min(0).max(5000).optional(),
+  include_meta: z.boolean().optional(),
+  include_slots: z.boolean().optional(),
+  include_slots_preview: z.boolean().optional(),
+  slots_preview_keys: z.number().int().min(1).max(50).optional(),
+});
+
+const MemoryResolveArgs = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  uri: z.string().min(1),
+  include_meta: z.boolean().optional(),
+  include_slots: z.boolean().optional(),
+  include_slots_preview: z.boolean().optional(),
+  slots_preview_keys: z.number().int().min(1).max(50).optional(),
+});
+
+const HandoffKind = z.enum(["patch_handoff", "review_handoff", "task_handoff"]);
+
+const MemoryStoreHandoffArgs = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  memory_lane: z.enum(["private", "shared"]).optional(),
+  anchor: z.string().min(1),
+  file_path: z.string().min(1),
+  repo_root: z.string().min(1).optional(),
+  symbol: z.string().min(1).optional(),
+  handoff_kind: HandoffKind.default("patch_handoff"),
+  title: z.string().min(1).optional(),
+  summary: z.string().min(1),
+  handoff_text: z.string().min(1),
+  risk: z.string().min(1).optional(),
+  acceptance_checks: z.array(z.string().min(1)).max(20).optional(),
+  tags: z.array(z.string().min(1)).max(20).optional(),
+});
+
+const MemoryRecoverHandoffArgs = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  anchor: z.string().min(1),
+  file_path: z.string().min(1).optional(),
+  symbol: z.string().min(1).optional(),
+  handoff_kind: HandoffKind.default("patch_handoff"),
+  memory_lane: z.enum(["private", "shared"]).optional(),
+  limit: z.number().int().min(1).max(20).optional(),
+  recall_limit: z.number().int().min(1).max(50).optional(),
 });
 
 const ToolsSelectArgs = z.object({
@@ -625,6 +796,127 @@ async function handleCodexLearnFromRun(env: AionisDevEnv, args: Record<string, u
   return textResult(clipText(JSON.stringify(result, null, 2), env.AIONIS_MAX_TOOL_TEXT_CHARS));
 }
 
+async function handleStoreHandoff(env: AionisDevEnv, args: Record<string, unknown>): Promise<ToolResult> {
+  const parsed = MemoryStoreHandoffArgs.parse(args);
+  const nodeId = randomUUID();
+  const handoffText = [
+    `anchor=${parsed.anchor}`,
+    `file=${parsed.file_path}`,
+    parsed.symbol ? `symbol=${parsed.symbol}` : null,
+    `kind=${parsed.handoff_kind}`,
+    parsed.risk ? `risk=${parsed.risk}` : null,
+    `summary=${parsed.summary}`,
+    `handoff=${parsed.handoff_text}`,
+    parsed.acceptance_checks && parsed.acceptance_checks.length > 0
+      ? `acceptance_checks=${parsed.acceptance_checks.join(" | ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+  const result = await postJson(env, "/v1/memory/write", {
+    tenant_id: parsed.tenant_id,
+    scope: parsed.scope,
+    actor: parsed.actor,
+    memory_lane: parsed.memory_lane ?? "shared",
+    input_text: handoffText,
+    nodes: [
+      {
+        id: nodeId,
+        type: "event",
+        title: parsed.title ?? `Handoff ${parsed.anchor}`,
+        text_summary: parsed.summary,
+        slots: {
+          summary_kind: "handoff",
+          handoff_kind: parsed.handoff_kind,
+          anchor: parsed.anchor,
+          file_path: parsed.file_path,
+          repo_root: parsed.repo_root,
+          symbol: parsed.symbol,
+          risk: parsed.risk,
+          handoff_text: parsed.handoff_text,
+          acceptance_checks: parsed.acceptance_checks ?? [],
+          tags: parsed.tags ?? [],
+        },
+      },
+    ],
+  });
+  return textResult(summarizeStoreHandoff(result, env));
+}
+
+function buildHandoffRecallQuery(args: z.infer<typeof MemoryRecoverHandoffArgs>): string {
+  return [
+    args.anchor,
+    args.file_path,
+    args.symbol,
+    args.handoff_kind,
+    "patch handoff",
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+}
+
+async function handleRecoverHandoff(env: AionisDevEnv, args: Record<string, unknown>): Promise<ToolResult> {
+  const parsed = MemoryRecoverHandoffArgs.parse(args);
+  const recall = await postJson(env, "/v1/memory/recall_text", {
+    tenant_id: parsed.tenant_id,
+    scope: parsed.scope,
+    query_text: buildHandoffRecallQuery(parsed),
+    limit: parsed.recall_limit ?? 10,
+  });
+
+  const slotsContains: Record<string, unknown> = {
+    summary_kind: "handoff",
+    handoff_kind: parsed.handoff_kind,
+    anchor: parsed.anchor,
+  };
+  if (parsed.file_path) slotsContains.file_path = parsed.file_path;
+  if (parsed.symbol) slotsContains.symbol = parsed.symbol;
+
+  const find = await postJson(env, "/v1/memory/find", {
+    tenant_id: parsed.tenant_id,
+    scope: parsed.scope,
+    type: "event",
+    memory_lane: parsed.memory_lane,
+    slots_contains: slotsContains,
+    limit: parsed.limit ?? 5,
+    include_meta: true,
+    include_slots_preview: true,
+  });
+
+  const nodes = Array.isArray((find as any)?.nodes) ? ((find as any).nodes as Array<Record<string, unknown>>) : [];
+  if (nodes.length === 0) {
+    return {
+      isError: true,
+      content: [{ type: "text", text: "handoff_not_found: no matching handoff artifact was found in scope" }],
+    };
+  }
+
+  const ranked = [...nodes].sort((a, b) => {
+    const aTime = typeof a.updated_at === "string" ? Date.parse(a.updated_at) : 0;
+    const bTime = typeof b.updated_at === "string" ? Date.parse(b.updated_at) : 0;
+    return bTime - aTime;
+  });
+  const target = ranked[0];
+  const uri = typeof target.uri === "string" ? target.uri : null;
+  if (!uri) {
+    return {
+      isError: true,
+      content: [{ type: "text", text: "handoff_not_found: matching handoff node was missing a resolvable URI" }],
+    };
+  }
+
+  const resolve = await postJson(env, "/v1/memory/resolve", {
+    tenant_id: parsed.tenant_id,
+    scope: parsed.scope,
+    uri,
+    include_meta: true,
+    include_slots: true,
+  });
+
+  return textResult(summarizeRecoveredHandoff({ recall, find, resolve }, env));
+}
+
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "aionis_memory_remember",
@@ -678,6 +970,102 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         rules_limit: { type: "integer" },
       },
       ["query_text"],
+    ),
+  },
+  {
+    name: "aionis_memory_find",
+    title: "Aionis Memory Find",
+    description: "Find matching memory graph nodes before reading full payloads.",
+    path: "/v1/memory/find",
+    argsSchema: MemoryFindArgs,
+    summarize: summarizeMemoryFind,
+    inputSchema: schemaObject({
+      tenant_id: { type: "string" },
+      scope: { type: "string" },
+      uri: { type: "string" },
+      type: { type: "string" },
+      id: { type: "string" },
+      client_id: { type: "string" },
+      title_contains: { type: "string" },
+      text_contains: { type: "string" },
+      memory_lane: { type: "string", enum: ["private", "shared"] },
+      slots_contains: { type: "object" },
+      consumer_agent_id: { type: "string" },
+      consumer_team_id: { type: "string" },
+      limit: { type: "integer" },
+      offset: { type: "integer" },
+      include_meta: { type: "boolean" },
+      include_slots: { type: "boolean" },
+      include_slots_preview: { type: "boolean" },
+      slots_preview_keys: { type: "integer" },
+    }),
+  },
+  {
+    name: "aionis_memory_resolve",
+    title: "Aionis Memory Resolve",
+    description: "Resolve a memory graph URI into a full node, edge, commit, or decision payload.",
+    path: "/v1/memory/resolve",
+    argsSchema: MemoryResolveArgs,
+    summarize: summarizeMemoryResolve,
+    inputSchema: schemaObject(
+      {
+        tenant_id: { type: "string" },
+        scope: { type: "string" },
+        uri: { type: "string" },
+        include_meta: { type: "boolean" },
+        include_slots: { type: "boolean" },
+        include_slots_preview: { type: "boolean" },
+        slots_preview_keys: { type: "integer" },
+      },
+      ["uri"],
+    ),
+  },
+  {
+    name: "aionis_store_handoff",
+    title: "Aionis Store Handoff",
+    description: "Store a standardized cross-session handoff artifact in Aionis.",
+    argsSchema: MemoryStoreHandoffArgs,
+    handler: handleStoreHandoff,
+    inputSchema: schemaObject(
+      {
+        tenant_id: { type: "string" },
+        scope: { type: "string" },
+        actor: { type: "string" },
+        memory_lane: { type: "string", enum: ["private", "shared"] },
+        anchor: { type: "string" },
+        file_path: { type: "string" },
+        repo_root: { type: "string" },
+        symbol: { type: "string" },
+        handoff_kind: { type: "string", enum: ["patch_handoff", "review_handoff", "task_handoff"] },
+        title: { type: "string" },
+        summary: { type: "string" },
+        handoff_text: { type: "string" },
+        risk: { type: "string" },
+        acceptance_checks: { type: "array", items: { type: "string" } },
+        tags: { type: "array", items: { type: "string" } },
+      },
+      ["anchor", "file_path", "summary", "handoff_text"],
+    ),
+  },
+  {
+    name: "aionis_recover_handoff",
+    title: "Aionis Recover Handoff",
+    description: "Recover a standardized handoff artifact using recall plus exact object resolve.",
+    argsSchema: MemoryRecoverHandoffArgs,
+    handler: handleRecoverHandoff,
+    inputSchema: schemaObject(
+      {
+        tenant_id: { type: "string" },
+        scope: { type: "string" },
+        anchor: { type: "string" },
+        file_path: { type: "string" },
+        symbol: { type: "string" },
+        handoff_kind: { type: "string", enum: ["patch_handoff", "review_handoff", "task_handoff"] },
+        memory_lane: { type: "string", enum: ["private", "shared"] },
+        limit: { type: "integer" },
+        recall_limit: { type: "integer" },
+      },
+      ["anchor"],
     ),
   },
   {
