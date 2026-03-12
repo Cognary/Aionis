@@ -205,4 +205,6 @@ npm run -s lite:dogfood
 
 1. [5 分钟上手](/public/zh/getting-started/02-onboarding-5min)
 2. [Embedding 配置](/public/zh/getting-started/03-embedding-setup)
-3. [快速开始](/public/zh/getting-started/01-get-started)
+3. [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
+4. [快速开始](/public/zh/getting-started/01-get-started)
+5. [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)

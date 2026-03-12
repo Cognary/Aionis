@@ -108,6 +108,8 @@ Lite Alpha 当前有意保留这两个 server-only 外层面：
 如果你要本地长期跑 Lite，建议继续看：
 
 1. [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
+2. [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
+3. [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)
 
 ## 方案 C：Self-Host（Docker）
 
@@ -179,7 +181,11 @@ make stack-down
    [Embedding 配置](/public/zh/getting-started/03-embedding-setup)
 2. 跑一遍 Lite 运维清单：
    [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
-3. 继续搭完整 memory workflow：
+3. 查看 Lite public beta 边界：
+   [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
+4. 本地行为和预期不一致时，走统一排障路径：
+   [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)
+5. 继续搭完整 memory workflow：
    [构建 Memory Workflow](/public/zh/guides/01-build-memory)
-4. 查看 API 契约：
+6. 查看 API 契约：
    [API Reference](/public/zh/api-reference/00-api-reference)

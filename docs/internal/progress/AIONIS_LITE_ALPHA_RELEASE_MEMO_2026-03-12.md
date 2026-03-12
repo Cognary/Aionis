@@ -10,6 +10,8 @@ Related:
 3. [LITE_ALPHA_GATE_V1_20260311.md](/Users/lucio/Desktop/Aionis/artifacts/lite/LITE_ALPHA_GATE_V1_20260311.md)
 4. [scripts/start-lite.sh](/Users/lucio/Desktop/Aionis/scripts/start-lite.sh)
 5. [AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md)
+6. [AIONIS_LITE_PUBLIC_BETA_READINESS_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_PUBLIC_BETA_READINESS_2026-03-12.md)
+7. [AIONIS_LITE_PUBLIC_BETA_DECISION_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_PUBLIC_BETA_DECISION_2026-03-12.md)
 
 ## Decision
 
