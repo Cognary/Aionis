@@ -9,6 +9,17 @@ type StoreLike = {
 
 type LiteWriteStoreLike = WriteStoreAccess & {
   withTx: <T>(fn: () => Promise<T>) => Promise<T>;
+  setNodeEmbeddingReady: (args: {
+    scope: string;
+    id: string;
+    embedding: number[];
+    embeddingModel: string;
+  }) => Promise<void>;
+  setNodeEmbeddingFailed: (args: {
+    scope: string;
+    id: string;
+    error: string;
+  }) => Promise<void>;
   close?: () => Promise<void>;
   healthSnapshot?: () => unknown;
 };
@@ -17,6 +28,99 @@ type GateLike = {
   release: () => void;
   wait_ms: number;
 };
+
+async function completeLiteInlineEmbeddings(args: {
+  prepared: any;
+  embedder: { name: string; embed: (texts: string[]) => Promise<number[][]> } | null;
+  liteWriteStore: LiteWriteStoreLike;
+}): Promise<{
+  attempted: number;
+  updated: number;
+  failed: number;
+  error?: string;
+} | null> {
+  const { prepared, embedder, liteWriteStore } = args;
+  if (!embedder || !prepared.auto_embed_effective) return null;
+
+  const planned = ((prepared.nodes ?? []) as Array<{
+    id: unknown;
+    embedding?: unknown;
+    embed_text?: unknown;
+  }>)
+    .filter((node) => !node.embedding && typeof node.embed_text === "string" && node.embed_text.trim().length > 0)
+    .map((node) => ({
+      id: String(node.id),
+      text: String(node.embed_text),
+    }));
+  if (planned.length === 0) return null;
+
+  const ready = await liteWriteStore.readyEmbeddingNodeIds(prepared.scope, planned.map((node) => node.id));
+  const pending = planned.filter((node) => !ready.has(node.id));
+  if (pending.length === 0) {
+    return {
+      attempted: planned.length,
+      updated: 0,
+      failed: 0,
+    };
+  }
+
+  let vectors: number[][];
+  try {
+    vectors = await embedder.embed(pending.map((node) => node.text));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await liteWriteStore.withTx(async () => {
+      for (const node of pending) {
+        await liteWriteStore.setNodeEmbeddingFailed({
+          scope: prepared.scope,
+          id: node.id,
+          error: message,
+        });
+      }
+    });
+    return {
+      attempted: pending.length,
+      updated: 0,
+      failed: pending.length,
+      error: message,
+    };
+  }
+  if (vectors.length !== pending.length) {
+    const message = `unexpected embedding count: expected ${pending.length}, got ${vectors.length}`;
+    await liteWriteStore.withTx(async () => {
+      for (const node of pending) {
+        await liteWriteStore.setNodeEmbeddingFailed({
+          scope: prepared.scope,
+          id: node.id,
+          error: message,
+        });
+      }
+    });
+    return {
+      attempted: pending.length,
+      updated: 0,
+      failed: pending.length,
+      error: message,
+    };
+  }
+
+  await liteWriteStore.withTx(async () => {
+    for (let i = 0; i < pending.length; i += 1) {
+      await liteWriteStore.setNodeEmbeddingReady({
+        scope: prepared.scope,
+        id: pending[i].id,
+        embedding: vectors[i] ?? [],
+        embeddingModel: embedder.name,
+      });
+    }
+  });
+
+  return {
+    attempted: pending.length,
+    updated: pending.length,
+    failed: 0,
+  };
+}
 
 export function registerMemoryWriteRoutes(args: {
   app: any;
@@ -142,6 +246,13 @@ export function registerMemoryWriteRoutes(args: {
 
             return writeRes;
           });
+      const liteInlineEmbedding = liteModeActive
+        ? await completeLiteInlineEmbeddings({
+            prepared,
+            embedder,
+            liteWriteStore,
+          })
+        : null;
 
       const warnings: Array<{ code: string; message: string; details?: Record<string, unknown> }> = [];
       if (forcedLiteTopicClusterAsync) {
@@ -153,6 +264,29 @@ export function registerMemoryWriteRoutes(args: {
             tenant_id: out.tenant_id ?? prepared.tenant_id ?? env.MEMORY_TENANT_ID,
             requested_async: false,
             applied_async: true,
+          },
+        });
+      }
+      if (liteInlineEmbedding?.updated) {
+        warnings.push({
+          code: "lite_embedding_backfill_completed_inline",
+          message: "lite edition completed embedding backfill inline after memory write",
+          details: {
+            scope: out.scope ?? prepared.scope_public ?? env.MEMORY_SCOPE,
+            tenant_id: out.tenant_id ?? prepared.tenant_id ?? env.MEMORY_TENANT_ID,
+            updated_nodes: liteInlineEmbedding.updated,
+          },
+        });
+      }
+      if ((liteInlineEmbedding?.failed ?? 0) > 0) {
+        warnings.push({
+          code: "lite_embedding_backfill_inline_failed",
+          message: "lite edition failed to complete inline embedding backfill; recallability may remain degraded",
+          details: {
+            scope: out.scope ?? prepared.scope_public ?? env.MEMORY_SCOPE,
+            tenant_id: out.tenant_id ?? prepared.tenant_id ?? env.MEMORY_TENANT_ID,
+            failed_nodes: liteInlineEmbedding?.failed ?? 0,
+            error: liteInlineEmbedding?.error ?? null,
           },
         });
       }

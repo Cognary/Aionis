@@ -29,6 +29,7 @@ export function registerMemoryReplayCoreRoutes(args: {
   embeddedRuntime: any;
   liteReplayAccess?: any;
   liteReplayStore?: any;
+  liteWriteStore?: any;
   writeAccessShadowMirrorV2: boolean;
   requireMemoryPrincipal: (req: any) => Promise<any>;
   withIdentityFromRequest: (req: any, body: unknown, principal: any, kind: any) => any;
@@ -45,6 +46,7 @@ export function registerMemoryReplayCoreRoutes(args: {
     embeddedRuntime,
     liteReplayAccess,
     liteReplayStore,
+    liteWriteStore,
     writeAccessShadowMirrorV2,
     requireMemoryPrincipal,
     withIdentityFromRequest,
@@ -67,7 +69,10 @@ export function registerMemoryReplayCoreRoutes(args: {
     embeddedRuntime,
     replayAccess: liteReplayAccess ?? null,
     replayMirror: liteReplayStore ?? null,
+    writeAccess: liteWriteStore ?? null,
   };
+
+  const liteModeActive = env.AIONIS_EDITION === "lite" && !!liteWriteStore;
 
   app.post("/v1/memory/replay/run/start", async (req: any, reply: any) => {
     const principal = await requireMemoryPrincipal(req);
@@ -77,7 +82,9 @@ export function registerMemoryReplayCoreRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) => replayRunStart(client, body, writeDefaults));
+      out = liteModeActive
+        ? await liteWriteStore.withTx(() => replayRunStart({} as any, body, writeDefaults))
+        : await store.withTx((client) => replayRunStart(client, body, writeDefaults));
     } finally {
       gate.release();
     }
@@ -92,7 +99,9 @@ export function registerMemoryReplayCoreRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) => replayStepBefore(client, body, writeDefaults));
+      out = liteModeActive
+        ? await liteWriteStore.withTx(() => replayStepBefore({} as any, body, writeDefaults))
+        : await store.withTx((client) => replayStepBefore(client, body, writeDefaults));
     } finally {
       gate.release();
     }
@@ -107,7 +116,9 @@ export function registerMemoryReplayCoreRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) => replayStepAfter(client, body, writeDefaults));
+      out = liteModeActive
+        ? await liteWriteStore.withTx(() => replayStepAfter({} as any, body, writeDefaults))
+        : await store.withTx((client) => replayStepAfter(client, body, writeDefaults));
     } finally {
       gate.release();
     }
@@ -122,7 +133,9 @@ export function registerMemoryReplayCoreRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) => replayRunEnd(client, body, writeDefaults));
+      out = liteModeActive
+        ? await liteWriteStore.withTx(() => replayRunEnd({} as any, body, writeDefaults))
+        : await store.withTx((client) => replayRunEnd(client, body, writeDefaults));
     } finally {
       gate.release();
     }
@@ -159,7 +172,9 @@ export function registerMemoryReplayCoreRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) => replayPlaybookCompileFromRun(client, body, writeDefaults));
+      out = liteModeActive
+        ? await liteWriteStore.withTx(() => replayPlaybookCompileFromRun({} as any, body, writeDefaults))
+        : await store.withTx((client) => replayPlaybookCompileFromRun(client, body, writeDefaults));
     } finally {
       gate.release();
     }
@@ -218,7 +233,9 @@ export function registerMemoryReplayCoreRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) => replayPlaybookPromote(client, body, writeDefaults));
+      out = liteModeActive
+        ? await liteWriteStore.withTx(() => replayPlaybookPromote({} as any, body, writeDefaults))
+        : await store.withTx((client) => replayPlaybookPromote(client, body, writeDefaults));
     } finally {
       gate.release();
     }
@@ -233,7 +250,9 @@ export function registerMemoryReplayCoreRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) => replayPlaybookRepair(client, body, writeDefaults));
+      out = liteModeActive
+        ? await liteWriteStore.withTx(() => replayPlaybookRepair({} as any, body, writeDefaults))
+        : await store.withTx((client) => replayPlaybookRepair(client, body, writeDefaults));
     } finally {
       gate.release();
     }

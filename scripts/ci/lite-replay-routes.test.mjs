@@ -69,62 +69,19 @@ test("lite replay routes round-trip through sqlite mirror", () => {
     import { registerMemoryReplayCoreRoutes } from "./src/routes/memory-replay-core.ts";
     import { registerMemoryReplayGovernedRoutes } from "./src/routes/memory-replay-governed.ts";
     import { createLiteReplayStore } from "./src/store/lite-replay-store.ts";
-
-    class FakeWriteClient {
-      commitCounter = 0;
-      queries = [];
-      async query(sql, params) {
-        const s = sql.replace(/\\s+/g, " ").trim();
-        this.queries.push({ sql: s, params });
-        if (s.includes("SELECT id, scope FROM memory_nodes WHERE id = ANY($1::uuid[])")) {
-          const ids = Array.isArray(params?.[0]) ? params[0] : [];
-          return {
-            rows: ids.map((id) => ({ id, scope: "default" })),
-            rowCount: ids.length,
-          };
-        }
-        if (s.includes("SELECT commit_hash FROM memory_commits WHERE id = $1 AND scope = $2")) {
-          return { rows: [], rowCount: 0 };
-        }
-        if (s.includes("INSERT INTO memory_commits") && s.includes("RETURNING id")) {
-          this.commitCounter += 1;
-          return {
-            rows: [{ id: \`00000000-0000-0000-0000-\${String(this.commitCounter).padStart(12, "0")}\` }],
-            rowCount: 1,
-          };
-        }
-        if (s.includes("INSERT INTO memory_nodes") && s.includes("ON CONFLICT (id) DO NOTHING")) {
-          return { rows: [], rowCount: 1 };
-        }
-        if (s.includes("INSERT INTO memory_rule_defs")) {
-          return { rows: [], rowCount: 1 };
-        }
-        if (s.includes("INSERT INTO memory_edges")) {
-          return { rows: [], rowCount: 1 };
-        }
-        if (s.includes("SELECT id FROM memory_nodes") && s.includes("embedding_status = 'ready'")) {
-          return { rows: [], rowCount: 0 };
-        }
-        if (s.includes("INSERT INTO memory_outbox")) {
-          return { rows: [], rowCount: 1 };
-        }
-        if (s.includes("UPDATE memory_outbox")) {
-          return { rows: [], rowCount: 1 };
-        }
-        throw new Error("FakeWriteClient unhandled query: " + s);
-      }
-    }
+    import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
 
     const main = async () => {
       const tmpDir = mkdtempSync(path.join(os.tmpdir(), "aionis-lite-replay-routes-"));
       const liteReplayStore = createLiteReplayStore(path.join(tmpDir, "replay.sqlite"));
+      const liteWriteStore = createLiteWriteStore(path.join(tmpDir, "write.sqlite"));
       const liteReplayAccess = liteReplayStore.createReplayAccess();
-      const client = new FakeWriteClient();
       const store = {
-        withTx: async (fn) => await fn(client),
-        withClient: async (fn) => await fn(client),
+        withTx: async (fn) => await fn({}),
+        withClient: async (fn) => await fn({}),
       };
       const env = {
+        AIONIS_EDITION: "lite",
         MEMORY_SCOPE: "default",
         MEMORY_TENANT_ID: "default",
         MAX_TEXT_LEN: 4096,
@@ -148,6 +105,7 @@ test("lite replay routes round-trip through sqlite mirror", () => {
           embeddedRuntime: { applyWrite: async () => {} },
           liteReplayAccess,
           liteReplayStore,
+          liteWriteStore,
           writeAccessShadowMirrorV2: true,
           requireMemoryPrincipal: async () => ({ sub: "tester" }),
           withIdentityFromRequest: (_req, body) => body,
@@ -159,7 +117,9 @@ test("lite replay routes round-trip through sqlite mirror", () => {
 
         registerMemoryReplayGovernedRoutes({
           app,
+          env,
           store,
+          liteWriteStore,
           requireMemoryPrincipal: async () => ({ sub: "tester" }),
           withIdentityFromRequest: (_req, body) => body,
           enforceRateLimit: async () => {},
@@ -180,6 +140,7 @@ test("lite replay routes round-trip through sqlite mirror", () => {
             embeddedRuntime: { applyWrite: async () => {} },
             replayAccess: liteReplayAccess,
             replayMirror: liteReplayStore,
+            writeAccess: liteWriteStore,
           }),
           buildReplayPlaybookRunOptions: () => ({
             defaultScope: "default",
@@ -199,6 +160,7 @@ test("lite replay routes round-trip through sqlite mirror", () => {
               embeddedRuntime: { applyWrite: async () => {} },
               replayAccess: liteReplayAccess,
               replayMirror: liteReplayStore,
+              writeAccess: liteWriteStore,
             },
             localExecutor: {
               enabled: false,
@@ -304,6 +266,7 @@ test("lite replay routes round-trip through sqlite mirror", () => {
         }));
       } finally {
         await app.close();
+        await liteWriteStore.close();
         await liteReplayStore.close();
         rmSync(tmpDir, { recursive: true, force: true });
       }

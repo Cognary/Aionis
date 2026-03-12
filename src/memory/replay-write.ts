@@ -1,7 +1,7 @@
 import type pg from "pg";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
-import { createPostgresWriteStoreAccess } from "../store/write-access.js";
+import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 
 export type ReplayMirrorNodeRecord = {
@@ -39,6 +39,7 @@ export type ReplayMemoryWriteOptions = {
   embedder: EmbeddingProvider | null;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
   replayMirror?: ReplayWriteMirror | null;
+  writeAccess?: WriteStoreAccess | null;
 };
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -126,7 +127,7 @@ export async function applyReplayMemoryWrite(
     allowCrossScopeEdges: opts.allowCrossScopeEdges,
     shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
-    write_access: createPostgresWriteStoreAccess(client, {
+    write_access: opts.writeAccess ?? createPostgresWriteStoreAccess(client, {
       capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
     }),
   });

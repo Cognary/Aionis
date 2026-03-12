@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { stableUuid } from "../util/uuid.js";
+import { assertDim } from "../util/pgvector.js";
 import type {
   WriteCommitInsertArgs,
   WriteEdgeUpsertArgs,
@@ -317,6 +318,17 @@ export type LiteWriteStore = WriteStoreAccess & {
     outcome: "positive" | "negative" | "neutral";
     ruleNodeIds: string[];
   }): Promise<LiteRuleCandidateRow[]>;
+  setNodeEmbeddingReady(args: {
+    scope: string;
+    id: string;
+    embedding: number[];
+    embeddingModel: string;
+  }): Promise<void>;
+  setNodeEmbeddingFailed(args: {
+    scope: string;
+    id: string;
+    error: string;
+  }): Promise<void>;
   listSessionEvents(args: {
     scope: string;
     sessionClientId: string;
@@ -1631,6 +1643,38 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
           `UPDATE lite_memory_outbox SET payload_json = ? WHERE row_id = ?`,
         ).run(stringifyJson(payload), row.row_id);
       }
+    },
+
+    async setNodeEmbeddingReady(args): Promise<void> {
+      assertDim(args.embedding, 1536);
+      db.prepare(
+        `UPDATE lite_memory_nodes
+         SET embedding_vector_json = ?,
+             embedding_model = ?,
+             embedding_status = 'ready',
+             embedding_last_error = NULL
+         WHERE scope = ?
+           AND id = ?`,
+      ).run(
+        stringifyJson(args.embedding),
+        args.embeddingModel,
+        args.scope,
+        args.id,
+      );
+    },
+
+    async setNodeEmbeddingFailed(args): Promise<void> {
+      db.prepare(
+        `UPDATE lite_memory_nodes
+         SET embedding_status = 'failed',
+             embedding_last_error = ?
+         WHERE scope = ?
+           AND id = ?`,
+      ).run(
+        args.error,
+        args.scope,
+        args.id,
+      );
     },
 
     async mirrorCommitArtifactsToShadowV2(_scope: string, _commitId: string): Promise<WriteShadowMirrorCopied> {
