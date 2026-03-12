@@ -13,7 +13,9 @@ type GateLike = {
 
 export function registerMemoryReplayGovernedRoutes(args: {
   app: any;
+  env?: { AIONIS_EDITION?: string };
   store: StoreLike;
+  liteWriteStore?: any;
   requireMemoryPrincipal: (req: any) => Promise<any>;
   withIdentityFromRequest: (req: any, body: unknown, principal: any, kind: any) => any;
   enforceRateLimit: (req: any, reply: any, kind: "write" | "recall") => Promise<void>;
@@ -26,7 +28,9 @@ export function registerMemoryReplayGovernedRoutes(args: {
 }) {
   const {
     app,
+    env,
     store,
+    liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,
@@ -37,6 +41,7 @@ export function registerMemoryReplayGovernedRoutes(args: {
     buildReplayRepairReviewOptions,
     buildReplayPlaybookRunOptions,
   } = args;
+  const liteModeActive = env?.AIONIS_EDITION === "lite" && !!liteWriteStore;
 
   app.post("/v1/memory/replay/playbooks/repair/review", async (req: any, reply: any) => {
     const principal = await requireMemoryPrincipal(req);
@@ -56,9 +61,17 @@ export function registerMemoryReplayGovernedRoutes(args: {
     const gate = await acquireInflightSlot("write");
     let out: any;
     try {
-      out = await store.withTx((client) =>
-        replayPlaybookRepairReview(client, body, buildReplayRepairReviewOptions()),
-      );
+      const reviewOptions = buildReplayRepairReviewOptions();
+      if (liteModeActive) {
+        reviewOptions.writeAccess = liteWriteStore;
+      }
+      out = liteModeActive
+        ? await liteWriteStore.withTx(() =>
+          replayPlaybookRepairReview({} as any, body, reviewOptions),
+        )
+        : await store.withTx((client) =>
+          replayPlaybookRepairReview(client, body, reviewOptions),
+        );
     } finally {
       gate.release();
     }
@@ -84,8 +97,12 @@ export function registerMemoryReplayGovernedRoutes(args: {
     const gate = await acquireInflightSlot(rateKind);
     let out: any;
     try {
+      const runOptions = buildReplayPlaybookRunOptions(reply, "replay_playbook_run");
+      if (liteModeActive && runOptions.writeOptions) {
+        runOptions.writeOptions.writeAccess = liteWriteStore;
+      }
       out = await store.withClient((client) =>
-        replayPlaybookRun(client, body, buildReplayPlaybookRunOptions(reply, "replay_playbook_run")),
+        replayPlaybookRun(client, body, runOptions),
       );
     } finally {
       gate.release();
@@ -108,8 +125,12 @@ export function registerMemoryReplayGovernedRoutes(args: {
     const gate = await acquireInflightSlot(rateKind);
     let out: any;
     try {
+      const runOptions = buildReplayPlaybookRunOptions(reply, "replay_playbook_dispatch");
+      if (liteModeActive && runOptions.writeOptions) {
+        runOptions.writeOptions.writeAccess = liteWriteStore;
+      }
       out = await store.withClient((client) =>
-        replayPlaybookDispatch(client, body, buildReplayPlaybookRunOptions(reply, "replay_playbook_dispatch")),
+        replayPlaybookDispatch(client, body, runOptions),
       );
     } finally {
       gate.release();

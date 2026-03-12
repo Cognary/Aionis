@@ -10,6 +10,7 @@ import {
   type ReplayNodeRow,
   type ReplayStoreAccess,
 } from "../store/replay-access.js";
+import type { WriteStoreAccess } from "../store/write-access.js";
 import { sha256Hex } from "../util/crypto.js";
 import { HttpError } from "../util/http.js";
 import {
@@ -65,6 +66,7 @@ type ReplayWriteOptions = {
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
   replayAccess?: ReplayStoreAccess | null;
   replayMirror?: import("./replay-write.js").ReplayWriteMirror | null;
+  writeAccess?: WriteStoreAccess | null;
 };
 
 type ReplayReadOptions = {

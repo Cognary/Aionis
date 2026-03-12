@@ -554,6 +554,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     embeddedRuntime,
     liteReplayAccess,
     liteReplayStore,
+    liteWriteStore,
     writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
     requireMemoryPrincipal,
     withIdentityFromRequest,
@@ -565,7 +566,9 @@ export function registerApplicationRoutes(args: Record<string, any>) {
 
   registerMemoryReplayGovernedRoutes({
     app,
+    env,
     store,
+    liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,
