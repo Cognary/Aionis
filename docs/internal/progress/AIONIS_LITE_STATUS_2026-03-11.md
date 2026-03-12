@@ -10,8 +10,13 @@ Related docs:
 - [AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_INTERNAL_ALPHA_DOGFOOD_2026-03-12.md)
 - [AIONIS_LITE_BETA_GATE_V1_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_BETA_GATE_V1_2026-03-12.md)
 - [AIONIS_LITE_BETA_GATE_V2_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_BETA_GATE_V2_2026-03-12.md)
+- [AIONIS_LITE_PUBLIC_BETA_READINESS_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_PUBLIC_BETA_READINESS_2026-03-12.md)
+- [AIONIS_LITE_PUBLIC_BETA_DECISION_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_PUBLIC_BETA_DECISION_2026-03-12.md)
+- [AIONIS_LITE_PUBLIC_BETA_DOGFOOD_2026-03-12.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_LITE_PUBLIC_BETA_DOGFOOD_2026-03-12.md)
 - [Lite Operator Notes (EN)](/Users/lucio/Desktop/Aionis/docs/public/en/getting-started/04-lite-operator-notes.md)
 - [Lite 运维说明 (ZH)](/Users/lucio/Desktop/Aionis/docs/public/zh/getting-started/04-lite-operator-notes.md)
+- [Lite Troubleshooting and Feedback (EN)](/Users/lucio/Desktop/Aionis/docs/public/en/getting-started/06-lite-troubleshooting-and-feedback.md)
+- [Lite 排障与反馈 (ZH)](/Users/lucio/Desktop/Aionis/docs/public/zh/getting-started/06-lite-troubleshooting-and-feedback.md)
 
 ## 1. Executive Summary
 
@@ -21,12 +26,12 @@ It is now accurate to describe Lite as:
 
 1. a real `edition` profile
 2. a real local SQLite-backed kernel path
-3. a partially complete single-user runtime
+3. a beta-candidate local single-user runtime
 
 It is not yet accurate to describe Lite as:
 
 1. feature-complete
-2. beta-release ready
+2. GA-ready
 3. a full replacement for the current server edition
 
 Current repository state reflects:
@@ -187,6 +192,7 @@ It is now reasonable to say:
 6. repeated real-process dogfooding now has a canonical green script path on `main`
 7. Lite beta gate v1 now exists and passes on the current repository snapshot
 8. Lite beta gate v2 now exists and passes on the current repository snapshot
+9. a non-scripted public-beta-style manual operator pass is now green
 
 ### 5.2 What We Cannot Say Yet
 
@@ -196,6 +202,7 @@ It is now reasonable to say:
 2. Lite preserves the kernel-required local path for single-user execution
 3. the major first-pass dogfood blockers have been closed
 4. Lite is now a stronger beta-candidate by repository gates v1 and v2
+5. Lite is now approved for a controlled public beta posture
 
 It is still not yet reasonable to say:
 

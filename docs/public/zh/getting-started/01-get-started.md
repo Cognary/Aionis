@@ -16,7 +16,9 @@ title: "快速开始"
 1. [5 分钟上手](/public/zh/getting-started/02-onboarding-5min)
 2. [Embedding 配置](/public/zh/getting-started/03-embedding-setup)
 3. [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
-4. [Playground](/public/zh/guides/02-playground)
+4. [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
+5. [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)
+6. [Playground](/public/zh/guides/02-playground)
 
 ## 2) 运行时选择
 
@@ -37,6 +39,8 @@ Lite Alpha 当前的明确边界：
 在排查 Lite 本地行为前，建议先看：
 
 1. [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
+2. [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
+3. [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)
 
 ## 3) 必要概念（最小集）
 

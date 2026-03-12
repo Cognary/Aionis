@@ -1,0 +1,109 @@
+name: Lite Beta Feedback
+description: Report startup, operator UX, replay, recall, or pack issues while evaluating Aionis Lite beta.
+title: "[Lite beta] "
+labels:
+  - lite
+  - beta-feedback
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for Aionis Lite beta feedback.
+
+        Include the smallest reproducible path you can. If you already ran `npm run -s lite:dogfood`, include the result.
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, shell, and Node version
+      placeholder: macOS 15, zsh, Node 22.11.0
+    validations:
+      required: true
+
+  - type: input
+    id: startup
+    attributes:
+      label: Startup command
+      description: Exact command used to start Lite
+      placeholder: ADMIN_TOKEN=dogfood-admin npm run start:lite
+    validations:
+      required: true
+
+  - type: textarea
+    id: health
+    attributes:
+      label: Health output
+      description: Paste the relevant /health JSON fields
+      placeholder: |
+        {
+          "ok": true,
+          "aionis_edition": "lite",
+          "memory_store_backend": "lite_sqlite"
+        }
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Problem area
+      options:
+        - startup
+        - health
+        - write
+        - find
+        - recall_text
+        - planning/context
+        - context/assemble
+        - replay
+        - packs
+        - memory lane visibility
+        - docs/operator UX
+        - other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dogfood
+    attributes:
+      label: lite:dogfood result
+      options:
+        - not run
+        - passed
+        - failed
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Smallest steps or request payload that reproduces the issue
+      placeholder: |
+        1. Start Lite
+        2. POST /v1/memory/write with ...
+        3. POST /v1/memory/recall_text with ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Extra notes
+      description: Include warnings, screenshots, or artifact paths if relevant

@@ -109,6 +109,8 @@ Those route groups return stable `501 server_only_in_lite`.
 If you are operating Lite locally, read:
 
 1. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
+2. [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
+3. [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)
 
 ## Option C: Self-Host (Docker)
 
@@ -171,5 +173,7 @@ Your onboarding is complete when:
 
 1. Configure production embeddings: [Embedding Setup](/public/en/getting-started/03-embedding-setup)
 2. Run the Lite operator checklist: [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
-3. Build a full memory workflow: [Build Memory Workflows](/public/en/guides/01-build-memory)
-4. Explore API contracts: [API Reference](/public/en/api-reference/00-api-reference)
+3. Review Lite public beta scope: [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
+4. Use the public troubleshooting path when local behavior diverges: [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)
+5. Build a full memory workflow: [Build Memory Workflows](/public/en/guides/01-build-memory)
+6. Explore API contracts: [API Reference](/public/en/api-reference/00-api-reference)

@@ -20,7 +20,9 @@ In the first 30 minutes, you should be able to:
 1. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
 2. [Embedding Setup](/public/en/getting-started/03-embedding-setup)
 3. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
-4. [Playground](/public/en/guides/02-playground)
+4. [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
+5. [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)
+6. [Playground](/public/en/guides/02-playground)
 
 ## Integration Flow
 
@@ -54,6 +56,8 @@ Those route groups return stable `501 server_only_in_lite`.
 Before debugging Lite behavior, also read:
 
 1. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
+2. [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
+3. [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)
 
 ## Step 2: Validate Core APIs
 

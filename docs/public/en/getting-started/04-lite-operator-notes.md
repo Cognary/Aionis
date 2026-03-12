@@ -205,4 +205,6 @@ The stable local operator order is:
 
 1. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
 2. [Embedding Setup](/public/en/getting-started/03-embedding-setup)
-3. [Get Started](/public/en/getting-started/01-get-started)
+3. [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
+4. [Get Started](/public/en/getting-started/01-get-started)
+5. [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)

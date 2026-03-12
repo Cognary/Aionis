@@ -221,6 +221,11 @@ npm run build
 npm run start:lite
 ```
 
+Before treating Lite as anything beyond a local evaluation path:
+
+- English: `doc.aionisos.com/public/en/getting-started/05-lite-public-beta-boundary`
+- 中文: `doc.aionisos.com/public/zh/getting-started/05-lite-public-beta-boundary`
+
 In another shell:
 
 ```bash
@@ -243,6 +248,8 @@ Those routes return stable `501 server_only_in_lite`.
 Operator notes and troubleshooting:
 
 - [Lite Operator Notes](https://doc.aionisos.com/public/en/getting-started/04-lite-operator-notes)
+- [Lite Public Beta Boundary](https://doc.aionisos.com/public/en/getting-started/05-lite-public-beta-boundary)
+- [Lite Troubleshooting and Feedback](https://doc.aionisos.com/public/en/getting-started/06-lite-troubleshooting-and-feedback)
 
 ## SDKs and Distribution
 
