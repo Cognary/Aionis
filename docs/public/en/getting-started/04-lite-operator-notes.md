@@ -72,7 +72,11 @@ The most common Lite operator confusion is not startup. It is visibility.
 Rule of thumb:
 
 1. `memory_lane = "shared"` is best for onboarding, demos, and inspection
-2. `memory_lane = "private"` is owner-scoped and may not appear in `find` unless consumer identity matches
+2. `memory_lane = "private"` is owner-scoped and `find` is usually stricter about it
+3. do not simplify private-lane behavior into “hidden on every Lite surface”
+4. the more accurate current operator rule is:
+   - `find` may hide private content
+   - `recall_text`, `planning/context`, and `context/assemble` may still surface private content
 
 If you want the shortest debug path, use `shared` while verifying:
 
@@ -83,6 +87,21 @@ If you want the shortest debug path, use `shared` while verifying:
 5. `/v1/memory/context/assemble`
 
 If `find` looks empty after a successful private write, check visibility semantics before assuming SQLite persistence is broken.
+
+## Minimum Write Request Shape
+
+Lite supports `/v1/memory/write`, but the minimum request shape is the same as Server.
+
+You must still provide at least one of:
+
+1. `input_text`
+2. `input_sha256`
+
+If you send only `nodes`, the current response is:
+
+1. `must set input_text or input_sha256`
+
+That is not a Lite-specific failure and does not mean the SQLite write path is broken. It means the request does not satisfy the write contract.
 
 ## Pack Routes and Admin Token
 
@@ -170,6 +189,7 @@ Check:
 1. did you write with `memory_lane = "private"`?
 2. are you expecting owner-scoped data to appear without consumer identity?
 3. can you reproduce the same flow with `memory_lane = "shared"`?
+4. do not assume “empty `find`” also means `recall_text` must be empty
 
 ### write succeeds but recall/context is empty
 

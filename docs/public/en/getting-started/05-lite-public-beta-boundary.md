@@ -59,6 +59,11 @@ The current supported Lite beta surface is:
    - `tools/run`
    - `tools/feedback`
 
+Additional constraints:
+
+1. `/v1/memory/write` still requires `input_text` or `input_sha256` in the minimum valid request
+2. Lite supporting these routes does not imply identical visibility semantics across every lane and inspection surface
+
 ## Intentionally Server-Only
 
 These outer surfaces remain intentionally unavailable in Lite:
@@ -139,9 +144,10 @@ Expected health:
 These are known Lite beta operator edges, not release blockers:
 
 1. Lite requires Node `22+` because of `node:sqlite`
-2. `memory_lane = "private"` follows visibility rules and may not appear in `find`
-3. pack routes still require `ADMIN_TOKEN` and `X-Admin-Token`
-4. successful writes may return `lite_embedding_backfill_completed_inline`
+2. `memory_lane = "private"` should not be read as “hidden everywhere”
+3. in the current Lite beta, `find` is stricter for private lane visibility while `recall_text` / context paths may still surface private content
+4. pack routes still require `ADMIN_TOKEN` and `X-Admin-Token`
+5. successful writes may return `lite_embedding_backfill_completed_inline`
 
 For details, see:
 

@@ -59,6 +59,11 @@ Aionis Lite public beta 不是：
    - `tools/run`
    - `tools/feedback`
 
+补充约束：
+
+1. `/v1/memory/write` 仍然要求最小请求里带 `input_text` 或 `input_sha256`
+2. Lite 支持这些 route，不代表所有 lane 和 inspection surface 的可见性完全一致
+
 ## 明确保留为 Server-Only 的能力
 
 这些外层能力在 Lite 里仍然故意不可用：
@@ -139,9 +144,10 @@ npm run -s lite:dogfood
 这些是 Lite beta 当前已知的 operator edge，不属于 release blocker：
 
 1. Lite 依赖 Node `22+`，因为用到了 `node:sqlite`
-2. `memory_lane = "private"` 会遵守可见性规则，不一定出现在 `find`
-3. pack 路由仍然需要 `ADMIN_TOKEN` 和 `X-Admin-Token`
-4. 成功写入后可能返回 `lite_embedding_backfill_completed_inline`
+2. `memory_lane = "private"` 不该被理解成“所有 surface 一律不可见”
+3. 在当前 Lite beta 里，`find` 对 private lane 更严格，而 `recall_text` / context 路径可能仍然返回 private 内容
+4. pack 路由仍然需要 `ADMIN_TOKEN` 和 `X-Admin-Token`
+5. 成功写入后可能返回 `lite_embedding_backfill_completed_inline`
 
 详细说明见：
 

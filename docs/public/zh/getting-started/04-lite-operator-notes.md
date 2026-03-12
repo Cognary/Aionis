@@ -72,7 +72,11 @@ Lite 本地最容易让人误判的问题，通常不是启动，而是可见性
 经验规则：
 
 1. `memory_lane = "shared"` 最适合 onboarding、demo、inspection
-2. `memory_lane = "private"` 是 owner-scope 的，不一定会出现在 `find`
+2. `memory_lane = "private"` 是 owner-scope 的，`find` 通常更严格
+3. 不要把 private lane 简化理解成“在 Lite 下所有 surface 都看不到”
+4. 当前更准确的经验判断是：
+   - `find` 可能看不到 private 内容
+   - `recall_text`、`planning/context`、`context/assemble` 仍然可能把 private 内容带出来
 
 如果你想走最短调试路径，优先用 `shared` 去验证：
 
@@ -83,6 +87,21 @@ Lite 本地最容易让人误判的问题，通常不是启动，而是可见性
 5. `/v1/memory/context/assemble`
 
 如果 private write 之后 `find` 为空，先检查可见性语义，不要先断定 SQLite 持久化坏了。
+
+## 最小写入请求要求
+
+Lite 支持 `/v1/memory/write`，但最小请求形状和 Server 一样，不是“只传 nodes 就行”。
+
+至少满足下面之一：
+
+1. `input_text`
+2. `input_sha256`
+
+如果你只传 `nodes`，当前会返回：
+
+1. `must set input_text or input_sha256`
+
+这不是 Lite 特有故障，也不表示 SQLite 写路径坏了，而是请求本身不满足 write contract。
 
 ## Pack 路由和 Admin Token
 
@@ -170,6 +189,7 @@ npm run -s lite:dogfood
 1. 这次写入是不是 `memory_lane = "private"`？
 2. 你是不是在没有 consumer identity 的情况下，期待 owner-scope 数据直接出现在 inspection 里？
 3. 同一条链路改成 `memory_lane = "shared"` 后是否能复现？
+4. 不要用 “`find` 为空” 直接推断 “`recall_text` 也一定为空”
 
 ### write 成功但 recall/context 为空
 
