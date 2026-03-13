@@ -8,6 +8,7 @@ export type PlanningSummary = {
   layered_output: boolean;
   forgotten_items: number;
   static_blocks_selected: number;
+  selected_memory_layers: string[];
   optimization_profile: "balanced" | "aggressive" | null;
   context_compaction_profile: "balanced" | "aggressive";
   recall_mode?: string | null;
@@ -25,6 +26,7 @@ export type AssemblySummary = {
   layered_output: boolean;
   forgotten_items: number;
   static_blocks_selected: number;
+  selected_memory_layers: string[];
   optimization_profile: "balanced" | "aggressive" | null;
   context_compaction_profile: "balanced" | "aggressive";
   recall_mode?: string | null;
@@ -71,6 +73,9 @@ export function buildPlanningSummary(args: {
     layered_output: Boolean(args.layered_context),
     forgotten_items: Number(costSignals.forgotten_items ?? layeredStats.forgotten_items ?? 0),
     static_blocks_selected: Number(costSignals.static_blocks_selected ?? staticInjection.selected_blocks ?? 0),
+    selected_memory_layers: Array.isArray(costSignals.selected_memory_layers)
+      ? costSignals.selected_memory_layers.filter((entry): entry is string => typeof entry === "string")
+      : [],
     optimization_profile: args.optimization_profile,
     context_compaction_profile: args.context_compaction_profile,
     recall_mode: args.recall_mode ?? null,
@@ -112,6 +117,7 @@ export function buildAssemblySummary(args: {
     layered_output: planning.layered_output,
     forgotten_items: planning.forgotten_items,
     static_blocks_selected: planning.static_blocks_selected,
+    selected_memory_layers: planning.selected_memory_layers,
     optimization_profile: planning.optimization_profile,
     context_compaction_profile: planning.context_compaction_profile,
     recall_mode: planning.recall_mode,

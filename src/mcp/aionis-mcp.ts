@@ -141,6 +141,12 @@ const ToolRecallTextArgs = z
     max_edges: z.coerce.number().int().min(0).max(100).optional(),
     min_edge_weight: z.coerce.number().min(0).max(1).optional(),
     min_edge_confidence: z.coerce.number().min(0).max(1).optional(),
+    memory_layer_preference: z
+      .object({
+        allowed_layers: z.array(z.enum(["L0", "L1", "L2", "L3", "L4", "L5"])).min(1).max(6),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -197,6 +203,7 @@ const TOOLS: ToolDef[] = [
         max_edges: { type: "integer", minimum: 0, maximum: 100, default: 80 },
         min_edge_weight: { type: "number", minimum: 0, maximum: 1, default: 0.2 },
         min_edge_confidence: { type: "number", minimum: 0, maximum: 1, default: 0.2 },
+        memory_layer_preference: { type: "object", description: "Optional allowed memory layers; trust anchors are always preserved." },
       },
       required: ["query_text"],
     },
@@ -286,6 +293,7 @@ async function toolRecallText(env: Env, rawArgs: unknown) {
   if (typeof a.max_edges === "number") body.max_edges = a.max_edges;
   if (typeof a.min_edge_weight === "number") body.min_edge_weight = a.min_edge_weight;
   if (typeof a.min_edge_confidence === "number") body.min_edge_confidence = a.min_edge_confidence;
+  if (a.memory_layer_preference) body.memory_layer_preference = a.memory_layer_preference;
 
   try {
     const res: any = await postJson(env, "/v1/memory/recall_text", body);

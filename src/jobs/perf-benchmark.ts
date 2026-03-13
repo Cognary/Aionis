@@ -111,6 +111,7 @@ type CompressionAggregate = {
 type OptimizationAggregate = {
   enabled: boolean;
   params: {
+    benchmark_preset: OptimizationBenchmarkPresetName | null;
     profile: "balanced" | "aggressive";
     request_mode: "explicit" | "inherit_default";
     token_budget: number;
@@ -118,6 +119,8 @@ type OptimizationAggregate = {
     samples: number;
     query_text: string;
     tool_candidates: string[];
+    override_check: boolean;
+    override_layers: string[];
   };
   total_pairs: number;
   ok_pairs: number;
@@ -134,7 +137,24 @@ type OptimizationAggregate = {
     within_token_budget_ratio: number;
     optimization_profile_applied_ratio: number;
     optimization_profile_source_frequency?: Record<string, number>;
+    selected_memory_layers_frequency?: Record<string, number>;
+    selection_policy_frequency?: Record<string, number>;
+    selection_policy_source_frequency?: Record<string, number>;
+    requested_allowed_layers_frequency?: Record<string, number>;
     latency_ms: { baseline_p95: number; optimized_p95: number; delta_p95: number };
+  };
+  override_compare?: {
+    enabled: boolean;
+    allowed_layers: string[];
+    ok_pairs: number;
+    failed_pairs: number;
+    tightened_context_est_tokens: { mean: number; p50: number; p95: number };
+    delta_vs_optimized_tokens: { mean: number; p50: number; p95: number; min: number; max: number };
+    within_token_budget_ratio: number;
+    selected_memory_layers_frequency?: Record<string, number>;
+    selection_policy_source_frequency?: Record<string, number>;
+    requested_allowed_layers_frequency?: Record<string, number>;
+    latency_ms: { optimized_p95: number; tightened_p95: number; delta_p95: number };
   };
   latency_breakdown_ms: {
     baseline: Record<string, { mean: number; p50: number; p95: number; min: number; max: number }>;
@@ -267,6 +287,16 @@ type AnnAccumulator = {
   result_edges: number[];
   transport_error_count: number;
   sample_count: number;
+};
+
+type OptimizationBenchmarkPresetName = "endpoint_default_only" | "caller_tightened_l1" | "caller_tightened_l1_l3";
+
+type OptimizationBenchmarkPreset = {
+  name: OptimizationBenchmarkPresetName;
+  optimization_check: boolean;
+  optimization_request_mode: "explicit" | "inherit_default";
+  optimization_override_check: boolean;
+  optimization_override_layers: string[];
 };
 
 function emptySelectorAccumulator(): SelectorAccumulator {
@@ -410,6 +440,41 @@ function parseCsvRecallProfiles(flag: string, fallback: RecallProfileName[]): Re
   return out.length > 0 ? out : fallback;
 }
 
+function parseOptimizationBenchmarkPreset(flag: string): OptimizationBenchmarkPreset | null {
+  const raw = (argValue(flag) ?? "").trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === "endpoint_default_only") {
+    return {
+      name: "endpoint_default_only",
+      optimization_check: true,
+      optimization_request_mode: "inherit_default",
+      optimization_override_check: false,
+      optimization_override_layers: [],
+    };
+  }
+  if (raw === "caller_tightened_l1") {
+    return {
+      name: "caller_tightened_l1",
+      optimization_check: true,
+      optimization_request_mode: "inherit_default",
+      optimization_override_check: true,
+      optimization_override_layers: ["L1"],
+    };
+  }
+  if (raw === "caller_tightened_l1_l3") {
+    return {
+      name: "caller_tightened_l1_l3",
+      optimization_check: true,
+      optimization_request_mode: "inherit_default",
+      optimization_override_check: true,
+      optimization_override_layers: ["L1", "L3"],
+    };
+  }
+  throw new Error(
+    "invalid --optimization-benchmark-preset; expected endpoint_default_only|caller_tightened_l1|caller_tightened_l1_l3",
+  );
+}
+
 function summarizeSeries(values: number[]): { mean: number; p50: number; p95: number; min: number; max: number } {
   if (values.length === 0) return { mean: 0, p50: 0, p95: 0, min: 0, max: 0 };
   const sorted = [...values].sort((a, b) => a - b);
@@ -421,6 +486,12 @@ function summarizeSeries(values: number[]): { mean: number; p50: number; p95: nu
     min: round(sorted[0], 6),
     max: round(sorted[sorted.length - 1], 6),
   };
+}
+
+function incrementFrequency(target: Record<string, number>, key: unknown) {
+  const normalized = String(key ?? "").trim();
+  if (!normalized) return;
+  target[normalized] = (target[normalized] ?? 0) + 1;
 }
 
 function summarizeAnnAccumulator(acc: AnnAccumulator): AnnProfileAggregate {
@@ -569,17 +640,40 @@ async function main() {
   const compressionProfileRaw = (argValue("--compression-profile") ?? "aggressive").trim().toLowerCase();
   const compressionProfile: "balanced" | "aggressive" = compressionProfileRaw === "balanced" ? "balanced" : "aggressive";
   const compressionQueryText = (argValue("--compression-query-text") ?? "memory graph perf compression").trim();
-  const optimizationCheckRaw = (argValue("--optimization-check") ?? "false").trim().toLowerCase();
+  const optimizationBenchmarkPreset = parseOptimizationBenchmarkPreset("--optimization-benchmark-preset");
+  const optimizationCheckRaw = (
+    argValue("--optimization-check") ??
+    (optimizationBenchmarkPreset?.optimization_check ? "true" : "false")
+  )
+    .trim()
+    .toLowerCase();
   const optimizationCheck = optimizationCheckRaw === "true";
   const optimizationSamples = clampInt(Number(argValue("--optimization-samples") ?? "20"), 1, 2000);
   const optimizationTokenBudget = clampInt(Number(argValue("--optimization-token-budget") ?? "600"), 64, 256000);
   const optimizationCharBudget = clampInt(Number(argValue("--optimization-char-budget") ?? "1800"), 200, 200000);
   const optimizationProfileRaw = (argValue("--optimization-profile") ?? "aggressive").trim().toLowerCase();
   const optimizationProfile: "balanced" | "aggressive" = optimizationProfileRaw === "balanced" ? "balanced" : "aggressive";
-  const optimizationRequestModeRaw = (argValue("--optimization-request-mode") ?? "explicit").trim().toLowerCase();
+  const optimizationRequestModeRaw = (
+    argValue("--optimization-request-mode") ??
+    optimizationBenchmarkPreset?.optimization_request_mode ??
+    "explicit"
+  )
+    .trim()
+    .toLowerCase();
   const optimizationRequestMode: "explicit" | "inherit_default" =
     optimizationRequestModeRaw === "inherit_default" ? "inherit_default" : "explicit";
   const optimizationQueryText = (argValue("--optimization-query-text") ?? "prepare production deploy context").trim();
+  const optimizationOverrideCheckRaw = (
+    argValue("--optimization-override-check") ??
+    (optimizationBenchmarkPreset?.optimization_override_check ? "true" : "false")
+  )
+    .trim()
+    .toLowerCase();
+  const optimizationOverrideCheck = optimizationOverrideCheckRaw === "true";
+  const optimizationOverrideLayers = parseJsonStringArrayArg(
+    "--optimization-override-layers-json",
+    optimizationBenchmarkPreset?.optimization_override_layers ?? ["L1"],
+  ).filter((layer) => layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5");
   const replayCheckRaw = (argValue("--replay-check") ?? "false").trim().toLowerCase();
   const replayCheck = replayCheckRaw === "true";
   const replayPlaybookId = (argValue("--replay-playbook-id") ?? "").trim();
@@ -849,18 +943,29 @@ async function main() {
     const optimizationByStatus: Record<string, number> = {};
     const optimizationLeversFrequency: Record<string, number> = {};
     const optimizationProfileSourceFrequency: Record<string, number> = {};
+    const selectedMemoryLayerFrequency: Record<string, number> = {};
+    const selectionPolicyFrequency: Record<string, number> = {};
+    const selectionPolicySourceFrequency: Record<string, number> = {};
+    const requestedAllowedLayerFrequency: Record<string, number> = {};
+    const overrideSelectedMemoryLayerFrequency: Record<string, number> = {};
+    const overrideSelectionPolicySourceFrequency: Record<string, number> = {};
+    const overrideRequestedAllowedLayerFrequency: Record<string, number> = {};
     const baselineTokens: number[] = [];
     const optimizedTokens: number[] = [];
+    const tightenedTokens: number[] = [];
+    const tightenedVsOptimizedTokenDelta: number[] = [];
     const tokenReductionRatios: number[] = [];
     const forgottenItems: number[] = [];
     const staticBlocksSelected: number[] = [];
     const baselineLatency: number[] = [];
     const optimizedLatency: number[] = [];
+    const tightenedLatency: number[] = [];
     const baselineStageTimings: Array<Record<string, unknown>> = [];
     const optimizedStageTimings: Array<Record<string, unknown>> = [];
     let transportErrorCount = 0;
     let withinTokenBudgetCount = 0;
     let optimizationProfileAppliedCount = 0;
+    let overrideWithinTokenBudgetCount = 0;
 
     const staticContextBlocks = [
       {
@@ -950,10 +1055,33 @@ async function main() {
       optimizationByStatus[optimizedStatusKey] = (optimizationByStatus[optimizedStatusKey] ?? 0) + 1;
       if (optimized.error) transportErrorCount += 1;
 
+      let optimizedOverride: JsonSample | null = null;
+      if (optimizationOverrideCheck) {
+        optimizedOverride = await timedRequestJson("/v1/memory/context/assemble", {
+          ...baseAssemblePayload(),
+          ...(optimizationRequestMode === "explicit" ? { context_optimization_profile: optimizationProfile } : {}),
+          memory_layer_preference: {
+            allowed_layers: optimizationOverrideLayers,
+          },
+          context_layers: {
+            enabled: ["facts", "episodes", "static", "tools", "citations"],
+            char_budget_total: optimizationCharBudget,
+            include_merge_trace: false,
+          },
+        });
+        const optimizedOverrideStatusKey = optimizedOverride.error
+          ? `optimized_override:error:${optimizedOverride.error}`
+          : `optimized_override:${optimizedOverride.status}`;
+        optimizationByStatus[optimizedOverrideStatusKey] =
+          (optimizationByStatus[optimizedOverrideStatusKey] ?? 0) + 1;
+        if (optimizedOverride.error) transportErrorCount += 1;
+      }
+
       if (!baseline.ok || !optimized.ok) continue;
 
       const baselineCost = baseline.body?.cost_signals ?? null;
       const optimizedCost = optimized.body?.cost_signals ?? null;
+      const optimizedOverrideCost = optimizedOverride?.body?.cost_signals ?? null;
       const baselineStageTiming = baseline.body?.recall?.observability?.stage_timings_ms ?? null;
       const optimizedStageTiming = optimized.body?.recall?.observability?.stage_timings_ms ?? null;
       const baselineLayeredTiming = baseline.body?.layered_context?.timings_ms ?? null;
@@ -969,6 +1097,23 @@ async function main() {
       staticBlocksSelected.push(Math.max(0, Number(optimizedCost?.static_blocks_selected ?? 0)));
       baselineLatency.push(baseline.ms);
       optimizedLatency.push(optimized.ms);
+      if (optimizedOverride?.ok) {
+        const tightenedContextTokens = Number(optimizedOverrideCost?.context_est_tokens ?? 0);
+        tightenedTokens.push(Math.max(0, tightenedContextTokens));
+        tightenedVsOptimizedTokenDelta.push(Math.max(0, optimizedContextTokens - Math.max(0, tightenedContextTokens)));
+        tightenedLatency.push(optimizedOverride.ms);
+        if (optimizedOverrideCost?.within_token_budget === true) overrideWithinTokenBudgetCount += 1;
+        const overrideSelectionPolicy = optimizedOverride.body?.recall?.context?.selection_policy ?? null;
+        incrementFrequency(overrideSelectionPolicySourceFrequency, overrideSelectionPolicy?.source);
+        const overrideRequestedAllowedLayers = Array.isArray(overrideSelectionPolicy?.requested_allowed_layers)
+          ? overrideSelectionPolicy.requested_allowed_layers
+          : [];
+        for (const layer of overrideRequestedAllowedLayers) incrementFrequency(overrideRequestedAllowedLayerFrequency, layer);
+        const overrideSelectedMemoryLayers = Array.isArray(optimizedOverrideCost?.selected_memory_layers)
+          ? optimizedOverrideCost.selected_memory_layers
+          : [];
+        for (const layer of overrideSelectedMemoryLayers) incrementFrequency(overrideSelectedMemoryLayerFrequency, layer);
+      }
       if ((baselineStageTiming && typeof baselineStageTiming === "object") || (baselineLayeredTiming && typeof baselineLayeredTiming === "object")) {
         baselineStageTimings.push({
           ...((baselineStageTiming && typeof baselineStageTiming === "object" ? baselineStageTiming : {}) as Record<string, unknown>),
@@ -997,15 +1142,27 @@ async function main() {
         if (!key) continue;
         optimizationLeversFrequency[key] = (optimizationLeversFrequency[key] ?? 0) + 1;
       }
+      const selectedMemoryLayers = Array.isArray(optimizedCost?.selected_memory_layers) ? optimizedCost.selected_memory_layers : [];
+      for (const layer of selectedMemoryLayers) incrementFrequency(selectedMemoryLayerFrequency, layer);
+      const selectionPolicy = optimized.body?.recall?.context?.selection_policy ?? null;
+      incrementFrequency(selectionPolicyFrequency, selectionPolicy?.name);
+      incrementFrequency(selectionPolicySourceFrequency, selectionPolicy?.source);
+      const requestedAllowedLayers = Array.isArray(selectionPolicy?.requested_allowed_layers)
+        ? selectionPolicy.requested_allowed_layers
+        : [];
+      for (const layer of requestedAllowedLayers) incrementFrequency(requestedAllowedLayerFrequency, layer);
     }
 
     const baselineTokenSummary = summarizeSeries(baselineTokens);
     const optimizedTokenSummary = summarizeSeries(optimizedTokens);
+    const tightenedTokenSummary = summarizeSeries(tightenedTokens);
+    const tightenedVsOptimizedTokenDeltaSummary = summarizeSeries(tightenedVsOptimizedTokenDelta);
     const reductionSummary = summarizeSeries(tokenReductionRatios);
     const forgottenSummary = summarizeSeries(forgottenItems);
     const staticBlocksSummary = summarizeSeries(staticBlocksSelected);
     const baselineLatencySummary = summarizeSeries(baselineLatency);
     const optimizedLatencySummary = summarizeSeries(optimizedLatency);
+    const tightenedLatencySummary = summarizeSeries(tightenedLatency);
     const baselineStageSummary = summarizeStageTimingSeries(baselineStageTimings);
     const optimizedStageSummary = summarizeStageTimingSeries(optimizedStageTimings);
     const stageDeltaP95: Record<string, number> = {};
@@ -1017,6 +1174,7 @@ async function main() {
     optimization = {
       enabled: true,
       params: {
+        benchmark_preset: optimizationBenchmarkPreset?.name ?? null,
         profile: optimizationProfile,
         request_mode: optimizationRequestMode,
         token_budget: optimizationTokenBudget,
@@ -1024,6 +1182,8 @@ async function main() {
         samples: optimizationSamples,
         query_text: optimizationQueryText,
         tool_candidates: optimizationToolCandidates,
+        override_check: optimizationOverrideCheck,
+        override_layers: optimizationOverrideLayers,
       },
       total_pairs: optimizationSamples,
       ok_pairs: okPairs,
@@ -1056,12 +1216,40 @@ async function main() {
         within_token_budget_ratio: okPairs > 0 ? round(withinTokenBudgetCount / okPairs, 6) : 0,
         optimization_profile_applied_ratio: okPairs > 0 ? round(optimizationProfileAppliedCount / okPairs, 6) : 0,
         optimization_profile_source_frequency: optimizationProfileSourceFrequency,
+        selected_memory_layers_frequency: selectedMemoryLayerFrequency,
+        selection_policy_frequency: selectionPolicyFrequency,
+        selection_policy_source_frequency: selectionPolicySourceFrequency,
+        requested_allowed_layers_frequency: requestedAllowedLayerFrequency,
         latency_ms: {
           baseline_p95: baselineLatencySummary.p95,
           optimized_p95: optimizedLatencySummary.p95,
           delta_p95: round(optimizedLatencySummary.p95 - baselineLatencySummary.p95, 6),
         },
       },
+      override_compare: optimizationOverrideCheck
+        ? {
+            enabled: true,
+            allowed_layers: optimizationOverrideLayers,
+            ok_pairs: tightenedTokens.length,
+            failed_pairs: Math.max(0, optimizationSamples - tightenedTokens.length),
+            tightened_context_est_tokens: {
+              mean: tightenedTokenSummary.mean,
+              p50: tightenedTokenSummary.p50,
+              p95: tightenedTokenSummary.p95,
+            },
+            delta_vs_optimized_tokens: tightenedVsOptimizedTokenDeltaSummary,
+            within_token_budget_ratio:
+              tightenedTokens.length > 0 ? round(overrideWithinTokenBudgetCount / tightenedTokens.length, 6) : 0,
+            selected_memory_layers_frequency: overrideSelectedMemoryLayerFrequency,
+            selection_policy_source_frequency: overrideSelectionPolicySourceFrequency,
+            requested_allowed_layers_frequency: overrideRequestedAllowedLayerFrequency,
+            latency_ms: {
+              optimized_p95: optimizedLatencySummary.p95,
+              tightened_p95: tightenedLatencySummary.p95,
+              delta_p95: round(tightenedLatencySummary.p95 - optimizedLatencySummary.p95, 6),
+            },
+          }
+        : undefined,
       latency_breakdown_ms: {
         baseline: baselineStageSummary,
         optimized: optimizedStageSummary,
@@ -1605,10 +1793,14 @@ async function main() {
           compression_token_budget: compressionTokenBudget,
           compression_profile: compressionProfile,
           optimization_check: optimizationCheck,
+          optimization_benchmark_preset: optimizationBenchmarkPreset?.name ?? null,
           optimization_samples: optimizationSamples,
           optimization_token_budget: optimizationTokenBudget,
           optimization_char_budget: optimizationCharBudget,
           optimization_profile: optimizationProfile,
+          optimization_request_mode: optimizationRequestMode,
+          optimization_override_check: optimizationOverrideCheck,
+          optimization_override_layers: optimizationOverrideLayers,
           replay_check: replayCheck,
           replay_playbook_id: replayPlaybookId || null,
           replay_version: replayVersion,

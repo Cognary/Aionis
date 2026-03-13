@@ -239,6 +239,8 @@ export function registerMemoryRecallRoutes(args: {
     const observability = buildRecallObservability({
       timings,
       inflight_wait_ms: gate.wait_ms,
+      context_items: (out as any)?.context?.items ?? [],
+      selection_policy: (out as any)?.context?.selection_policy ?? null,
       explicit_mode: {
         mode: explicitMode.mode,
         profile: explicitMode.profile,

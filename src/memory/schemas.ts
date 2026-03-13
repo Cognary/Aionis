@@ -4,6 +4,12 @@ export const UUID = z.string().uuid();
 
 export const NodeType = z.enum(["event", "entity", "topic", "rule", "evidence", "concept", "procedure", "self_model"]);
 export const EdgeType = z.enum(["part_of", "related_to", "derived_from"]);
+export const MemoryLayerId = z.enum(["L0", "L1", "L2", "L3", "L4", "L5"]);
+export const MemoryLayerPreference = z
+  .object({
+    allowed_layers: z.array(MemoryLayerId).min(1).max(6),
+  })
+  .strict();
 
 const QueryBoolean = z.preprocess((v) => {
   if (typeof v === "boolean") return v;
@@ -139,6 +145,8 @@ export const MemoryRecallRequest = z.object({
   context_char_budget: z.number().int().positive().max(1000000).optional(),
   // Optional context compaction policy preset.
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
+  // Optional caller-controlled layer tightening. The server always preserves trust anchors.
+  memory_layer_preference: MemoryLayerPreference.optional(),
   // Optional: evaluate SHADOW/ACTIVE rules alongside recall to produce an applied policy patch for the planner.
   // Use the normalized "Planner Context" shape (see docs/PLANNER_CONTEXT.md).
   rules_context: z.any().optional(),
@@ -177,6 +185,7 @@ export const MemoryRecallTextRequest = z.object({
   context_char_budget: z.number().int().positive().max(1000000).optional(),
   // Optional context compaction policy preset.
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
+  memory_layer_preference: MemoryLayerPreference.optional(),
   // Optional: same as MemoryRecallRequest.rules_* but for recall_text.
   rules_context: z.any().optional(),
   rules_include_shadow: z.boolean().optional().default(false),
@@ -257,6 +266,7 @@ export const PlanningContextRequest = z.object({
   context_char_budget: z.number().int().positive().max(1000000).optional(),
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
   context_optimization_profile: z.enum(["balanced", "aggressive"]).optional(),
+  memory_layer_preference: MemoryLayerPreference.optional(),
   // Experimental: return explicit multi-layer context assembly (facts/episodes/rules/decisions/tools/citations).
   return_layered_context: z.boolean().default(false),
   context_layers: ContextLayerConfig.optional(),
@@ -299,6 +309,7 @@ export const ContextAssembleRequest = z.object({
   context_char_budget: z.number().int().positive().max(1000000).optional(),
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
   context_optimization_profile: z.enum(["balanced", "aggressive"]).optional(),
+  memory_layer_preference: MemoryLayerPreference.optional(),
   return_layered_context: z.boolean().default(true),
   context_layers: ContextLayerConfig.optional(),
   static_context_blocks: z.array(StaticContextBlock).max(100).optional(),
@@ -344,6 +355,41 @@ export const MemoryResolveRequest = z.object({
 });
 
 export type MemoryResolveInput = z.infer<typeof MemoryResolveRequest>;
+
+export const HandoffKind = z.enum(["patch_handoff", "review_handoff", "task_handoff"]);
+
+export const HandoffStoreRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  memory_lane: z.enum(["private", "shared"]).default("shared"),
+  anchor: z.string().min(1),
+  file_path: z.string().min(1),
+  repo_root: z.string().min(1).optional(),
+  symbol: z.string().min(1).optional(),
+  handoff_kind: HandoffKind.default("patch_handoff"),
+  title: z.string().min(1).optional(),
+  summary: z.string().min(1),
+  handoff_text: z.string().min(1),
+  risk: z.string().min(1).optional(),
+  acceptance_checks: z.array(z.string().min(1)).max(50).optional(),
+  tags: z.array(z.string().min(1)).max(50).optional(),
+});
+
+export type HandoffStoreInput = z.infer<typeof HandoffStoreRequest>;
+
+export const HandoffRecoverRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  anchor: z.string().min(1),
+  file_path: z.string().min(1).optional(),
+  symbol: z.string().min(1).optional(),
+  handoff_kind: HandoffKind.default("patch_handoff"),
+  memory_lane: z.enum(["private", "shared"]).optional(),
+  limit: z.number().int().positive().max(20).default(5),
+});
+
+export type HandoffRecoverInput = z.infer<typeof HandoffRecoverRequest>;
 
 export const MemorySessionCreateRequest = z.object({
   tenant_id: z.string().min(1).optional(),

@@ -279,6 +279,7 @@ const assembled = await client.contextAssemble({
 
 console.log(assembled.layered_context?.forgetting, assembled.layered_context?.layers?.episodes?.forgotten_count);
 console.log(assembled.cost_signals?.primary_savings_levers, assembled.cost_signals?.context_est_tokens);
+console.log(assembled.cost_signals?.selected_memory_layers, assembled.recall.context.selection_policy);
 ```
 
 ## Write-Time Distillation (TypeScript)
@@ -316,6 +317,9 @@ console.log(writeRes.distillation, writeRes.nodes);
 2. It does not delete memory graph objects or archive them by itself.
 3. The default policy is intentionally conservative: keep `hot/warm`, exclude archived, and only apply salience filtering when you opt in.
 4. `contextAssemble` responses now expose `cost_signals` so callers can inspect estimated context tokens, forgotten items, and active savings levers directly.
+5. `cost_signals.selected_memory_layers` exposes which memory compression layers were actually selected for the assembled context.
+6. `recall.context.selection_policy` and `recall.observability.memory_layers` expose the active endpoint-default layer preference and trust-anchor policy used during context selection.
+7. `memory_layer_preference.allowed_layers` can tighten the active layer set on `recall_text`, `planning/context`, and `context/assemble`, but Aionis still preserves `L3/L0` trust anchors automatically.
 
 ## Selective Static Injection (TypeScript)
 

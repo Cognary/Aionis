@@ -15,6 +15,7 @@ import { buildContext } from "./context.js";
 import { sha256Hex } from "../util/crypto.js";
 import { badRequest } from "../util/http.js";
 import { resolveTenantScope } from "./tenant.js";
+import { resolveMemoryLayerPolicy } from "./layer-policy.js";
 import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 
 export type RecallAuth = {
@@ -204,6 +205,7 @@ export async function memoryRecallParsed(
   };
   const consumerAgentId = parsed.consumer_agent_id?.trim() || null;
   const consumerTeamId = parsed.consumer_team_id?.trim() || null;
+  const layerPolicy = resolveMemoryLayerPolicy(endpoint, parsed.memory_layer_preference ?? null);
   const stage1ExactFallbackOnEmpty = options?.stage1_exact_fallback_on_empty ?? true;
   assertDim(parsed.query_embedding, 1536);
 
@@ -460,6 +462,7 @@ export async function memoryRecallParsed(
       context_token_budget: parsed.context_token_budget,
       context_char_budget: parsed.context_char_budget,
       context_compaction_profile: parsed.context_compaction_profile,
+      layer_policy: layerPolicy,
     },
   );
 
@@ -596,7 +599,12 @@ export async function memoryRecallParsed(
     seeds: outSeeds,
     subgraph: { nodes: outNodes, edges: outEdges },
     ranked,
-    context: { text: context_text, items: context_items, citations },
+    context: {
+      text: context_text,
+      items: context_items,
+      citations,
+      selection_policy: layerPolicy,
+    },
     ...(parsed.return_debug
       ? {
           debug: {

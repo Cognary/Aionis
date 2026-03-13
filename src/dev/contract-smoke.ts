@@ -33,6 +33,7 @@ import { requireAdminTokenHeader, secretTokensEqual } from "../util/admin_auth.j
 import { resolveTenantScope } from "../memory/tenant.js";
 import { loadEnv } from "../config.js";
 import { CAPABILITY_CONTRACT, capabilityContract } from "../capability-contract.js";
+import { buildRecallObservability } from "../app/recall-observability.js";
 import { createAuthResolver } from "../util/auth.js";
 import {
   createControlApiKey,
@@ -43,6 +44,7 @@ import {
   upsertControlProject,
 } from "../control-plane.js";
 import { memoryRecallParsed, type RecallAuth } from "../memory/recall.js";
+import { buildContext } from "../memory/context.js";
 import { assembleLayeredContext } from "../memory/context-orchestrator.js";
 import { ruleMatchesContext } from "../memory/rule-engine.js";
 import { buildAppliedPolicy, parsePolicyPatch } from "../memory/rule-policy.js";
@@ -57,6 +59,7 @@ import { applyContextOptimizationProfile } from "../app/context-optimization-pro
 import { buildAssemblySummary, buildPlanningSummary } from "../app/planning-summary.js";
 import { createRecallPolicy } from "../app/recall-policy.js";
 import { validateAutomationGraph } from "../memory/automation.js";
+import { resolveMemoryLayerPolicy } from "../memory/layer-policy.js";
 import {
   replayPlaybookCandidate,
   replayPlaybookCompileFromRun,
@@ -2227,6 +2230,7 @@ async function run() {
   assert.equal(preparedWriteDistilled.nodes.length, 3);
   assert.equal(preparedWriteDistilled.edges.length, 2);
   assert.ok(preparedWriteDistilled.nodes.some((node) => node.type === "evidence" && node.slots.summary_kind === "write_distillation_evidence"));
+  assert.ok(preparedWriteDistilled.nodes.some((node) => node.slots.compression_layer === "L1"));
   assert.equal(
     preparedWriteDistilled.nodes.filter((node) => node.type === "concept" && node.slots.summary_kind === "write_distillation_fact").length,
     2,
@@ -2863,16 +2867,20 @@ async function run() {
     query_text: "memory graph",
     context: { run: { id: "run_1" }, agent: { id: "agent_a", team_id: "team_a" } },
     tool_candidates: ["psql", "curl", "psql"],
+    memory_layer_preference: { allowed_layers: ["L1", "L3"] },
   });
   assert.equal(planningReq.include_shadow, false);
   assert.equal(planningReq.rules_limit, 50);
   assert.equal(planningReq.tool_strict, true);
   assert.equal(planningReq.limit, 30);
+  assert.deepEqual(planningReq.memory_layer_preference?.allowed_layers, ["L1", "L3"]);
   const recallTextDenseModeReq = MemoryRecallTextRequest.parse({
     query_text: "relationship topology",
     recall_mode: "dense_edge",
+    memory_layer_preference: { allowed_layers: ["L0", "L3"] },
   });
   assert.equal(recallTextDenseModeReq.recall_mode, "dense_edge");
+  assert.deepEqual(recallTextDenseModeReq.memory_layer_preference?.allowed_layers, ["L0", "L3"]);
   const planningOptimizedReq = PlanningContextRequest.parse({
     query_text: "deploy api",
     context: { intent: "deploy" },
@@ -2976,6 +2984,11 @@ async function run() {
       forgetting: { dropped_items: 3, dropped_by_reason: { tier: 2, salience: 1 } },
       static_injection: { selected_blocks: 2, rejected_blocks: 1 },
     },
+    context_items: [
+      { kind: "event", node_id: "evt1", compression_layer: "L0" },
+      { kind: "topic", node_id: "top1", compression_layer: "L2" },
+      { kind: "concept", node_id: "cmp1", compression_layer: "L3" },
+    ],
     context_est_tokens: 220,
     context_token_budget: 300,
     context_char_budget: 1200,
@@ -2987,7 +3000,146 @@ async function run() {
   assert.equal(contextCostSignals.within_char_budget, true);
   assert.equal(contextCostSignals.forgotten_items, 3);
   assert.equal(contextCostSignals.static_blocks_selected, 2);
+  assert.deepEqual(contextCostSignals.selected_memory_layers, ["L0", "L2", "L3"]);
   assert.equal(contextCostSignals.primary_savings_levers.includes("optimization_profile:aggressive"), true);
+  const factualPolicy = resolveMemoryLayerPolicy("recall");
+  assert.equal(factualPolicy.name, "factual_recall");
+  assert.deepEqual(factualPolicy.trust_anchor_layers, ["L3", "L0"]);
+  const planningPolicy = resolveMemoryLayerPolicy("planning_context");
+  assert.equal(planningPolicy.name, "planning_context");
+  assert.deepEqual(planningPolicy.preferred_layers, ["L3", "L0", "L1", "L2"]);
+  const tightenedPlanningPolicy = resolveMemoryLayerPolicy("planning_context", { allowed_layers: ["L1"] });
+  assert.equal(tightenedPlanningPolicy.source, "request_override");
+  assert.deepEqual(tightenedPlanningPolicy.requested_allowed_layers, ["L1"]);
+  assert.deepEqual(tightenedPlanningPolicy.preferred_layers, ["L3", "L0", "L1"]);
+  assert.deepEqual(tightenedPlanningPolicy.fallback_layers, ["L1"]);
+  assert.deepEqual(tightenedPlanningPolicy.trust_anchor_layers, ["L3", "L0"]);
+  const tightenedContext = buildContext(
+    [
+      { id: "topic_l2", activation: 0.9, score: 0.9 },
+      { id: "concept_l3", activation: 0.8, score: 0.8 },
+      { id: "entity_u0", activation: 0.75, score: 0.75 },
+      { id: "evidence_l1", activation: 0.7, score: 0.7 },
+      { id: "event_l0", activation: 0.6, score: 0.6 },
+      { id: "rule_u0", activation: 0.55, score: 0.55 },
+    ],
+    new Map([
+      [
+        "topic_l2",
+        {
+          id: "topic_l2",
+          type: "topic",
+          tier: "warm",
+          title: "L2 topic",
+          text_summary: "topic summary",
+          slots: {},
+          topic_state: "active",
+          raw_ref: null,
+          evidence_ref: null,
+          commit_id: null,
+          confidence: 0.8,
+          salience: 0.8,
+        },
+      ],
+      [
+        "concept_l3",
+        {
+          id: "concept_l3",
+          type: "concept",
+          tier: "warm",
+          title: "L3 concept",
+          text_summary: "rollup summary",
+          slots: { summary_kind: "compression_rollup", source_event_count: 1, citations: [] },
+          topic_state: null,
+          raw_ref: null,
+          evidence_ref: null,
+          commit_id: null,
+          confidence: 0.9,
+          salience: 0.9,
+        },
+      ],
+      [
+        "entity_u0",
+        {
+          id: "entity_u0",
+          type: "entity",
+          tier: "warm",
+          title: "entity1",
+          text_summary: "entity summary",
+          slots: {},
+          topic_state: null,
+          raw_ref: null,
+          evidence_ref: null,
+          commit_id: null,
+          confidence: 0.8,
+          salience: 0.75,
+        },
+      ],
+      [
+        "evidence_l1",
+        {
+          id: "evidence_l1",
+          type: "evidence",
+          tier: "hot",
+          title: null,
+          text_summary: "distilled evidence",
+          slots: { summary_kind: "write_distillation_evidence" },
+          topic_state: null,
+          raw_ref: null,
+          evidence_ref: "ev://1",
+          commit_id: null,
+          confidence: 0.9,
+          salience: 0.7,
+        },
+      ],
+      [
+        "event_l0",
+        {
+          id: "event_l0",
+          type: "event",
+          tier: "hot",
+          title: null,
+          text_summary: "raw event",
+          slots: {},
+          topic_state: null,
+          raw_ref: "raw://1",
+          evidence_ref: null,
+          commit_id: null,
+          confidence: 0.9,
+          salience: 0.6,
+        },
+      ],
+      [
+        "rule_u0",
+        {
+          id: "rule_u0",
+          type: "rule",
+          tier: "warm",
+          title: "rule1",
+          text_summary: "rule summary",
+          slots: {},
+          topic_state: null,
+          raw_ref: null,
+          evidence_ref: null,
+          commit_id: null,
+          confidence: 0.8,
+          salience: 0.55,
+        },
+      ],
+    ]) as any,
+    new Map(),
+    { layer_policy: tightenedPlanningPolicy },
+  );
+  assert.equal(tightenedContext.items.some((item: any) => item.node_id === "topic_l2"), false);
+  assert.equal(tightenedContext.items.some((item: any) => item.node_id === "entity_u0"), false);
+  assert.equal(tightenedContext.items.some((item: any) => item.node_id === "rule_u0"), false);
+  assert.deepEqual(
+    tightenedContext.items
+      .map((item: any) => item.compression_layer)
+      .filter((layer: unknown): layer is string => typeof layer === "string")
+      .sort(),
+    ["L0", "L1", "L3"],
+  );
   const planningSummary = buildPlanningSummary({
     rules: { considered: 6, matched: 2 },
     tools: {
@@ -3012,6 +3164,7 @@ async function run() {
   assert.equal(planningSummary.context_est_tokens, 220);
   assert.equal(planningSummary.forgotten_items, 3);
   assert.equal(planningSummary.static_blocks_selected, 2);
+  assert.deepEqual(planningSummary.selected_memory_layers, ["L0", "L2", "L3"]);
   assert.equal(planningSummary.recall_mode, "dense_edge");
   const assemblySummary = buildAssemblySummary({
     rules: { considered: 4, matched: 1 },
@@ -3037,6 +3190,21 @@ async function run() {
   assert.equal(assemblySummary.rules_matched, 1);
   assert.equal(assemblySummary.include_rules, true);
   assert.equal(assemblySummary.context_est_tokens, 180);
+  assert.deepEqual(assemblySummary.selected_memory_layers, ["L0", "L2", "L3"]);
+  const recallObservability = buildRecallObservability({
+    timings: { stage1_candidates_ann: 2, stage3_context: 5 },
+    inflight_wait_ms: 1,
+    context_items: [
+      { kind: "event", node_id: "evt1", compression_layer: "L0" },
+      { kind: "concept", node_id: "cmp1", compression_layer: "L3" },
+    ],
+    selection_policy: factualPolicy,
+    adaptive_profile: { profile: "balanced", applied: false, reason: "test" },
+    adaptive_hard_cap: { applied: false, reason: "test" },
+  });
+  assert.deepEqual((recallObservability as any).memory_layers.selected_layers, ["L0", "L3"]);
+  assert.equal((recallObservability as any).memory_layers.selection_policy?.name, "factual_recall");
+  assert.deepEqual((recallObservability as any).memory_layers.selection_policy?.requested_allowed_layers, []);
   const layeredForgotten = assembleLayeredContext({
     recall: {
       context: {
@@ -3513,6 +3681,21 @@ async function run() {
   for (const item of out.context.items as any[]) {
     assert.ok(typeof item.uri === "string" && String(item.uri).startsWith("aionis://"));
   }
+  assert.equal((out.context as any).selection_policy?.name, "factual_recall");
+  assert.deepEqual((out.context as any).selection_policy?.trust_anchor_layers, ["L3", "L0"]);
+  const tightenedOut = await memoryRecallParsed(
+    fake as any,
+    MemoryRecallRequest.parse({
+      ...baseReq,
+      memory_layer_preference: { allowed_layers: ["L1"] },
+    }),
+    "default",
+    "default",
+    { allow_debug_embeddings: false },
+  );
+  assert.equal((tightenedOut.context as any).selection_policy?.source, "request_override");
+  assert.deepEqual((tightenedOut.context as any).selection_policy?.requested_allowed_layers, ["L1"]);
+  assert.deepEqual((tightenedOut.context as any).selection_policy?.preferred_layers, ["L3", "L0", "L1"]);
   for (const c of out.context.citations as any[]) {
     assert.ok(typeof c.uri === "string" && String(c.uri).startsWith("aionis://"));
   }

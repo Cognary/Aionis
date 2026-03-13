@@ -166,6 +166,11 @@ export type MemoryContextAssemblyTelemetryInput = {
   dropped_items: number;
   layers_with_content: number;
   merge_trace_included: boolean;
+  selection_policy_name?: string | null;
+  selection_policy_source?: string | null;
+  selected_memory_layers?: string[];
+  trust_anchor_layers?: string[];
+  requested_allowed_layers?: string[];
   layers: MemoryContextAssemblyLayerTelemetryInput[];
 };
 
@@ -1667,6 +1672,24 @@ export async function recordMemoryContextAssemblyTelemetry(
   const layersWithContent = boundedInt(input.layers_with_content, 10_000);
   const mergeTraceIncluded = input.merge_trace_included === true;
   const latencyMs = boundedMs(input.latency_ms);
+  const selectionPolicyName = trimOrNull(input.selection_policy_name);
+  const selectionPolicySourceRaw = trimOrNull(input.selection_policy_source);
+  const selectionPolicySource =
+    selectionPolicySourceRaw === "endpoint_default" || selectionPolicySourceRaw === "request_override"
+      ? selectionPolicySourceRaw
+      : null;
+  const selectedMemoryLayers = asStringArray(input.selected_memory_layers, []).filter((layer) =>
+    layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5",
+  );
+  const trustAnchorLayers = asStringArray(input.trust_anchor_layers, []).filter((layer) =>
+    layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5",
+  );
+  const requestedAllowedLayers = asStringArray(input.requested_allowed_layers, []).filter((layer) =>
+    layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5",
+  );
+  const selectedMemoryLayersJson = JSON.stringify(selectedMemoryLayers);
+  const trustAnchorLayersJson = JSON.stringify(trustAnchorLayers);
+  const requestedAllowedLayersJson = JSON.stringify(requestedAllowedLayers);
 
   const layers = (Array.isArray(input.layers) ? input.layers : [])
     .map((layer) => ({
@@ -1709,9 +1732,14 @@ export async function recordMemoryContextAssemblyTelemetry(
             dropped_items,
             layers_with_content,
             merge_trace_included,
+            selection_policy_name,
+            selection_policy_source,
+            selected_memory_layers_json,
+            trust_anchor_layers_json,
+            requested_allowed_layers_json,
             latency_ms
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           RETURNING id
           `,
           [
@@ -1728,48 +1756,96 @@ export async function recordMemoryContextAssemblyTelemetry(
             droppedItems,
             layersWithContent,
             mergeTraceIncluded,
+            selectionPolicyName,
+            selectionPolicySource,
+            selectedMemoryLayersJson,
+            trustAnchorLayersJson,
+            requestedAllowedLayersJson,
             latencyMs,
           ],
         );
       } catch (insertErr: any) {
-        // Backward compatibility during rolling migration: old schema has no layered_output column.
+        // Backward compatibility during rolling migration: old schema may not have new layer-policy columns
+        // or the earlier layered_output column yet.
         if (String(insertErr?.code ?? "") !== "42703") throw insertErr;
-        head = await client.query(
-          `
-          INSERT INTO memory_context_assembly_telemetry (
-            tenant_id,
-            scope,
-            endpoint,
-            request_id,
-            total_budget_chars,
-            used_chars,
-            remaining_chars,
-            source_items,
-            kept_items,
-            dropped_items,
-            layers_with_content,
-            merge_trace_included,
-            latency_ms
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          RETURNING id
-          `,
-          [
-            tenantId,
-            scope,
-            endpoint,
-            requestId,
-            totalBudgetChars,
-            usedChars,
-            remainingChars,
-            sourceItems,
-            keptItems,
-            droppedItems,
-            layersWithContent,
-            mergeTraceIncluded,
-            latencyMs,
-          ],
-        );
+        try {
+          head = await client.query(
+            `
+            INSERT INTO memory_context_assembly_telemetry (
+              tenant_id,
+              scope,
+              endpoint,
+              layered_output,
+              request_id,
+              total_budget_chars,
+              used_chars,
+              remaining_chars,
+              source_items,
+              kept_items,
+              dropped_items,
+              layers_with_content,
+              merge_trace_included,
+              latency_ms
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING id
+            `,
+            [
+              tenantId,
+              scope,
+              endpoint,
+              layeredOutput,
+              requestId,
+              totalBudgetChars,
+              usedChars,
+              remainingChars,
+              sourceItems,
+              keptItems,
+              droppedItems,
+              layersWithContent,
+              mergeTraceIncluded,
+              latencyMs,
+            ],
+          );
+        } catch (legacyInsertErr: any) {
+          if (String(legacyInsertErr?.code ?? "") !== "42703") throw legacyInsertErr;
+          head = await client.query(
+            `
+            INSERT INTO memory_context_assembly_telemetry (
+              tenant_id,
+              scope,
+              endpoint,
+              request_id,
+              total_budget_chars,
+              used_chars,
+              remaining_chars,
+              source_items,
+              kept_items,
+              dropped_items,
+              layers_with_content,
+              merge_trace_included,
+              latency_ms
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            RETURNING id
+            `,
+            [
+              tenantId,
+              scope,
+              endpoint,
+              requestId,
+              totalBudgetChars,
+              usedChars,
+              remainingChars,
+              sourceItems,
+              keptItems,
+              droppedItems,
+              layersWithContent,
+              mergeTraceIncluded,
+              latencyMs,
+            ],
+          );
+        }
       }
       const telemetryId = Number(head.rows[0]?.id ?? 0);
       if (!Number.isFinite(telemetryId) || telemetryId <= 0) return;
@@ -2085,6 +2161,11 @@ export async function getTenantOperabilityDiagnostics(
       let contextSummaryRow: any = null;
       let contextEndpointRowsRaw: any[] = [];
       let contextLayerRowsRaw: any[] = [];
+      let contextSelectionPolicyRowsRaw: any[] = [];
+      let contextSelectionPolicySourceRowsRaw: any[] = [];
+      let contextMemoryLayerRowsRaw: any[] = [];
+      let contextTrustAnchorRowsRaw: any[] = [];
+      let contextRequestedAllowedLayerRowsRaw: any[] = [];
       let contextTelemetryWarning: string | null = null;
       let sandboxSummaryRow: any = null;
       let sandboxStatusRowsRaw: any[] = [];
@@ -2110,7 +2191,55 @@ export async function getTenantOperabilityDiagnostics(
         );
         const hasLayeredOutput = layeredOutputColumn.rows[0]?.has_layered_output === true;
         const layeredExpr = hasLayeredOutput ? "c.layered_output" : "(c.total_budget_chars > 0)";
-        if (!hasLayeredOutput) {
+        const layerPolicyColumns = await client.query(
+          `
+          SELECT
+            EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'memory_context_assembly_telemetry'
+                AND column_name = 'selection_policy_name'
+            ) AS has_selection_policy_name,
+            EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'memory_context_assembly_telemetry'
+                AND column_name = 'selected_memory_layers_json'
+            ) AS has_selected_memory_layers_json,
+            EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'memory_context_assembly_telemetry'
+                AND column_name = 'trust_anchor_layers_json'
+            ) AS has_trust_anchor_layers_json
+            ,
+            EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'memory_context_assembly_telemetry'
+                AND column_name = 'selection_policy_source'
+            ) AS has_selection_policy_source,
+            EXISTS (
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'memory_context_assembly_telemetry'
+                AND column_name = 'requested_allowed_layers_json'
+            ) AS has_requested_allowed_layers_json
+          `,
+        );
+        const hasSelectionPolicyName = layerPolicyColumns.rows[0]?.has_selection_policy_name === true;
+        const hasSelectedMemoryLayersJson = layerPolicyColumns.rows[0]?.has_selected_memory_layers_json === true;
+        const hasTrustAnchorLayersJson = layerPolicyColumns.rows[0]?.has_trust_anchor_layers_json === true;
+        const hasSelectionPolicySource = layerPolicyColumns.rows[0]?.has_selection_policy_source === true;
+        const hasRequestedAllowedLayersJson = layerPolicyColumns.rows[0]?.has_requested_allowed_layers_json === true;
+        if (
+          !hasLayeredOutput ||
+          !hasSelectionPolicyName ||
+          !hasSelectedMemoryLayersJson ||
+          !hasTrustAnchorLayersJson ||
+          !hasSelectionPolicySource ||
+          !hasRequestedAllowedLayersJson
+        ) {
           contextTelemetryWarning = "context_assembly_telemetry_schema_legacy";
         }
 
@@ -2184,6 +2313,107 @@ export async function getTenantOperabilityDiagnostics(
           [...layerArgs, windowMinutes],
         );
         contextLayerRowsRaw = contextByLayer.rows;
+
+        if (hasSelectionPolicyName) {
+          const contextBySelectionPolicy = await client.query(
+            `
+            SELECT
+              c.selection_policy_name,
+              COUNT(*)::bigint AS total
+            FROM memory_context_assembly_telemetry c
+            WHERE c.tenant_id = $1
+              AND ${scopeFilterContext.sql}
+              AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+              AND c.selection_policy_name IS NOT NULL
+            GROUP BY c.selection_policy_name
+            ORDER BY total DESC, c.selection_policy_name ASC
+            `,
+            [...scopeFilterContext.args, windowMinutes],
+          );
+          contextSelectionPolicyRowsRaw = contextBySelectionPolicy.rows;
+        }
+
+        if (hasSelectionPolicySource) {
+          const contextBySelectionPolicySource = await client.query(
+            `
+            SELECT
+              c.selection_policy_source,
+              COUNT(*)::bigint AS total
+            FROM memory_context_assembly_telemetry c
+            WHERE c.tenant_id = $1
+              AND ${scopeFilterContext.sql}
+              AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+              AND c.selection_policy_source IS NOT NULL
+            GROUP BY c.selection_policy_source
+            ORDER BY total DESC, c.selection_policy_source ASC
+            `,
+            [...scopeFilterContext.args, windowMinutes],
+          );
+          contextSelectionPolicySourceRowsRaw = contextBySelectionPolicySource.rows;
+        }
+
+        if (hasSelectedMemoryLayersJson) {
+          const contextByMemoryLayer = await client.query(
+            `
+            SELECT
+              layer_name,
+              COUNT(*)::bigint AS total
+            FROM (
+              SELECT jsonb_array_elements_text(c.selected_memory_layers_json) AS layer_name
+              FROM memory_context_assembly_telemetry c
+              WHERE c.tenant_id = $1
+                AND ${scopeFilterContext.sql}
+                AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+            ) expanded
+            GROUP BY layer_name
+            ORDER BY total DESC, layer_name ASC
+            `,
+            [...scopeFilterContext.args, windowMinutes],
+          );
+          contextMemoryLayerRowsRaw = contextByMemoryLayer.rows;
+        }
+
+        if (hasTrustAnchorLayersJson) {
+          const contextByTrustAnchor = await client.query(
+            `
+            SELECT
+              layer_name,
+              COUNT(*)::bigint AS total
+            FROM (
+              SELECT jsonb_array_elements_text(c.trust_anchor_layers_json) AS layer_name
+              FROM memory_context_assembly_telemetry c
+              WHERE c.tenant_id = $1
+                AND ${scopeFilterContext.sql}
+                AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+            ) expanded
+            GROUP BY layer_name
+            ORDER BY total DESC, layer_name ASC
+            `,
+            [...scopeFilterContext.args, windowMinutes],
+          );
+          contextTrustAnchorRowsRaw = contextByTrustAnchor.rows;
+        }
+
+        if (hasRequestedAllowedLayersJson) {
+          const contextByRequestedAllowedLayer = await client.query(
+            `
+            SELECT
+              layer_name,
+              COUNT(*)::bigint AS total
+            FROM (
+              SELECT jsonb_array_elements_text(c.requested_allowed_layers_json) AS layer_name
+              FROM memory_context_assembly_telemetry c
+              WHERE c.tenant_id = $1
+                AND ${scopeFilterContext.sql}
+                AND c.created_at >= now() - (($${scopeFilterContext.args.length + 1}::text || ' minutes')::interval)
+            ) expanded
+            GROUP BY layer_name
+            ORDER BY total DESC, layer_name ASC
+            `,
+            [...scopeFilterContext.args, windowMinutes],
+          );
+          contextRequestedAllowedLayerRowsRaw = contextByRequestedAllowedLayer.rows;
+        }
       } catch (contextErr: any) {
         if (String(contextErr?.code ?? "") === "42P01") {
           contextTelemetryWarning = "context_assembly_telemetry_table_missing";
@@ -2430,6 +2660,26 @@ export async function getTenantOperabilityDiagnostics(
           budget_exhausted_rate: total > 0 ? round(budgetExhausted / total) : 0,
         };
       });
+      const contextSelectionPolicyRows = contextSelectionPolicyRowsRaw.map((r: any) => ({
+        selection_policy_name: String(r.selection_policy_name ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const contextSelectionPolicySourceRows = contextSelectionPolicySourceRowsRaw.map((r: any) => ({
+        selection_policy_source: String(r.selection_policy_source ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const contextMemoryLayerRows = contextMemoryLayerRowsRaw.map((r: any) => ({
+        layer_name: String(r.layer_name ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const contextTrustAnchorRows = contextTrustAnchorRowsRaw.map((r: any) => ({
+        layer_name: String(r.layer_name ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
+      const contextRequestedAllowedLayerRows = contextRequestedAllowedLayerRowsRaw.map((r: any) => ({
+        layer_name: String(r.layer_name ?? "unknown"),
+        total: Number(r.total ?? 0),
+      }));
       const criticalLayerAlerts = contextLayerRows
         .filter((row) => row.layer_name === "rules" || row.layer_name === "decisions")
         .map((row) => ({
@@ -2504,6 +2754,11 @@ export async function getTenantOperabilityDiagnostics(
         budget_use_ratio_avg: round(Number(contextSummaryRow?.budget_use_ratio_avg ?? 0)),
         endpoints: contextEndpointRows,
         layers: contextLayerRows,
+        selection_policies: contextSelectionPolicyRows,
+        selection_policy_sources: contextSelectionPolicySourceRows,
+        selected_memory_layers: contextMemoryLayerRows,
+        trust_anchor_layers: contextTrustAnchorRows,
+        requested_allowed_layers: contextRequestedAllowedLayerRows,
         alerts: {
           critical_layers: criticalLayerAlerts,
         },

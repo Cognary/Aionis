@@ -245,6 +245,7 @@ console.log(
   assembled.layered_context?.layers?.episodes?.forgotten_count,
 );
 console.log(assembled.cost_signals?.primary_savings_levers, assembled.cost_signals?.context_est_tokens);
+console.log(assembled.cost_signals?.selected_memory_layers, assembled.recall.context.selection_policy);
 ```
 
 ## Write-Time Distillation（TypeScript）
@@ -288,6 +289,9 @@ console.log(writeRes.distillation, writeRes.nodes);
 2. 它不会自己删除 memory graph，也不会直接归档节点。
 3. 默认策略是保守的：保留 `hot/warm`、排除 archived，只有显式配置 `min_salience` 才会做低 salience 过滤。
 4. `contextAssemble` 响应现在也会带 `cost_signals`，可直接查看估算 token、forgotten items 和当前生效的节省杠杆。
+5. `cost_signals.selected_memory_layers` 会直接告诉你这次 assemble 实际选中了哪些 memory compression layers。
+6. `recall.context.selection_policy` 与 `recall.observability.memory_layers` 会回显当前 endpoint-default 的 layer preference 与 trust-anchor 策略。
+7. `memory_layer_preference.allowed_layers` 可以在 `recall_text`、`planning/context`、`context/assemble` 上显式收紧可用层，但 Aionis 仍会自动保留 `L3/L0` trust anchors。
 
 ## Selective Static Injection（TypeScript）
 

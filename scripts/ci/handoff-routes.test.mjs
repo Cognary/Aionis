@@ -268,3 +268,132 @@ test("native handoff recover prefers the newest matching handoff", () => {
   assert.equal(parsed.recoverBody.handoff.summary, "New summary");
   assert.equal(parsed.recoverBody.handoff.handoff_text, "New handoff text");
 });
+
+test("native handoff routes preserve authenticated private ownership in lite mode", () => {
+  const out = runSnippet(`
+    import { mkdtempSync, rmSync } from "node:fs";
+    import os from "node:os";
+    import path from "node:path";
+    import { createHttpApp } from "./src/host/bootstrap.ts";
+    import { registerHostErrorHandler } from "./src/host/http-host.ts";
+    import { registerHandoffRoutes } from "./src/routes/handoff.ts";
+    import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
+
+    const main = async () => {
+      const tmpDir = mkdtempSync(path.join(os.tmpdir(), "aionis-handoff-routes-"));
+      const sqlitePath = path.join(tmpDir, "handoff.sqlite");
+      const liteWriteStore = createLiteWriteStore(sqlitePath);
+      const app = createHttpApp({ TRUST_PROXY: false });
+      registerHostErrorHandler(app);
+
+      try {
+        registerHandoffRoutes({
+          app,
+          env: {
+            MEMORY_SCOPE: "default",
+            MEMORY_TENANT_ID: "default",
+            MAX_TEXT_LEN: 4096,
+            PII_REDACTION: false,
+            ALLOW_CROSS_SCOPE_EDGES: false,
+            MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+            MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+          },
+          store: {
+            withTx: async () => { throw new Error("lite handoff store should not use store.withTx"); },
+            withClient: async () => { throw new Error("lite handoff recover should not use store.withClient"); },
+          },
+          embedder: null,
+          embeddedRuntime: null,
+          liteWriteStore,
+          writeAccessForClient: () => { throw new Error("lite handoff routes should not use postgres write access"); },
+          requireMemoryPrincipal: async () => ({ tenant_id: "default", agent_id: "agent-1", team_id: null }),
+          withIdentityFromRequest: (_req, body) => body,
+          enforceRateLimit: async () => {},
+          enforceTenantQuota: async () => {},
+          tenantFromBody: () => "default",
+          acquireInflightSlot: async () => ({ release() {}, wait_ms: 0 }),
+        });
+
+        const storeRes = await app.inject({
+          method: "POST",
+          url: "/v1/handoff/store",
+          payload: {
+            anchor: "private-anchor-1",
+            file_path: "/repo/private.py",
+            summary: "Private handoff",
+            handoff_text: "Recover this exact private handoff.",
+            memory_lane: "private",
+          },
+        });
+
+        const recoverRes = await app.inject({
+          method: "POST",
+          url: "/v1/handoff/recover",
+          payload: {
+            anchor: "private-anchor-1",
+            file_path: "/repo/private.py",
+            memory_lane: "private",
+          },
+        });
+
+        process.stdout.write("__RESULT__" + JSON.stringify({
+          storeStatus: storeRes.statusCode,
+          recoverStatus: recoverRes.statusCode,
+          storeBody: JSON.parse(storeRes.body),
+          recoverBody: JSON.parse(recoverRes.body),
+        }));
+      } finally {
+        await app.close();
+        await liteWriteStore.close();
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    };
+
+    main().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  `);
+
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.storeStatus, 200);
+  assert.equal(parsed.recoverStatus, 200);
+  assert.equal(parsed.storeBody.handoff.memory_lane, "private");
+  assert.equal(parsed.recoverBody.handoff.memory_lane, "private");
+  assert.equal(parsed.recoverBody.handoff.handoff_text, "Recover this exact private handoff.");
+  assert.equal(parsed.recoverBody.matched_nodes, 1);
+});
+
+test("http observability maps handoff routes into request telemetry endpoints", () => {
+  const out = runSnippet(`
+    import { createHttpObservabilityHelpers } from "./src/app/http-observability.ts";
+
+    const { telemetryEndpointFromRequest, resolveCorsPolicy } = createHttpObservabilityHelpers({
+      env: {
+        APP_ENV: "dev",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+      },
+      db: null,
+      recordMemoryContextAssemblyTelemetry: async () => {},
+    });
+
+    process.stdout.write("__RESULT__" + JSON.stringify({
+      store: telemetryEndpointFromRequest({ method: "POST", routerPath: "/v1/handoff/store" }),
+      recover: telemetryEndpointFromRequest({ method: "POST", routerPath: "/v1/handoff/recover" }),
+      corsStore: resolveCorsPolicy({ method: "POST", routerPath: "/v1/handoff/store" }),
+      corsPreflight: resolveCorsPolicy({
+        method: "OPTIONS",
+        routerPath: "/v1/handoff/recover",
+        headers: { "access-control-request-method": "POST" },
+      }),
+    }));
+  `);
+
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.store, "write");
+  assert.equal(parsed.recover, "recall");
+  assert.equal(parsed.corsStore.allow_methods, "POST,OPTIONS");
+  assert.deepEqual(parsed.corsStore.allow_origins, ["*"]);
+  assert.equal(parsed.corsPreflight.allow_methods, "POST,OPTIONS");
+});

@@ -93,6 +93,10 @@ import type {
   ContextAssembleInput,
   ContextAssembleSummary,
   ContextAssembleResponse,
+  HandoffRecoverInput,
+  HandoffRecoverResponse,
+  HandoffStoreInput,
+  HandoffStoreResponse,
   HealthResponse,
   MemoryEventWriteInput,
   MemoryEventWriteResponse,
@@ -285,6 +289,17 @@ export class AionisClient {
 
   async write(input: MemoryWriteInput, opts?: RequestOptions): Promise<AionisResponse<MemoryWriteResponse>> {
     return this.requestPost<MemoryWriteInput, MemoryWriteResponse>("/v1/memory/write", input, opts);
+  }
+
+  async handoffStore(input: HandoffStoreInput, opts?: RequestOptions): Promise<AionisResponse<HandoffStoreResponse>> {
+    return this.requestPost<HandoffStoreInput, HandoffStoreResponse>("/v1/handoff/store", input, opts);
+  }
+
+  async handoffRecover(
+    input: HandoffRecoverInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<HandoffRecoverResponse>> {
+    return this.requestPost<HandoffRecoverInput, HandoffRecoverResponse>("/v1/handoff/recover", input, opts);
   }
 
   async recall(input: MemoryRecallInput, opts?: RequestOptions): Promise<AionisResponse<MemoryRecallResponse>> {

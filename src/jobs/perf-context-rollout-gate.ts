@@ -6,6 +6,10 @@ type OptimizationSummary = {
   estimated_token_reduction?: { mean?: number };
   optimization_profile_applied_ratio?: number;
   optimization_profile_source_frequency?: Record<string, number>;
+  selected_memory_layers_frequency?: Record<string, number>;
+  selection_policy_frequency?: Record<string, number>;
+  selection_policy_source_frequency?: Record<string, number>;
+  requested_allowed_layers_frequency?: Record<string, number>;
   latency_ms?: { delta_p95?: number };
 };
 
@@ -106,6 +110,21 @@ function median(values: number[]): number {
   return (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+function topFrequencyEntry(frequency: Record<string, number> | null | undefined): { key: string; count: number } | null {
+  const entries = Object.entries(frequency ?? {}).filter(([, value]) => Number(value) > 0);
+  if (entries.length === 0) return null;
+  entries.sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]));
+  return { key: entries[0][0], count: Number(entries[0][1]) };
+}
+
+function topFrequencyKeys(frequency: Record<string, number> | null | undefined, limit = 3): string[] {
+  return Object.entries(frequency ?? {})
+    .filter(([, value]) => Number(value) > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([key]) => key);
+}
+
 async function main() {
   const benchmarkFiles = await resolveBenchmarkFiles();
   const generatedAt = new Date().toISOString();
@@ -123,6 +142,9 @@ async function main() {
   const minEndpointDefaultRatio = argNumber("--min-endpoint-default-ratio", 0.95);
   const maxLatencyP95RegressionMs = argNumber("--max-latency-p95-regression-ms", 50);
   const requiredRequestMode = (argValue("--required-request-mode") ?? "inherit_default").trim();
+  const requiredSelectionPolicy = (argValue("--required-selection-policy") ?? "").trim();
+  const minSelectionPolicyRatio = argNumber("--min-selection-policy-ratio", 0);
+  const maxRequestOverrideRatio = argNumber("--max-request-override-ratio", 1);
 
   const rows: string[][] = [[
     "Query",
@@ -131,6 +153,12 @@ async function main() {
     "Token Reduction Mean",
     "Applied Ratio",
     "Endpoint Default Ratio",
+    "Selection Policy",
+    "Policy Ratio",
+    "Policy Source",
+    "Request Override Ratio",
+    "Requested Layers",
+    "Top Layers",
     "Latency p95 Delta",
     "Verdict",
   ]];
@@ -149,8 +177,22 @@ async function main() {
     const tokenReductionMean = Number(optimization.summary?.estimated_token_reduction?.mean ?? 0);
     const appliedRatio = Number(optimization.summary?.optimization_profile_applied_ratio ?? 0);
     const sourceFrequency = optimization.summary?.optimization_profile_source_frequency ?? {};
+    const selectedMemoryLayersFrequency = optimization.summary?.selected_memory_layers_frequency ?? {};
+    const selectionPolicyFrequency = optimization.summary?.selection_policy_frequency ?? {};
+    const selectionPolicySourceFrequency = optimization.summary?.selection_policy_source_frequency ?? {};
+    const requestedAllowedLayersFrequency = optimization.summary?.requested_allowed_layers_frequency ?? {};
     const endpointDefaultCount = Number(sourceFrequency.endpoint_default ?? 0);
     const endpointDefaultRatio = totalPairs > 0 ? endpointDefaultCount / totalPairs : 0;
+    const dominantSelectionPolicy = topFrequencyEntry(selectionPolicyFrequency);
+    const dominantSelectionPolicySource = topFrequencyEntry(selectionPolicySourceFrequency);
+    const selectionPolicyCount = requiredSelectionPolicy
+      ? Number(selectionPolicyFrequency[requiredSelectionPolicy] ?? 0)
+      : Number(dominantSelectionPolicy?.count ?? 0);
+    const selectionPolicyRatio = okPairs > 0 ? selectionPolicyCount / okPairs : 0;
+    const requestOverrideCount = Number(selectionPolicySourceFrequency.request_override ?? 0);
+    const requestOverrideRatio = okPairs > 0 ? requestOverrideCount / okPairs : 0;
+    const topRequestedAllowedLayers = topFrequencyKeys(requestedAllowedLayersFrequency, 3);
+    const topLayers = topFrequencyKeys(selectedMemoryLayersFrequency, 3);
     const latencyDeltaP95 = Number(optimization.summary?.latency_ms?.delta_p95 ?? 0);
 
     const pass =
@@ -159,6 +201,8 @@ async function main() {
       tokenReductionMean >= minTokenReductionMean &&
       appliedRatio >= minAppliedRatio &&
       endpointDefaultRatio >= minEndpointDefaultRatio &&
+      selectionPolicyRatio >= minSelectionPolicyRatio &&
+      requestOverrideRatio <= maxRequestOverrideRatio &&
       latencyDeltaP95 <= maxLatencyP95RegressionMs;
 
     rows.push([
@@ -168,6 +212,12 @@ async function main() {
       `${round(tokenReductionMean * 100, 2)}%`,
       String(round(appliedRatio, 4)),
       String(round(endpointDefaultRatio, 4)),
+      dominantSelectionPolicy?.key ?? "(none)",
+      String(round(selectionPolicyRatio, 4)),
+      dominantSelectionPolicySource?.key ?? "(none)",
+      String(round(requestOverrideRatio, 4)),
+      topRequestedAllowedLayers.length > 0 ? topRequestedAllowedLayers.join(", ") : "(none)",
+      topLayers.length > 0 ? topLayers.join(", ") : "(none)",
       `${round(latencyDeltaP95, 3)} ms`,
       pass ? "pass" : "fail",
     ]);
@@ -182,6 +232,16 @@ async function main() {
       token_reduction_mean: round(tokenReductionMean, 6),
       optimization_profile_applied_ratio: round(appliedRatio, 6),
       endpoint_default_ratio: round(endpointDefaultRatio, 6),
+      dominant_selection_policy: dominantSelectionPolicy?.key ?? null,
+      selection_policy_ratio: round(selectionPolicyRatio, 6),
+      dominant_selection_policy_source: dominantSelectionPolicySource?.key ?? null,
+      request_override_ratio: round(requestOverrideRatio, 6),
+      requested_allowed_layers: topRequestedAllowedLayers,
+      selection_policy_source_frequency: selectionPolicySourceFrequency,
+      selected_memory_layers: topLayers,
+      selected_memory_layers_frequency: selectedMemoryLayersFrequency,
+      selection_policy_frequency: selectionPolicyFrequency,
+      requested_allowed_layers_frequency: requestedAllowedLayersFrequency,
       latency_p95_delta_ms: round(latencyDeltaP95, 6),
       pass,
     });
@@ -194,6 +254,8 @@ async function main() {
     median_token_reduction_mean: round(median(artifacts.map((artifact) => artifact.token_reduction_mean)), 6),
     median_applied_ratio: round(median(artifacts.map((artifact) => artifact.optimization_profile_applied_ratio)), 6),
     median_endpoint_default_ratio: round(median(artifacts.map((artifact) => artifact.endpoint_default_ratio)), 6),
+    median_selection_policy_ratio: round(median(artifacts.map((artifact) => artifact.selection_policy_ratio)), 6),
+    median_request_override_ratio: round(median(artifacts.map((artifact) => artifact.request_override_ratio)), 6),
     median_latency_p95_delta_ms: round(median(artifacts.map((artifact) => artifact.latency_p95_delta_ms)), 6),
   };
   const verdict = sampleGatePass && failingArtifacts.length === 0;
@@ -204,6 +266,16 @@ async function main() {
   }
   if (failingArtifacts.length > 0) {
     recommendations.push(`Do not recommend endpoint-default rollout while these artifacts fail gate: ${failingArtifacts.join(", ")}.`);
+  }
+  if (requiredSelectionPolicy && artifacts.some((artifact) => artifact.selection_policy_ratio < minSelectionPolicyRatio)) {
+    recommendations.push(
+      `Selection policy requirement not met consistently: require ${requiredSelectionPolicy} at ratio >= ${minSelectionPolicyRatio}.`,
+    );
+  }
+  if (maxRequestOverrideRatio < 1 && artifacts.some((artifact) => artifact.request_override_ratio > maxRequestOverrideRatio)) {
+    recommendations.push(
+      `Request override ratio too high for endpoint-default rollout: require request_override ratio <= ${maxRequestOverrideRatio}.`,
+    );
   }
   if (verdict) {
     recommendations.push(
@@ -226,6 +298,9 @@ Generated at: \`${generatedAt}\`
 - min token reduction mean: ${round(minTokenReductionMean * 100, 2)}%
 - min applied ratio: ${minAppliedRatio}
 - min endpoint_default ratio: ${minEndpointDefaultRatio}
+- required selection policy: ${requiredSelectionPolicy || "(report-only)"}
+- min selection policy ratio: ${minSelectionPolicyRatio}
+- max request override ratio: ${maxRequestOverrideRatio}
 - max latency p95 regression: ${maxLatencyP95RegressionMs} ms
 
 ## Artifact Gate
@@ -238,6 +313,8 @@ ${mdTable(rows)}
 - median token reduction mean: ${round(overall.median_token_reduction_mean * 100, 2)}%
 - median applied ratio: ${overall.median_applied_ratio}
 - median endpoint_default ratio: ${overall.median_endpoint_default_ratio}
+- median selection policy ratio: ${overall.median_selection_policy_ratio}
+- median request override ratio: ${overall.median_request_override_ratio}
 - median latency p95 delta: ${overall.median_latency_p95_delta_ms} ms
 
 ## Verdict
@@ -264,6 +341,9 @@ ${recommendations.map((line) => `- ${line}`).join("\n")}
       min_token_reduction_mean: minTokenReductionMean,
       min_applied_ratio: minAppliedRatio,
       min_endpoint_default_ratio: minEndpointDefaultRatio,
+      required_selection_policy: requiredSelectionPolicy || null,
+      min_selection_policy_ratio: minSelectionPolicyRatio,
+      max_request_override_ratio: maxRequestOverrideRatio,
       max_latency_p95_regression_ms: maxLatencyP95RegressionMs,
     },
     gates: {

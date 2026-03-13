@@ -1009,6 +1009,11 @@ test("policy-planner probe validates diagnostics context_assembly dual metrics",
               budget_use_ratio_avg: 0.4,
               endpoints: [],
               layers: [],
+              selection_policies: [],
+              selection_policy_sources: [],
+              selected_memory_layers: [],
+              trust_anchor_layers: [],
+              requested_allowed_layers: [],
               alerts: { critical_layers: [] },
             },
             outbox: {
@@ -1034,6 +1039,11 @@ test("policy-planner probe validates diagnostics context_assembly dual metrics",
     assert.equal(parsed.results.diagnostics.context_assembly.total, 2);
     assert.equal(parsed.results.diagnostics.context_assembly.layered_total, 1);
     assert.equal(parsed.results.diagnostics.context_assembly.layered_adoption_rate, 0.5);
+    assert.deepEqual(parsed.results.diagnostics.context_assembly.selection_policies, []);
+    assert.deepEqual(parsed.results.diagnostics.context_assembly.selection_policy_sources, []);
+    assert.deepEqual(parsed.results.diagnostics.context_assembly.selected_memory_layers, []);
+    assert.deepEqual(parsed.results.diagnostics.context_assembly.trust_anchor_layers, []);
+    assert.deepEqual(parsed.results.diagnostics.context_assembly.requested_allowed_layers, []);
     assert.equal(parsed.results.resolve.skipped, false);
     assert.equal(parsed.results.pack_export_decisions.skipped, false);
     assert.equal(parsed.results.pack_export_decisions.decisions_count, 1);

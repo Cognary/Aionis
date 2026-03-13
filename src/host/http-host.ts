@@ -19,6 +19,7 @@ import { registerAutomationRoutes } from "../routes/automations.js";
 import { registerMemoryAccessRoutes } from "../routes/memory-access.js";
 import { registerMemoryContextRuntimeRoutes } from "../routes/memory-context-runtime.js";
 import { registerMemoryFeedbackToolRoutes } from "../routes/memory-feedback-tools.js";
+import { registerHandoffRoutes } from "../routes/handoff.js";
 import { registerMemoryLifecycleRoutes } from "../routes/memory-lifecycle.js";
 import { registerMemoryRecallRoutes } from "../routes/memory-recall.js";
 import { registerMemoryReplayCoreRoutes } from "../routes/memory-replay-core.js";
@@ -445,6 +446,22 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     tenantFromBody,
     acquireInflightSlot,
     runTopicClusterForEventIds,
+  });
+
+  registerHandoffRoutes({
+    app,
+    env,
+    store,
+    embedder,
+    embeddedRuntime,
+    liteWriteStore,
+    writeAccessForClient,
+    requireMemoryPrincipal,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    tenantFromBody,
+    acquireInflightSlot,
   });
 
   registerMemoryLifecycleRoutes({

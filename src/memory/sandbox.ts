@@ -1361,6 +1361,9 @@ export class SandboxExecutor {
     if (prev) clearInterval(prev);
     const timer = setInterval(() => {
       void this.store.withClient(async (client) => {
+        if (!client || typeof (client as { query?: unknown }).query !== "function") {
+          return;
+        }
         await client.query(
           `
           UPDATE memory_sandbox_runs
@@ -1387,6 +1390,9 @@ export class SandboxExecutor {
     this.recoveryInFlight = true;
     try {
       const staleRows = await this.store.withClient(async (client) => {
+        if (!client || typeof (client as { query?: unknown }).query !== "function") {
+          return [] as SandboxRunRow[];
+        }
         const out = await client.query<SandboxRunRow>(
           `
           SELECT

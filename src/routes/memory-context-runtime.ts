@@ -72,6 +72,13 @@ export function registerMemoryContextRuntimeRoutes(args: {
     latency_ms: number;
     layered_output: boolean;
     layered_context: unknown;
+    selected_memory_layers?: string[];
+    selection_policy?: {
+      name?: string | null;
+      source?: string | null;
+      trust_anchor_layers?: string[];
+      requested_allowed_layers?: string[];
+    } | null;
   }) => Promise<void>;
 }) {
   const {
@@ -233,6 +240,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
         context_token_budget: parsed.context_token_budget,
         context_char_budget: parsed.context_char_budget,
         context_compaction_profile: parsed.context_compaction_profile,
+        memory_layer_preference: parsed.memory_layer_preference,
         rules_context: parsed.rules_context,
         rules_include_shadow: parsed.rules_include_shadow,
         rules_limit: parsed.rules_limit,
@@ -432,6 +440,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const observability = buildRecallObservability({
       timings,
       inflight_wait_ms: gate.wait_ms,
+      context_items: (out as any)?.context?.items ?? [],
+      selection_policy: (out as any)?.context?.selection_policy ?? null,
       explicit_mode: {
         mode: explicitMode.mode,
         profile: explicitMode.profile,
@@ -599,6 +609,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
         context_token_budget: parsed.context_token_budget,
         context_char_budget: parsed.context_char_budget,
         context_compaction_profile: parsed.context_compaction_profile,
+        memory_layer_preference: parsed.memory_layer_preference,
       });
       const auth = buildRecallAuth(req, wantDebugEmbeddings);
 
@@ -759,6 +770,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const observability = buildRecallObservability({
       timings,
       inflight_wait_ms: gate.wait_ms,
+      context_items: recallOut?.context?.items ?? [],
+      selection_policy: recallOut?.context?.selection_policy ?? null,
       explicit_mode: {
         mode: explicitMode.mode,
         profile: explicitMode.profile,
@@ -851,6 +864,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     }
     const costSignals = buildLayeredContextCostSignals({
       layered_context: layeredContext,
+      context_items: Array.isArray(recallOut?.context?.items) ? recallOut.context.items : [],
       context_est_tokens: contextEstTokens,
       context_token_budget: recallParsed.context_token_budget ?? null,
       context_char_budget: recallParsed.context_char_budget ?? null,
@@ -877,6 +891,11 @@ export function registerMemoryContextRuntimeRoutes(args: {
         latency_ms: ms,
         layered_output: !!layeredContext,
         layered_context: layeredContext,
+        selected_memory_layers: Array.isArray(costSignals?.selected_memory_layers) ? costSignals.selected_memory_layers : [],
+        selection_policy:
+          recallOut?.context?.selection_policy && typeof recallOut.context.selection_policy === "object"
+            ? recallOut.context.selection_policy
+            : null,
       });
     } catch (err) {
       req.log.warn({ err, tenant_id: tenantIdOut, scope: recallOut.scope }, "planning_context telemetry insert failed");
@@ -1035,6 +1054,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
         context_token_budget: parsed.context_token_budget,
         context_char_budget: parsed.context_char_budget,
         context_compaction_profile: parsed.context_compaction_profile,
+        memory_layer_preference: parsed.memory_layer_preference,
       });
       const auth = buildRecallAuth(req, wantDebugEmbeddings);
       const executionContext =
@@ -1201,6 +1221,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const observability = buildRecallObservability({
       timings,
       inflight_wait_ms: gate.wait_ms,
+      context_items: recallOut?.context?.items ?? [],
+      selection_policy: recallOut?.context?.selection_policy ?? null,
       explicit_mode: {
         mode: explicitMode.mode,
         profile: explicitMode.profile,
@@ -1248,6 +1270,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     }
     const costSignals = buildLayeredContextCostSignals({
       layered_context: layeredContext,
+      context_items: Array.isArray(recallOut?.context?.items) ? recallOut.context.items : [],
       context_est_tokens: contextEstTokens,
       context_token_budget: recallParsed.context_token_budget ?? null,
       context_char_budget: recallParsed.context_char_budget ?? null,
@@ -1275,6 +1298,11 @@ export function registerMemoryContextRuntimeRoutes(args: {
         latency_ms: ms,
         layered_output: !!layeredContext,
         layered_context: layeredContext,
+        selected_memory_layers: Array.isArray(costSignals?.selected_memory_layers) ? costSignals.selected_memory_layers : [],
+        selection_policy:
+          recallOut?.context?.selection_policy && typeof recallOut.context.selection_policy === "object"
+            ? recallOut.context.selection_policy
+            : null,
       });
     } catch (err) {
       req.log.warn({ err, tenant_id: tenantIdOut, scope: recallOut.scope }, "context_assemble telemetry insert failed");

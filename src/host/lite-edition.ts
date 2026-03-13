@@ -15,6 +15,7 @@ export function buildLiteRouteMatrix() {
   return {
     kernel_required_routes: [
       "memory-write",
+      "memory-handoff",
       "memory-recall",
       "memory-context-runtime",
       "memory-access-partial",

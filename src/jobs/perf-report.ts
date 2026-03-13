@@ -39,6 +39,10 @@ type BenchmarkJson = {
       within_token_budget_ratio?: number;
       optimization_profile_applied_ratio?: number;
       optimization_profile_source_frequency?: Record<string, number>;
+      selected_memory_layers_frequency?: Record<string, number>;
+      selection_policy_frequency?: Record<string, number>;
+      selection_policy_source_frequency?: Record<string, number>;
+      requested_allowed_layers_frequency?: Record<string, number>;
       latency_ms?: { baseline_p95: number; optimized_p95: number; delta_p95: number };
     };
     latency_breakdown_ms?: {
@@ -47,6 +51,19 @@ type BenchmarkJson = {
       delta_p95?: Record<string, number>;
     };
     levers_frequency?: Record<string, number>;
+    override_compare?: {
+      enabled?: boolean;
+      allowed_layers?: string[];
+      ok_pairs?: number;
+      failed_pairs?: number;
+      tightened_context_est_tokens?: { mean: number; p50: number; p95: number };
+      delta_vs_optimized_tokens?: { mean: number; p50: number; p95: number; min: number; max: number };
+      within_token_budget_ratio?: number;
+      selected_memory_layers_frequency?: Record<string, number>;
+      selection_policy_source_frequency?: Record<string, number>;
+      requested_allowed_layers_frequency?: Record<string, number>;
+      latency_ms?: { optimized_p95: number; tightened_p95: number; delta_p95: number };
+    };
   } | null;
   replay?: {
     enabled: boolean;
@@ -483,6 +500,34 @@ async function main() {
       if (optimizationSources) {
         optimizationLines.push(`  - optimization_profile_sources: ${optimizationSources}`);
       }
+      const selectedLayers = Object.entries(optimization.summary?.selected_memory_layers_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      if (selectedLayers) {
+        optimizationLines.push(`  - selected_memory_layers: ${selectedLayers}`);
+      }
+      const selectionPolicies = Object.entries(optimization.summary?.selection_policy_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      if (selectionPolicies) {
+        optimizationLines.push(`  - selection_policies: ${selectionPolicies}`);
+      }
+      const selectionPolicySources = Object.entries(optimization.summary?.selection_policy_source_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      if (selectionPolicySources) {
+        optimizationLines.push(`  - selection_policy_sources: ${selectionPolicySources}`);
+      }
+      const requestedAllowedLayers = Object.entries(optimization.summary?.requested_allowed_layers_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      if (requestedAllowedLayers) {
+        optimizationLines.push(`  - requested_allowed_layers: ${requestedAllowedLayers}`);
+      }
       if (latency) {
         optimizationLines.push(
           `  - context assemble p95 baseline=${round(latency.baseline_p95)} ms optimized=${round(latency.optimized_p95)} ms delta=${round(latency.delta_p95)} ms`,
@@ -495,6 +540,24 @@ async function main() {
         .join(", ");
       if (stageBreakdown) optimizationLines.push(`  - top stage delta p95: ${stageBreakdown}`);
       if (levers) optimizationLines.push(`  - top savings levers: ${levers}`);
+      const overrideCompare = optimization.override_compare;
+      if (overrideCompare?.enabled) {
+        optimizationLines.push(
+          `  - override cohort: layers=${Array.isArray(overrideCompare.allowed_layers) ? overrideCompare.allowed_layers.join(", ") : "(none)"} ok_pairs=${Number(overrideCompare.ok_pairs ?? 0)}`,
+        );
+        optimizationLines.push(
+          `  - override token delta vs optimized mean=${round(Number(overrideCompare.delta_vs_optimized_tokens?.mean ?? 0), 3)} p50=${round(Number(overrideCompare.delta_vs_optimized_tokens?.p50 ?? 0), 3)} p95=${round(Number(overrideCompare.delta_vs_optimized_tokens?.p95 ?? 0), 3)}`,
+        );
+        optimizationLines.push(
+          `  - override within token budget ratio=${round(Number(overrideCompare.within_token_budget_ratio ?? 0), 4)}`,
+        );
+        const overrideLatency = overrideCompare.latency_ms;
+        if (overrideLatency) {
+          optimizationLines.push(
+            `  - override p95 optimized=${round(overrideLatency.optimized_p95)} ms tightened=${round(overrideLatency.tightened_p95)} ms delta=${round(overrideLatency.delta_p95)} ms`,
+          );
+        }
+      }
     }
 
     const replay = bench?.replay;

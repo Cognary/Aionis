@@ -227,6 +227,7 @@ async function run() {
         created_at: e.event_created_at,
       }));
       const slots = {
+        compression_layer: "L3",
         summary_kind: "compression_rollup",
         summary_scope: "topic",
         source_topic_id: topic.topic_id,

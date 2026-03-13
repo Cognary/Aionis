@@ -128,6 +128,7 @@ test("lite edition route matrix advertises kernel and server-only split", () => 
   `);
   const parsed = JSON.parse(out);
   assert.ok(parsed.kernel_required_routes.includes("memory-write"));
+  assert.ok(parsed.kernel_required_routes.includes("memory-handoff"));
   assert.ok(parsed.server_only_route_groups.some((entry) => entry.group === "admin_control"));
   assert.ok(parsed.server_only_route_groups.some((entry) => entry.group === "automations"));
 });

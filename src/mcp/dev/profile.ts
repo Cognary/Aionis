@@ -3,6 +3,11 @@ import { type AionisDevEnv, postJson } from "./client.js";
 
 const JsonRecord = z.record(z.unknown());
 const Uuid = z.string().uuid();
+const MemoryLayerPreferenceSchema = z
+  .object({
+    allowed_layers: z.array(z.enum(["L0", "L1", "L2", "L3", "L4", "L5"])).min(1).max(6),
+  })
+  .strict();
 
 export const CodexTaskContextSchema = z.object({
   task: z.object({
@@ -64,6 +69,7 @@ export const CodexPlanningContextArgsSchema = z.object({
   context_char_budget: z.number().int().positive().max(1_000_000).optional(),
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
   context_optimization_profile: z.enum(["balanced", "aggressive"]).optional(),
+  memory_layer_preference: MemoryLayerPreferenceSchema.optional(),
   return_layered_context: z.boolean().optional(),
   context_layers: z.object({
     enabled: z.array(z.enum(["facts", "episodes", "rules", "static", "decisions", "tools", "citations"])).min(1).max(7).optional(),

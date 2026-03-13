@@ -33,6 +33,7 @@ function packageFixture({ includeStartLite = true } = {}) {
         "node --test",
         "scripts/ci/lite-startup-packaging.test.mjs",
         "scripts/ci/lite-edition-routes.test.mjs",
+        "scripts/ci/handoff-routes.test.mjs",
         "scripts/ci/lite-write-routes.test.mjs",
         "scripts/ci/lite-recall-routes.test.mjs",
         "scripts/ci/lite-context-runtime-routes.test.mjs",
@@ -54,6 +55,7 @@ function routeMatrixFixture() {
   return {
     kernel_required_routes: [
       "memory-write",
+      "memory-handoff",
       "memory-recall",
       "memory-context-runtime",
       "memory-access-partial",

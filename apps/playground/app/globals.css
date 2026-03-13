@@ -699,6 +699,21 @@ pre {
   gap: 0.45rem;
 }
 
+.memory-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.memory-policy-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 0.45rem;
+  background: #18181b;
+  display: grid;
+  gap: 0.2rem;
+}
+
 .layered-metrics {
   display: flex;
   flex-wrap: wrap;
@@ -812,6 +827,10 @@ pre {
 
   .oa-tabs {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .memory-policy-grid {
+    grid-template-columns: 1fr;
   }
 
   .filters-row {

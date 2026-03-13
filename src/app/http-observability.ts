@@ -87,10 +87,12 @@ export function createHttpObservabilityHelpers(args: {
     ["/v1/memory/sessions", "write"],
     ["/v1/memory/events", "write"],
     ["/v1/memory/packs/import", "write"],
+    ["/v1/handoff/store", "write"],
     ["/v1/memory/find", "recall"],
     ["/v1/memory/packs/export", "recall"],
     ["/v1/memory/recall", "recall"],
     ["/v1/memory/recall_text", "recall_text"],
+    ["/v1/handoff/recover", "recall"],
     ["/v1/memory/planning/context", "planning_context"],
     ["/v1/memory/context/assemble", "context_assemble"],
     ["/v1/memory/tools/decision", "recall"],
@@ -120,7 +122,7 @@ export function createHttpObservabilityHelpers(args: {
     const method = String(req?.method ?? "").toUpperCase();
     const preflightMethod = String(requestHeader(req, "access-control-request-method") ?? "").trim().toUpperCase();
 
-    if (path.startsWith("/v1/memory/")) {
+    if (path.startsWith("/v1/memory/") || path.startsWith("/v1/handoff/")) {
       const isMemoryCorsMethod = method === "POST" || (method === "OPTIONS" && preflightMethod === "POST");
       if (!isMemoryCorsMethod) return null;
       return {
@@ -189,6 +191,13 @@ export function createHttpObservabilityHelpers(args: {
     latency_ms: number;
     layered_output: boolean;
     layered_context: any;
+    selected_memory_layers?: string[];
+    selection_policy?: {
+      name?: string | null;
+      source?: string | null;
+      trust_anchor_layers?: string[];
+      requested_allowed_layers?: string[];
+    } | null;
   }) {
     if (!db) return;
     const isLayeredOutput = args.layered_output === true;
@@ -208,6 +217,21 @@ export function createHttpObservabilityHelpers(args: {
       dropped_items: isLayeredOutput ? parseNonNegativeNumber(args.layered_context?.stats?.dropped_items) : 0,
       layers_with_content: isLayeredOutput ? parseNonNegativeNumber(args.layered_context?.stats?.layers_with_content) : 0,
       merge_trace_included: isLayeredOutput ? Array.isArray(args.layered_context?.merge_trace) : false,
+      selection_policy_name:
+        args.selection_policy && typeof args.selection_policy.name === "string" ? args.selection_policy.name : null,
+      selection_policy_source:
+        args.selection_policy && typeof args.selection_policy.source === "string" ? args.selection_policy.source : null,
+      selected_memory_layers: Array.isArray(args.selected_memory_layers)
+        ? args.selected_memory_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+        : [],
+      trust_anchor_layers:
+        args.selection_policy && Array.isArray(args.selection_policy.trust_anchor_layers)
+          ? args.selection_policy.trust_anchor_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+          : [],
+      requested_allowed_layers:
+        args.selection_policy && Array.isArray(args.selection_policy.requested_allowed_layers)
+          ? args.selection_policy.requested_allowed_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+          : [],
       layers: layerRows,
     });
   }

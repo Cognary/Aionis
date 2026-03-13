@@ -28,6 +28,8 @@ import type {
   SandboxSessionCreateInput,
   ContextAssembleInput,
   ContextLayerConfigInput,
+  HandoffRecoverInput,
+  HandoffStoreInput,
   MemoryEventWriteInput,
   MemoryFindInput,
   MemoryResolveInput,
@@ -79,6 +81,8 @@ export type {
   SandboxSessionCreateInput,
   ContextAssembleInput,
   ContextLayerConfigInput,
+  HandoffRecoverInput,
+  HandoffStoreInput,
   MemoryEventWriteInput,
   MemoryFindInput,
   MemoryResolveInput,
@@ -631,6 +635,47 @@ export type MemoryWriteResponse = {
   [k: string]: unknown;
 };
 
+export type HandoffArtifactView = {
+  id: string;
+  uri?: string | null;
+  type?: string | null;
+  client_id?: string | null;
+  handoff_kind: string;
+  anchor: string;
+  file_path: string;
+  repo_root?: string | null;
+  symbol?: string | null;
+  title?: string | null;
+  summary: string | null;
+  handoff_text: string;
+  risk?: string | null;
+  acceptance_checks: string[];
+  tags: string[];
+  memory_lane?: "private" | "shared" | null;
+  commit_id?: string | null;
+  commit_uri?: string | null;
+  [k: string]: unknown;
+};
+
+export type HandoffStoreResponse = {
+  tenant_id?: string;
+  scope?: string;
+  commit_id: string;
+  commit_uri?: string;
+  handoff: HandoffArtifactView | null;
+  [k: string]: unknown;
+};
+
+export type HandoffRecoverResponse = {
+  tenant_id: string;
+  scope: string;
+  handoff_kind: string;
+  anchor: string;
+  matched_nodes: number;
+  handoff: HandoffArtifactView;
+  [k: string]: unknown;
+};
+
 export type HealthResponse = {
   ok: boolean;
   aionis_edition?: "server" | "lite";
@@ -702,7 +747,17 @@ export type RecallContextItemDto = {
   kind: string;
   node_id: string;
   uri?: string;
+  compression_layer?: string | null;
   [k: string]: unknown;
+};
+
+export type RecallContextSelectionPolicyDto = {
+  name: string;
+  preferred_layers: string[];
+  fallback_layers: string[];
+  trust_anchor_layers: string[];
+  source: string;
+  requested_allowed_layers?: string[];
 };
 
 export type RecallCitationDto = {
@@ -728,6 +783,7 @@ export type MemoryRecallResponse = {
     text: string;
     items: RecallContextItemDto[];
     citations: RecallCitationDto[];
+    selection_policy?: RecallContextSelectionPolicyDto;
   };
   debug?: Record<string, unknown>;
   rules?: Record<string, unknown>;
@@ -783,6 +839,7 @@ export type ContextAssembleResponse = {
     layered_output: boolean;
     forgotten_items: number;
     static_blocks_selected: number;
+    selected_memory_layers: string[];
     optimization_profile: "balanced" | "aggressive" | null;
     context_compaction_profile: "balanced" | "aggressive";
     recall_mode?: string | null;
@@ -803,6 +860,7 @@ export type ContextAssembleResponse = {
     forgotten_by_reason: Record<string, number>;
     static_blocks_selected: number;
     static_blocks_rejected: number;
+    selected_memory_layers: string[];
     primary_savings_levers: string[];
     [k: string]: unknown;
   };

@@ -42,6 +42,8 @@ type InflightKind = "recall" | "write";
 
 type IdentityRequestKind =
   | "write"
+  | "handoff_store"
+  | "handoff_recover"
   | "rehydrate"
   | "activate"
   | "find"

@@ -5,7 +5,6 @@ import {
   HandoffRecoverRequest,
   HandoffStoreRequest,
   type HandoffRecoverInput,
-  type HandoffStoreInput,
   type MemoryFindInput,
   type MemoryResolveInput,
   type MemoryWriteInput,
@@ -47,6 +46,10 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
 
 export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
   const parsed = HandoffStoreRequest.parse(input);
+  const raw = input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
+  const producerAgentId = normalizeOptionalString(typeof raw.producer_agent_id === "string" ? raw.producer_agent_id : undefined);
+  const ownerAgentId = normalizeOptionalString(typeof raw.owner_agent_id === "string" ? raw.owner_agent_id : undefined);
+  const ownerTeamId = normalizeOptionalString(typeof raw.owner_team_id === "string" ? raw.owner_team_id : undefined);
   const handoffText = [
     `anchor=${parsed.anchor}`,
     `file=${parsed.file_path}`,
@@ -66,6 +69,9 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
     scope: parsed.scope,
     actor: parsed.actor,
     memory_lane: parsed.memory_lane,
+    ...(producerAgentId ? { producer_agent_id: producerAgentId } : {}),
+    ...(ownerAgentId ? { owner_agent_id: ownerAgentId } : {}),
+    ...(ownerTeamId ? { owner_team_id: ownerTeamId } : {}),
     input_text: handoffText,
     edges: [],
     nodes: [
@@ -148,15 +154,21 @@ export async function recoverHandoff(args: {
   input: unknown;
   defaultScope: string;
   defaultTenantId: string;
+  consumerAgentId?: string | null;
+  consumerTeamId?: string | null;
 }) {
   const parsed = HandoffRecoverRequest.parse(args.input);
   const normalizedFilePath = normalizeOptionalString(parsed.file_path);
   const normalizedSymbol = normalizeOptionalString(parsed.symbol);
+  const consumerAgentId = normalizeOptionalString(args.consumerAgentId ?? undefined) ?? null;
+  const consumerTeamId = normalizeOptionalString(args.consumerTeamId ?? undefined) ?? null;
   const findInput: MemoryFindInput = {
     tenant_id: parsed.tenant_id,
     scope: parsed.scope,
     type: "event",
     memory_lane: parsed.memory_lane,
+    ...(consumerAgentId ? { consumer_agent_id: consumerAgentId } : {}),
+    ...(consumerTeamId ? { consumer_team_id: consumerTeamId } : {}),
     include_meta: true,
     include_slots: false,
     include_slots_preview: true,
@@ -194,6 +206,8 @@ export async function recoverHandoff(args: {
     tenant_id: findResult.tenant_id,
     scope: findResult.scope,
     uri: topNode.uri,
+    ...(consumerAgentId ? { consumer_agent_id: consumerAgentId } : {}),
+    ...(consumerTeamId ? { consumer_team_id: consumerTeamId } : {}),
     include_meta: true,
     include_slots: true,
     include_slots_preview: false,

@@ -23,6 +23,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const REQUIRED_RUNTIME_HOST_TESTS = [
   "scripts/ci/lite-startup-packaging.test.mjs",
   "scripts/ci/lite-edition-routes.test.mjs",
+  "scripts/ci/handoff-routes.test.mjs",
   "scripts/ci/lite-write-routes.test.mjs",
   "scripts/ci/lite-recall-routes.test.mjs",
   "scripts/ci/lite-context-runtime-routes.test.mjs",
@@ -38,6 +39,7 @@ const REQUIRED_RUNTIME_HOST_TESTS = [
 
 const REQUIRED_KERNEL_ROUTE_GROUPS = [
   "memory-write",
+  "memory-handoff",
   "memory-recall",
   "memory-context-runtime",
   "memory-access-partial",

@@ -254,6 +254,7 @@ export function distillWriteArtifacts(args: {
         title: source.title ? `Distilled: ${normalizeSnippet(source.title, 72)}` : "Distilled evidence",
         text_summary: evidenceSummary,
         slots: {
+          compression_layer: "L1",
           summary_kind: "write_distillation_evidence",
           distillation_kind: "write_distilled_evidence",
           source_kind: source.source_kind,
@@ -302,6 +303,7 @@ export function distillWriteArtifacts(args: {
         title: fact.title,
         text_summary: fact.summary,
         slots: {
+          compression_layer: "L1",
           summary_kind: "write_distillation_fact",
           distillation_kind: "write_distilled_fact",
           extraction_pattern: fact.extraction_pattern,

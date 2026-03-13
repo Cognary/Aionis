@@ -1,3 +1,4 @@
+import type { MemoryLayerId, MemoryLayerPolicy } from "./layer-policy.js";
 import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 
 type RankedItem = { id: string; activation: number; score: number };
@@ -16,6 +17,27 @@ type NodeRow = {
   confidence: number;
   salience: number;
 };
+
+function resolveCompressionLayer(n: NodeRow): MemoryLayerId | null {
+  if (n.type === "event") return "L0";
+  if (n.type === "evidence") {
+    if (n.slots?.summary_kind === "write_distillation_evidence") return "L1";
+    return "L0";
+  }
+  if (n.type === "topic") return "L2";
+  if (n.type === "concept") {
+    if (typeof n.slots?.compression_layer === "string" && n.slots.compression_layer.trim()) {
+      const layer = n.slots.compression_layer.trim();
+      if (layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5") {
+        return layer;
+      }
+      return null;
+    }
+    if (n.slots?.summary_kind === "write_distillation_fact") return "L1";
+    if (n.slots?.summary_kind === "compression_rollup") return "L3";
+  }
+  return null;
+}
 
 type RuleDefRow = {
   rule_node_id: string;
@@ -41,6 +63,7 @@ export type ContextItem =
       tier?: string;
       salience?: number;
       lifecycle_state?: string | null;
+      compression_layer?: string | null;
     }
   | {
       kind: "entity";
@@ -52,6 +75,7 @@ export type ContextItem =
       tier?: string;
       salience?: number;
       lifecycle_state?: string | null;
+      compression_layer?: string | null;
     }
   | {
       kind: "event" | "evidence";
@@ -64,6 +88,7 @@ export type ContextItem =
       tier?: string;
       salience?: number;
       lifecycle_state?: string | null;
+      compression_layer?: string | null;
     }
   | {
       kind: "rule";
@@ -82,6 +107,7 @@ export type ContextItem =
       tier?: string;
       salience?: number;
       lifecycle_state?: string | null;
+      compression_layer?: string | null;
     };
 
 export type ContextBuildOptions = {
@@ -90,6 +116,7 @@ export type ContextBuildOptions = {
   context_token_budget?: number | null;
   context_char_budget?: number | null;
   context_compaction_profile?: ContextCompactionProfile | null;
+  layer_policy?: MemoryLayerPolicy | null;
 };
 
 type ContextCitation = {
@@ -155,17 +182,39 @@ function pickTop(
   nodes: Map<string, NodeRow>,
   types: Set<string>,
   limit: number,
+  layerPolicy?: MemoryLayerPolicy | null,
 ): NodeRow[] {
-  const out: NodeRow[] = [];
+  const allowedLayers =
+    layerPolicy?.source === "request_override"
+      ? new Set<MemoryLayerId>([...layerPolicy.preferred_layers, ...layerPolicy.fallback_layers, ...layerPolicy.trust_anchor_layers])
+      : null;
+  const out: Array<{ node: NodeRow; rank_index: number }> = [];
+  let rankIndex = 0;
   for (const r of ranked) {
+    rankIndex += 1;
     const n = nodes.get(r.id);
     if (!n) continue;
     if (!types.has(n.type)) continue;
     if (n.type === "topic" && ((n.topic_state ?? n.slots?.topic_state) === "draft")) continue;
-    out.push(n);
-    if (out.length >= limit) break;
+    const layer = resolveCompressionLayer(n);
+    if (allowedLayers && (!layer || !allowedLayers.has(layer))) continue;
+    out.push({ node: n, rank_index: rankIndex });
   }
-  return out;
+  if (layerPolicy && out.length > 1) {
+    const preferredOrder = new Map(layerPolicy.preferred_layers.map((layer, idx) => [layer, idx]));
+    const fallbackOffset = layerPolicy.preferred_layers.length;
+    const fallbackOrder = new Map(layerPolicy.fallback_layers.map((layer, idx) => [layer, fallbackOffset + idx]));
+    const unknownLayerRank = fallbackOffset + layerPolicy.fallback_layers.length + 32;
+    out.sort((a, b) => {
+      const aLayer = resolveCompressionLayer(a.node);
+      const bLayer = resolveCompressionLayer(b.node);
+      const aPref = aLayer ? (preferredOrder.get(aLayer) ?? fallbackOrder.get(aLayer) ?? unknownLayerRank) : unknownLayerRank + 16;
+      const bPref = bLayer ? (preferredOrder.get(bLayer) ?? fallbackOrder.get(bLayer) ?? unknownLayerRank) : unknownLayerRank + 16;
+      if (aPref !== bPref) return aPref - bPref;
+      return a.rank_index - b.rank_index;
+    });
+  }
+  return out.slice(0, limit).map((entry) => entry.node);
 }
 
 function fmtJsonCompact(v: any): string {
@@ -276,7 +325,8 @@ export function buildContext(
     });
   };
 
-  const topics = pickTop(ranked, nodes, new Set(["topic", "concept"]), 4);
+  const layerPolicy = options?.layer_policy ?? null;
+  const topics = pickTop(ranked, nodes, new Set(["topic", "concept"]), 4, layerPolicy);
   const hasCompressionConcept = topics.some(isCompressionConcept);
   for (const n of topics) {
     const uri = buildNodeUri(n, options);
@@ -290,11 +340,12 @@ export function buildContext(
       tier: n.tier,
       salience: n.salience,
       lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
+      compression_layer: resolveCompressionLayer(n),
     });
     pushCitation(n);
   }
 
-  const entities = pickTop(ranked, nodes, new Set(["entity"]), 6);
+  const entities = pickTop(ranked, nodes, new Set(["entity"]), 6, layerPolicy);
   for (const n of entities) {
     const uri = buildNodeUri(n, options);
     items.push({
@@ -307,11 +358,12 @@ export function buildContext(
       tier: n.tier,
       salience: n.salience,
       lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
+      compression_layer: resolveCompressionLayer(n),
     });
     pushCitation(n);
   }
 
-  const rawEvents = pickTop(ranked, nodes, new Set(["event", "evidence"]), hasCompressionConcept ? 24 : 10);
+  const rawEvents = pickTop(ranked, nodes, new Set(["event", "evidence"]), hasCompressionConcept ? 24 : 10, layerPolicy);
   const compressionCited = new Set<string>();
   if (hasCompressionConcept) {
     for (const n of topics) {
@@ -340,11 +392,12 @@ export function buildContext(
       tier: n.tier,
       salience: n.salience,
       lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
+      compression_layer: resolveCompressionLayer(n),
     });
     pushCitation(n);
   }
 
-  const rules = pickTop(ranked, nodes, new Set(["rule"]), 6);
+  const rules = pickTop(ranked, nodes, new Set(["rule"]), 6, layerPolicy);
   for (const n of rules) {
     const d = ruleDefs.get(n.id);
     const uri = buildNodeUri(n, options);
@@ -365,6 +418,7 @@ export function buildContext(
       tier: n.tier,
       salience: n.salience,
       lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
+      compression_layer: resolveCompressionLayer(n),
     });
     pushCitation(n);
   }

@@ -561,6 +561,44 @@ This mode is intended for API processes started with:
 1. `MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT=balanced|aggressive`
 2. `MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT=balanced|aggressive`
 
+For repeatable comparison cohorts, you can use `--optimization-benchmark-preset`:
+
+```bash
+# endpoint-default only
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --optimization-benchmark-preset endpoint_default_only \
+  --optimization-samples 12
+
+# endpoint-default + caller-tightened L1
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --optimization-benchmark-preset caller_tightened_l1 \
+  --optimization-samples 12
+
+# endpoint-default + caller-tightened L1,L3
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --optimization-benchmark-preset caller_tightened_l1_l3 \
+  --optimization-samples 12
+```
+
+Preset behavior:
+
+1. `endpoint_default_only` -> `optimization_check=true`, `optimization_request_mode=inherit_default`, no caller override cohort
+2. `caller_tightened_l1` -> same endpoint-default baseline, plus override cohort with `allowed_layers=["L1"]`
+3. `caller_tightened_l1_l3` -> same endpoint-default baseline, plus override cohort with `allowed_layers=["L1","L3"]`
+4. explicit flags such as `--optimization-request-mode`, `--optimization-override-check`, and `--optimization-override-layers-json` still override preset defaults
+
 Optional replay-dispatch evidence sampling (collects deterministic replay eligibility, dispatch decisions, and `result_summary` coverage for one existing playbook):
 
 ```bash
@@ -678,6 +716,21 @@ This gate is intended for context-side rollout only:
 2. require `endpoint_default` as the recorded optimization source
 3. require token-reduction and latency thresholds to hold across all supplied artifacts
 4. use it to justify endpoint-default rollout, not wider mode-level defaults
+
+It now also reports:
+
+1. top `selected_memory_layers`
+2. dominant `selection_policy`
+3. dominant `selection_policy_source`
+4. top `requested_allowed_layers`
+5. optional `--required-selection-policy` and `--min-selection-policy-ratio` thresholds if you want layer-policy evidence to become part of the gate
+6. optional `--max-request-override-ratio` if you want endpoint-default rollout evidence to exclude heavy caller-side layer tightening
+
+Override cohort benchmarking:
+
+1. add `--optimization-override-check true` to run a second optimized cohort with caller-side layer tightening
+2. optionally set `--optimization-override-layers-json '["L1"]'` (or another allowed-layer subset)
+3. benchmark output will then include `override_compare`, which compares default optimized vs caller-tightened tokens and p95 latency
 
 Apply the corresponding env profile to `.env`:
 

@@ -175,6 +175,8 @@ Memory 路由使用以下任一方式：
    - `dispatch.decision=candidate_only`
    - 可通过 `execute_fallback=false` 禁止回退执行
 6. replay 的 `candidate / run / dispatch` 响应现在都会带机器可读的 `cost_signals`。
+7. `planning/context` 与 `context/assemble` 现在也会暴露 `cost_signals.selected_memory_layers` 和 `recall.context.selection_policy`，方便运维判断这次选中了哪些 memory layers，以及实际应用了哪套 trust-anchor 策略。
+8. `recall_text`、`planning/context`、`context/assemble` 现在支持 `memory_layer_preference.allowed_layers` 做调用方侧收紧；服务端仍然会强制保留 `L3/L0` trust anchors。
 7. 执行后端支持：
    - `params.execution_backend=local_process`（默认）
    - `params.execution_backend=sandbox_sync`（沙箱同步执行并校验结果）

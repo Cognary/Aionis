@@ -175,6 +175,8 @@ Notes:
    - `dispatch.decision=candidate_only`
    - callers can disable fallback with `execute_fallback=false`
 6. replay `candidate / run / dispatch` responses now include machine-readable `cost_signals`.
+7. `planning/context` and `context/assemble` expose `cost_signals.selected_memory_layers` plus `recall.context.selection_policy`, so operators can inspect which memory layers were selected and which trust-anchor policy was applied.
+8. `recall_text`, `planning/context`, and `context/assemble` now accept `memory_layer_preference.allowed_layers` for caller-side tightening; the server still enforces `L3/L0` trust anchors.
 7. Execution backends:
    - `params.execution_backend=local_process` (default)
    - `params.execution_backend=sandbox_sync` (sandbox run sync, with command result validation)

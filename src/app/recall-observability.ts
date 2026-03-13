@@ -5,6 +5,43 @@ function normalizeAionisUri(v: unknown): string | null {
   return s;
 }
 
+function selectedMemoryLayers(items: unknown): string[] {
+  if (!Array.isArray(items)) return [];
+  const out = new Set<string>();
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const layer = String((item as Record<string, unknown>).compression_layer ?? "").trim();
+    if (!layer) continue;
+    out.add(layer);
+  }
+  return Array.from(out).sort();
+}
+
+function normalizeSelectionPolicy(input: unknown) {
+  if (!input || typeof input !== "object") return null;
+  const raw = input as Record<string, unknown>;
+  const preferredLayers = Array.isArray(raw.preferred_layers)
+    ? raw.preferred_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+  const fallbackLayers = Array.isArray(raw.fallback_layers)
+    ? raw.fallback_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+  const trustAnchorLayers = Array.isArray(raw.trust_anchor_layers)
+    ? raw.trust_anchor_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+  const requestedAllowedLayers = Array.isArray(raw.requested_allowed_layers)
+    ? raw.requested_allowed_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+  return {
+    name: typeof raw.name === "string" ? raw.name : null,
+    preferred_layers: preferredLayers,
+    fallback_layers: fallbackLayers,
+    trust_anchor_layers: trustAnchorLayers,
+    source: typeof raw.source === "string" ? raw.source : "unknown",
+    requested_allowed_layers: requestedAllowedLayers,
+  };
+}
+
 export function collectRecallTrajectoryUriLinks(args: { recall: any; tools?: any; max_per_type?: number }) {
   const cap = Math.max(1, Math.min(200, Number(args.max_per_type ?? 32)));
   const out = {
@@ -96,6 +133,8 @@ export function collectRecallTrajectoryUriLinks(args: { recall: any; tools?: any
 export function buildRecallObservability(args: {
   timings: Record<string, number>;
   inflight_wait_ms: number;
+  context_items?: unknown;
+  selection_policy?: unknown;
   explicit_mode?: {
     mode?: string | null;
     profile?: string;
@@ -134,6 +173,8 @@ export function buildRecallObservability(args: {
     audit_insert_ms: args.timings["audit_insert"] ?? 0,
     debug_embeddings_ms: args.timings["debug_embeddings"] ?? 0,
   };
+  const memoryLayers = selectedMemoryLayers(args.context_items);
+  const selectionPolicy = normalizeSelectionPolicy(args.selection_policy);
   return {
     stage_timings_ms: stageTimings,
     inflight_wait_ms: args.inflight_wait_ms,
@@ -170,5 +211,9 @@ export function buildRecallObservability(args: {
     },
     stage1: args.stage1 ?? null,
     neighborhood_counts: args.neighborhood_counts ?? null,
+    memory_layers: {
+      selected_layers: memoryLayers,
+      selection_policy: selectionPolicy,
+    },
   };
 }

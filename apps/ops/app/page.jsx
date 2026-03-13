@@ -125,6 +125,13 @@ export default async function OpsDashboardPage({ searchParams }) {
     : [];
   const contextAssembly = diagnostics?.context_assembly ?? null;
   const contextAssemblyLayerRows = Array.isArray(contextAssembly?.layers) ? contextAssembly.layers : [];
+  const contextSelectionPolicyRows = Array.isArray(contextAssembly?.selection_policies) ? contextAssembly.selection_policies : [];
+  const contextSelectionPolicySourceRows = Array.isArray(contextAssembly?.selection_policy_sources) ? contextAssembly.selection_policy_sources : [];
+  const contextMemoryLayerRows = Array.isArray(contextAssembly?.selected_memory_layers) ? contextAssembly.selected_memory_layers : [];
+  const contextTrustAnchorRows = Array.isArray(contextAssembly?.trust_anchor_layers) ? contextAssembly.trust_anchor_layers : [];
+  const contextRequestedAllowedLayerRows = Array.isArray(contextAssembly?.requested_allowed_layers)
+    ? contextAssembly.requested_allowed_layers
+    : [];
   const timeseriesRows = Array.isArray(timeseries?.series) ? timeseries.series.slice(0, 24) : [];
   const keyUsageRows = Array.isArray(keyUsage?.items) ? keyUsage.items.slice(0, 16) : [];
   const rollupFailedSample = Array.isArray(rollup?.failed_sample) ? rollup.failed_sample : [];
@@ -337,6 +344,132 @@ export default async function OpsDashboardPage({ searchParams }) {
             </table>
           </div>
         </article>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Context Layer Policy</h2>
+          <StatusChip result={diagnosticsResult} />
+        </div>
+        <div className="grid-2">
+          <div className="table-wrap compact">
+            <table>
+              <thead>
+                <tr>
+                  <th>selection_policy</th>
+                  <th>total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contextSelectionPolicyRows.map((row) => (
+                  <tr key={String(row.selection_policy_name)}>
+                    <td>{String(row.selection_policy_name)}</td>
+                    <td>{formatNumber(row.total)}</td>
+                  </tr>
+                ))}
+                {contextSelectionPolicyRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="empty">No selection policy telemetry rows</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+          <div className="table-wrap compact">
+            <table>
+              <thead>
+                <tr>
+                  <th>selection_policy_source</th>
+                  <th>total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contextSelectionPolicySourceRows.map((row) => (
+                  <tr key={String(row.selection_policy_source)}>
+                    <td>{String(row.selection_policy_source)}</td>
+                    <td>{formatNumber(row.total)}</td>
+                  </tr>
+                ))}
+                {contextSelectionPolicySourceRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="empty">No selection policy source rows</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="grid-2">
+          <div className="table-wrap compact">
+            <table>
+              <thead>
+                <tr>
+                  <th>selected_memory_layer</th>
+                  <th>total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contextMemoryLayerRows.map((row) => (
+                  <tr key={`selected:${String(row.layer_name)}`}>
+                    <td>{String(row.layer_name)}</td>
+                    <td>{formatNumber(row.total)}</td>
+                  </tr>
+                ))}
+                {contextMemoryLayerRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="empty">No selected memory layer rows</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+          <div className="table-wrap compact">
+            <table>
+              <thead>
+                <tr>
+                  <th>requested_allowed_layer</th>
+                  <th>total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contextRequestedAllowedLayerRows.map((row) => (
+                  <tr key={`requested:${String(row.layer_name)}`}>
+                    <td>{String(row.layer_name)}</td>
+                    <td>{formatNumber(row.total)}</td>
+                  </tr>
+                ))}
+                {contextRequestedAllowedLayerRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="empty">No requested allowed layer rows</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="table-wrap compact">
+          <table>
+            <thead>
+              <tr>
+                <th>trust_anchor_layer</th>
+                <th>total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contextTrustAnchorRows.map((row) => (
+                <tr key={`anchor:${String(row.layer_name)}`}>
+                  <td>{String(row.layer_name)}</td>
+                  <td>{formatNumber(row.total)}</td>
+                </tr>
+              ))}
+              {contextTrustAnchorRows.length === 0 ? (
+                <tr>
+                  <td colSpan={2} className="empty">No trust anchor layer rows</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="grid-2">

@@ -14,6 +14,7 @@ export type LayeredContextCostSignals = {
   forgotten_by_reason: Record<string, number>;
   static_blocks_selected: number;
   static_blocks_rejected: number;
+  selected_memory_layers: string[];
   primary_savings_levers: string[];
 };
 
@@ -39,8 +40,21 @@ function normalizeProfile(value: unknown): ContextOptimizationProfileName | null
   return value === "aggressive" || value === "balanced" ? value : null;
 }
 
+function selectedMemoryLayers(items: unknown): string[] {
+  if (!Array.isArray(items)) return [];
+  const out = new Set<string>();
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const layer = String((item as Record<string, unknown>).compression_layer ?? "").trim();
+    if (!layer) continue;
+    out.add(layer);
+  }
+  return Array.from(out).sort();
+}
+
 export function buildLayeredContextCostSignals(args: {
   layered_context?: any;
+  context_items?: any[];
   context_est_tokens: number;
   context_token_budget?: number | null;
   context_char_budget?: number | null;
@@ -58,6 +72,7 @@ export function buildLayeredContextCostSignals(args: {
   const staticRejected = asNonNegativeNumber(args.layered_context?.static_injection?.rejected_blocks);
   const compactionProfile = normalizeProfile(args.context_compaction_profile) ?? "balanced";
   const optimizationProfile = normalizeProfile(args.context_optimization_profile);
+  const memoryLayers = selectedMemoryLayers(args.context_items);
   const levers: string[] = [];
   if (optimizationProfile) levers.push(`optimization_profile:${optimizationProfile}`);
   if (forgottenItems > 0) levers.push("forgetting");
@@ -65,6 +80,7 @@ export function buildLayeredContextCostSignals(args: {
   if (compactionProfile === "aggressive") levers.push("aggressive_compaction");
   if (tokenBudget !== null) levers.push("token_budget");
   if (charBudget !== null) levers.push("char_budget");
+  if (memoryLayers.length > 0) levers.push(`memory_layers:${memoryLayers.join(",")}`);
 
   return {
     summary_version: "context_cost_signals_v1",
@@ -83,6 +99,7 @@ export function buildLayeredContextCostSignals(args: {
     forgotten_by_reason: forgottenByReason,
     static_blocks_selected: staticSelected,
     static_blocks_rejected: staticRejected,
+    selected_memory_layers: memoryLayers,
     primary_savings_levers: levers,
   };
 }

@@ -488,6 +488,11 @@ async function probeDiagnostics() {
   );
   ensure(Array.isArray(contextAssembly.endpoints), `${label}: diagnostics.context_assembly.endpoints must be array`);
   ensure(Array.isArray(contextAssembly.layers), `${label}: diagnostics.context_assembly.layers must be array`);
+  ensure(Array.isArray(contextAssembly.selection_policies), `${label}: diagnostics.context_assembly.selection_policies must be array`);
+  ensure(Array.isArray(contextAssembly.selection_policy_sources), `${label}: diagnostics.context_assembly.selection_policy_sources must be array`);
+  ensure(Array.isArray(contextAssembly.selected_memory_layers), `${label}: diagnostics.context_assembly.selected_memory_layers must be array`);
+  ensure(Array.isArray(contextAssembly.trust_anchor_layers), `${label}: diagnostics.context_assembly.trust_anchor_layers must be array`);
+  ensure(Array.isArray(contextAssembly.requested_allowed_layers), `${label}: diagnostics.context_assembly.requested_allowed_layers must be array`);
   return { skipped: false, status: out.status, body: out.body };
 }
 
@@ -686,6 +691,21 @@ try {
               total: Number(diagnostics.body?.diagnostics?.context_assembly?.total ?? 0),
               layered_total: Number(diagnostics.body?.diagnostics?.context_assembly?.layered_total ?? 0),
               layered_adoption_rate: Number(diagnostics.body?.diagnostics?.context_assembly?.layered_adoption_rate ?? 0),
+              selection_policies: Array.isArray(diagnostics.body?.diagnostics?.context_assembly?.selection_policies)
+                ? diagnostics.body.diagnostics.context_assembly.selection_policies
+                : [],
+              selection_policy_sources: Array.isArray(diagnostics.body?.diagnostics?.context_assembly?.selection_policy_sources)
+                ? diagnostics.body.diagnostics.context_assembly.selection_policy_sources
+                : [],
+              selected_memory_layers: Array.isArray(diagnostics.body?.diagnostics?.context_assembly?.selected_memory_layers)
+                ? diagnostics.body.diagnostics.context_assembly.selected_memory_layers
+                : [],
+              trust_anchor_layers: Array.isArray(diagnostics.body?.diagnostics?.context_assembly?.trust_anchor_layers)
+                ? diagnostics.body.diagnostics.context_assembly.trust_anchor_layers
+                : [],
+              requested_allowed_layers: Array.isArray(diagnostics.body?.diagnostics?.context_assembly?.requested_allowed_layers)
+                ? diagnostics.body.diagnostics.context_assembly.requested_allowed_layers
+                : [],
             },
           },
       resolve: resolve.skipped

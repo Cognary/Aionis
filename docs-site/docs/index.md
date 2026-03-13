@@ -29,9 +29,12 @@ aside: false
       <span>Auditable evidence</span>
     </div>
   </div>
-  <div class="landing-proof-panel">
-    <div class="proof-card featured">
-      <p class="proof-label">Real continuation test</p>
+  <div class="landing-proof-panel signal-stack">
+    <div class="proof-card featured signal-card signal-card-metric">
+      <div class="signal-card-topline">
+        <span class="proof-label">Real continuation test</span>
+        <span class="signal-pill">Open source</span>
+      </div>
       <h2><code>pallets/click</code></h2>
       <p class="proof-summary">
         Aionis resumed a real repository task from stored execution memory instead of starting from zero.
@@ -48,14 +51,19 @@ aside: false
       </div>
       <a class="proof-link" href="/guide/evidence">See the public evidence</a>
     </div>
-    <div class="proof-card compact">
-      <p class="proof-label">What changes</p>
-      <ul class="proof-list">
-        <li>Less rediscovery across sessions</li>
-        <li>Less repeated prompt rebuilding</li>
-        <li>More exact recovery of prior work</li>
-        <li>More reusable execution paths</li>
-      </ul>
+    <div class="signal-card-row">
+      <div class="proof-card compact signal-card">
+        <p class="proof-label">What resumes</p>
+        <p class="signal-copy">
+          Prior handoffs, replayable run state, decisions, and evidence come back without rereading the whole repo.
+        </p>
+      </div>
+      <div class="proof-card compact signal-card">
+        <p class="proof-label">What becomes reusable</p>
+        <p class="signal-copy">
+          Successful work can become playbooks, exact handoffs, and inspectable traces instead of throwaway prompt history.
+        </p>
+      </div>
     </div>
   </div>
 </div>
@@ -63,30 +71,50 @@ aside: false
 <div class="home-section-lead">
   <span>Start here</span>
 </div>
-<ul class="mint-quick-nav">
-  <li><a href="/guide/lite-public-beta">Try Lite in 5 minutes</a></li>
-  <li><a href="/guide/choose-lite-or-server">Choose Lite or Server</a></li>
-  <li><a href="/guide/evidence">See the evidence</a></li>
-  <li><a href="/guide/codex-local-profile">Use it with Codex</a></li>
-  <li><a href="/guide/overview">Understand why it works</a></li>
-  <li><a href="/api/">Integrate the APIs</a></li>
-</ul>
+<div class="landing-path-grid landing-path-grid-3">
+  <a class="landing-path-card lite" href="/guide/lite-public-beta">
+    <span class="path-pill">Fastest path</span>
+    <h3>Start with Lite</h3>
+    <p>Run Aionis locally with SQLite, validate continuity, replay, and exact handoff recovery, and get to first value quickly.</p>
+    <strong>Best for local evaluation, single-user workflows, and low-friction trials.</strong>
+  </a>
+  <a class="landing-path-card codex" href="/guide/codex-local-profile">
+    <span class="path-pill">Best integration path</span>
+    <h3>Use it with Codex</h3>
+    <p>Connect Aionis to coding-agent workflows so new sessions can recover context instead of rebuilding it from scratch.</p>
+    <strong>Best for local coding agents, MCP, and continuity-sensitive handoffs.</strong>
+  </a>
+  <a class="landing-path-card server" href="/guide/choose-lite-or-server">
+    <span class="path-pill">Production path</span>
+    <h3>Move to Server</h3>
+    <p>Adopt the self-hosted production path when you need stronger deployment discipline, operator workflows, and team-facing runtime behavior.</p>
+    <strong>Best for self-hosted production and operational rollout.</strong>
+  </a>
+</div>
 
 <div class="home-section-lead">
-  <span>Why teams switch</span>
+  <span>What changes when agents stop restarting</span>
 </div>
-<div class="landing-value-grid">
-  <div class="landing-value-card">
-    <h3>Continue</h3>
-    <p>New sessions resume work from stored execution state instead of rebuilding context from scratch.</p>
+<div class="landing-bento-grid">
+  <div class="landing-bento-card large">
+    <div class="bento-icon"><IoPlay /></div>
+    <h3>Continue work instead of reconstructing it</h3>
+    <p>New sessions can resume from stored execution state, exact handoffs, and replay traces instead of rereading the repo and rebuilding the patch plan.</p>
   </div>
-  <div class="landing-value-card">
-    <h3>Recover</h3>
-    <p>Exact handoffs, evidence, and prior decisions can be brought back when continuity matters.</p>
+  <div class="landing-bento-card">
+    <div class="bento-icon"><IoJournalPage /></div>
+    <h3>Recover exact handoffs</h3>
+    <p>Bring back the prior task summary, exact handoff text, risk notes, and acceptance checks when continuity matters.</p>
   </div>
-  <div class="landing-value-card">
-    <h3>Replay</h3>
-    <p>Successful runs can become reusable playbooks instead of one-off prompt history.</p>
+  <div class="landing-bento-card">
+    <div class="bento-icon"><IoCodeBrackets /></div>
+    <h3>Turn successful work into replayable paths</h3>
+    <p>Replay and playbooks turn one-off agent runs into reusable workflows instead of throwaway prompt history.</p>
+  </div>
+  <div class="landing-bento-card accent">
+    <div class="bento-icon"><IoShieldCheck /></div>
+    <h3>Keep runtime evidence inspectable</h3>
+    <p>Decision IDs, commit URIs, replay runs, and handoff artifacts make the work auditable instead of opaque.</p>
   </div>
 </div>
 
@@ -116,68 +144,28 @@ aside: false
   </a>
 </div>
 
-## Pick your path
-
-<div class="landing-path-grid">
-  <a class="landing-path-card lite" href="/guide/lite-public-beta">
-    <span class="path-pill">Fastest path</span>
-    <h3>Start with Lite</h3>
-    <p>Run Aionis locally with SQLite, validate continuity, replay, and handoff recovery, and get to first value quickly.</p>
-    <strong>Best for local evaluation, single-user workflows, and Codex + MCP.</strong>
+<div class="home-section-lead">
+  <span>Browse the docs</span>
+</div>
+<div class="doc-map-grid">
+  <a class="doc-map-card" href="/guide/overview">
+    <div class="doc-map-icon"><IoOpenBook /></div>
+    <h3>Understand the model</h3>
+    <p>Read the product model, the core concepts, and why Aionis is more than token optimization.</p>
   </a>
-  <a class="landing-path-card server" href="/guide/choose-lite-or-server">
-    <span class="path-pill">Production path</span>
-    <h3>Move to Server</h3>
-    <p>Adopt the self-hosted production path when you need stronger deployment discipline, operations, and team-facing runtime behavior.</p>
-    <strong>Best for self-hosted production and operational rollout.</strong>
+  <a class="doc-map-card" href="/guide/quickstart">
+    <div class="doc-map-icon"><IoPlay /></div>
+    <h3>Get to first value fast</h3>
+    <p>Start Lite, write memory, recall it later, and validate exact handoff recovery and replay identifiers.</p>
+  </a>
+  <a class="doc-map-card" href="/guide/codex-local-profile">
+    <div class="doc-map-icon"><IoCodeBrackets /></div>
+    <h3>Integrate with coding agents</h3>
+    <p>Use Codex, MCP, and SDK flows when your first use case is local coding agents and continuity-sensitive work.</p>
+  </a>
+  <a class="doc-map-card" href="/api/">
+    <div class="doc-map-icon"><IoMultiplePages /></div>
+    <h3>Wire the APIs</h3>
+    <p>Move from guide-level understanding to memory, policy, replay, and endpoint contracts for real integrations.</p>
   </a>
 </div>
-
-<div class="home-cards compact">
-  <a class="home-card" href="/guide/overview">
-    <div class="card-body">
-      <h3>Overview</h3>
-      <p>Understand what Aionis is, why it exists, and why it is more than token optimization.</p>
-    </div>
-  </a>
-  <a class="home-card" href="/guide/quickstart">
-    <div class="card-body">
-      <h3>Quickstart</h3>
-      <p>Get to a working write and recall flow fast, then keep the identifiers required for later replay.</p>
-    </div>
-  </a>
-  <a class="home-card" href="/guide/codex-local-profile">
-    <div class="card-body">
-      <h3>Use it with Codex</h3>
-      <p>Run Codex with Aionis Lite and keep continuity across local coding sessions.</p>
-    </div>
-  </a>
-  <a class="home-card" href="/api/">
-    <div class="card-body">
-      <h3>API Reference</h3>
-      <p>Use memory, policy, replay, and endpoint contracts when wiring production integrations.</p>
-    </div>
-  </a>
-</div>
-
-## What you can accomplish in the first hour
-
-1. Start Lite locally and confirm `/health`.
-2. Write one memory and recall it later.
-3. Use Codex or MCP with a real Aionis-backed flow.
-4. Keep the identifiers needed for replay and exact handoff recovery.
-5. Decide whether to stay local with Lite or move to Server.
-
-## Recommended first success path
-
-1. Read [Choose Lite or Server](/guide/choose-lite-or-server).
-2. Start with [Lite Public Beta](/guide/lite-public-beta) or [Quickstart](/guide/quickstart).
-3. Use [Codex + Aionis](/guide/codex-local-profile) if your first use case is coding agents.
-4. Use [API Guide](/guide/api-guide) and [API Reference](/api/) during integration.
-5. Move to [Operations and Gates](/guide/operations-and-gates) when you need the Server production path.
-
-## If you only read three pages
-
-1. [Lite Public Beta](/guide/lite-public-beta) for the fastest way to try it.
-2. [Choose Lite or Server](/guide/choose-lite-or-server) for the right product path.
-3. [Overview](/guide/overview) for the product model.

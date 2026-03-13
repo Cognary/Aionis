@@ -162,6 +162,15 @@ const I18N = {
     char_budget_total: "char budget total",
     include_merge_trace: "include merge trace",
     layered_context_summary: "layered context summary",
+    memory_layer_selection: "memory layer selection",
+    selected_memory_layers: "selected layers",
+    selection_policy_name: "selection policy",
+    selection_policy_source: "policy source",
+    requested_allowed_layers: "requested layers",
+    preferred_layers: "preferred layers",
+    fallback_layers: "fallback layers",
+    trust_anchor_layers: "trust anchors",
+    no_memory_layer_selection: "No memory layer selection metadata.",
     layer_order: "layer order",
     layers_with_content: "layers with content",
     source_items: "source items",
@@ -301,6 +310,15 @@ const I18N = {
     char_budget_total: "总字符预算",
     include_merge_trace: "输出 merge trace",
     layered_context_summary: "分层上下文摘要",
+    memory_layer_selection: "记忆层选择",
+    selected_memory_layers: "已选层",
+    selection_policy_name: "选择策略",
+    selection_policy_source: "策略来源",
+    requested_allowed_layers: "请求层",
+    preferred_layers: "优先层",
+    fallback_layers: "回退层",
+    trust_anchor_layers: "可信锚点层",
+    no_memory_layer_selection: "当前没有记忆层选择元数据。",
     layer_order: "层顺序",
     layers_with_content: "有内容层数",
     source_items: "源条目",
@@ -1020,6 +1038,56 @@ export default function PlaygroundPage() {
     const layered = active.data.layered_context;
     if (!layered || typeof layered !== "object" || Array.isArray(layered)) return null;
     return layered;
+  }, [active]);
+  const activeMemoryLayerSelection = useMemo(() => {
+    if (!active?.data || typeof active.data !== "object" || Array.isArray(active.data)) return null;
+    const root = active.data;
+    const recallSurface =
+      root.recall && typeof root.recall === "object" && !Array.isArray(root.recall)
+        ? root.recall
+        : root;
+    const costSignals = root.cost_signals && typeof root.cost_signals === "object" && !Array.isArray(root.cost_signals)
+      ? root.cost_signals
+      : {};
+    const observability = recallSurface?.observability && typeof recallSurface.observability === "object" && !Array.isArray(recallSurface.observability)
+      ? recallSurface.observability
+      : {};
+    const observabilityMemoryLayers =
+      observability.memory_layers && typeof observability.memory_layers === "object" && !Array.isArray(observability.memory_layers)
+        ? observability.memory_layers
+        : {};
+    const context =
+      recallSurface?.context && typeof recallSurface.context === "object" && !Array.isArray(recallSurface.context)
+        ? recallSurface.context
+        : {};
+    const policy =
+      context.selection_policy && typeof context.selection_policy === "object" && !Array.isArray(context.selection_policy)
+        ? context.selection_policy
+        : observabilityMemoryLayers.selection_policy && typeof observabilityMemoryLayers.selection_policy === "object" && !Array.isArray(observabilityMemoryLayers.selection_policy)
+          ? observabilityMemoryLayers.selection_policy
+          : null;
+    const selectedLayersRaw = Array.isArray(costSignals.selected_memory_layers)
+      ? costSignals.selected_memory_layers
+      : Array.isArray(observabilityMemoryLayers.selected_layers)
+        ? observabilityMemoryLayers.selected_layers
+        : Array.isArray(root.planning_summary?.selected_memory_layers)
+          ? root.planning_summary.selected_memory_layers
+          : Array.isArray(root.assembly_summary?.selected_memory_layers)
+            ? root.assembly_summary.selected_memory_layers
+            : [];
+    const selectedLayers = Array.from(new Set(selectedLayersRaw.map((entry) => String(entry || "").trim()).filter(Boolean)));
+    const normalizeLayerList = (value) =>
+      Array.isArray(value) ? value.map((entry) => String(entry || "").trim()).filter(Boolean) : [];
+    if (!policy && selectedLayers.length === 0) return null;
+    return {
+      selectedLayers,
+      policyName: policy && typeof policy.name === "string" ? policy.name : "",
+      policySource: policy && typeof policy.source === "string" ? policy.source : "",
+      requestedAllowedLayers: normalizeLayerList(policy?.requested_allowed_layers),
+      preferredLayers: normalizeLayerList(policy?.preferred_layers),
+      fallbackLayers: normalizeLayerList(policy?.fallback_layers),
+      trustAnchorLayers: normalizeLayerList(policy?.trust_anchor_layers)
+    };
   }, [active]);
 
   function patchPayload(mutator) {
@@ -2265,6 +2333,44 @@ export default function PlaygroundPage() {
                     </div>
                   </details>
                 ) : null}
+                <details>
+                  <summary>{tr("memory_layer_selection")}</summary>
+                  {activeMemoryLayerSelection ? (
+                    <div className="layered-summary">
+                      <div className="layered-metrics">
+                        <span>
+                          {tr("selected_memory_layers")}: <span className="mono">{activeMemoryLayerSelection.selectedLayers.join(" -> ") || "-"}</span>
+                        </span>
+                        <span>
+                          {tr("selection_policy_name")}: <span className="mono">{activeMemoryLayerSelection.policyName || "-"}</span>
+                        </span>
+                        <span>
+                          {tr("selection_policy_source")}: <span className="mono">{activeMemoryLayerSelection.policySource || "-"}</span>
+                        </span>
+                      </div>
+                      <div className="memory-policy-grid">
+                        <div className="memory-policy-card">
+                          <p className="tiny muted">{tr("requested_allowed_layers")}</p>
+                          <p className="mono tiny">{activeMemoryLayerSelection.requestedAllowedLayers.join(", ") || "-"}</p>
+                        </div>
+                        <div className="memory-policy-card">
+                          <p className="tiny muted">{tr("preferred_layers")}</p>
+                          <p className="mono tiny">{activeMemoryLayerSelection.preferredLayers.join(", ") || "-"}</p>
+                        </div>
+                        <div className="memory-policy-card">
+                          <p className="tiny muted">{tr("fallback_layers")}</p>
+                          <p className="mono tiny">{activeMemoryLayerSelection.fallbackLayers.join(", ") || "-"}</p>
+                        </div>
+                        <div className="memory-policy-card">
+                          <p className="tiny muted">{tr("trust_anchor_layers")}</p>
+                          <p className="mono tiny">{activeMemoryLayerSelection.trustAnchorLayers.join(", ") || "-"}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="muted tiny">{tr("no_memory_layer_selection")}</p>
+                  )}
+                </details>
                 <details>
                   <summary>{tr("response_diff")}</summary>
                   {!previousSameOperation ? (
