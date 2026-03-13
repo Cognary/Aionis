@@ -687,10 +687,19 @@ export type HandoffRecoverResponse = {
     [k: string]: unknown;
   };
   execution_ready_handoff?: {
+    anchor?: string;
+    handoff_kind?: string;
     file_path?: string | null;
+    repo_root?: string | null;
+    symbol?: string | null;
+    target_files?: string[];
+    next_action?: string;
     summary?: string | null;
     handoff_text: string;
     risk?: string | null;
+    must_change?: string[];
+    must_remove?: string[];
+    must_keep?: string[];
     acceptance_checks: string[];
     [k: string]: unknown;
   };

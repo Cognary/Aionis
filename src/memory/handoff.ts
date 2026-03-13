@@ -47,6 +47,23 @@ type PromptSafeHandoff = {
   tags: string[];
 };
 
+type ExecutionReadyHandoff = {
+  anchor: string;
+  handoff_kind: string;
+  file_path: string | null;
+  repo_root: string | null;
+  symbol: string | null;
+  target_files: string[];
+  next_action: string;
+  summary: string | null;
+  handoff_text: string;
+  risk: string | null;
+  must_change: string[];
+  must_remove: string[];
+  must_keep: string[];
+  acceptance_checks: string[];
+};
+
 function stringifyChecks(checks: string[] | undefined): string | null {
   return checks && checks.length > 0 ? checks.join(" | ") : null;
 }
@@ -72,6 +89,11 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
     parsed.risk ? `risk=${parsed.risk}` : null,
     `summary=${parsed.summary}`,
     `handoff=${parsed.handoff_text}`,
+    parsed.next_action ? `next_action=${parsed.next_action}` : null,
+    parsed.target_files && parsed.target_files.length > 0 ? `target_files=${parsed.target_files.join(" | ")}` : null,
+    parsed.must_change && parsed.must_change.length > 0 ? `must_change=${parsed.must_change.join(" | ")}` : null,
+    parsed.must_remove && parsed.must_remove.length > 0 ? `must_remove=${parsed.must_remove.join(" | ")}` : null,
+    parsed.must_keep && parsed.must_keep.length > 0 ? `must_keep=${parsed.must_keep.join(" | ")}` : null,
     stringifyChecks(parsed.acceptance_checks) ? `acceptance_checks=${stringifyChecks(parsed.acceptance_checks)}` : null,
   ]
     .filter(Boolean)
@@ -103,6 +125,11 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
           handoff_text: parsed.handoff_text,
           acceptance_checks: parsed.acceptance_checks ?? [],
           tags: parsed.tags ?? [],
+          target_files: parsed.target_files ?? [],
+          next_action: parsed.next_action ?? parsed.handoff_text,
+          must_change: parsed.must_change ?? [],
+          must_remove: parsed.must_remove ?? [],
+          must_keep: parsed.must_keep ?? [],
         },
       },
     ],
@@ -129,8 +156,43 @@ function buildPromptSafeHandoff(node: HandoffNode, input: HandoffRecoverInput): 
   };
 }
 
+function buildExecutionReadyHandoff(node: HandoffNode, input: HandoffRecoverInput, promptSafe: PromptSafeHandoff): ExecutionReadyHandoff {
+  const slots = node.slots && typeof node.slots === "object" ? node.slots : {};
+  const targetFiles = Array.isArray(slots.target_files)
+    ? slots.target_files.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
+  const mustChange = Array.isArray(slots.must_change)
+    ? slots.must_change.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
+  const mustRemove = Array.isArray(slots.must_remove)
+    ? slots.must_remove.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
+  const mustKeep = Array.isArray(slots.must_keep)
+    ? slots.must_keep.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
+  const nextAction =
+    typeof slots.next_action === "string" && slots.next_action.trim().length > 0 ? slots.next_action.trim() : promptSafe.handoff_text;
+  return {
+    anchor: promptSafe.anchor,
+    handoff_kind: promptSafe.handoff_kind,
+    file_path: promptSafe.file_path,
+    repo_root: promptSafe.repo_root,
+    symbol: promptSafe.symbol,
+    target_files: targetFiles.length > 0 ? targetFiles : (promptSafe.file_path ? [promptSafe.file_path] : []),
+    next_action: nextAction,
+    summary: promptSafe.summary,
+    handoff_text: promptSafe.handoff_text,
+    risk: promptSafe.risk,
+    must_change: mustChange,
+    must_remove: mustRemove,
+    must_keep: mustKeep,
+    acceptance_checks: promptSafe.acceptance_checks,
+  };
+}
+
 function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, input: HandoffRecoverInput) {
   const promptSafe = buildPromptSafeHandoff(node, input);
+  const executionReady = buildExecutionReadyHandoff(node, input, promptSafe);
   return {
     handoff_kind: promptSafe.handoff_kind,
     anchor: promptSafe.anchor,
@@ -152,13 +214,7 @@ function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, inpu
       commit_uri: node.commit_uri ?? null,
     },
     prompt_safe_handoff: promptSafe,
-    execution_ready_handoff: {
-      file_path: promptSafe.file_path,
-      summary: promptSafe.summary,
-      handoff_text: promptSafe.handoff_text,
-      risk: promptSafe.risk,
-      acceptance_checks: promptSafe.acceptance_checks,
-    },
+    execution_ready_handoff: executionReady,
   };
 }
 

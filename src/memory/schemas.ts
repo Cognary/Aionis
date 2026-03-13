@@ -374,6 +374,11 @@ export const HandoffStoreRequest = z.object({
   risk: z.string().min(1).optional(),
   acceptance_checks: z.array(z.string().min(1)).max(50).optional(),
   tags: z.array(z.string().min(1)).max(50).optional(),
+  target_files: z.array(z.string().min(1)).max(50).optional(),
+  next_action: z.string().min(1).optional(),
+  must_change: z.array(z.string().min(1)).max(100).optional(),
+  must_remove: z.array(z.string().min(1)).max(100).optional(),
+  must_keep: z.array(z.string().min(1)).max(100).optional(),
 });
 
 export type HandoffStoreInput = z.infer<typeof HandoffStoreRequest>;
