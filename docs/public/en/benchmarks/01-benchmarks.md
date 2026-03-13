@@ -30,7 +30,8 @@ The benchmark section is meant to answer four questions:
 9. [Real GitHub Repo Policy A/B](/public/en/benchmarks/11-real-repo-policy-ab)
 10. [L5 Serving-Side Compaction](/public/en/benchmarks/12-l5-serving-compaction)
 11. [Aionis Evidence Overview](/public/en/benchmarks/13-aionis-evidence-overview)
-12. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
+12. [Layer 1 Capability Matrix](/public/en/benchmarks/14-layer1-capability-matrix)
+13. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
 
 ## Evidence Dimensions
 
@@ -67,4 +68,5 @@ Every benchmark page includes:
 7. [Real GitHub Repo Policy A/B](/public/en/benchmarks/11-real-repo-policy-ab)
 8. [L5 Serving-Side Compaction](/public/en/benchmarks/12-l5-serving-compaction)
 9. [Aionis Evidence Overview](/public/en/benchmarks/13-aionis-evidence-overview)
-10. [Operate and Production](/public/en/operate-production/00-operate-production)
+10. [Layer 1 Capability Matrix](/public/en/benchmarks/14-layer1-capability-matrix)
+11. [Operate and Production](/public/en/operate-production/00-operate-production)

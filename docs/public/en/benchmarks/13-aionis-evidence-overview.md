@@ -61,3 +61,4 @@ Use it when you want the current evidence boundary, not only architecture or pro
 4. [Real GitHub Repo Handoff A/B](/public/en/benchmarks/10-real-repo-handoff-ab)
 5. [Real GitHub Repo Policy A/B](/public/en/benchmarks/11-real-repo-policy-ab)
 6. [L5 Serving-Side Compaction](/public/en/benchmarks/12-l5-serving-compaction)
+7. [Layer 1 Capability Matrix](/public/en/benchmarks/14-layer1-capability-matrix)

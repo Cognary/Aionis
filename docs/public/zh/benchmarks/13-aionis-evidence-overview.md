@@ -61,3 +61,4 @@ title: "Aionis 证据总览"
 4. [真实 GitHub 仓库 Handoff A/B](/public/zh/benchmarks/10-real-repo-handoff-ab)
 5. [真实 GitHub 仓库 Policy A/B](/public/zh/benchmarks/11-real-repo-policy-ab)
 6. [L5 Serving-Side Compaction](/public/zh/benchmarks/12-l5-serving-compaction)
+7. [Layer 1 能力矩阵](/public/zh/benchmarks/14-layer1-capability-matrix)
