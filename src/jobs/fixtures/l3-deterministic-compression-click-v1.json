@@ -1,0 +1,47 @@
+{
+  "actor": "l3_deterministic_compression_benchmark",
+  "context_char_budget": 360,
+  "context_token_budget": 120,
+  "records": [
+    {
+      "key": "evt_parser_focus",
+      "title": "parser option handling investigation",
+      "text_summary": "The parser option handling path in Click flows through add_to_parser in src/click/core.py. Validation belongs in tests/test_parser.py and tests/test_options.py. Ignore old shell completion and CI cleanup notes."
+    },
+    {
+      "key": "evt_parser_tests",
+      "title": "parser regression tests",
+      "text_summary": "Focused regression coverage is tests/test_parser.py and tests/test_options.py. The implementation path is still add_to_parser in src/click/core.py."
+    },
+    {
+      "key": "l1_fact_parser",
+      "kind": "L1_fact",
+      "title": "parser option handling fact",
+      "text_summary": "Stable fact: Click parser option handling should inspect add_to_parser in src/click/core.py and verify with tests/test_parser.py and tests/test_options.py."
+    },
+    {
+      "key": "l2_topic_parser_scope",
+      "kind": "L2_topic",
+      "title": "parser option handling topic",
+      "text_summary": "Topic: Click parser option handling -> src/click/core.py, add_to_parser, tests/test_parser.py, tests/test_options.py."
+    },
+    {
+      "key": "l3_rollup_parser_scope",
+      "kind": "L3_rollup",
+      "title": "compression rollup parser scope",
+      "text_summary": "Compression rollup: parser option handling in Click should focus on add_to_parser in src/click/core.py and validate with tests/test_parser.py plus tests/test_options.py."
+    }
+  ],
+  "cases": [
+    {
+      "id": "click_l3_001",
+      "query_text": "What is the deterministic planner-ready scope for Click parser option handling?",
+      "critical_facts": ["src/click/core.py", "add_to_parser", "tests/test_parser.py", "tests/test_options.py"]
+    },
+    {
+      "id": "click_l3_002",
+      "query_text": "Which implementation path and tests should survive deterministic compression for this Click task?",
+      "critical_facts": ["src/click/core.py", "tests/test_parser.py", "tests/test_options.py"]
+    }
+  ]
+}
