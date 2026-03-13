@@ -8,13 +8,17 @@ title: "API 参考"
 
 ## 基础路径
 
-所有 Memory Kernel 路由都在：
+核心 memory-kernel 路由在：
 
 `/v1/memory/*`
 
+continuity 路由在：
+
+`/v1/handoff/*`
+
 ## 认证方式
 
-Memory 路由使用以下任一方式：
+Memory 与 handoff 路由使用以下任一方式：
 
 1. `X-Api-Key: <key>`
 2. `Authorization: Bearer <token>`
@@ -28,6 +32,21 @@ Memory 路由使用以下任一方式：
 1. `POST /v1/memory/write`
 2. `POST /v1/memory/recall`
 3. `POST /v1/memory/recall_text`
+
+说明：
+
+1. `recall` 与 `recall_text` 可能会回显 `recall.context.selection_policy`，方便调用方查看这次实际应用的 memory-layer preference 与 trust-anchor policy。
+
+### Handoff Continuity
+
+1. `POST /v1/handoff/store`
+2. `POST /v1/handoff/recover`
+
+说明：
+
+1. 当你需要结构化、可精确恢复的 continuity artifact，而不是模糊摘要时，使用 `handoff/store`。
+2. `handoff/recover` 会返回命中的 handoff artifact，包括 `handoff_text`、`summary`、`risk` 与 `acceptance_checks`。
+3. 支持 `memory_lane="private"`；recover 时仍然受认证主体 owner 规则约束。
 
 ### 上下文编排
 
@@ -175,28 +194,28 @@ Memory 路由使用以下任一方式：
    - `dispatch.decision=candidate_only`
    - 可通过 `execute_fallback=false` 禁止回退执行
 6. replay 的 `candidate / run / dispatch` 响应现在都会带机器可读的 `cost_signals`。
-7. `planning/context` 与 `context/assemble` 现在也会暴露 `cost_signals.selected_memory_layers` 和 `recall.context.selection_policy`，方便运维判断这次选中了哪些 memory layers，以及实际应用了哪套 trust-anchor 策略。
-8. `recall_text`、`planning/context`、`context/assemble` 现在支持 `memory_layer_preference.allowed_layers` 做调用方侧收紧；服务端仍然会强制保留 `L3/L0` trust anchors。
-7. 执行后端支持：
+7. `planning/context` 与 `context/assemble` 会暴露 `cost_signals.selected_memory_layers`；同时 `recall / recall_text / planning/context / context/assemble` 都可能回显 `recall.context.selection_policy`，方便运维查看实际应用的 layer policy。
+8. `recall`、`recall_text`、`planning/context`、`context/assemble` 支持 `memory_layer_preference.allowed_layers` 做调用方侧收紧；服务端仍然会强制保留 `L3/L0` trust anchors。
+9. 执行后端支持：
    - `params.execution_backend=local_process`（默认）
    - `params.execution_backend=sandbox_sync`（沙箱同步执行并校验结果）
    - `params.execution_backend=sandbox_async`（沙箱排队执行，返回 pending 证据）
-6. 命令执行受 allowlist 限制，当前仅支持命令类工具（`command|shell|exec|bash`）。
-7. 可选执行参数：
+10. 命令执行受 allowlist 限制，当前仅支持命令类工具（`command|shell|exec|bash`）。
+11. 可选执行参数：
    - 顶层 `project_id` 或 `params.project_id`（用于 sandbox budget 维度）
    - `params.sensitive_review_mode=block|warn`
    - `params.allow_sensitive_exec=true`（`block` 命中敏感命令时需要显式放行）
-8. `guided` 支持可配置修复策略：
+12. `guided` 支持可配置修复策略：
    - `deterministic_skip`（默认）：生成 remove-step 补丁作为回退。
    - `heuristic_patch`：优先给出命令替换/重试补丁，失败时回退 remove-step。
    - `http_synth`：调用外部修复合成端点（失败自动回退 heuristic）。
    - `builtin_llm`：内置 OpenAI 兼容修复合成（失败自动回退 heuristic）。
-9. 可选 guided 运行参数：
+13. 可选 guided 运行参数：
    - `params.guided_repair_strategy`
    - `params.command_alias_map`
    - `params.guided_repair_max_error_chars`
    - 安全默认：请求侧切换到 `builtin_llm` 默认被禁止，除非服务端显式放开。
-10. guided 修复服务端默认值：
+14. guided 修复服务端默认值：
    - `REPLAY_GUIDED_REPAIR_STRATEGY`
    - `REPLAY_GUIDED_REPAIR_ALLOW_REQUEST_BUILTIN_LLM`
    - `REPLAY_GUIDED_REPAIR_MAX_ERROR_CHARS`
@@ -209,18 +228,18 @@ Memory 路由使用以下任一方式：
    - `REPLAY_GUIDED_REPAIR_LLM_TIMEOUT_MS`
    - `REPLAY_GUIDED_REPAIR_LLM_MAX_TOKENS`
    - `REPLAY_GUIDED_REPAIR_LLM_TEMPERATURE`
-11. `playbooks/repair/review` 支持 `shadow_validation_mode=readiness|execute|execute_sandbox`。
-12. `shadow_validation_mode=execute_sandbox` 支持更深策略控制（`shadow_validation_params`）：
+15. `playbooks/repair/review` 支持 `shadow_validation_mode=readiness|execute|execute_sandbox`。
+16. `shadow_validation_mode=execute_sandbox` 支持更深策略控制（`shadow_validation_params`）：
    - `profile=fast|balanced|thorough`
    - `execution_mode=sync|async_queue`
    - `timeout_ms`、`stop_on_failure`
-13. shadow validation 执行默认值可由环境变量控制：
+17. shadow validation 执行默认值可由环境变量控制：
    - `REPLAY_SHADOW_VALIDATE_EXECUTE_TIMEOUT_MS`
    - `REPLAY_SHADOW_VALIDATE_EXECUTE_STOP_ON_FAILURE`
    - `REPLAY_SHADOW_VALIDATE_SANDBOX_TIMEOUT_MS`
    - `REPLAY_SHADOW_VALIDATE_SANDBOX_STOP_ON_FAILURE`
-14. `playbooks/repair/review` 可通过 `auto_promote_on_pass`、`auto_promote_target_status`、`auto_promote_gate` 做自动晋升。
-15. `playbooks/compile_from_run` 会在 `compile_summary` 输出编译质量信息：
+18. `playbooks/repair/review` 可通过 `auto_promote_on_pass`、`auto_promote_target_status`、`auto_promote_gate` 做自动晋升。
+19. `playbooks/compile_from_run` 会在 `compile_summary` 输出编译质量信息：
    - 重复步骤去重摘要（`steps_dedup_removed`、`dedup_removed_step_indexes`）
    - 参数化候选提取（`parameterization.variables`，以及每步 `template_variables`）
    - 每步质量分（`quality_score`、`quality_flags`）与汇总建议
@@ -228,22 +247,22 @@ Memory 路由使用以下任一方式：
      - 响应顶层 `usage`（`prompt_tokens`、`completion_tokens`、`total_tokens`）
      - `compile_summary.usage_estimate` 同步返回同一组数值
      - 当前来源为 `estimated_char_based_v1`（基于字符估算，不是模型计费账单值）
-16. 服务端可通过以下环境变量提供默认策略（请求显式参数优先）：
+20. 服务端可通过以下环境变量提供默认策略（请求显式参数优先）：
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_PROFILE`
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_DEFAULT`
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_TARGET_STATUS`
    - `REPLAY_REPAIR_REVIEW_GATE_*`
    - `REPLAY_REPAIR_REVIEW_POLICY_JSON`（支持 `endpoint` / `tenant_default` / `tenant_endpoint` / `tenant_scope_default` / `tenant_scope_endpoint`）
-17. `playbooks/repair/review` 响应包含 `auto_promote_policy_resolution`，用于查看命中来源与最终生效策略。
-18. `GET /v1/admin/control/diagnostics/tenant/:tenant_id` 的 `diagnostics.replay_policy` 会汇总策略命中与覆盖统计。
-19. `playbooks/repair/review` 支持可选闭环学习投影请求：
+21. `playbooks/repair/review` 响应包含 `auto_promote_policy_resolution`，用于查看命中来源与最终生效策略。
+22. `GET /v1/admin/control/diagnostics/tenant/:tenant_id` 的 `diagnostics.replay_policy` 会汇总策略命中与覆盖统计。
+23. `playbooks/repair/review` 支持可选闭环学习投影请求：
    - `learning_projection.enabled`
    - `learning_projection.mode=rule_and_episode|episode_only`
    - `learning_projection.delivery=async_outbox|sync_inline`
    - `learning_projection.target_rule_state=draft|shadow`
    - `learning_projection.min_total_steps`
    - `learning_projection.min_success_ratio`
-20. `playbooks/repair/review` 响应可包含 `learning_projection_result`：
+24. `playbooks/repair/review` 响应可包含 `learning_projection_result`：
    - `status=queued|applied|skipped|failed`
    - 产物 URI（`generated_rule_uri`、`generated_episode_uri`）
    - warning 代码：

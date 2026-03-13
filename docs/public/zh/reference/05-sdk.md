@@ -29,6 +29,11 @@ pip install aionis-sdk
 3. `scope`
 4. `apiKey` 或 bearer token
 
+字段命名映射：
+
+1. TypeScript: `baseUrl`
+2. Python: `base_url`
+
 ## Quick Start（TypeScript）
 
 ```ts
@@ -220,6 +225,29 @@ console.log(lifecycle.lifecycle_summary?.status);
 console.log(lifecycle.lifecycle_summary?.recent_decisions);
 ```
 
+## Exact Handoff Recovery（TypeScript）
+
+如果你希望 continuation 依赖结构化 handoff，而不是临时自由文本摘要，可以直接使用 handoff helpers。
+
+```ts
+const stored = await client.handoffStore({
+  anchor: "patch:planner-layer-policy",
+  file_path: "src/memory/recall.ts",
+  handoff_kind: "patch_handoff",
+  summary: "让 recall 和 context 路径都携带 memory-layer policy。",
+  handoff_text: "Recall 现在会回显 selection policy，调用方也能显式收紧 allowed layers。",
+  acceptance_checks: ["recall 返回 selection_policy", "文档说明 recall 支持 layer tightening"],
+});
+
+const recovered = await client.handoffRecover({
+  anchor: "patch:planner-layer-policy",
+  file_path: "src/memory/recall.ts",
+  handoff_kind: "patch_handoff",
+});
+
+console.log(stored.handoff?.id, recovered.handoff.handoff_text);
+```
+
 ## Context Forgetting（TypeScript）
 
 如果你希望 Aionis 在注入上下文时默认排除 `cold/archive` 或低 salience 记忆，可以直接在 layered context 上启用 forgetting policy。
@@ -268,10 +296,17 @@ console.log(writeRes.distillation, writeRes.nodes);
 
 ## 核心 SDK 方法
 
-1. Memory: `write`、`recall`、`recall_text`
-2. Context: `context_assemble`
-3. Graph: `find`、`resolve`
-4. Replay: `replayPlaybookGet`、`replayPlaybookCandidate`、`replayPlaybookRun`、`replayPlaybookDispatch`
+1. TypeScript memory: `write`、`recall`、`recallText`
+2. TypeScript context 与 graph: `contextAssemble`、`find`、`resolve`
+3. TypeScript policy loop: `rulesEvaluate`、`toolsSelect`、`toolsDecision`、`toolsRun`、`toolsFeedback`
+4. TypeScript replay: `replayPlaybookGet`、`replayPlaybookCandidate`、`replayPlaybookRun`、`replayPlaybookDispatch`
+5. TypeScript continuity helpers: `handoffStore`、`handoffRecover`
+6. Python SDK 对重叠核心流程使用 snake_case 命名，比如 `write`、`recall`、`recall_text`、`context_assemble`
+
+说明：
+
+1. 最新的 summary-first helpers 与 continuity helpers 目前优先体现在 TypeScript client 上。
+2. Python SDK 当前覆盖面更窄；如果某个 helper 还没有对应方法，可以直接调用同一条 HTTP 路由。
 
 ## Replay Dispatch 说明
 
@@ -291,7 +326,7 @@ console.log(writeRes.distillation, writeRes.nodes);
 4. `contextAssemble` 响应现在也会带 `cost_signals`，可直接查看估算 token、forgotten items 和当前生效的节省杠杆。
 5. `cost_signals.selected_memory_layers` 会直接告诉你这次 assemble 实际选中了哪些 memory compression layers。
 6. `recall.context.selection_policy` 与 `recall.observability.memory_layers` 会回显当前 endpoint-default 的 layer preference 与 trust-anchor 策略。
-7. `memory_layer_preference.allowed_layers` 可以在 `recall_text`、`planning/context`、`context/assemble` 上显式收紧可用层，但 Aionis 仍会自动保留 `L3/L0` trust anchors。
+7. `memory_layer_preference.allowed_layers` 可以在 `recall`、`recall_text`、`planning/context`、`context/assemble` 上显式收紧可用层，但 Aionis 仍会自动保留 `L3/L0` trust anchors。
 
 ## Selective Static Injection（TypeScript）
 

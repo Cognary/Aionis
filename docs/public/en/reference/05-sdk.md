@@ -82,11 +82,17 @@ print(write_res.get("commit_uri"), recall_res.get("request_id"))
 
 ## Core SDK Methods
 
-1. Memory: `write`, `recall`, `recall_text`
-2. Context: `context_assemble`
-3. Graph: `find`, `resolve`
-4. Policy loop: `rules_evaluate`, `tools_select`, `tools_decision`, `tools_feedback`
-5. Replay: `replayPlaybookGet`, `replayPlaybookCandidate`, `replayPlaybookRun`, `replayPlaybookDispatch`
+1. TypeScript memory: `write`, `recall`, `recallText`
+2. TypeScript context and graph: `contextAssemble`, `find`, `resolve`
+3. TypeScript policy loop: `rulesEvaluate`, `toolsSelect`, `toolsDecision`, `toolsRun`, `toolsFeedback`
+4. TypeScript replay: `replayPlaybookGet`, `replayPlaybookCandidate`, `replayPlaybookRun`, `replayPlaybookDispatch`
+5. TypeScript continuity helpers: `handoffStore`, `handoffRecover`
+6. Python SDK uses snake_case naming for overlapping core flows, such as `write`, `recall`, `recall_text`, and `context_assemble`
+
+Notes:
+
+1. The current TypeScript client exposes the newest summary-first helpers and continuity helpers first.
+2. Python SDK coverage is narrower today; when a helper is missing there, use the same HTTP routes directly.
 
 ## Find Summary (TypeScript)
 
@@ -219,6 +225,29 @@ console.log(lifecycle.lifecycle_summary?.status);
 console.log(lifecycle.lifecycle_summary?.recent_decisions);
 ```
 
+## Exact Handoff Recovery (TypeScript)
+
+Use structured handoffs when continuation quality matters more than ad hoc free-form summaries.
+
+```ts
+const stored = await client.handoffStore({
+  anchor: "patch:planner-layer-policy",
+  file_path: "src/memory/recall.ts",
+  handoff_kind: "patch_handoff",
+  summary: "Carry memory-layer policy through recall and context surfaces.",
+  handoff_text: "Recall now echoes selection policy and callers can tighten allowed layers.",
+  acceptance_checks: ["recall returns selection_policy", "docs mention recall layer tightening"],
+});
+
+const recovered = await client.handoffRecover({
+  anchor: "patch:planner-layer-policy",
+  file_path: "src/memory/recall.ts",
+  handoff_kind: "patch_handoff",
+});
+
+console.log(stored.handoff?.id, recovered.handoff.handoff_text);
+```
+
 ## Replay Dispatch Quick Start (TypeScript)
 
 Use replay candidate lookup to decide whether a playbook can skip primary reasoning, then let dispatch execute deterministic replay or fallback automatically.
@@ -319,7 +348,7 @@ console.log(writeRes.distillation, writeRes.nodes);
 4. `contextAssemble` responses now expose `cost_signals` so callers can inspect estimated context tokens, forgotten items, and active savings levers directly.
 5. `cost_signals.selected_memory_layers` exposes which memory compression layers were actually selected for the assembled context.
 6. `recall.context.selection_policy` and `recall.observability.memory_layers` expose the active endpoint-default layer preference and trust-anchor policy used during context selection.
-7. `memory_layer_preference.allowed_layers` can tighten the active layer set on `recall_text`, `planning/context`, and `context/assemble`, but Aionis still preserves `L3/L0` trust anchors automatically.
+7. `memory_layer_preference.allowed_layers` can tighten the active layer set on `recall`, `recall_text`, `planning/context`, and `context/assemble`, but Aionis still preserves `L3/L0` trust anchors automatically.
 
 ## Selective Static Injection (TypeScript)
 

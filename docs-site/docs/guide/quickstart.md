@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Try Aionis quickly with Lite or Server and validate write, recall, and replayable identifiers.
+description: Try Aionis quickly with Lite or Server and validate write, recall, exact handoff recovery, and replayable identifiers.
 ---
 
 <div class="doc-hero doc-hero-start">
@@ -14,12 +14,14 @@ description: Try Aionis quickly with Lite or Server and validate write, recall, 
     <span>Health check</span>
     <span>Write memory</span>
     <span>Recall context</span>
+    <span>Recover handoff</span>
   </div>
   <div class="doc-hero-panel">
     <div class="doc-hero-grid">
       <div class="doc-hero-chip active">/health</div>
       <div class="doc-hero-chip">memory.write</div>
       <div class="doc-hero-chip accent">memory.recall_text</div>
+      <div class="doc-hero-chip">handoff.recover</div>
       <div class="doc-hero-chip">commit.persist</div>
     </div>
     <div class="doc-hero-meta">
@@ -36,8 +38,9 @@ description: Try Aionis quickly with Lite or Server and validate write, recall, 
 1. Run Aionis locally or point to a hosted environment.
 2. Write one recallable memory event.
 3. Recall that memory by text.
-4. Capture the identifiers you will need later for replay and debugging.
-5. Leave this page with one verified end-to-end success path.
+4. Store and recover one exact handoff artifact.
+5. Capture the identifiers you will need later for replay and debugging.
+6. Leave this page with one verified end-to-end success path.
 
 ## Before you start
 
@@ -108,6 +111,34 @@ curl -sS http://localhost:3001/v1/memory/recall_text \
   -d '{"tenant_id":"default","scope":"default","query_text":"preferred follow-up channel","limit":5}' | jq
 ```
 
+Store and recover one exact handoff:
+
+```bash
+curl -sS http://localhost:3001/v1/handoff/store \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"default",
+    "memory_lane":"shared",
+    "anchor":"quickstart:onboarding",
+    "file_path":"docs/quickstart.md",
+    "handoff_kind":"task_handoff",
+    "summary":"Quickstart continuity check",
+    "handoff_text":"Verified Lite write, recall_text, and handoff recovery.",
+    "acceptance_checks":["write returns commit_id","recall_text returns context","handoff_recover returns exact text"]
+  }' | jq
+
+curl -sS http://localhost:3001/v1/handoff/recover \
+  -H 'content-type: application/json' \
+  -d '{
+    "tenant_id":"default",
+    "scope":"default",
+    "anchor":"quickstart:onboarding",
+    "file_path":"docs/quickstart.md",
+    "handoff_kind":"task_handoff"
+  }' | jq
+```
+
 Canonical Lite validation:
 
 ```bash
@@ -172,7 +203,8 @@ curl -sS "$BASE_URL/v1/memory/write" \
 1. `/health` returns healthy status.
 2. `write` returns `request_id` and commit fields.
 3. `recall_text` returns candidate or context data.
-4. You can identify which IDs to keep for later replay and debugging.
+4. `handoff/recover` returns the exact handoff artifact you just stored.
+5. You can identify which IDs to keep for later replay and debugging.
 
 ## What to persist from your first run
 

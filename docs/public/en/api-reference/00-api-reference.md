@@ -8,13 +8,17 @@ This page is the practical API map for integrating Aionis into product workflows
 
 ## Base Path
 
-All memory-kernel routes are under:
+Core memory-kernel routes are under:
 
 `/v1/memory/*`
 
+Continuity routes are under:
+
+`/v1/handoff/*`
+
 ## Authentication
 
-Use one of these for memory routes:
+Use one of these for memory and handoff routes:
 
 1. `X-Api-Key: <key>`
 2. `Authorization: Bearer <token>`
@@ -28,6 +32,21 @@ Use `X-Admin-Token` only for admin/control surfaces that explicitly require it.
 1. `POST /v1/memory/write`
 2. `POST /v1/memory/recall`
 3. `POST /v1/memory/recall_text`
+
+Notes:
+
+1. `recall` and `recall_text` may echo `recall.context.selection_policy` so callers can inspect which memory-layer preference and trust-anchor policy was applied.
+
+### Handoff Continuity
+
+1. `POST /v1/handoff/store`
+2. `POST /v1/handoff/recover`
+
+Notes:
+
+1. Use `handoff/store` when you want a structured, exact continuity artifact instead of relying on free-form summaries.
+2. `handoff/recover` returns the matched artifact, including `handoff_text`, `summary`, `risk`, and `acceptance_checks`.
+3. `memory_lane="private"` is supported; authenticated ownership still applies during recovery.
 
 ### Context Orchestration
 
@@ -175,28 +194,28 @@ Notes:
    - `dispatch.decision=candidate_only`
    - callers can disable fallback with `execute_fallback=false`
 6. replay `candidate / run / dispatch` responses now include machine-readable `cost_signals`.
-7. `planning/context` and `context/assemble` expose `cost_signals.selected_memory_layers` plus `recall.context.selection_policy`, so operators can inspect which memory layers were selected and which trust-anchor policy was applied.
-8. `recall_text`, `planning/context`, and `context/assemble` now accept `memory_layer_preference.allowed_layers` for caller-side tightening; the server still enforces `L3/L0` trust anchors.
-7. Execution backends:
+7. `planning/context` and `context/assemble` expose `cost_signals.selected_memory_layers`, and `recall / recall_text / planning/context / context/assemble` can all echo `recall.context.selection_policy`, so operators can inspect the applied layer policy.
+8. `recall`, `recall_text`, `planning/context`, and `context/assemble` accept `memory_layer_preference.allowed_layers` for caller-side tightening; the server still enforces `L3/L0` trust anchors.
+9. Execution backends:
    - `params.execution_backend=local_process` (default)
    - `params.execution_backend=sandbox_sync` (sandbox run sync, with command result validation)
    - `params.execution_backend=sandbox_async` (sandbox queue mode, pending execution evidence)
-6. Command execution is allowlist-gated and currently supports command-style tools (`command|shell|exec|bash`).
-7. Optional replay run execution params:
+10. Command execution is allowlist-gated and currently supports command-style tools (`command|shell|exec|bash`).
+11. Optional replay run execution params:
    - `project_id` (top-level) or `params.project_id` for sandbox budget scoping
    - `params.sensitive_review_mode=block|warn`
    - `params.allow_sensitive_exec=true` (required when `block` mode hits a sensitive command)
-8. `guided` supports repair synthesis strategies:
+12. `guided` supports repair synthesis strategies:
    - `deterministic_skip` (default): remove-step patch fallback.
    - `heuristic_patch`: command-replacement/retry patch when possible, else remove-step fallback.
    - `http_synth`: external repair synthesizer (`REPLAY_GUIDED_REPAIR_HTTP_ENDPOINT`) with heuristic fallback.
    - `builtin_llm`: built-in OpenAI-compatible repair synthesis with heuristic fallback.
-9. Optional guided replay params:
+13. Optional guided replay params:
    - `params.guided_repair_strategy` (`deterministic_skip|heuristic_patch|http_synth|builtin_llm`)
    - `params.command_alias_map` (for command substitution in heuristic/http fallback paths)
    - `params.guided_repair_max_error_chars`
    - Security default: request-side switch to `builtin_llm` is blocked unless explicitly enabled by server policy.
-10. Guided repair server defaults:
+14. Guided repair server defaults:
    - `REPLAY_GUIDED_REPAIR_STRATEGY`
    - `REPLAY_GUIDED_REPAIR_ALLOW_REQUEST_BUILTIN_LLM`
    - `REPLAY_GUIDED_REPAIR_MAX_ERROR_CHARS`
@@ -209,25 +228,25 @@ Notes:
    - `REPLAY_GUIDED_REPAIR_LLM_TIMEOUT_MS`
    - `REPLAY_GUIDED_REPAIR_LLM_MAX_TOKENS`
    - `REPLAY_GUIDED_REPAIR_LLM_TEMPERATURE`
-11. Recommended repair workflow: `playbooks/repair` (pending review) -> `playbooks/repair/review` (approve/reject + auto shadow validation).
-12. `playbooks/repair/review` supports `shadow_validation_mode=readiness|execute|execute_sandbox`:
+15. Recommended repair workflow: `playbooks/repair` (pending review) -> `playbooks/repair/review` (approve/reject + auto shadow validation).
+16. `playbooks/repair/review` supports `shadow_validation_mode=readiness|execute|execute_sandbox`:
    - `readiness`: precondition + allowlist gate checks only.
    - `execute`: strict local execution validation (`record_run=false`, no replay graph writes).
    - `execute_sandbox`: strict sandbox sync execution validation via sandbox session/run APIs.
-13. `shadow_validation_mode=execute_sandbox` supports deeper policy controls via `shadow_validation_params`:
+17. `shadow_validation_mode=execute_sandbox` supports deeper policy controls via `shadow_validation_params`:
    - `profile=fast|balanced|thorough`
    - `execution_mode=sync|async_queue`
    - `timeout_ms`, `stop_on_failure`
-14. Shadow-validation execution defaults can be controlled by env:
+18. Shadow-validation execution defaults can be controlled by env:
    - `REPLAY_SHADOW_VALIDATE_EXECUTE_TIMEOUT_MS`
    - `REPLAY_SHADOW_VALIDATE_EXECUTE_STOP_ON_FAILURE`
    - `REPLAY_SHADOW_VALIDATE_SANDBOX_TIMEOUT_MS`
    - `REPLAY_SHADOW_VALIDATE_SANDBOX_STOP_ON_FAILURE`
-15. `playbooks/repair/review` can auto-promote when validation passes:
+19. `playbooks/repair/review` can auto-promote when validation passes:
    - `auto_promote_on_pass=true`
    - `auto_promote_target_status` (for example `active`)
    - `auto_promote_gate` thresholds (`max_failed_steps`, `max_blocked_steps`, `max_unknown_steps`, `min_success_ratio`, etc.)
-16. `playbooks/compile_from_run` annotates compile quality metadata:
+20. `playbooks/compile_from_run` annotates compile quality metadata:
    - duplicate-step removal summary (`steps_dedup_removed`, `dedup_removed_step_indexes`)
    - template variable extraction (`parameterization.variables`, `template_variables` per step)
    - per-step quality score (`quality_score`, `quality_flags`) and aggregate recommendations
@@ -235,7 +254,7 @@ Notes:
      - top-level `usage` (`prompt_tokens`, `completion_tokens`, `total_tokens`)
      - `compile_summary.usage_estimate` mirrors the same numbers
      - current source is `estimated_char_based_v1` (char-based estimate, not provider-billed usage)
-17. Server-side default policy can prefill review auto-promotion fields when callers omit them:
+21. Server-side default policy can prefill review auto-promotion fields when callers omit them:
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_PROFILE` (`custom|strict|staged|aggressive`)
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_DEFAULT`
    - `REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_TARGET_STATUS`
@@ -248,16 +267,16 @@ Notes:
    - `REPLAY_REPAIR_REVIEW_POLICY_JSON` (`endpoint` / `tenant_default` / `tenant_endpoint` / `tenant_scope_default` / `tenant_scope_endpoint` override maps)
    - When profile is not `custom`, profile defaults are applied first and request fields still take precedence.
    - Resolution order: global defaults -> endpoint -> tenant_default -> tenant_endpoint -> tenant_scope_default -> tenant_scope_endpoint -> request payload fields.
-18. `playbooks/repair/review` response includes `auto_promote_policy_resolution` (resolved tenant/scope, base source, applied policy layers, request overrides, and final effective defaults).
-19. `GET /v1/admin/control/diagnostics/tenant/:tenant_id` includes `diagnostics.replay_policy` rollups for replay review policy coverage and layer hit distribution.
-20. `playbooks/repair/review` supports optional closed-loop learning projection request:
+22. `playbooks/repair/review` response includes `auto_promote_policy_resolution` (resolved tenant/scope, base source, applied policy layers, request overrides, and final effective defaults).
+23. `GET /v1/admin/control/diagnostics/tenant/:tenant_id` includes `diagnostics.replay_policy` rollups for replay review policy coverage and layer hit distribution.
+24. `playbooks/repair/review` supports optional closed-loop learning projection request:
    - `learning_projection.enabled`
    - `learning_projection.mode=rule_and_episode|episode_only`
    - `learning_projection.delivery=async_outbox|sync_inline`
    - `learning_projection.target_rule_state=draft|shadow`
    - `learning_projection.min_total_steps`
    - `learning_projection.min_success_ratio`
-21. `playbooks/repair/review` response may include `learning_projection_result`:
+25. `playbooks/repair/review` response may include `learning_projection_result`:
    - `status=queued|applied|skipped|failed`
    - generated URIs (`generated_rule_uri`, `generated_episode_uri`)
    - warning codes:
