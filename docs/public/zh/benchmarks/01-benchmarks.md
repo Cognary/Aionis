@@ -28,7 +28,8 @@ title: "基准测试"
 7. [Policy 工具选择与反馈闭环](/public/zh/benchmarks/09-policy-tool-selection)
 8. [真实 GitHub 仓库 Handoff A/B](/public/zh/benchmarks/10-real-repo-handoff-ab)
 9. [真实 GitHub 仓库 Policy A/B](/public/zh/benchmarks/11-real-repo-policy-ab)
-10. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
+10. [L5 Serving-Side Compaction](/public/zh/benchmarks/12-l5-serving-compaction)
+11. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
 
 ## 证据维度
 
@@ -64,4 +65,5 @@ title: "基准测试"
 5. [Policy 工具选择与反馈闭环](/public/zh/benchmarks/09-policy-tool-selection)
 6. [真实 GitHub 仓库 Handoff A/B](/public/zh/benchmarks/10-real-repo-handoff-ab)
 7. [真实 GitHub 仓库 Policy A/B](/public/zh/benchmarks/11-real-repo-policy-ab)
-8. [运维与生产](/public/zh/operate-production/00-operate-production)
+8. [L5 Serving-Side Compaction](/public/zh/benchmarks/12-l5-serving-compaction)
+9. [运维与生产](/public/zh/operate-production/00-operate-production)
