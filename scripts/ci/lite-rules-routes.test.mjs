@@ -192,3 +192,151 @@ test("lite rules/evaluate reads rule candidates from sqlite store", () => {
   assert.equal(parsed.body.evaluation_summary.selected_tool, "kubectl");
   assert.equal(parsed.body.agent_visibility_summary.lane.applied, true);
 });
+
+test("lite rules/state activates rule and changes tools/select result", () => {
+  const out = runSnippet(`
+    import { mkdtempSync, rmSync } from "node:fs";
+    import os from "node:os";
+    import path from "node:path";
+    import { createHttpApp } from "./src/host/bootstrap.ts";
+    import { registerHostErrorHandler } from "./src/host/http-host.ts";
+    import { registerMemoryFeedbackToolRoutes } from "./src/routes/memory-feedback-tools.ts";
+    import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
+
+    const main = async () => {
+      const tmpDir = mkdtempSync(path.join(os.tmpdir(), "aionis-lite-rules-state-"));
+      const sqlitePath = path.join(tmpDir, "memory.sqlite");
+      const liteWriteStore = createLiteWriteStore(sqlitePath);
+
+      try {
+        await liteWriteStore.withTx(async () => {
+          const commitId = await liteWriteStore.insertCommit({
+            scope: "default",
+            parentCommitId: null,
+            inputSha256: "lite-rules-state-sha",
+            diffJson: JSON.stringify({ nodes: [], edges: [] }),
+            actor: "lite-rules-state-test",
+            modelVersion: null,
+            promptVersion: null,
+            commitHash: "lite-rules-state-commit",
+          });
+          await liteWriteStore.insertNode({
+            id: "60000000-0000-0000-0000-000000000001",
+            scope: "default",
+            clientId: "rule:deploy",
+            type: "rule",
+            tier: "hot",
+            title: "deploy rule",
+            textSummary: "prefer kubectl and deny bash for deploy workflow",
+            slotsJson: JSON.stringify({
+              if: { intent: "deploy" },
+              then: { tool: { prefer: ["kubectl"], deny: ["bash"] } },
+              rule_scope: "global",
+              priority: 10,
+            }),
+            rawRef: null,
+            evidenceRef: null,
+            embeddingVector: null,
+            embeddingModel: null,
+            memoryLane: "shared",
+            producerAgentId: null,
+            ownerAgentId: null,
+            ownerTeamId: null,
+            embeddingStatus: "skipped",
+            embeddingLastError: null,
+            salience: 0.9,
+            importance: 0.9,
+            confidence: 0.95,
+            redactionVersion: 1,
+            commitId,
+          });
+          await liteWriteStore.insertRuleDef({
+            ruleNodeId: "60000000-0000-0000-0000-000000000001",
+            scope: "default",
+            ifJson: JSON.stringify({ intent: "deploy" }),
+            thenJson: JSON.stringify({ tool: { prefer: ["kubectl"], deny: ["bash"] } }),
+            exceptionsJson: JSON.stringify([]),
+            ruleScope: "global",
+            targetAgentId: null,
+            targetTeamId: null,
+            commitId,
+          });
+        });
+
+        const app = createHttpApp({ TRUST_PROXY: false });
+        registerHostErrorHandler(app);
+        registerMemoryFeedbackToolRoutes({
+          app,
+          env: {
+            MEMORY_SCOPE: "default",
+            MEMORY_TENANT_ID: "default",
+            MAX_TEXT_LEN: 4096,
+            PII_REDACTION: false,
+          },
+          store: { withTx: async () => { throw new Error("lite rules/state should not use store.withTx"); }, withClient: async () => { throw new Error("lite tools/select should not use store.withClient"); } },
+          embeddedRuntime: null,
+          liteWriteStore,
+          requireMemoryPrincipal: async () => ({ sub: "tester" }),
+          withIdentityFromRequest: (_req, body) => body,
+          enforceRateLimit: async () => {},
+          enforceTenantQuota: async () => {},
+          tenantFromBody: () => "default",
+          acquireInflightSlot: async () => ({ release() {} }),
+        });
+
+        try {
+          const activate = await app.inject({
+            method: "POST",
+            url: "/v1/memory/rules/state",
+            payload: {
+              rule_node_id: "60000000-0000-0000-0000-000000000001",
+              state: "active",
+              input_text: "activate deploy rule",
+            },
+          });
+          const select = await app.inject({
+            method: "POST",
+            url: "/v1/memory/tools/select",
+            payload: {
+              context: {
+                intent: "deploy",
+                agent: { id: "agent-lite", team_id: "team-lite" },
+              },
+              candidates: ["bash", "curl", "kubectl"],
+              include_shadow: false,
+              rules_limit: 50,
+              input_text: "deploy the release",
+            },
+          });
+          process.stdout.write("__RESULT__" + JSON.stringify({
+            activateStatus: activate.statusCode,
+            activateBody: JSON.parse(activate.body),
+            selectStatus: select.statusCode,
+            selectBody: JSON.parse(select.body),
+          }));
+        } finally {
+          await app.close();
+        }
+      } finally {
+        await liteWriteStore.close();
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    };
+
+    main().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  `);
+
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.activateStatus, 200);
+  assert.ok(parsed.activateBody.commit_id);
+  assert.equal(parsed.selectStatus, 200);
+  assert.equal(parsed.selectBody.decision?.selected_tool, "kubectl");
+  assert.equal(parsed.selectBody.selection?.selected, "kubectl");
+  assert.ok(Array.isArray(parsed.selectBody.decision?.source_rule_ids));
+  assert.ok(parsed.selectBody.decision.source_rule_ids.includes("60000000-0000-0000-0000-000000000001"));
+  assert.equal(parsed.selectBody.selection_summary?.selected_tool, "kubectl");
+  assert.equal(parsed.selectBody.selection_summary?.source_rule_count, 1);
+});

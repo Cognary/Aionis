@@ -178,6 +178,22 @@ export type LiteRuleCandidateRow = {
   updated_at: string;
 };
 
+export type LiteRuleDefSyncRow = {
+  scope: string;
+  rule_node_id: string;
+  state: "draft" | "shadow" | "active" | "disabled";
+  rule_scope: "global" | "team" | "agent";
+  target_agent_id: string | null;
+  target_team_id: string | null;
+  if_json: Record<string, unknown>;
+  then_json: Record<string, unknown>;
+  exceptions_json: unknown[];
+  positive_count: number;
+  negative_count: number;
+  commit_id: string | null;
+  updated_at: string;
+};
+
 export type LiteExecutionDecisionRow = {
   id: string;
   scope: string;
@@ -246,6 +262,21 @@ export type LiteWriteStore = WriteStoreAccess & {
     limit: number;
     states?: Array<"shadow" | "active">;
   }): Promise<LiteRuleCandidateRow[]>;
+  getRuleDef(scope: string, ruleNodeId: string): Promise<LiteRuleDefSyncRow | null>;
+  upsertRuleState(args: {
+    scope: string;
+    ruleNodeId: string;
+    state: "draft" | "shadow" | "active" | "disabled";
+    ifJson: Record<string, unknown>;
+    thenJson: Record<string, unknown>;
+    exceptionsJson: unknown[];
+    ruleScope: "global" | "team" | "agent";
+    targetAgentId: string | null;
+    targetTeamId: string | null;
+    positiveCount: number;
+    negativeCount: number;
+    commitId: string | null;
+  }): Promise<LiteRuleDefSyncRow>;
   insertExecutionDecision(args: {
     id: string;
     scope: string;
@@ -911,6 +942,100 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
           rule_slots: parseJsonObject(row.slots_json),
           updated_at: row.updated_at,
         }));
+    },
+
+    async getRuleDef(scope: string, ruleNodeId: string): Promise<LiteRuleDefSyncRow | null> {
+      const row = db.prepare(
+        `SELECT
+           scope,
+           rule_node_id,
+           state,
+           rule_scope,
+           target_agent_id,
+           target_team_id,
+           if_json,
+           then_json,
+           exceptions_json,
+           positive_count,
+           negative_count,
+           commit_id,
+           updated_at
+         FROM lite_memory_rule_defs
+         WHERE scope = ?
+           AND rule_node_id = ?
+         LIMIT 1`,
+      ).get(scope, ruleNodeId) as {
+        scope: string;
+        rule_node_id: string;
+        state: "draft" | "shadow" | "active" | "disabled";
+        rule_scope: "global" | "team" | "agent";
+        target_agent_id: string | null;
+        target_team_id: string | null;
+        if_json: string;
+        then_json: string;
+        exceptions_json: string;
+        positive_count: number;
+        negative_count: number;
+        commit_id: string | null;
+        updated_at: string;
+      } | undefined;
+      if (!row) return null;
+      return {
+        scope: row.scope,
+        rule_node_id: row.rule_node_id,
+        state: row.state,
+        rule_scope: row.rule_scope,
+        target_agent_id: row.target_agent_id,
+        target_team_id: row.target_team_id,
+        if_json: parseJsonObject(row.if_json),
+        then_json: parseJsonObject(row.then_json),
+        exceptions_json: parseJsonArray(row.exceptions_json),
+        positive_count: Number(row.positive_count ?? 0),
+        negative_count: Number(row.negative_count ?? 0),
+        commit_id: row.commit_id,
+        updated_at: row.updated_at,
+      };
+    },
+
+    async upsertRuleState(args): Promise<LiteRuleDefSyncRow> {
+      const createdAt = nowIso();
+      const updatedAt = createdAt;
+      db.prepare(
+        `INSERT INTO lite_memory_rule_defs
+          (rule_node_id, scope, state, if_json, then_json, exceptions_json, rule_scope, target_agent_id, target_team_id, positive_count, negative_count, commit_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(rule_node_id) DO UPDATE SET
+           state = excluded.state,
+           if_json = excluded.if_json,
+           then_json = excluded.then_json,
+           exceptions_json = excluded.exceptions_json,
+           rule_scope = excluded.rule_scope,
+           target_agent_id = excluded.target_agent_id,
+           target_team_id = excluded.target_team_id,
+           commit_id = excluded.commit_id,
+           updated_at = excluded.updated_at
+         WHERE lite_memory_rule_defs.scope = excluded.scope`,
+      ).run(
+        args.ruleNodeId,
+        args.scope,
+        args.state,
+        stringifyJson(args.ifJson),
+        stringifyJson(args.thenJson),
+        stringifyJson(args.exceptionsJson),
+        args.ruleScope,
+        args.targetAgentId,
+        args.targetTeamId,
+        args.positiveCount,
+        args.negativeCount,
+        args.commitId,
+        createdAt,
+        updatedAt,
+      );
+      const row = await this.getRuleDef(args.scope, args.ruleNodeId);
+      if (!row) {
+        throw new Error("lite_rule_def_upsert_failed");
+      }
+      return row;
     },
 
     async insertExecutionDecision(args): Promise<{ id: string; created_at: string }> {

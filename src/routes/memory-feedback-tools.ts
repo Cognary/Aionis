@@ -63,11 +63,18 @@ export function registerMemoryFeedbackToolRoutes(args: {
     const body = withIdentityFromRequest(req, req.body, principal, "rules_state");
     await enforceRateLimit(req, reply, "write");
     await enforceTenantQuota(req, reply, "write", tenantFromBody(body));
-    const out = await store.withTx((client) =>
-      updateRuleState(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
-        embeddedRuntime,
-      }),
-    );
+    const out = liteWriteStore
+      ? await liteWriteStore.withTx(() =>
+          updateRuleState({} as any, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+            embeddedRuntime,
+            liteWriteStore,
+          }),
+        )
+      : await store.withTx((client) =>
+          updateRuleState(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+            embeddedRuntime,
+          }),
+        );
     return reply.code(200).send(out);
   });
 
