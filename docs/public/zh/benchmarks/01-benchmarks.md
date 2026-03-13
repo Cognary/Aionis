@@ -24,7 +24,8 @@ title: "基准测试"
 3. [差异化证据](/public/zh/benchmarks/03-differentiation-evidence)
 4. [AionisBench v0.1](/public/zh/benchmarks/06-aionis-bench-v01)
 5. [Agent Handoff 与 Replay](/public/zh/benchmarks/07-agent-handoff-and-replay)
-6. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
+6. [Task Handoff 与 Recover 语义](/public/zh/benchmarks/08-task-handoff-and-recover)
+7. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
 
 ## 证据维度
 
@@ -49,10 +50,12 @@ title: "基准测试"
 1. 先看 [Benchmark 快照（公开版）](/public/zh/benchmarks/02-benchmark-snapshot-public)
 2. 再看 [性能基线](/public/zh/benchmarks/05-performance-baseline)，了解怎么在本地复现
 3. 最后看 [差异化证据](/public/zh/benchmarks/03-differentiation-evidence)，理解这些数据到底在证明什么
+4. 再看 [Task Handoff 与 Recover 语义](/public/zh/benchmarks/08-task-handoff-and-recover)，理解非文件中心 handoff 的边界
 
 ## 下一步
 
 1. [差异化证据](/public/zh/benchmarks/03-differentiation-evidence)
 2. [性能基线](/public/zh/benchmarks/05-performance-baseline)
 3. [Agent Handoff 与 Replay](/public/zh/benchmarks/07-agent-handoff-and-replay)
-4. [运维与生产](/public/zh/operate-production/00-operate-production)
+4. [Task Handoff 与 Recover 语义](/public/zh/benchmarks/08-task-handoff-and-recover)
+5. [运维与生产](/public/zh/operate-production/00-operate-production)

@@ -24,7 +24,8 @@ The benchmark section is meant to answer four questions:
 3. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
 4. [AionisBench v0.1](/public/en/benchmarks/06-aionis-bench-v01)
 5. [Agent Handoff and Replay](/public/en/benchmarks/07-agent-handoff-and-replay)
-6. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
+6. [Task Handoff and Recover Semantics](/public/en/benchmarks/08-task-handoff-and-recover)
+7. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
 
 ## Evidence Dimensions
 
@@ -55,4 +56,5 @@ Every benchmark page includes:
 1. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
 2. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)
 3. [Agent Handoff and Replay](/public/en/benchmarks/07-agent-handoff-and-replay)
-4. [Operate and Production](/public/en/operate-production/00-operate-production)
+4. [Task Handoff and Recover Semantics](/public/en/benchmarks/08-task-handoff-and-recover)
+5. [Operate and Production](/public/en/operate-production/00-operate-production)
