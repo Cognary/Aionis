@@ -34,6 +34,7 @@ That is the product: less rediscovery, more continuation.
 1. cross-runtime handoff recovery: `33.33% -> 100%` success (`file_export` baseline vs `aionis_handoff`)
 2. real-repo strict replay on `pallets/click`: `replay1` and `replay2` both ran at **0 model tokens**
 3. guided replay repair smoke: model tokens are spent only when repair is invoked (`1063` total tokens in the documented DeepSeek smoke)
+4. real-repo policy A/B on `pallets/click`: `0% -> 100%` success while tool routing converged from `grep` / `pytest-all` to `rg` / `pytest-focused`
 
 [Start in 5 Minutes](./docs/public/en/getting-started/02-onboarding-5min.md) · [Choose Lite or Server](./docs/public/en/getting-started/07-choose-lite-vs-server.md) · [Docs](https://doc.aionisos.com) · [Lite Public Beta](./docs/public/en/getting-started/05-lite-public-beta-boundary.md)
 
@@ -204,6 +205,7 @@ Recommended evidence pages:
 2. [Differentiation Evidence](https://doc.aionisos.com/public/en/benchmarks/03-differentiation-evidence)
 3. [Performance Baseline](https://doc.aionisos.com/public/en/benchmarks/05-performance-baseline)
 4. [Agent Handoff and Replay](https://doc.aionisos.com/public/en/benchmarks/07-agent-handoff-and-replay)
+5. [Real GitHub Repo Policy A/B](https://doc.aionisos.com/public/en/benchmarks/11-real-repo-policy-ab)
 
 ---
 

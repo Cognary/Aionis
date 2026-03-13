@@ -19,6 +19,7 @@ Recent handoff and replay evidence now also shows:
 1. cross-runtime handoff recovery improving success from `33.33%` to `100%`
 2. real-repo strict replay running at `0` model tokens on `pallets/click`
 3. guided replay spending model tokens only when repair is required
+4. real-repo policy A/B improving success from `0%` to `100%` while converging tool routing onto `rg` and `pytest-focused`
 
 ## Start Here
 
@@ -49,6 +50,7 @@ Recent handoff and replay evidence now also shows:
 2. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
 3. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)
 4. [Agent Handoff and Replay](/public/en/benchmarks/07-agent-handoff-and-replay)
+5. [Real GitHub Repo Policy A/B](/public/en/benchmarks/11-real-repo-policy-ab)
 
 ## Continue By Need
 
