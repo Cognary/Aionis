@@ -29,7 +29,8 @@ title: "基准测试"
 8. [真实 GitHub 仓库 Handoff A/B](/public/zh/benchmarks/10-real-repo-handoff-ab)
 9. [真实 GitHub 仓库 Policy A/B](/public/zh/benchmarks/11-real-repo-policy-ab)
 10. [L5 Serving-Side Compaction](/public/zh/benchmarks/12-l5-serving-compaction)
-11. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
+11. [Aionis 证据总览](/public/zh/benchmarks/13-aionis-evidence-overview)
+12. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
 
 ## 证据维度
 
@@ -66,4 +67,5 @@ title: "基准测试"
 6. [真实 GitHub 仓库 Handoff A/B](/public/zh/benchmarks/10-real-repo-handoff-ab)
 7. [真实 GitHub 仓库 Policy A/B](/public/zh/benchmarks/11-real-repo-policy-ab)
 8. [L5 Serving-Side Compaction](/public/zh/benchmarks/12-l5-serving-compaction)
-9. [运维与生产](/public/zh/operate-production/00-operate-production)
+9. [Aionis 证据总览](/public/zh/benchmarks/13-aionis-evidence-overview)
+10. [运维与生产](/public/zh/operate-production/00-operate-production)
