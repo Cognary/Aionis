@@ -364,7 +364,7 @@ export const HandoffStoreRequest = z.object({
   actor: z.string().min(1).optional(),
   memory_lane: z.enum(["private", "shared"]).default("shared"),
   anchor: z.string().min(1),
-  file_path: z.string().min(1),
+  file_path: z.string().min(1).optional(),
   repo_root: z.string().min(1).optional(),
   symbol: z.string().min(1).optional(),
   handoff_kind: HandoffKind.default("patch_handoff"),
@@ -379,6 +379,14 @@ export const HandoffStoreRequest = z.object({
   must_change: z.array(z.string().min(1)).max(100).optional(),
   must_remove: z.array(z.string().min(1)).max(100).optional(),
   must_keep: z.array(z.string().min(1)).max(100).optional(),
+}).superRefine((value, ctx) => {
+  if (value.handoff_kind !== "task_handoff" && !value.file_path) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["file_path"],
+      message: "file_path is required unless handoff_kind is task_handoff",
+    });
+  }
 });
 
 export type HandoffStoreInput = z.infer<typeof HandoffStoreRequest>;
@@ -387,6 +395,7 @@ export const HandoffRecoverRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   anchor: z.string().min(1),
+  repo_root: z.string().min(1).optional(),
   file_path: z.string().min(1).optional(),
   symbol: z.string().min(1).optional(),
   handoff_kind: HandoffKind.default("patch_handoff"),

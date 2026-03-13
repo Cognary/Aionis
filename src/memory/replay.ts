@@ -4855,6 +4855,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         llmTemperature: opts.guidedRepair?.llmTemperature,
         mode: "guided",
       });
+      mergeReplayUsage(usageOut, asObject(repair)?.usage);
       stepReports.push({
         step_index: stepIndex,
         tool_name: toolName,

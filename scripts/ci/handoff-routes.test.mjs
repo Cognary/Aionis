@@ -269,6 +269,188 @@ test("native handoff recover prefers the newest matching handoff", () => {
   assert.equal(parsed.recoverBody.handoff.handoff_text, "New handoff text");
 });
 
+test("native handoff recover can disambiguate by repo_root", () => {
+  const out = runSnippet(`
+    import { mkdtempSync, rmSync } from "node:fs";
+    import os from "node:os";
+    import path from "node:path";
+    import { createHttpApp } from "./src/host/bootstrap.ts";
+    import { registerHostErrorHandler } from "./src/host/http-host.ts";
+    import { registerHandoffRoutes } from "./src/routes/handoff.ts";
+    import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
+
+    const main = async () => {
+      const tmpDir = mkdtempSync(path.join(os.tmpdir(), "aionis-handoff-routes-"));
+      const sqlitePath = path.join(tmpDir, "handoff.sqlite");
+      const liteWriteStore = createLiteWriteStore(sqlitePath);
+      const app = createHttpApp({ TRUST_PROXY: false });
+      registerHostErrorHandler(app);
+
+      try {
+        registerHandoffRoutes({
+          app,
+          env: {
+            MEMORY_SCOPE: "default",
+            MEMORY_TENANT_ID: "default",
+            MAX_TEXT_LEN: 4096,
+            PII_REDACTION: false,
+            ALLOW_CROSS_SCOPE_EDGES: false,
+            MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+            MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+          },
+          store: {
+            withTx: async () => { throw new Error("lite handoff store should not use store.withTx"); },
+            withClient: async () => { throw new Error("lite handoff recover should not use store.withClient"); },
+          },
+          embedder: null,
+          embeddedRuntime: null,
+          liteWriteStore,
+          writeAccessForClient: () => { throw new Error("lite handoff routes should not use postgres write access"); },
+          requireMemoryPrincipal: async () => ({ sub: "tester" }),
+          withIdentityFromRequest: (_req, body) => body,
+          enforceRateLimit: async () => {},
+          enforceTenantQuota: async () => {},
+          tenantFromBody: () => "default",
+          acquireInflightSlot: async () => ({ release() {}, wait_ms: 0 }),
+        });
+
+        await app.inject({
+          method: "POST",
+          url: "/v1/handoff/store",
+          payload: {
+            anchor: "shared-anchor",
+            repo_root: "/repo-a",
+            file_path: "/repo/foo.py",
+            summary: "Repo A summary",
+            handoff_text: "Repo A handoff",
+          },
+        });
+        await app.inject({
+          method: "POST",
+          url: "/v1/handoff/store",
+          payload: {
+            anchor: "shared-anchor",
+            repo_root: "/repo-b",
+            file_path: "/repo/foo.py",
+            summary: "Repo B summary",
+            handoff_text: "Repo B handoff",
+          },
+        });
+
+        const recoverRes = await app.inject({
+          method: "POST",
+          url: "/v1/handoff/recover",
+          payload: {
+            anchor: "shared-anchor",
+            repo_root: "/repo-a",
+            file_path: "/repo/foo.py",
+          },
+        });
+
+        process.stdout.write("__RESULT__" + JSON.stringify({
+          recoverStatus: recoverRes.statusCode,
+          recoverBody: JSON.parse(recoverRes.body),
+        }));
+      } finally {
+        await app.close();
+        await liteWriteStore.close();
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    };
+
+    main().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  `);
+
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.recoverStatus, 200);
+  assert.equal(parsed.recoverBody.handoff.repo_root, "/repo-a");
+  assert.equal(parsed.recoverBody.handoff.handoff_text, "Repo A handoff");
+});
+
+test("native handoff store accepts task_handoff without file_path", () => {
+  const out = runSnippet(`
+    import { mkdtempSync, rmSync } from "node:fs";
+    import os from "node:os";
+    import path from "node:path";
+    import { createHttpApp } from "./src/host/bootstrap.ts";
+    import { registerHostErrorHandler } from "./src/host/http-host.ts";
+    import { registerHandoffRoutes } from "./src/routes/handoff.ts";
+    import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
+
+    const main = async () => {
+      const tmpDir = mkdtempSync(path.join(os.tmpdir(), "aionis-handoff-routes-"));
+      const sqlitePath = path.join(tmpDir, "handoff.sqlite");
+      const liteWriteStore = createLiteWriteStore(sqlitePath);
+      const app = createHttpApp({ TRUST_PROXY: false });
+      registerHostErrorHandler(app);
+
+      try {
+        registerHandoffRoutes({
+          app,
+          env: {
+            MEMORY_SCOPE: "default",
+            MEMORY_TENANT_ID: "default",
+            MAX_TEXT_LEN: 4096,
+            PII_REDACTION: false,
+            ALLOW_CROSS_SCOPE_EDGES: false,
+            MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+            MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+          },
+          store: {
+            withTx: async () => { throw new Error("lite handoff store should not use store.withTx"); },
+            withClient: async () => { throw new Error("lite handoff recover should not use store.withClient"); },
+          },
+          embedder: null,
+          embeddedRuntime: null,
+          liteWriteStore,
+          writeAccessForClient: () => { throw new Error("lite handoff routes should not use postgres write access"); },
+          requireMemoryPrincipal: async () => ({ sub: "tester" }),
+          withIdentityFromRequest: (_req, body) => body,
+          enforceRateLimit: async () => {},
+          enforceTenantQuota: async () => {},
+          tenantFromBody: () => "default",
+          acquireInflightSlot: async () => ({ release() {}, wait_ms: 0 }),
+        });
+
+        const storeRes = await app.inject({
+          method: "POST",
+          url: "/v1/handoff/store",
+          payload: {
+            anchor: "task-anchor",
+            handoff_kind: "task_handoff",
+            summary: "Resume deployment checklist",
+            handoff_text: "Continue from approval step 2.",
+            next_action: "Request final approval",
+          },
+        });
+
+        process.stdout.write("__RESULT__" + JSON.stringify({
+          storeStatus: storeRes.statusCode,
+          storeBody: JSON.parse(storeRes.body),
+        }));
+      } finally {
+        await app.close();
+        await liteWriteStore.close();
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    };
+
+    main().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  `);
+
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.storeStatus, 200);
+  assert.equal(parsed.storeBody.handoff.handoff_kind, "task_handoff");
+  assert.equal(parsed.storeBody.handoff.file_path, null);
+  assert.equal(parsed.storeBody.handoff.next_action, "Request final approval");
+});
+
 test("native handoff routes preserve authenticated private ownership in lite mode", () => {
   const out = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";

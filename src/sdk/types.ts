@@ -642,7 +642,7 @@ export type HandoffArtifactView = {
   client_id?: string | null;
   handoff_kind: string;
   anchor: string;
-  file_path: string;
+  file_path?: string | null;
   repo_root?: string | null;
   symbol?: string | null;
   title?: string | null;
@@ -651,6 +651,11 @@ export type HandoffArtifactView = {
   risk?: string | null;
   acceptance_checks: string[];
   tags: string[];
+  target_files?: string[];
+  next_action?: string | null;
+  must_change?: string[];
+  must_remove?: string[];
+  must_keep?: string[];
   memory_lane?: "private" | "shared" | null;
   commit_id?: string | null;
   commit_uri?: string | null;

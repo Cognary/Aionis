@@ -220,7 +220,13 @@ function summarizeStoreHandoff(result: any, env: AionisDevEnv): string {
 
 function summarizeRecoveredHandoff(result: any, env: AionisDevEnv): string {
   const handoff = result?.handoff && typeof result.handoff === "object" ? result.handoff : {};
+  const executionReady =
+    result?.execution_ready_handoff && typeof result.execution_ready_handoff === "object" ? result.execution_ready_handoff : {};
   const acceptanceChecks = Array.isArray(handoff.acceptance_checks) ? handoff.acceptance_checks : [];
+  const targetFiles = Array.isArray(executionReady.target_files) ? executionReady.target_files : [];
+  const mustChange = Array.isArray(executionReady.must_change) ? executionReady.must_change : [];
+  const mustRemove = Array.isArray(executionReady.must_remove) ? executionReady.must_remove : [];
+  const mustKeep = Array.isArray(executionReady.must_keep) ? executionReady.must_keep : [];
 
   return clipText(
     [
@@ -228,10 +234,16 @@ function summarizeRecoveredHandoff(result: any, env: AionisDevEnv): string {
       typeof result?.handoff_kind === "string" ? `handoff_kind: ${result.handoff_kind}` : null,
       typeof result?.anchor === "string" ? `anchor: ${result.anchor}` : null,
       typeof handoff.file_path === "string" ? `file_path: ${handoff.file_path}` : null,
+      typeof handoff.repo_root === "string" ? `repo_root: ${handoff.repo_root}` : null,
       typeof handoff.symbol === "string" ? `symbol: ${handoff.symbol}` : null,
       typeof handoff.risk === "string" ? `risk: ${handoff.risk}` : null,
       typeof handoff.summary === "string" ? `summary: ${handoff.summary}` : null,
       typeof handoff.handoff_text === "string" ? `handoff_text: ${handoff.handoff_text}` : null,
+      typeof executionReady.next_action === "string" ? `next_action: ${executionReady.next_action}` : null,
+      targetFiles.length > 0 ? `target_files: ${targetFiles.join(" | ")}` : null,
+      mustChange.length > 0 ? `must_change: ${mustChange.join(" | ")}` : null,
+      mustRemove.length > 0 ? `must_remove: ${mustRemove.join(" | ")}` : null,
+      mustKeep.length > 0 ? `must_keep: ${mustKeep.join(" | ")}` : null,
       acceptanceChecks.length > 0 ? `acceptance_checks: ${acceptanceChecks.join(" | ")}` : null,
       typeof handoff.uri === "string" ? `source_uri: ${handoff.uri}` : null,
       typeof handoff.commit_id === "string" ? `commit_id: ${handoff.commit_id}` : null,
@@ -501,7 +513,7 @@ const MemoryStoreHandoffArgs = z.object({
   actor: z.string().min(1).optional(),
   memory_lane: z.enum(["private", "shared"]).optional(),
   anchor: z.string().min(1),
-  file_path: z.string().min(1),
+  file_path: z.string().min(1).optional(),
   repo_root: z.string().min(1).optional(),
   symbol: z.string().min(1).optional(),
   handoff_kind: HandoffKind.default("patch_handoff"),
@@ -511,12 +523,26 @@ const MemoryStoreHandoffArgs = z.object({
   risk: z.string().min(1).optional(),
   acceptance_checks: z.array(z.string().min(1)).max(20).optional(),
   tags: z.array(z.string().min(1)).max(20).optional(),
+  target_files: z.array(z.string().min(1)).max(50).optional(),
+  next_action: z.string().min(1).optional(),
+  must_change: z.array(z.string().min(1)).max(100).optional(),
+  must_remove: z.array(z.string().min(1)).max(100).optional(),
+  must_keep: z.array(z.string().min(1)).max(100).optional(),
+}).superRefine((value, ctx) => {
+  if (value.handoff_kind !== "task_handoff" && !value.file_path) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["file_path"],
+      message: "file_path is required unless handoff_kind is task_handoff",
+    });
+  }
 });
 
 const MemoryRecoverHandoffArgs = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   anchor: z.string().min(1),
+  repo_root: z.string().min(1).optional(),
   file_path: z.string().min(1).optional(),
   symbol: z.string().min(1).optional(),
   handoff_kind: HandoffKind.default("patch_handoff"),
@@ -930,8 +956,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         risk: { type: "string" },
         acceptance_checks: { type: "array", items: { type: "string" } },
         tags: { type: "array", items: { type: "string" } },
+        target_files: { type: "array", items: { type: "string" } },
+        next_action: { type: "string" },
+        must_change: { type: "array", items: { type: "string" } },
+        must_remove: { type: "array", items: { type: "string" } },
+        must_keep: { type: "array", items: { type: "string" } },
       },
-      ["anchor", "file_path", "summary", "handoff_text"],
+      ["anchor", "summary", "handoff_text"],
     ),
   },
   {
@@ -945,6 +976,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         tenant_id: { type: "string" },
         scope: { type: "string" },
         anchor: { type: "string" },
+        repo_root: { type: "string" },
         file_path: { type: "string" },
         symbol: { type: "string" },
         handoff_kind: { type: "string", enum: ["patch_handoff", "review_handoff", "task_handoff"] },

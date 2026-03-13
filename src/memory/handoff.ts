@@ -82,7 +82,7 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
   const ownerTeamId = normalizeOptionalString(typeof raw.owner_team_id === "string" ? raw.owner_team_id : undefined);
   const handoffText = [
     `anchor=${parsed.anchor}`,
-    `file=${parsed.file_path}`,
+    parsed.file_path ? `file=${parsed.file_path}` : null,
     parsed.repo_root ? `repo_root=${parsed.repo_root}` : null,
     parsed.symbol ? `symbol=${parsed.symbol}` : null,
     `kind=${parsed.handoff_kind}`,
@@ -118,7 +118,7 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
           summary_kind: "handoff",
           handoff_kind: parsed.handoff_kind,
           anchor: parsed.anchor,
-          file_path: parsed.file_path,
+          file_path: parsed.file_path ?? null,
           repo_root: parsed.repo_root,
           symbol: parsed.symbol,
           risk: parsed.risk,
@@ -209,6 +209,11 @@ function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, inpu
       risk: promptSafe.risk,
       acceptance_checks: promptSafe.acceptance_checks,
       tags: promptSafe.tags,
+      target_files: executionReady.target_files,
+      next_action: executionReady.next_action,
+      must_change: executionReady.must_change,
+      must_remove: executionReady.must_remove,
+      must_keep: executionReady.must_keep,
       memory_lane: node.memory_lane ?? null,
       commit_id: node.commit_id ?? null,
       commit_uri: node.commit_uri ?? null,
@@ -252,6 +257,7 @@ export async function recoverHandoff(args: {
 }) {
   const parsed = HandoffRecoverRequest.parse(args.input);
   const normalizedFilePath = normalizeOptionalString(parsed.file_path);
+  const normalizedRepoRoot = normalizeOptionalString(parsed.repo_root);
   const normalizedSymbol = normalizeOptionalString(parsed.symbol);
   const consumerAgentId = normalizeOptionalString(args.consumerAgentId ?? undefined) ?? null;
   const consumerTeamId = normalizeOptionalString(args.consumerTeamId ?? undefined) ?? null;
@@ -272,6 +278,7 @@ export async function recoverHandoff(args: {
       summary_kind: "handoff",
       handoff_kind: parsed.handoff_kind,
       anchor: parsed.anchor,
+      ...(normalizedRepoRoot ? { repo_root: normalizedRepoRoot } : {}),
       ...(normalizedFilePath ? { file_path: normalizedFilePath } : {}),
       ...(normalizedSymbol ? { symbol: normalizedSymbol } : {}),
     },
@@ -287,6 +294,7 @@ export async function recoverHandoff(args: {
   if (!topNode || typeof topNode.uri !== "string") {
     throw new HttpError(404, "handoff_not_found", "handoff was not found in this scope", {
       anchor: parsed.anchor,
+      repo_root: parsed.repo_root ?? null,
       file_path: parsed.file_path ?? null,
       symbol: parsed.symbol ?? null,
       handoff_kind: parsed.handoff_kind,
