@@ -11,6 +11,7 @@ export type MemoryLayerPreferenceInput = {
 
 export type ResolveMemoryLayerPolicyOptions = {
   unsafe_allow_drop_trust_anchors?: boolean;
+  internal_allow_l4_selection?: boolean;
 };
 
 export type MemoryLayerPolicy = {
@@ -28,21 +29,23 @@ function dedupeLayers(input: readonly MemoryLayerId[]): MemoryLayerId[] {
 
 function defaultPolicyForEndpoint(
   endpoint: "recall" | "recall_text" | "planning_context" | "context_assemble",
+  options?: ResolveMemoryLayerPolicyOptions,
 ): MemoryLayerPolicy {
+  const internalAllowL4Selection = options?.internal_allow_l4_selection === true;
   if (endpoint === "planning_context" || endpoint === "context_assemble") {
     return {
       name: "planning_context",
-      preferred_layers: dedupeLayers(["L3", "L0", "L1", "L2"]),
+      preferred_layers: dedupeLayers(internalAllowL4Selection ? ["L4", "L3", "L0", "L1", "L2"] : ["L3", "L0", "L1", "L2"]),
       fallback_layers: dedupeLayers(["L1", "L2"]),
-      trust_anchor_layers: dedupeLayers(["L3", "L0"]),
+      trust_anchor_layers: dedupeLayers(internalAllowL4Selection ? ["L4", "L3", "L0"] : ["L3", "L0"]),
       source: "endpoint_default",
     };
   }
   return {
     name: "factual_recall",
-    preferred_layers: dedupeLayers(["L3", "L0", "L1", "L2"]),
+    preferred_layers: dedupeLayers(internalAllowL4Selection ? ["L4", "L3", "L0", "L1", "L2"] : ["L3", "L0", "L1", "L2"]),
     fallback_layers: dedupeLayers(["L0", "L1"]),
-    trust_anchor_layers: dedupeLayers(["L3", "L0"]),
+    trust_anchor_layers: dedupeLayers(internalAllowL4Selection ? ["L4", "L3", "L0"] : ["L3", "L0"]),
     source: "endpoint_default",
   };
 }
@@ -52,7 +55,7 @@ export function resolveMemoryLayerPolicy(
   preference?: MemoryLayerPreferenceInput | null,
   options?: ResolveMemoryLayerPolicyOptions,
 ): MemoryLayerPolicy {
-  const base = defaultPolicyForEndpoint(endpoint);
+  const base = defaultPolicyForEndpoint(endpoint, options);
   const requestedAllowedLayers = dedupeLayers(
     Array.isArray(preference?.allowed_layers) ? preference.allowed_layers.filter((layer): layer is MemoryLayerId => MEMORY_LAYER_IDS.includes(layer)) : [],
   );

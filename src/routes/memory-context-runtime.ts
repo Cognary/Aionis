@@ -118,6 +118,11 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const raw = String(req.headers["x-aionis-internal-allow-drop-trust-anchors"] ?? "").trim().toLowerCase();
     return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
   };
+  const allowInternalL4Serving = (req: any): boolean => {
+    if (env.APP_ENV === "prod") return false;
+    const raw = String(req.headers["x-aionis-internal-allow-l4-serving"] ?? "").trim().toLowerCase();
+    return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+  };
   const allowLayerPolicyRetrievalFiltering = (req: any): boolean => {
     if (env.APP_ENV === "prod") return false;
     const raw = String(req.headers["x-aionis-internal-apply-layer-policy-to-retrieval"] ?? "").trim().toLowerCase();
@@ -168,6 +173,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const scope = parsed.scope ?? env.MEMORY_SCOPE;
     const qNorm = normalizeText(parsed.query_text, env.MAX_TEXT_LEN);
     const q = env.PII_REDACTION ? redactPII(qNorm).text : qNorm;
+    const internalAllowL4Selection = allowInternalL4Serving(req);
 
     let vec: number[];
     let embedMs = 0;
@@ -273,6 +279,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           {
             stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
             recall_access: recallAccessForClient({} as any),
+            internal_allow_l4_selection: internalAllowL4Selection,
           },
         );
 
@@ -321,6 +328,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
             {
               stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
               recall_access: recallAccessForClient(client),
+              internal_allow_l4_selection: internalAllowL4Selection,
             },
           );
 
@@ -625,6 +633,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       const auth = buildRecallAuth(req, wantDebugEmbeddings);
       const unsafeDropTrustAnchors = allowUnsafeDropTrustAnchors(req);
       const applyLayerPolicyToRetrieval = allowLayerPolicyRetrievalFiltering(req);
+      const internalAllowL4Selection = allowInternalL4Serving(req);
 
       if (liteModeActive) {
         const recall = await memoryRecallParsed(
@@ -644,6 +653,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
             recall_access: recallAccessForClient({} as any),
             unsafe_allow_drop_trust_anchors: unsafeDropTrustAnchors,
             unsafe_apply_layer_policy_to_retrieval: applyLayerPolicyToRetrieval,
+            internal_allow_l4_selection: internalAllowL4Selection,
           },
         );
 
@@ -707,6 +717,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
               recall_access: recallAccessForClient(client),
               unsafe_allow_drop_trust_anchors: unsafeDropTrustAnchors,
               unsafe_apply_layer_policy_to_retrieval: applyLayerPolicyToRetrieval,
+              internal_allow_l4_selection: internalAllowL4Selection,
             },
           );
 
@@ -1078,6 +1089,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       const auth = buildRecallAuth(req, wantDebugEmbeddings);
       const unsafeDropTrustAnchors = allowUnsafeDropTrustAnchors(req);
       const applyLayerPolicyToRetrieval = allowLayerPolicyRetrievalFiltering(req);
+      const internalAllowL4Selection = allowInternalL4Serving(req);
       const executionContext =
         parsed.context && typeof parsed.context === "object" && !Array.isArray(parsed.context) ? parsed.context : {};
 
@@ -1099,6 +1111,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
             recall_access: recallAccessForClient({} as any),
             unsafe_allow_drop_trust_anchors: unsafeDropTrustAnchors,
             unsafe_apply_layer_policy_to_retrieval: applyLayerPolicyToRetrieval,
+            internal_allow_l4_selection: internalAllowL4Selection,
           },
         );
 
@@ -1164,6 +1177,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
               recall_access: recallAccessForClient(client),
               unsafe_allow_drop_trust_anchors: unsafeDropTrustAnchors,
               unsafe_apply_layer_policy_to_retrieval: applyLayerPolicyToRetrieval,
+              internal_allow_l4_selection: internalAllowL4Selection,
             },
           );
 

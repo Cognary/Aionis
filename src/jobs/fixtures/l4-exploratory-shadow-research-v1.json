@@ -1,0 +1,58 @@
+{
+  "actor": "l4_exploratory_shadow_benchmark",
+  "context_char_budget": 320,
+  "context_token_budget": 110,
+  "records": [
+    {
+      "key": "evt_vendor_a",
+      "title": "vendor A note",
+      "text_summary": "Vendor A uses usage-based pricing, provides 200k context, and exposes an OpenAI-compatible endpoint."
+    },
+    {
+      "key": "evt_vendor_b",
+      "title": "vendor B note",
+      "text_summary": "Vendor B uses a flat enterprise plan with annual commitment, provides 128k context, and depends on a proprietary SDK."
+    },
+    {
+      "key": "evt_vendor_c",
+      "title": "vendor C note",
+      "text_summary": "Vendor C provides 1M context and supports REST and batch ingestion."
+    },
+    {
+      "key": "l1_fact_vendor_api",
+      "kind": "L1_fact",
+      "title": "vendor api facts",
+      "text_summary": "Stable facts: Vendor A exposes an OpenAI-compatible endpoint. Vendor B depends on a proprietary SDK. Vendor C supports REST and batch ingestion."
+    },
+    {
+      "key": "l2_topic_vendor_comparison",
+      "kind": "L2_topic",
+      "title": "vendor comparison topic",
+      "text_summary": "Topic: Vendor A = usage-based pricing, 200k context, OpenAI-compatible endpoint; Vendor B = flat enterprise plan, annual commitment, 128k context, proprietary SDK; Vendor C = 1M context, REST and batch ingestion."
+    },
+    {
+      "key": "l3_rollup_vendor_comparison",
+      "kind": "L3_rollup",
+      "title": "compression rollup vendor comparison",
+      "text_summary": "Compression rollup: Vendor A is usage-based pricing with 200k context and an OpenAI-compatible endpoint. Vendor B is a flat enterprise plan with annual commitment, 128k context, and a proprietary SDK. Vendor C offers 1M context with REST and batch ingestion."
+    },
+    {
+      "key": "l4_abstraction_vendor_pattern",
+      "kind": "L4_abstraction",
+      "title": "semantic abstraction vendor pattern",
+      "text_summary": "Semantic abstraction (shadow): Vendor comparison can be planned as three constraints: open integration via OpenAI-compatible endpoint, enterprise constraints via proprietary SDK and annual commitment, and high-context ingestion via REST and batch ingestion."
+    }
+  ],
+  "cases": [
+    {
+      "id": "research_l4_001",
+      "query_text": "Which vendor pattern preserves open integration versus proprietary enterprise integration?",
+      "critical_facts": ["OpenAI-compatible endpoint", "proprietary SDK", "annual commitment"]
+    },
+    {
+      "id": "research_l4_002",
+      "query_text": "Which vendor offers 1M context and what ingestion interface must still be preserved under abstraction?",
+      "critical_facts": ["1M context", "REST and batch ingestion"]
+    }
+  ]
+}

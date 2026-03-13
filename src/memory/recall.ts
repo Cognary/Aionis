@@ -32,6 +32,7 @@ export type MemoryRecallOptions = {
   recall_access?: RecallStoreAccess;
   unsafe_allow_drop_trust_anchors?: boolean;
   unsafe_apply_layer_policy_to_retrieval?: boolean;
+  internal_allow_l4_selection?: boolean;
 };
 
 type NodeRow = RecallNodeRow;
@@ -239,6 +240,7 @@ export async function memoryRecallParsed(
   const consumerTeamId = parsed.consumer_team_id?.trim() || null;
   const layerPolicy = resolveMemoryLayerPolicy(endpoint, parsed.memory_layer_preference ?? null, {
     unsafe_allow_drop_trust_anchors: options?.unsafe_allow_drop_trust_anchors === true,
+    internal_allow_l4_selection: options?.internal_allow_l4_selection === true,
   });
   const stage1ExactFallbackOnEmpty = options?.stage1_exact_fallback_on_empty ?? true;
   assertDim(parsed.query_embedding, 1536);

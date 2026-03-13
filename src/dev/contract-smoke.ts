@@ -3098,6 +3098,9 @@ async function run() {
   const planningPolicy = resolveMemoryLayerPolicy("planning_context");
   assert.equal(planningPolicy.name, "planning_context");
   assert.deepEqual(planningPolicy.preferred_layers, ["L3", "L0", "L1", "L2"]);
+  const l4PlanningPolicy = resolveMemoryLayerPolicy("planning_context", null, { internal_allow_l4_selection: true });
+  assert.deepEqual(l4PlanningPolicy.preferred_layers, ["L4", "L3", "L0", "L1", "L2"]);
+  assert.deepEqual(l4PlanningPolicy.trust_anchor_layers, ["L4", "L3", "L0"]);
   const tightenedPlanningPolicy = resolveMemoryLayerPolicy("planning_context", { allowed_layers: ["L1"] });
   assert.equal(tightenedPlanningPolicy.source, "request_override");
   assert.deepEqual(tightenedPlanningPolicy.requested_allowed_layers, ["L1"]);
