@@ -205,6 +205,35 @@ This plan does **not** do any of the following yet:
 
 ---
 
+## Current Status (2026-03-13)
+
+The internal `L4` serve opt-in path has now been implemented behind:
+
+- `x-aionis-internal-allow-l4-serving: true`
+
+Observed benchmark result after implementation:
+
+- baseline arm selects `L0,L1,L2,L3`
+- treatment arm selects `L0,L1,L2,L3,L4`
+- `fact_recall_rate` stays flat
+- `context_est_tokens` stays flat
+- `context_chars` increases slightly
+
+Current interpretation:
+
+- the `L4` serving path now exists and is testable
+- the current research-style fixture does **not** show a serving gain
+- `L4` should remain internal/experimental
+- no external benchmark or product claim should present `L4` as a proven improvement yet
+
+Recommended next step:
+
+- pause public `L4` claims
+- keep the opt-in path
+- revisit only with a fixture explicitly designed to reward semantic abstraction over lower-layer redundancy
+
+---
+
 ## Implementation Sequence
 
 ### Task 1: Add design doc
