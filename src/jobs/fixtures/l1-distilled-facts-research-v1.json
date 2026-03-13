@@ -22,13 +22,31 @@
       "key": "l1_evidence_vendor",
       "kind": "L1_evidence",
       "title": "distilled vendor evidence",
-      "text_summary": "Distilled evidence: AlphaAI, BetaStack, and GammaCloud differ on pricing, context window, and API compatibility. The stable evaluation fields are pricing model, context capacity, and API surface."
+      "text_summary": "Distilled evidence: pricing facts are usage-based pricing for AlphaAI, flat enterprise plan for BetaStack, and annual commitment for GammaCloud. Context facts are 200k context, 128k context, and 1M context. API facts are OpenAI-compatible endpoint, proprietary SDK, and REST and batch ingestion."
     },
     {
       "key": "l1_fact_vendor",
       "kind": "L1_fact",
       "title": "vendor comparison fact",
-      "text_summary": "Stable fact: the vendor evaluation should keep pricing, context window, and API compatibility as the primary comparison dimensions and ignore unrelated market chatter."
+      "text_summary": "Stable fact: preserve the exact comparison fields and exact findings. Pricing: usage-based pricing, flat enterprise plan, annual commitment. Context: 200k context, 128k context, 1M context. API compatibility: OpenAI-compatible endpoint, proprietary SDK, REST and batch ingestion."
+    },
+    {
+      "key": "l1_fact_vendor_price",
+      "kind": "L1_fact",
+      "title": "vendor pricing fact",
+      "text_summary": "Stable pricing fact: AlphaAI uses usage-based pricing, BetaStack offers a flat enterprise plan, and GammaCloud requires annual commitment."
+    },
+    {
+      "key": "l1_fact_vendor_context",
+      "kind": "L1_fact",
+      "title": "vendor context fact",
+      "text_summary": "Stable context fact: AlphaAI supports 200k context, BetaStack supports 128k context, and GammaCloud supports 1M context."
+    },
+    {
+      "key": "l1_fact_vendor_api",
+      "kind": "L1_fact",
+      "title": "vendor api compatibility fact",
+      "text_summary": "Stable API fact: AlphaAI exposes an OpenAI-compatible endpoint, BetaStack requires a proprietary SDK, and GammaCloud supports REST and batch ingestion."
     }
   ],
   "cases": [
