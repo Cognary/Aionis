@@ -27,7 +27,8 @@ The benchmark section is meant to answer four questions:
 6. [Task Handoff and Recover Semantics](/public/en/benchmarks/08-task-handoff-and-recover)
 7. [Policy Tool Selection and Feedback Loop](/public/en/benchmarks/09-policy-tool-selection)
 8. [Real GitHub Repo Handoff A/B](/public/en/benchmarks/10-real-repo-handoff-ab)
-9. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
+9. [Real GitHub Repo Policy A/B](/public/en/benchmarks/11-real-repo-policy-ab)
+10. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
 
 ## Evidence Dimensions
 
@@ -61,4 +62,5 @@ Every benchmark page includes:
 4. [Task Handoff and Recover Semantics](/public/en/benchmarks/08-task-handoff-and-recover)
 5. [Policy Tool Selection and Feedback Loop](/public/en/benchmarks/09-policy-tool-selection)
 6. [Real GitHub Repo Handoff A/B](/public/en/benchmarks/10-real-repo-handoff-ab)
-7. [Operate and Production](/public/en/operate-production/00-operate-production)
+7. [Real GitHub Repo Policy A/B](/public/en/benchmarks/11-real-repo-policy-ab)
+8. [Operate and Production](/public/en/operate-production/00-operate-production)

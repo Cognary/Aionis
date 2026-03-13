@@ -27,7 +27,8 @@ title: "基准测试"
 6. [Task Handoff 与 Recover 语义](/public/zh/benchmarks/08-task-handoff-and-recover)
 7. [Policy 工具选择与反馈闭环](/public/zh/benchmarks/09-policy-tool-selection)
 8. [真实 GitHub 仓库 Handoff A/B](/public/zh/benchmarks/10-real-repo-handoff-ab)
-9. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
+9. [真实 GitHub 仓库 Policy A/B](/public/zh/benchmarks/11-real-repo-policy-ab)
+10. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
 
 ## 证据维度
 
@@ -62,4 +63,5 @@ title: "基准测试"
 4. [Task Handoff 与 Recover 语义](/public/zh/benchmarks/08-task-handoff-and-recover)
 5. [Policy 工具选择与反馈闭环](/public/zh/benchmarks/09-policy-tool-selection)
 6. [真实 GitHub 仓库 Handoff A/B](/public/zh/benchmarks/10-real-repo-handoff-ab)
-7. [运维与生产](/public/zh/operate-production/00-operate-production)
+7. [真实 GitHub 仓库 Policy A/B](/public/zh/benchmarks/11-real-repo-policy-ab)
+8. [运维与生产](/public/zh/operate-production/00-operate-production)
