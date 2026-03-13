@@ -21,6 +21,16 @@ Recent handoff and replay evidence now also shows:
 3. guided replay spending model tokens only when repair is required
 4. real-repo policy A/B improving success from `0%` to `100%` while converging tool routing onto `rg` and `pytest-focused`
 
+## Layer 1 Snapshot
+
+| Capability | Baseline | With Aionis | Result |
+| --- | --- | --- | --- |
+| Handoff | `file_export` | `aionis_handoff` | `0% -> 100%` on a real `pallets/click` repo task |
+| Policy | no policy / broad tools | `aionis_policy` | `0% -> 100%`, routing converged to `rg` + `pytest-focused` |
+| Replay | rerun from scratch | compile + strict replay | replay runs succeeded at `0` model tokens |
+
+See [Layer 1 Capability Matrix](/public/en/benchmarks/14-layer1-capability-matrix) for the full controlled A/B view.
+
 ## Start Here
 
 1. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)

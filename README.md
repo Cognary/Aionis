@@ -36,6 +36,16 @@ That is the product: less rediscovery, more continuation.
 3. guided replay repair smoke: model tokens are spent only when repair is invoked (`1063` total tokens in the documented DeepSeek smoke)
 4. real-repo policy A/B on `pallets/click`: `0% -> 100%` success while tool routing converged from `grep` / `pytest-all` to `rg` / `pytest-focused`
 
+**Layer 1 snapshot:**
+
+| Capability | Baseline | With Aionis | Result |
+| --- | --- | --- | --- |
+| Handoff | `file_export` | `aionis_handoff` | `0% -> 100%` on a real `pallets/click` repo task |
+| Policy | no policy / broad tools | `aionis_policy` | `0% -> 100%`, routing converged to `rg` + `pytest-focused` |
+| Replay | rerun from scratch | compile + strict replay | replay runs succeeded at `0` model tokens |
+
+See the [Layer 1 Capability Matrix](https://doc.aionisos.com/public/en/benchmarks/14-layer1-capability-matrix) for the controlled A/B layout.
+
 [Start in 5 Minutes](./docs/public/en/getting-started/02-onboarding-5min.md) · [Choose Lite or Server](./docs/public/en/getting-started/07-choose-lite-vs-server.md) · [Docs](https://doc.aionisos.com) · [Lite Public Beta](./docs/public/en/getting-started/05-lite-public-beta-boundary.md)
 
 ---
