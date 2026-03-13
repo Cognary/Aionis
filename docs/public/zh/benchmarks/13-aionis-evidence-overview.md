@@ -32,7 +32,7 @@ title: "Aionis 证据总览"
 
 | 层级 | 当前判断 | 当前最强信号 | 状态 |
 | --- | --- | --- | --- |
-| `L1 distilled facts` | 第一版稳定正向 | code corpus 上 `planning/context` 估计 token `100 -> 45.33`，research corpus 上 `66 -> 34.67`，事实保留持平 | `internal / positive` |
+| `L1 distilled facts` | 第一版公开正向结果 | code corpus 上 `planning/context` 估计 token `100 -> 45.33`，research corpus 上 `66 -> 34.67`，事实保留持平 | `public / proven` |
 | `L2 topic aggregation` | mixed，但已经可解释 | code corpus 上 `41.33 -> 36`；research corpus 上事实保留 `0.703704 -> 1.0`，但估计 token `34.89 -> 50.67` | `internal / mixed` |
 | `L3 deterministic compression` | benchmark 有效，但结果中性 | 事实保留与 token estimate 基本持平，没有测出净收益 | `internal / neutral` |
 | `L4 semantic abstraction` | opt-in 路径已打通，但当前无增益 | `L4` 已能进入 `selected_memory_layers`，但当前 fixture 下结果中性且略重 | `internal / neutral` |
@@ -62,3 +62,4 @@ title: "Aionis 证据总览"
 5. [真实 GitHub 仓库 Policy A/B](/public/zh/benchmarks/11-real-repo-policy-ab)
 6. [L5 Serving-Side Compaction](/public/zh/benchmarks/12-l5-serving-compaction)
 7. [Layer 1 能力矩阵](/public/zh/benchmarks/14-layer1-capability-matrix)
+8. [L1 Distilled Facts](/public/zh/benchmarks/15-l1-distilled-facts)

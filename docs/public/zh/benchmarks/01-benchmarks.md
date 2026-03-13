@@ -31,7 +31,8 @@ title: "基准测试"
 10. [L5 Serving-Side Compaction](/public/zh/benchmarks/12-l5-serving-compaction)
 11. [Aionis 证据总览](/public/zh/benchmarks/13-aionis-evidence-overview)
 12. [Layer 1 能力矩阵](/public/zh/benchmarks/14-layer1-capability-matrix)
-13. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
+13. [L1 Distilled Facts](/public/zh/benchmarks/15-l1-distilled-facts)
+14. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
 
 ## 证据维度
 
@@ -70,4 +71,5 @@ title: "基准测试"
 8. [L5 Serving-Side Compaction](/public/zh/benchmarks/12-l5-serving-compaction)
 9. [Aionis 证据总览](/public/zh/benchmarks/13-aionis-evidence-overview)
 10. [Layer 1 能力矩阵](/public/zh/benchmarks/14-layer1-capability-matrix)
-11. [运维与生产](/public/zh/operate-production/00-operate-production)
+11. [L1 Distilled Facts](/public/zh/benchmarks/15-l1-distilled-facts)
+12. [运维与生产](/public/zh/operate-production/00-operate-production)

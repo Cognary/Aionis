@@ -208,6 +208,7 @@ Recommended evidence pages:
 5. [Real GitHub Repo Policy A/B](https://doc.aionisos.com/public/en/benchmarks/11-real-repo-policy-ab)
 6. [Aionis Evidence Overview](https://doc.aionisos.com/public/en/benchmarks/13-aionis-evidence-overview)
 7. [Layer 1 Capability Matrix](https://doc.aionisos.com/public/en/benchmarks/14-layer1-capability-matrix)
+8. [L1 Distilled Facts](https://doc.aionisos.com/public/en/benchmarks/15-l1-distilled-facts)
 
 ---
 

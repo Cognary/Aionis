@@ -31,7 +31,8 @@ The benchmark section is meant to answer four questions:
 10. [L5 Serving-Side Compaction](/public/en/benchmarks/12-l5-serving-compaction)
 11. [Aionis Evidence Overview](/public/en/benchmarks/13-aionis-evidence-overview)
 12. [Layer 1 Capability Matrix](/public/en/benchmarks/14-layer1-capability-matrix)
-13. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
+13. [L1 Distilled Facts](/public/en/benchmarks/15-l1-distilled-facts)
+14. [Governance Weekly Report](/public/en/benchmarks/04-governance-weekly-report)
 
 ## Evidence Dimensions
 
@@ -69,4 +70,5 @@ Every benchmark page includes:
 8. [L5 Serving-Side Compaction](/public/en/benchmarks/12-l5-serving-compaction)
 9. [Aionis Evidence Overview](/public/en/benchmarks/13-aionis-evidence-overview)
 10. [Layer 1 Capability Matrix](/public/en/benchmarks/14-layer1-capability-matrix)
-11. [Operate and Production](/public/en/operate-production/00-operate-production)
+11. [L1 Distilled Facts](/public/en/benchmarks/15-l1-distilled-facts)
+12. [Operate and Production](/public/en/operate-production/00-operate-production)

@@ -53,6 +53,7 @@ Recent handoff and replay evidence now also shows:
 5. [Real GitHub Repo Policy A/B](/public/en/benchmarks/11-real-repo-policy-ab)
 6. [Aionis Evidence Overview](/public/en/benchmarks/13-aionis-evidence-overview)
 7. [Layer 1 Capability Matrix](/public/en/benchmarks/14-layer1-capability-matrix)
+8. [L1 Distilled Facts](/public/en/benchmarks/15-l1-distilled-facts)
 
 ## Continue By Need
 

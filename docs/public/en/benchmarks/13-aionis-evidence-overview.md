@@ -32,7 +32,7 @@ Use it when you want the current evidence boundary, not only architecture or pro
 
 | Layer | Current reading | Strongest current signal | Status |
 | --- | --- | --- | --- |
-| `L1 distilled facts` | first stable positive result | fact recall held while `planning/context` estimate dropped from `100 -> 45.33` on code corpus and `66 -> 34.67` on research corpus | `internal / positive` |
+| `L1 distilled facts` | first stable public positive result | fact recall held while `planning/context` estimate dropped from `100 -> 45.33` on code corpus and `66 -> 34.67` on research corpus | `public / proven` |
 | `L2 topic aggregation` | mixed but interpretable | code corpus improved from `41.33 -> 36` estimated tokens with fact recall held; research corpus improved fact recall from `0.703704 -> 1.0` but increased estimated tokens from `34.89 -> 50.67` | `internal / mixed` |
 | `L3 deterministic compression` | valid benchmark, no measured gain | fact recall and token estimate stayed flat against `L2` in current fixtures | `internal / neutral` |
 | `L4 semantic abstraction` | opt-in serving path exists, but no measured gain yet | `L4` can enter `selected_memory_layers`, but current result remains neutral and slightly heavier | `internal / neutral` |
@@ -62,3 +62,4 @@ Use it when you want the current evidence boundary, not only architecture or pro
 5. [Real GitHub Repo Policy A/B](/public/en/benchmarks/11-real-repo-policy-ab)
 6. [L5 Serving-Side Compaction](/public/en/benchmarks/12-l5-serving-compaction)
 7. [Layer 1 Capability Matrix](/public/en/benchmarks/14-layer1-capability-matrix)
+8. [L1 Distilled Facts](/public/en/benchmarks/15-l1-distilled-facts)
