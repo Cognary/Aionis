@@ -677,68 +677,80 @@ async function synthesizeGuidedRepairWithBuiltinLLM(input: {
       llm_endpoint: string;
       llm_response_preview: string;
       reasoning: string | null;
+      usage?: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+        source: string;
+      };
     }
   | { error: string }
 > {
   const baseUrl = input.baseUrl.trim().replace(/\/+$/, "");
   const endpoint = `${baseUrl}/chat/completions`;
+  const minimaxCompat = /minimax/i.test(baseUrl) || /minimax/i.test(input.model);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), input.timeoutMs);
   try {
+    const body: Record<string, unknown> = {
+      model: input.model,
+      temperature: input.temperature,
+      max_tokens: input.maxTokens,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You synthesize replay repair patches. Return strict JSON only. "
+            + "Use patch schema keys from this set: steps_override, remove_step_indices, step_patches, "
+            + "matchers, success_criteria, risk_profile, policy_constraints. "
+            + "Prefer minimal, safe, one-step patch changes.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify(
+            {
+              task: "Generate replay repair patch for one failing guided step.",
+              constraints: {
+                step_index_required: input.stepIndex,
+                tool_name: input.toolName,
+                allowed_commands: [...input.allowedCommands.values()],
+                reason: input.reason,
+                detail: input.detail,
+                command: input.command,
+                argv: input.argv,
+                step: input.stepObj ?? {},
+              },
+              output_schema: {
+                strategy: "string",
+                reasoning: "string (optional)",
+                patch: {
+                  step_patches: [
+                    {
+                      step_index: "number",
+                      set: "object",
+                    },
+                  ],
+                  remove_step_indices: ["number"],
+                },
+              },
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+    if (minimaxCompat) {
+      body.reasoning_split = true;
+      body.response_format = { type: "json_object" };
+    }
     const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${input.apiKey}`,
       },
-      body: JSON.stringify({
-        model: input.model,
-        temperature: input.temperature,
-        max_tokens: input.maxTokens,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You synthesize replay repair patches. Return strict JSON only. "
-              + "Use patch schema keys from this set: steps_override, remove_step_indices, step_patches, "
-              + "matchers, success_criteria, risk_profile, policy_constraints. "
-              + "Prefer minimal, safe, one-step patch changes.",
-          },
-          {
-            role: "user",
-            content: JSON.stringify(
-              {
-                task: "Generate replay repair patch for one failing guided step.",
-                constraints: {
-                  step_index_required: input.stepIndex,
-                  tool_name: input.toolName,
-                  allowed_commands: [...input.allowedCommands.values()],
-                  reason: input.reason,
-                  detail: input.detail,
-                  command: input.command,
-                  argv: input.argv,
-                  step: input.stepObj ?? {},
-                },
-                output_schema: {
-                  strategy: "string",
-                  reasoning: "string (optional)",
-                  patch: {
-                    step_patches: [
-                      {
-                        step_index: "number",
-                        set: "object",
-                      },
-                    ],
-                    remove_step_indices: ["number"],
-                  },
-                },
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
     const payload = await res.json().catch(() => ({}));
@@ -753,6 +765,27 @@ async function synthesizeGuidedRepairWithBuiltinLLM(input: {
     if (!patchObj || !looksLikeReplayPatchObject(patchObj)) {
       return { error: "builtin_llm_missing_patch" };
     }
+    const usageObj = asObject((payload as Record<string, unknown>).usage) ?? {};
+    const promptTokens = Number(
+      usageObj.prompt_tokens ?? usageObj.input_tokens ?? usageObj.promptTokens ?? usageObj.inputTokens ?? 0,
+    );
+    const completionTokens = Number(
+      usageObj.completion_tokens ?? usageObj.output_tokens ?? usageObj.completionTokens ?? usageObj.outputTokens ?? 0,
+    );
+    const totalTokensRaw = Number(
+      usageObj.total_tokens ?? usageObj.totalTokens ?? (Number.isFinite(promptTokens) && Number.isFinite(completionTokens)
+        ? promptTokens + completionTokens
+        : 0),
+    );
+    const usage =
+      Number.isFinite(promptTokens) && Number.isFinite(completionTokens) && Number.isFinite(totalTokensRaw)
+        ? {
+            prompt_tokens: Math.max(0, Math.trunc(promptTokens)),
+            completion_tokens: Math.max(0, Math.trunc(completionTokens)),
+            total_tokens: Math.max(0, Math.trunc(totalTokensRaw)),
+            source: "builtin_llm",
+          }
+        : undefined;
     return {
       strategy: toStringOrNull(parsed.strategy) ?? "builtin_llm_patch",
       patch: patchObj,
@@ -760,12 +793,35 @@ async function synthesizeGuidedRepairWithBuiltinLLM(input: {
       llm_endpoint: endpoint,
       llm_response_preview: content.slice(0, 800),
       reasoning: toStringOrNull(parsed.reasoning),
+      usage,
     };
   } catch (err: any) {
     return { error: String(err?.message ?? err) };
   } finally {
     clearTimeout(timer);
   }
+}
+
+function mergeReplayUsage(
+  target: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    source: string;
+  },
+  usage: unknown,
+) {
+  const obj = asObject(usage);
+  if (!obj) return;
+  const prompt = Number(obj.prompt_tokens);
+  const completion = Number(obj.completion_tokens);
+  const total = Number(obj.total_tokens);
+  if (!Number.isFinite(prompt) || !Number.isFinite(completion) || !Number.isFinite(total)) return;
+  target.prompt_tokens += Math.max(0, Math.trunc(prompt));
+  target.completion_tokens += Math.max(0, Math.trunc(completion));
+  target.total_tokens += Math.max(0, Math.trunc(total));
+  const source = toStringOrNull(obj.source);
+  if (source && target.source === "no_model_call" && target.total_tokens > 0) target.source = source;
 }
 
 function isReplayCommandTool(toolName: string | null): boolean {
@@ -1297,6 +1353,7 @@ async function makeGuidedRepairPatch(input: {
           llm_model: llm.llm_model,
           llm_endpoint: llm.llm_endpoint,
           llm_response_preview: llm.llm_response_preview,
+          usage: llm.usage,
           fallback_patch: buildDeterministicGuidedRepairPatch({
             stepIndex: input.stepIndex,
             toolName: input.toolName,
@@ -4306,6 +4363,12 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
   let blockedSteps = 0;
   let skippedSteps = 0;
   let pendingSteps = 0;
+  const usageOut = {
+    prompt_tokens: 0,
+    completion_tokens: 0,
+    total_tokens: 0,
+    source: "no_model_call",
+  };
 
   for (const step of stepsRaw) {
     const stepObj = asObject(step) ?? {};
@@ -4410,6 +4473,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         llmTemperature: opts.guidedRepair?.llmTemperature,
         mode: "guided",
       });
+      mergeReplayUsage(usageOut, asObject(repair)?.usage);
       stepReports.push({
         step_index: stepIndex,
         tool_name: toolName,
@@ -4501,6 +4565,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         llmTemperature: opts.guidedRepair?.llmTemperature,
         mode: "guided",
       });
+      mergeReplayUsage(usageOut, asObject(repair)?.usage);
       stepReports.push({
         step_index: stepIndex,
         tool_name: toolName,
@@ -4587,6 +4652,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         llmTemperature: opts.guidedRepair?.llmTemperature,
         mode: "guided",
       });
+      mergeReplayUsage(usageOut, asObject(repair)?.usage);
       stepReports.push({
         step_index: stepIndex,
         tool_name: toolName,
@@ -4679,6 +4745,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         llmTemperature: opts.guidedRepair?.llmTemperature,
         mode: "guided",
       });
+      mergeReplayUsage(usageOut, asObject(repair)?.usage);
       stepReports.push({
         step_index: stepIndex,
         tool_name: toolName,
@@ -5018,6 +5085,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       llmTemperature: opts.guidedRepair?.llmTemperature,
       mode: "guided",
     });
+    mergeReplayUsage(usageOut, asObject(repair)?.usage);
     stepReports.push({
       step_index: stepIndex,
       tool_name: toolName,
@@ -5177,6 +5245,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       ),
     },
     params_echo: parsed.params ?? {},
+    usage: usageOut,
     cost_signals: buildReplayCostSignals({ deterministic_gate: deterministicGate }),
   };
 }

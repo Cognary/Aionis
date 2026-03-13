@@ -1244,6 +1244,13 @@ export type ReplayPlaybookRunResponse = {
   execution?: Record<string, unknown>;
   execution_policy?: Record<string, unknown>;
   params_echo?: Record<string, unknown>;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    source: string;
+    [k: string]: unknown;
+  };
   cost_signals?: ReplayCostSignals;
   [k: string]: unknown;
 };
