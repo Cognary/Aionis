@@ -1,0 +1,63 @@
+{
+  "actor": "l1_distilled_facts_benchmark",
+  "context_char_budget": 420,
+  "context_token_budget": 140,
+  "records": [
+    {
+      "key": "evt_vendor_price",
+      "title": "vendor pricing note",
+      "text_summary": "Vendor comparison note. The stable facts are that AlphaAI uses usage-based pricing, BetaStack offers a flat enterprise plan, and GammaCloud requires annual commitment for the lower tier. Noise: the transcript also mentions unrelated launch rumors, conference gossip, generic cloud trend commentary, and old roadmap guesses that are not decision-relevant."
+    },
+    {
+      "key": "evt_vendor_context",
+      "title": "vendor context window note",
+      "text_summary": "Context window comparison. AlphaAI supports 200k context, BetaStack supports 128k context, and GammaCloud supports 1M context in preview. Noise includes speculative benchmark chatter, old screenshots, and non-source discussion about future multimodal releases."
+    },
+    {
+      "key": "evt_vendor_api",
+      "title": "vendor api compatibility note",
+      "text_summary": "API compatibility comparison. AlphaAI exposes an OpenAI-compatible endpoint, BetaStack requires a proprietary SDK, and GammaCloud supports both REST and batch ingestion. Noise includes historical billing incidents, unrelated compliance debates, and generic analyst commentary."
+    },
+    {
+      "key": "l1_evidence_vendor",
+      "kind": "L1_evidence",
+      "title": "distilled vendor evidence",
+      "text_summary": "Distilled evidence: AlphaAI, BetaStack, and GammaCloud differ on pricing, context window, and API compatibility. The stable evaluation fields are pricing model, context capacity, and API surface."
+    },
+    {
+      "key": "l1_fact_vendor",
+      "kind": "L1_fact",
+      "title": "vendor comparison fact",
+      "text_summary": "Stable fact: the vendor evaluation should keep pricing, context window, and API compatibility as the primary comparison dimensions and ignore unrelated market chatter."
+    }
+  ],
+  "cases": [
+    {
+      "id": "research_l1_001",
+      "query_text": "What are the stable pricing facts across AlphaAI, BetaStack, and GammaCloud?",
+      "critical_facts": [
+        "usage-based pricing",
+        "flat enterprise plan",
+        "annual commitment"
+      ]
+    },
+    {
+      "id": "research_l1_002",
+      "query_text": "Give me the planner-ready comparison of context window support for the three vendors.",
+      "critical_facts": [
+        "200k context",
+        "128k context",
+        "1M context"
+      ]
+    },
+    {
+      "id": "research_l1_003",
+      "query_text": "What API compatibility facts should be preserved for this vendor evaluation?",
+      "critical_facts": [
+        "OpenAI-compatible endpoint",
+        "proprietary SDK",
+        "REST and batch ingestion"
+      ]
+    }
+  ]
+}

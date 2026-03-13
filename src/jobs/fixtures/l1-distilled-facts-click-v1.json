@@ -1,0 +1,64 @@
+{
+  "actor": "l1_distilled_facts_benchmark",
+  "context_char_budget": 420,
+  "context_token_budget": 140,
+  "records": [
+    {
+      "key": "evt_parser_focus",
+      "title": "parser option handling investigation",
+      "text_summary": "Click parser investigation note. The parser option handling path ultimately flows through add_to_parser in src/click/core.py. Noise: historical benchmark notes mention unrelated shell completion experiments, archived release cleanup, and stale CI failures that are no longer relevant. The practical file focus is still src/click/core.py plus the parser regression coverage in tests/test_parser.py and tests/test_options.py. The executor should ignore old shell completion chatter and keep the review centered on parser option handling."
+    },
+    {
+      "key": "evt_parser_tests",
+      "title": "parser regression tests",
+      "text_summary": "Regression note for parser option handling. The required test coverage lives in tests/test_parser.py and tests/test_options.py. Noise: old snapshots mention unrelated decorators, envvar docs, and shell completion migrations. For this task the stable facts are that src/click/core.py contains the implementation path, add_to_parser is the function to inspect, and tests/test_parser.py with tests/test_options.py are the focused verification targets."
+    },
+    {
+      "key": "evt_parser_planner",
+      "title": "planner checklist for parser option changes",
+      "text_summary": "Planner checklist. Before changing parser option behavior, inspect add_to_parser in src/click/core.py, confirm which option paths are covered by tests/test_parser.py, and verify cross-option behavior in tests/test_options.py. Noise: archived incidents reference docs build failures, wheel metadata cleanup, and shell completion regressions, but those are not part of this change. The planner should keep a tight scope around src/click/core.py, tests/test_parser.py, tests/test_options.py, and add_to_parser."
+    },
+    {
+      "key": "l1_evidence_parser",
+      "kind": "L1_evidence",
+      "title": "distilled parser evidence",
+      "text_summary": "Distilled evidence: parser option handling should focus on src/click/core.py, tests/test_parser.py, tests/test_options.py, and the add_to_parser path."
+    },
+    {
+      "key": "l1_fact_parser",
+      "kind": "L1_fact",
+      "title": "parser option handling fact",
+      "text_summary": "Stable fact: parser option handling work in Click should inspect add_to_parser in src/click/core.py and validate changes with tests/test_parser.py plus tests/test_options.py."
+    }
+  ],
+  "cases": [
+    {
+      "id": "click_l1_001",
+      "query_text": "Which implementation file and focused tests should I inspect for parser option handling in Click?",
+      "critical_facts": [
+        "src/click/core.py",
+        "tests/test_parser.py",
+        "tests/test_options.py"
+      ]
+    },
+    {
+      "id": "click_l1_002",
+      "query_text": "What function and tests define the parser option handling path in this Click task?",
+      "critical_facts": [
+        "add_to_parser",
+        "tests/test_parser.py",
+        "tests/test_options.py"
+      ]
+    },
+    {
+      "id": "click_l1_003",
+      "query_text": "Give me the planner-ready facts for this Click parser option change under a tight context budget.",
+      "critical_facts": [
+        "src/click/core.py",
+        "add_to_parser",
+        "tests/test_parser.py",
+        "tests/test_options.py"
+      ]
+    }
+  ]
+}

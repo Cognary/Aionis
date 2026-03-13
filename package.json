@@ -116,6 +116,7 @@
     "job:execution-loop-gate": "tsx src/jobs/execution-loop-gate.ts",
     "job:governance-weekly-report": "tsx src/jobs/governance-weekly-report.ts",
     "job:perf-seed": "tsx src/jobs/perf-seed.ts",
+    "job:l1-distilled-facts-benchmark": "tsx src/jobs/l1-distilled-facts-benchmark.ts",
     "job:perf-benchmark": "tsx src/jobs/perf-benchmark.ts",
     "job:perf-selector-aggregate": "tsx src/jobs/perf-selector-aggregate.ts",
     "job:perf-selector-rollout-gate": "tsx src/jobs/perf-selector-rollout-gate.ts",
