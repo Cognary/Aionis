@@ -14,6 +14,12 @@ Recent larger-project evidence in this repository showed:
 
 for cross-session continuation with Aionis-backed recovery.
 
+Recent handoff and replay evidence now also shows:
+
+1. cross-runtime handoff recovery improving success from `33.33%` to `100%`
+2. real-repo strict replay running at `0` model tokens on `pallets/click`
+3. guided replay spending model tokens only when repair is required
+
 ## Start Here
 
 1. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)
@@ -42,6 +48,7 @@ for cross-session continuation with Aionis-backed recovery.
 1. [Benchmark Snapshot](/public/en/benchmarks/02-benchmark-snapshot-public)
 2. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
 3. [Performance Baseline](/public/en/benchmarks/05-performance-baseline)
+4. [Agent Handoff and Replay](/public/en/benchmarks/07-agent-handoff-and-replay)
 
 ## Continue By Need
 
