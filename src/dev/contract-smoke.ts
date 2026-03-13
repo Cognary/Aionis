@@ -41,6 +41,7 @@ import {
   normalizeControlAlertRouteTarget,
   normalizeControlIncidentPublishSourceDir,
   normalizeControlIncidentPublishTarget,
+  recordMemoryContextAssemblyTelemetry,
   upsertControlProject,
 } from "../control-plane.js";
 import { memoryRecallParsed, type RecallAuth } from "../memory/recall.js";
@@ -87,6 +88,7 @@ import {
   postJsonWithTls,
 } from "../memory/sandbox.js";
 import { buildLayeredContextCostSignals } from "../memory/cost-signals.js";
+import { buildSemanticAbstractions } from "../jobs/semantic-abstraction-lib.js";
 import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
   assertRecallStoreAccessContract,
@@ -168,7 +170,10 @@ class FakePgClient {
     }
 
     if (s.includes("FROM memory_nodes") && s.includes("id = ANY")) {
-      return { rows: this.fixtures.nodes as T[], rowCount: this.fixtures.nodes.length };
+      const rows = s.includes("NULL::jsonb AS slots")
+        ? this.fixtures.nodes.map((row) => ({ ...row, slots: null }))
+        : this.fixtures.nodes;
+      return { rows: rows as T[], rowCount: rows.length };
     }
 
     if (s.includes("FROM memory_rule_defs d") || s.includes("FROM memory_rule_defs")) {
@@ -177,6 +182,75 @@ class FakePgClient {
 
     throw new Error(`FakePgClient: unhandled query shape: ${s.slice(0, 200)}...`);
   }
+}
+
+class TelemetryFallbackPgClient {
+  public readonly queries: string[] = [];
+  private inTx = false;
+  private aborted = false;
+  private savepoints = new Set<string>();
+  private headInsertAttempts = 0;
+
+  async query<T>(sql: string): Promise<QueryResult<T>> {
+    const s = sql.replace(/\s+/g, " ").trim();
+    this.queries.push(s);
+
+    if (s === "BEGIN") {
+      this.inTx = true;
+      this.aborted = false;
+      this.savepoints.clear();
+      return { rows: [] as T[], rowCount: 0 };
+    }
+    if (s === "COMMIT") {
+      this.inTx = false;
+      this.aborted = false;
+      this.savepoints.clear();
+      return { rows: [] as T[], rowCount: 0 };
+    }
+    if (s === "ROLLBACK") {
+      this.inTx = false;
+      this.aborted = false;
+      this.savepoints.clear();
+      return { rows: [] as T[], rowCount: 0 };
+    }
+    if (s.startsWith("SAVEPOINT ")) {
+      this.savepoints.add(s.slice("SAVEPOINT ".length));
+      return { rows: [] as T[], rowCount: 0 };
+    }
+    if (s.startsWith("ROLLBACK TO SAVEPOINT ")) {
+      const name = s.slice("ROLLBACK TO SAVEPOINT ".length);
+      if (this.savepoints.has(name)) this.aborted = false;
+      return { rows: [] as T[], rowCount: 0 };
+    }
+    if (s.startsWith("RELEASE SAVEPOINT ")) {
+      this.savepoints.delete(s.slice("RELEASE SAVEPOINT ".length));
+      return { rows: [] as T[], rowCount: 0 };
+    }
+    if (this.inTx && this.aborted) {
+      const err: any = new Error("current transaction is aborted, commands ignored until end of transaction block");
+      err.code = "25P02";
+      throw err;
+    }
+
+    if (s.includes("INSERT INTO memory_context_assembly_telemetry")) {
+      this.headInsertAttempts += 1;
+      if (this.headInsertAttempts === 1) {
+        this.aborted = true;
+        const err: any = new Error('column "selection_policy_source" of relation "memory_context_assembly_telemetry" does not exist');
+        err.code = "42703";
+        throw err;
+      }
+      return { rows: [{ id: 77 }] as T[], rowCount: 1 };
+    }
+
+    if (s.includes("INSERT INTO memory_context_assembly_layer_telemetry")) {
+      return { rows: [] as T[], rowCount: 1 };
+    }
+
+    throw new Error(`TelemetryFallbackPgClient: unhandled query shape: ${s.slice(0, 200)}...`);
+  }
+
+  release() {}
 }
 
 class SandboxFixturePgClient {
@@ -2984,6 +3058,14 @@ async function run() {
       forgetting: { dropped_items: 3, dropped_by_reason: { tier: 2, salience: 1 } },
       static_injection: { selected_blocks: 2, rejected_blocks: 1 },
     },
+    context_selection_stats: {
+      retrieved_memory_layers: ["L0", "L2", "L3"],
+      retrieved_unlayered_count: 2,
+      selected_memory_layers: ["L0", "L2", "L3"],
+      selected_unlayered_count: 0,
+      filtered_by_layer_policy_count: 2,
+      filtered_by_layer: { unknown: 2 },
+    },
     context_items: [
       { kind: "event", node_id: "evt1", compression_layer: "L0" },
       { kind: "topic", node_id: "top1", compression_layer: "L2" },
@@ -3000,8 +3082,16 @@ async function run() {
   assert.equal(contextCostSignals.within_char_budget, true);
   assert.equal(contextCostSignals.forgotten_items, 3);
   assert.equal(contextCostSignals.static_blocks_selected, 2);
+  assert.deepEqual(contextCostSignals.retrieved_memory_layers, ["L0", "L2", "L3"]);
+  assert.equal(contextCostSignals.retrieved_unlayered_count, 2);
   assert.deepEqual(contextCostSignals.selected_memory_layers, ["L0", "L2", "L3"]);
+  assert.equal(contextCostSignals.selected_unlayered_count, 0);
+  assert.equal(contextCostSignals.retrieval_filtered_by_layer_policy_count, 0);
+  assert.deepEqual(contextCostSignals.retrieval_filtered_by_layer, {});
+  assert.equal(contextCostSignals.filtered_by_layer_policy_count, 2);
+  assert.deepEqual(contextCostSignals.filtered_by_layer, { unknown: 2 });
   assert.equal(contextCostSignals.primary_savings_levers.includes("optimization_profile:aggressive"), true);
+  assert.equal(contextCostSignals.primary_savings_levers.includes("layer_policy_filtering"), true);
   const factualPolicy = resolveMemoryLayerPolicy("recall");
   assert.equal(factualPolicy.name, "factual_recall");
   assert.deepEqual(factualPolicy.trust_anchor_layers, ["L3", "L0"]);
@@ -3014,6 +3104,15 @@ async function run() {
   assert.deepEqual(tightenedPlanningPolicy.preferred_layers, ["L3", "L0", "L1"]);
   assert.deepEqual(tightenedPlanningPolicy.fallback_layers, ["L1"]);
   assert.deepEqual(tightenedPlanningPolicy.trust_anchor_layers, ["L3", "L0"]);
+  const unsafeTightenedPlanningPolicy = resolveMemoryLayerPolicy(
+    "planning_context",
+    { allowed_layers: ["L1"] },
+    { unsafe_allow_drop_trust_anchors: true },
+  );
+  assert.equal(unsafeTightenedPlanningPolicy.source, "request_override");
+  assert.deepEqual(unsafeTightenedPlanningPolicy.preferred_layers, ["L1"]);
+  assert.deepEqual(unsafeTightenedPlanningPolicy.fallback_layers, ["L1"]);
+  assert.deepEqual(unsafeTightenedPlanningPolicy.trust_anchor_layers, []);
   const tightenedContext = buildContext(
     [
       { id: "topic_l2", activation: 0.9, score: 0.9 },
@@ -3133,6 +3232,14 @@ async function run() {
   assert.equal(tightenedContext.items.some((item: any) => item.node_id === "topic_l2"), false);
   assert.equal(tightenedContext.items.some((item: any) => item.node_id === "entity_u0"), false);
   assert.equal(tightenedContext.items.some((item: any) => item.node_id === "rule_u0"), false);
+  assert.deepEqual((tightenedContext as any).selection_stats?.retrieved_memory_layers, ["L0", "L1", "L2", "L3"]);
+  assert.equal((tightenedContext as any).selection_stats?.retrieved_unlayered_count, 2);
+  assert.deepEqual((tightenedContext as any).selection_stats?.selected_memory_layers, ["L0", "L1", "L3"]);
+  assert.equal((tightenedContext as any).selection_stats?.selected_unlayered_count, 0);
+  assert.equal((tightenedContext as any).selection_stats?.retrieval_filtered_by_layer_policy_count, 0);
+  assert.deepEqual((tightenedContext as any).selection_stats?.retrieval_filtered_by_layer, {});
+  assert.equal((tightenedContext as any).selection_stats?.filtered_by_layer_policy_count, 3);
+  assert.deepEqual((tightenedContext as any).selection_stats?.filtered_by_layer, { L2: 1, unknown: 2 });
   assert.deepEqual(
     tightenedContext.items
       .map((item: any) => item.compression_layer)
@@ -3199,10 +3306,23 @@ async function run() {
       { kind: "concept", node_id: "cmp1", compression_layer: "L3" },
     ],
     selection_policy: factualPolicy,
+    selection_stats: {
+      retrieved_memory_layers: ["L0", "L2", "L3"],
+      retrieved_unlayered_count: 1,
+      selected_memory_layers: ["L0", "L3"],
+      selected_unlayered_count: 0,
+      filtered_by_layer_policy_count: 1,
+      filtered_by_layer: { L2: 1 },
+    },
     adaptive_profile: { profile: "balanced", applied: false, reason: "test" },
     adaptive_hard_cap: { applied: false, reason: "test" },
   });
+  assert.deepEqual((recallObservability as any).memory_layers.retrieved_layers, ["L0", "L2", "L3"]);
   assert.deepEqual((recallObservability as any).memory_layers.selected_layers, ["L0", "L3"]);
+  assert.equal((recallObservability as any).memory_layers.retrieved_unlayered_count, 1);
+  assert.equal((recallObservability as any).memory_layers.selected_unlayered_count, 0);
+  assert.equal((recallObservability as any).memory_layers.filtered_by_layer_policy_count, 1);
+  assert.deepEqual((recallObservability as any).memory_layers.filtered_by_layer, { L2: 1 });
   assert.equal((recallObservability as any).memory_layers.selection_policy?.name, "factual_recall");
   assert.deepEqual((recallObservability as any).memory_layers.selection_policy?.requested_allowed_layers, []);
   const layeredForgotten = assembleLayeredContext({
@@ -3547,6 +3667,9 @@ async function run() {
 
   const seedEventId = "00000000-0000-0000-0000-000000000001";
   const seedTopicId = "00000000-0000-0000-0000-000000000002";
+  const seedConceptL1Id = "00000000-0000-0000-0000-000000000003";
+  const seedConceptL3Id = "00000000-0000-0000-0000-000000000004";
+  const seedEvidenceL1Id = "00000000-0000-0000-0000-000000000005";
 
   const fake = new FakePgClient({
     stage1: [
@@ -3683,6 +3806,173 @@ async function run() {
   }
   assert.equal((out.context as any).selection_policy?.name, "factual_recall");
   assert.deepEqual((out.context as any).selection_policy?.trust_anchor_layers, ["L3", "L0"]);
+  assert.ok(Array.isArray((out.context as any).selection_stats?.retrieved_memory_layers));
+  assert.ok(typeof (out.context as any).selection_stats?.filtered_by_layer_policy_count === "number");
+  const layeredFake = new FakePgClient({
+    stage1: [
+      {
+        id: seedEventId,
+        type: "event",
+        title: null,
+        text_summary: "seed event",
+        tier: "hot",
+        salience: 0.5,
+        confidence: 0.8,
+        similarity: 0.9,
+      },
+      {
+        id: seedTopicId,
+        type: "topic",
+        title: "Deploy topic",
+        text_summary: "topic",
+        tier: "hot",
+        salience: 0.4,
+        confidence: 0.7,
+        similarity: 0.88,
+      },
+      {
+        id: seedConceptL1Id,
+        type: "concept",
+        title: "Deploy fact",
+        text_summary: "distilled fact",
+        tier: "hot",
+        salience: 0.7,
+        confidence: 0.95,
+        similarity: 0.87,
+      },
+      {
+        id: seedConceptL3Id,
+        type: "concept",
+        title: "Deploy rollup",
+        text_summary: "rollup summary",
+        tier: "warm",
+        salience: 0.8,
+        confidence: 0.96,
+        similarity: 0.86,
+      },
+    ],
+    edges: [],
+    nodeIds: [],
+    nodes: [
+      {
+        id: seedEventId,
+        scope: "default",
+        type: "event",
+        tier: "hot",
+        title: null,
+        text_summary: "seed event",
+        slots: {},
+        embedding_status: "ready",
+        embedding_model: "minimax:embo-01",
+        topic_state: null,
+        member_count: null,
+        raw_ref: "raw://seed",
+        evidence_ref: null,
+        salience: 0.5,
+        importance: 0.5,
+        confidence: 0.8,
+        last_activated: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        commit_id: "00000000-0000-0000-0000-0000000000d1",
+      },
+      {
+        id: seedTopicId,
+        scope: "default",
+        type: "topic",
+        tier: "hot",
+        title: "Deploy topic",
+        text_summary: "topic",
+        slots: { topic_state: "active", member_count: 4 },
+        embedding_status: "ready",
+        embedding_model: "minimax:embo-01",
+        topic_state: "active",
+        member_count: 4,
+        raw_ref: null,
+        evidence_ref: null,
+        salience: 0.4,
+        importance: 0.4,
+        confidence: 0.7,
+        last_activated: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        commit_id: "00000000-0000-0000-0000-0000000000d2",
+      },
+      {
+        id: seedConceptL1Id,
+        scope: "default",
+        type: "concept",
+        tier: "hot",
+        title: "Deploy fact",
+        text_summary: "distilled fact",
+        slots: { summary_kind: "write_distillation_fact", compression_layer: "L1" },
+        embedding_status: "ready",
+        embedding_model: "minimax:embo-01",
+        topic_state: null,
+        member_count: null,
+        raw_ref: null,
+        evidence_ref: null,
+        salience: 0.7,
+        importance: 0.7,
+        confidence: 0.95,
+        last_activated: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        commit_id: "00000000-0000-0000-0000-0000000000d3",
+      },
+      {
+        id: seedConceptL3Id,
+        scope: "default",
+        type: "concept",
+        tier: "warm",
+        title: "Deploy rollup",
+        text_summary: "rollup summary",
+        slots: { summary_kind: "compression_rollup", compression_layer: "L3", citations: [seedEventId] },
+        embedding_status: "ready",
+        embedding_model: "minimax:embo-01",
+        topic_state: null,
+        member_count: null,
+        raw_ref: null,
+        evidence_ref: null,
+        salience: 0.8,
+        importance: 0.8,
+        confidence: 0.96,
+        last_activated: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        commit_id: "00000000-0000-0000-0000-0000000000d4",
+      },
+      {
+        id: seedEvidenceL1Id,
+        scope: "default",
+        type: "evidence",
+        tier: "hot",
+        title: null,
+        text_summary: "distilled evidence",
+        slots: { summary_kind: "write_distillation_evidence" },
+        embedding_status: "ready",
+        embedding_model: "minimax:embo-01",
+        topic_state: null,
+        member_count: null,
+        raw_ref: null,
+        evidence_ref: "ev://distilled",
+        salience: 0.6,
+        importance: 0.6,
+        confidence: 0.9,
+        last_activated: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        commit_id: "00000000-0000-0000-0000-0000000000d5",
+      },
+    ],
+    ruleDefs: [],
+    debugEmbeddings: [],
+  });
+  const layeredOut = await memoryRecallParsed(layeredFake as any, baseReq, "default", "default", { allow_debug_embeddings: false });
+  assert.deepEqual((layeredOut.context as any).selection_stats?.retrieved_memory_layers, ["L0", "L1", "L2", "L3"]);
+  assert.deepEqual((layeredOut.context as any).selection_stats?.selected_memory_layers, ["L0", "L1", "L2", "L3"]);
+  assert.equal((layeredOut.context as any).selection_stats?.retrieved_unlayered_count, 0);
+  assert.equal((layeredOut.context as any).selection_stats?.selected_unlayered_count, 0);
   const tightenedOut = await memoryRecallParsed(
     fake as any,
     MemoryRecallRequest.parse({
@@ -3696,6 +3986,53 @@ async function run() {
   assert.equal((tightenedOut.context as any).selection_policy?.source, "request_override");
   assert.deepEqual((tightenedOut.context as any).selection_policy?.requested_allowed_layers, ["L1"]);
   assert.deepEqual((tightenedOut.context as any).selection_policy?.preferred_layers, ["L3", "L0", "L1"]);
+  assert.ok(Array.isArray((tightenedOut.context as any).selection_stats?.selected_memory_layers));
+  assert.ok(((tightenedOut.context as any).selection_stats?.filtered_by_layer_policy_count ?? 0) >= 0);
+  const unsafeTightenedOut = await memoryRecallParsed(
+    layeredFake as any,
+    MemoryRecallRequest.parse({
+      ...baseReq,
+      memory_layer_preference: { allowed_layers: ["L1"] },
+    }),
+    "default",
+    "default",
+    { allow_debug_embeddings: false },
+    undefined,
+    "recall",
+    { unsafe_allow_drop_trust_anchors: true },
+  );
+  assert.deepEqual((unsafeTightenedOut.context as any).selection_policy?.preferred_layers, ["L1"]);
+  assert.deepEqual((unsafeTightenedOut.context as any).selection_policy?.trust_anchor_layers, []);
+  assert.deepEqual((unsafeTightenedOut.context as any).selection_stats?.selected_memory_layers, ["L1"]);
+  assert.equal((unsafeTightenedOut.context as any).selection_stats?.retrieval_filtered_by_layer_policy_count, 0);
+  const unsafeRetrievalTightenedOut = await memoryRecallParsed(
+    layeredFake as any,
+    MemoryRecallRequest.parse({
+      ...baseReq,
+      memory_layer_preference: { allowed_layers: ["L1"] },
+    }),
+    "default",
+    "default",
+    { allow_debug_embeddings: false },
+    undefined,
+    "recall",
+    {
+      unsafe_allow_drop_trust_anchors: true,
+      unsafe_apply_layer_policy_to_retrieval: true,
+    },
+  );
+  assert.deepEqual((unsafeRetrievalTightenedOut.context as any).selection_stats?.retrieved_memory_layers, ["L1"]);
+  assert.deepEqual((unsafeRetrievalTightenedOut.context as any).selection_stats?.selected_memory_layers, ["L1"]);
+  assert.equal((unsafeRetrievalTightenedOut.context as any).selection_stats?.retrieval_filtered_by_layer_policy_count, 3);
+  assert.deepEqual((unsafeRetrievalTightenedOut.context as any).selection_stats?.retrieval_filtered_by_layer, {
+    L0: 1,
+    L2: 1,
+    L3: 1,
+  });
+  assert.equal(
+    (unsafeRetrievalTightenedOut.subgraph.nodes as any[]).every((node) => (node as any).type === "concept"),
+    true,
+  );
   for (const c of out.context.citations as any[]) {
     assert.ok(typeof c.uri === "string" && String(c.uri).startsWith("aionis://"));
   }
@@ -4998,6 +5335,106 @@ async function run() {
   assert.equal((toolsSelectOut as any).selection_summary.matched_rules, 2);
   assert.equal((toolsSelectOut as any).selection_summary.source_rule_count, 2);
   assert.equal((toolsSelectOut as any).selection_summary.shadow_selected_tool, "bash");
+
+  const semanticDrafts = buildSemanticAbstractions({
+    topicTitle: "Deploy incident",
+    sourceSummaryText: [
+      "Topic summary: Deploy incident (4 events)",
+      "Key points:",
+      "- Rolled back the deploy after latency spiked",
+      "- Root cause was a quota limit on the worker pool",
+      "- Added a deployment guardrail and risk alert",
+    ].join("\n"),
+    sourceEventCount: 4,
+    maxTextLen: 700,
+  });
+  assert.equal(semanticDrafts.some((draft) => draft.abstraction_kind === "pattern"), true);
+  assert.equal(semanticDrafts.some((draft) => draft.abstraction_kind === "decision"), true);
+  assert.equal(semanticDrafts.some((draft) => draft.abstraction_kind === "risk"), true);
+  assert.equal(semanticDrafts.some((draft) => draft.abstraction_kind === "constraint"), true);
+  assert.equal(semanticDrafts.some((draft) => draft.abstraction_kind === "lesson"), true);
+  assert.equal(semanticDrafts.every((draft) => draft.text_summary.length > 0), true);
+  assert.equal(semanticDrafts.every((draft) => draft.quality.faithfulness > 0), true);
+
+  const telemetryFallbackClient = new TelemetryFallbackPgClient();
+  await recordMemoryContextAssemblyTelemetry(createDbFixture(telemetryFallbackClient as any), {
+    tenant_id: "default",
+    scope: "default",
+    endpoint: "context_assemble",
+    layered_output: true,
+    latency_ms: 12,
+    request_id: "req_telemetry_fallback_1",
+    total_budget_chars: 1200,
+    used_chars: 900,
+    remaining_chars: 300,
+    source_items: 9,
+    kept_items: 6,
+    dropped_items: 3,
+    layers_with_content: 2,
+    merge_trace_included: true,
+    selection_policy_name: "context_assemble_default",
+    selection_policy_source: "endpoint_default",
+    selected_memory_layers: ["L0", "L3"],
+    trust_anchor_layers: ["L0", "L3"],
+    requested_allowed_layers: ["L1"],
+    layers: [
+      {
+        layer_name: "facts",
+        source_count: 4,
+        kept_count: 3,
+        dropped_count: 1,
+        budget_chars: 600,
+        used_chars: 420,
+        max_items: 6,
+      },
+    ],
+  });
+  assert.equal(
+    telemetryFallbackClient.queries.some((query) => query === "ROLLBACK"),
+    false,
+    "head insert fallback should not abort the outer transaction",
+  );
+  assert.equal(
+    telemetryFallbackClient.queries.includes("SAVEPOINT memory_context_assembly_head_insert_sp"),
+    true,
+  );
+  assert.equal(
+    telemetryFallbackClient.queries.includes("ROLLBACK TO SAVEPOINT memory_context_assembly_head_insert_sp"),
+    true,
+  );
+  assert.equal(
+    telemetryFallbackClient.queries.includes("RELEASE SAVEPOINT memory_context_assembly_head_insert_sp"),
+    true,
+  );
+  assert.equal(
+    telemetryFallbackClient.queries.some(
+      (query) =>
+        query.includes("INSERT INTO memory_context_assembly_telemetry")
+        && query.includes("selection_policy_source")
+        && query.includes("requested_allowed_layers_json"),
+    ),
+    true,
+  );
+  assert.equal(
+    telemetryFallbackClient.queries.filter((query) => query.includes("INSERT INTO memory_context_assembly_telemetry")).length,
+    2,
+  );
+  assert.equal(
+    telemetryFallbackClient.queries.some(
+      (query) =>
+        query.includes("INSERT INTO memory_context_assembly_telemetry")
+        && query.includes("layered_output")
+        && query.includes("latency_ms")
+        && !query.includes("selection_policy_source")
+        && !query.includes("selected_memory_layers_json"),
+    ),
+    true,
+  );
+  assert.equal(
+    telemetryFallbackClient.queries.some((query) => query.includes("INSERT INTO memory_context_assembly_layer_telemetry")),
+    true,
+  );
+  assert.equal(telemetryFallbackClient.queries.at(-1), "COMMIT");
 
   await assert.rejects(
     () =>

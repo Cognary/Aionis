@@ -773,6 +773,12 @@ L4 不应直接只看 raw events。推荐输入为：
 - 已完成：perf benchmark / perf report / rollout gate 暴露 `selection_policy_source` 与 `requested_allowed_layers`，并支持可选 `request_override_ratio` gate
 - 已完成：`memory_layer_preference.allowed_layers` 从“排序偏置”修正为“真实收紧”，并给 perf benchmark 增加 caller-tightened override cohort
 - 已完成：给 perf benchmark 增加固定 preset（`endpoint_default_only` / `caller_tightened_l1` / `caller_tightened_l1_l3`）
+- 已完成：`buildContext` / `recall.observability` / `cost_signals` 暴露 retrieved-vs-selected layer stats 与 `filtered_by_layer_policy_count`
+- 已完成：perf benchmark / perf report 暴露 `retrieved_memory_layers_frequency`、`filtered_by_layer_policy_count`、`filtered_by_layer_frequency`
+- 已完成：修复 `context/assemble` 默认未携带 `slots` 导致 `L1/L3` 识别不完整的问题，默认 serving 现在能稳定看到 `L0/L1/L2/L3`
+- 已完成：增加 benchmark-only 的 unsafe measurement lane，可在 `APP_ENV!=prod` 时临时去掉 `L3/L0` trust anchors
+- 已完成：增加 retrieval-plane unsafe measurement lane，可在 benchmark override cohort 中把 layer policy 前推到 ranking / subgraph 之前
+- 已完成：perf benchmark / perf report / observability / cost_signals 暴露 retrieval-side layer filtering stats（`retrieval_filtered_by_layer_policy_count` / `retrieval_filtered_by_layer`）
 
 ### Phase 2: Add semantic abstraction in shadow mode
 
@@ -785,6 +791,21 @@ L4 不应直接只看 raw events。推荐输入为：
 - 新增 `job:semantic-abstraction`
 - 只对 sample scope/tenant 跑
 - 做 faithfulness / coverage / contradiction 评估
+
+进度（2026-03-13）：
+
+- 已完成：新增 shadow-only `job:semantic-abstraction`
+- 已完成：复用 `compression_rollup` 作为 source summary，不改默认 serving
+- 已完成：当前 deterministic L4 kinds 为 `pattern` / `decision` / `risk` / `constraint` / `lesson`
+- 已完成：L4 object 写入 `compression_layer=L4`、`summary_kind=semantic_abstraction`、`shadow_mode=true`
+- 已完成：沿用 `citations[]`、`source_event_ids`、`source_event_hash`，并写出 `quality.faithfulness/coverage/contradiction_risk`
+- 已完成：abstraction-to-topic (`part_of`) 与 abstraction-to-source-summary / cited-events (`derived_from`) 已落边
+- 已完成：L4 生成不再只依赖 `compression_rollup.text_summary`，会额外读取 source events 的 `text_summary` 提升 coverage
+- 已完成：`job:quality-eval` 暴露 `semantic_abstractions.total/by_kind/avg_faithfulness/avg_coverage/avg_contradiction_risk/avg_citation_coverage`
+- 已完成：`job:quality-eval` 增加 `semantic_abstraction_faithfulness` / `semantic_abstraction_citation_coverage` / `semantic_abstraction_contradiction_risk` checks
+- 已完成：`job:quality-eval` 增加 sample-level eval artifact（`lexical_overlap` / `negation_mismatch` / `contradiction_detected` / `sparse_source_summary`）
+- 已完成：`job:quality-eval` 增加 `semantic_shadow_compare`，可直接比较 `L3 only` 与 `L3 + L4 shadow` 的 abstraction count / lexical overlap / unique-term gain
+- 待完成：sample-scope contradiction evaluation artifact 与 shadow cohort benchmark
 
 ### Phase 3: Opt-in serving
 

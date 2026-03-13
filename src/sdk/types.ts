@@ -790,6 +790,17 @@ export type RecallContextSelectionPolicyDto = {
   requested_allowed_layers?: string[];
 };
 
+export type RecallContextSelectionStatsDto = {
+  retrieved_memory_layers: string[];
+  retrieved_unlayered_count: number;
+  selected_memory_layers: string[];
+  selected_unlayered_count: number;
+  retrieval_filtered_by_layer_policy_count: number;
+  retrieval_filtered_by_layer: Record<string, number>;
+  filtered_by_layer_policy_count: number;
+  filtered_by_layer: Record<string, number>;
+};
+
 export type RecallCitationDto = {
   node_id: string;
   uri?: string;
@@ -814,6 +825,7 @@ export type MemoryRecallResponse = {
     items: RecallContextItemDto[];
     citations: RecallCitationDto[];
     selection_policy?: RecallContextSelectionPolicyDto;
+    selection_stats?: RecallContextSelectionStatsDto;
   };
   debug?: Record<string, unknown>;
   rules?: Record<string, unknown>;
@@ -890,7 +902,14 @@ export type ContextAssembleResponse = {
     forgotten_by_reason: Record<string, number>;
     static_blocks_selected: number;
     static_blocks_rejected: number;
+    retrieved_memory_layers: string[];
+    retrieved_unlayered_count: number;
     selected_memory_layers: string[];
+    selected_unlayered_count: number;
+    retrieval_filtered_by_layer_policy_count: number;
+    retrieval_filtered_by_layer: Record<string, number>;
+    filtered_by_layer_policy_count: number;
+    filtered_by_layer: Record<string, number>;
     primary_savings_levers: string[];
     [k: string]: unknown;
   };

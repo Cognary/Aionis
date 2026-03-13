@@ -39,7 +39,12 @@ type BenchmarkJson = {
       within_token_budget_ratio?: number;
       optimization_profile_applied_ratio?: number;
       optimization_profile_source_frequency?: Record<string, number>;
+      retrieved_memory_layers_frequency?: Record<string, number>;
       selected_memory_layers_frequency?: Record<string, number>;
+      retrieval_filtered_by_layer_policy_count?: { mean: number; p50: number; p95: number; min: number; max: number };
+      retrieval_filtered_by_layer_frequency?: Record<string, number>;
+      filtered_by_layer_policy_count?: { mean: number; p50: number; p95: number; min: number; max: number };
+      filtered_by_layer_frequency?: Record<string, number>;
       selection_policy_frequency?: Record<string, number>;
       selection_policy_source_frequency?: Record<string, number>;
       requested_allowed_layers_frequency?: Record<string, number>;
@@ -54,12 +59,19 @@ type BenchmarkJson = {
     override_compare?: {
       enabled?: boolean;
       allowed_layers?: string[];
+      drop_trust_anchors?: boolean;
+      apply_layer_policy_to_retrieval?: boolean;
       ok_pairs?: number;
       failed_pairs?: number;
       tightened_context_est_tokens?: { mean: number; p50: number; p95: number };
       delta_vs_optimized_tokens?: { mean: number; p50: number; p95: number; min: number; max: number };
       within_token_budget_ratio?: number;
+      retrieved_memory_layers_frequency?: Record<string, number>;
       selected_memory_layers_frequency?: Record<string, number>;
+      retrieval_filtered_by_layer_policy_count?: { mean: number; p50: number; p95: number; min: number; max: number };
+      retrieval_filtered_by_layer_frequency?: Record<string, number>;
+      filtered_by_layer_policy_count?: { mean: number; p50: number; p95: number; min: number; max: number };
+      filtered_by_layer_frequency?: Record<string, number>;
       selection_policy_source_frequency?: Record<string, number>;
       requested_allowed_layers_frequency?: Record<string, number>;
       latency_ms?: { optimized_p95: number; tightened_p95: number; delta_p95: number };
@@ -500,12 +512,45 @@ async function main() {
       if (optimizationSources) {
         optimizationLines.push(`  - optimization_profile_sources: ${optimizationSources}`);
       }
+      const retrievedLayers = Object.entries(optimization.summary?.retrieved_memory_layers_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      if (retrievedLayers) {
+        optimizationLines.push(`  - retrieved_memory_layers: ${retrievedLayers}`);
+      }
       const selectedLayers = Object.entries(optimization.summary?.selected_memory_layers_frequency ?? {})
         .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
         .map(([k, v]) => `${k} x${v}`)
         .join(", ");
       if (selectedLayers) {
         optimizationLines.push(`  - selected_memory_layers: ${selectedLayers}`);
+      }
+      const retrievalFilteredByLayerPolicy = optimization.summary?.retrieval_filtered_by_layer_policy_count;
+      if (retrievalFilteredByLayerPolicy) {
+        optimizationLines.push(
+          `  - retrieval_filtered_by_layer_policy_count mean=${round(retrievalFilteredByLayerPolicy.mean, 3)} p50=${round(retrievalFilteredByLayerPolicy.p50, 3)} p95=${round(retrievalFilteredByLayerPolicy.p95, 3)}`,
+        );
+      }
+      const retrievalFilteredByLayer = Object.entries(optimization.summary?.retrieval_filtered_by_layer_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      if (retrievalFilteredByLayer) {
+        optimizationLines.push(`  - retrieval_filtered_by_layer: ${retrievalFilteredByLayer}`);
+      }
+      const filteredByLayerPolicy = optimization.summary?.filtered_by_layer_policy_count;
+      if (filteredByLayerPolicy) {
+        optimizationLines.push(
+          `  - filtered_by_layer_policy_count mean=${round(filteredByLayerPolicy.mean, 3)} p50=${round(filteredByLayerPolicy.p50, 3)} p95=${round(filteredByLayerPolicy.p95, 3)}`,
+        );
+      }
+      const filteredByLayer = Object.entries(optimization.summary?.filtered_by_layer_frequency ?? {})
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+        .map(([k, v]) => `${k} x${v}`)
+        .join(", ");
+      if (filteredByLayer) {
+        optimizationLines.push(`  - filtered_by_layer: ${filteredByLayer}`);
       }
       const selectionPolicies = Object.entries(optimization.summary?.selection_policy_frequency ?? {})
         .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
@@ -543,7 +588,7 @@ async function main() {
       const overrideCompare = optimization.override_compare;
       if (overrideCompare?.enabled) {
         optimizationLines.push(
-          `  - override cohort: layers=${Array.isArray(overrideCompare.allowed_layers) ? overrideCompare.allowed_layers.join(", ") : "(none)"} ok_pairs=${Number(overrideCompare.ok_pairs ?? 0)}`,
+          `  - override cohort: layers=${Array.isArray(overrideCompare.allowed_layers) ? overrideCompare.allowed_layers.join(", ") : "(none)"} trust_anchors=${overrideCompare.drop_trust_anchors ? "dropped_for_benchmark" : "kept"} retrieval_filter=${overrideCompare.apply_layer_policy_to_retrieval ? "enabled" : "selection_only"} ok_pairs=${Number(overrideCompare.ok_pairs ?? 0)}`,
         );
         optimizationLines.push(
           `  - override token delta vs optimized mean=${round(Number(overrideCompare.delta_vs_optimized_tokens?.mean ?? 0), 3)} p50=${round(Number(overrideCompare.delta_vs_optimized_tokens?.p50 ?? 0), 3)} p95=${round(Number(overrideCompare.delta_vs_optimized_tokens?.p95 ?? 0), 3)}`,
@@ -551,6 +596,39 @@ async function main() {
         optimizationLines.push(
           `  - override within token budget ratio=${round(Number(overrideCompare.within_token_budget_ratio ?? 0), 4)}`,
         );
+        const overrideRetrievedLayers = Object.entries(overrideCompare.retrieved_memory_layers_frequency ?? {})
+          .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+          .map(([k, v]) => `${k} x${v}`)
+          .join(", ");
+        if (overrideRetrievedLayers) {
+          optimizationLines.push(`  - override retrieved_memory_layers: ${overrideRetrievedLayers}`);
+        }
+        const overrideRetrievalFilteredByLayerPolicy = overrideCompare.retrieval_filtered_by_layer_policy_count;
+        if (overrideRetrievalFilteredByLayerPolicy) {
+          optimizationLines.push(
+            `  - override retrieval_filtered_by_layer_policy_count mean=${round(Number(overrideRetrievalFilteredByLayerPolicy.mean ?? 0), 3)} p50=${round(Number(overrideRetrievalFilteredByLayerPolicy.p50 ?? 0), 3)} p95=${round(Number(overrideRetrievalFilteredByLayerPolicy.p95 ?? 0), 3)}`,
+          );
+        }
+        const overrideRetrievalFilteredByLayer = Object.entries(overrideCompare.retrieval_filtered_by_layer_frequency ?? {})
+          .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+          .map(([k, v]) => `${k} x${v}`)
+          .join(", ");
+        if (overrideRetrievalFilteredByLayer) {
+          optimizationLines.push(`  - override retrieval_filtered_by_layer: ${overrideRetrievalFilteredByLayer}`);
+        }
+        const overrideFilteredByLayerPolicy = overrideCompare.filtered_by_layer_policy_count;
+        if (overrideFilteredByLayerPolicy) {
+          optimizationLines.push(
+            `  - override filtered_by_layer_policy_count mean=${round(Number(overrideFilteredByLayerPolicy.mean ?? 0), 3)} p50=${round(Number(overrideFilteredByLayerPolicy.p50 ?? 0), 3)} p95=${round(Number(overrideFilteredByLayerPolicy.p95 ?? 0), 3)}`,
+          );
+        }
+        const overrideFilteredByLayer = Object.entries(overrideCompare.filtered_by_layer_frequency ?? {})
+          .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+          .map(([k, v]) => `${k} x${v}`)
+          .join(", ");
+        if (overrideFilteredByLayer) {
+          optimizationLines.push(`  - override filtered_by_layer: ${overrideFilteredByLayer}`);
+        }
         const overrideLatency = overrideCompare.latency_ms;
         if (overrideLatency) {
           optimizationLines.push(

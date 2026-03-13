@@ -66,6 +66,30 @@ Quick smoke:
 ./examples/compression_rollup_smoke.sh
 ```
 
+## Semantic Abstraction (Implemented, Phase 2 shadow mode)
+
+Run:
+
+```bash
+npm run job:semantic-abstraction
+```
+
+Behavior (shadow-only L4 write path):
+
+- scans existing `compression_rollup` summaries as trusted source summaries
+- enriches generation with cited/source event `text_summary` when available
+- writes additive `concept` nodes with `summary_kind=semantic_abstraction`
+- sets `compression_layer=L4` and `shadow_mode=true` in `slots`
+- currently emits deterministic abstraction kinds:
+  - `pattern`
+  - `decision`
+  - `risk`
+  - `constraint`
+  - `lesson`
+- copies forward `citations[]`, `source_event_ids`, and `source_event_hash`
+- links abstraction-to-topic (`part_of`) and abstraction-to-source-summary / cited-events (`derived_from`)
+- remains idempotent on rerun when source hash and generated text are unchanged
+
 ## Topic Cluster (Implemented, online kNN)
 
 This job assigns unassigned `event` nodes to the nearest `topic` by embedding similarity.
@@ -157,10 +181,53 @@ Options:
 - `--max-alias-rate <0..1>` (default: `0.3`)
 - `--max-archive-ratio <0..1>` (default: `0.95`)
 - `--min-fresh-30d-ratio <0..1>` (default: `0.2`)
+- `--min-semantic-faithfulness <0..1>` (default: `0.9`)
+- `--min-semantic-citation-coverage <0..1>` (default: `0.8`)
+- `--max-semantic-contradiction-risk <0..1>` (default: `0.2`)
 - `--strict` (exit code `2` if any check fails)
 
 `embedding_ready_ratio` is computed on `embedding_expected_nodes` (hot/warm semantic nodes that have entered embedding pipeline), not raw total node count.
 Use `embedding_untracked_nodes` metric to monitor backlog of eligible nodes that have not entered embedding pipeline yet.
+
+When `semantic_abstraction` nodes exist, the report also includes:
+
+- `metrics.semantic_abstractions.total`
+- `metrics.semantic_abstractions.by_kind`
+- `metrics.semantic_abstractions.avg_faithfulness`
+- `metrics.semantic_abstractions.avg_coverage`
+- `metrics.semantic_abstractions.avg_contradiction_risk`
+- `metrics.semantic_abstractions.avg_citation_coverage`
+- `metrics.semantic_abstractions.contradiction_detected_count`
+- `metrics.semantic_abstractions.sparse_source_summary_count`
+- `metrics.semantic_abstractions.samples[]`
+- `metrics.semantic_shadow_compare.source_summaries`
+- `metrics.semantic_shadow_compare.source_summaries_with_l4`
+- `metrics.semantic_shadow_compare.avg_abstractions_per_summary`
+- `metrics.semantic_shadow_compare.avg_unique_term_gain_ratio`
+- `metrics.semantic_shadow_compare.samples[]`
+
+and three additional checks:
+
+- `semantic_abstraction_faithfulness`
+- `semantic_abstraction_citation_coverage`
+- `semantic_abstraction_contradiction_risk`
+
+Each semantic abstraction sample also includes a lightweight eval artifact:
+
+- `eval.lexical_overlap`
+- `eval.negation_mismatch`
+- `eval.contradiction_detected`
+- `eval.sparse_source_summary`
+
+The shadow compare artifact summarizes `L3 only` versus `L3 + L4 shadow` at the source-summary level:
+
+- `abstraction_count`
+- `abstraction_kinds`
+- `l3_chars`
+- `l4_chars_total`
+- `avg_l4_to_l3_lexical_overlap`
+- `unique_term_gain_ratio`
+- `novel_l4_terms_preview`
 
 Phase-4 lifecycle smoke (API + jobs together):
 
@@ -590,6 +657,24 @@ npm run job:perf-benchmark -- \
   --mode recall \
   --optimization-benchmark-preset caller_tightened_l1_l3 \
   --optimization-samples 12
+
+# internal measurement: caller-tightened L1 without trust anchors
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --optimization-benchmark-preset caller_tightened_l1_drop_anchors \
+  --optimization-samples 12
+
+# internal measurement: caller-tightened L1 with retrieval filtering
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --optimization-benchmark-preset caller_tightened_l1_drop_anchors_retrieval \
+  --optimization-samples 12
 ```
 
 Preset behavior:
@@ -597,7 +682,9 @@ Preset behavior:
 1. `endpoint_default_only` -> `optimization_check=true`, `optimization_request_mode=inherit_default`, no caller override cohort
 2. `caller_tightened_l1` -> same endpoint-default baseline, plus override cohort with `allowed_layers=["L1"]`
 3. `caller_tightened_l1_l3` -> same endpoint-default baseline, plus override cohort with `allowed_layers=["L1","L3"]`
-4. explicit flags such as `--optimization-request-mode`, `--optimization-override-check`, and `--optimization-override-layers-json` still override preset defaults
+4. `caller_tightened_l1_drop_anchors` / `caller_tightened_l1_l3_drop_anchors` -> internal measurement presets that remove forced `L3/L0` trust anchors from the override cohort; ignored in `APP_ENV=prod`
+5. `caller_tightened_l1_drop_anchors_retrieval` / `caller_tightened_l1_l3_drop_anchors_retrieval` -> same unsafe measurement, plus retrieval-plane filtering before ranking/subgraph assembly; ignored in `APP_ENV=prod`
+6. explicit flags such as `--optimization-request-mode`, `--optimization-override-check`, `--optimization-override-layers-json`, `--optimization-override-drop-trust-anchors`, and `--optimization-override-apply-layer-policy-to-retrieval` still override preset defaults
 
 Optional replay-dispatch evidence sampling (collects deterministic replay eligibility, dispatch decisions, and `result_summary` coverage for one existing playbook):
 
@@ -725,6 +812,13 @@ It now also reports:
 4. top `requested_allowed_layers`
 5. optional `--required-selection-policy` and `--min-selection-policy-ratio` thresholds if you want layer-policy evidence to become part of the gate
 6. optional `--max-request-override-ratio` if you want endpoint-default rollout evidence to exclude heavy caller-side layer tightening
+
+Benchmark/report layer-policy evidence now includes:
+
+1. top `selected_memory_layers`
+2. top `retrieved_memory_layers`
+3. `filtered_by_layer_policy_count`
+4. top `filtered_by_layer`
 
 Override cohort benchmarking:
 

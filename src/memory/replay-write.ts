@@ -2,6 +2,7 @@ import type pg from "pg";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
+import { toTenantScopeKey } from "./tenant.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
 
 export type ReplayMirrorNodeRecord = {
@@ -62,9 +63,15 @@ function toIntOrNull(value: unknown): number | null {
   return null;
 }
 
-function extractReplayMirrorNodes(writeReq: unknown, out: Awaited<ReturnType<typeof applyMemoryWrite>>): ReplayMirrorNodeRecord[] {
+function extractReplayMirrorNodes(
+  writeReq: unknown,
+  out: Awaited<ReturnType<typeof applyMemoryWrite>>,
+  opts: ReplayMemoryWriteOptions,
+): ReplayMirrorNodeRecord[] {
   const body = asObject(writeReq);
   const scope = toStringOrNull(body?.scope) ?? "default";
+  const tenantId = toStringOrNull(body?.tenant_id) ?? opts.defaultTenantId;
+  const scopeKey = toTenantScopeKey(scope, tenantId, opts.defaultTenantId);
   const nodesRaw = Array.isArray(body?.nodes) ? body?.nodes : [];
   const persistedIds = new Map<string, string>();
   for (const row of out.nodes) {
@@ -82,7 +89,7 @@ function extractReplayMirrorNodes(writeReq: unknown, out: Awaited<ReturnType<typ
     if (!nodeId) continue;
     records.push({
       node_id: nodeId,
-      scope,
+      scope: scopeKey,
       replay_kind: replayKind,
       run_id: toStringOrNull(slots.run_id),
       step_id: toStringOrNull(slots.step_id),
@@ -133,7 +140,7 @@ export async function applyReplayMemoryWrite(
   });
   if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
   if (opts.replayMirror) {
-    const replayNodes = extractReplayMirrorNodes(writeReq, out);
+    const replayNodes = extractReplayMirrorNodes(writeReq, out, opts);
     if (replayNodes.length > 0) {
       await opts.replayMirror.upsertReplayNodes(replayNodes);
     }

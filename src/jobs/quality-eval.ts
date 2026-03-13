@@ -5,6 +5,30 @@ import { closeDb, createDb, withTx } from "../db.js";
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
 
+const SEMANTIC_COMPARE_STOPWORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "into",
+  "after",
+  "before",
+  "across",
+  "there",
+  "this",
+  "that",
+  "topic",
+  "pattern",
+  "decision",
+  "path",
+  "risk",
+  "surface",
+  "constraint",
+  "lesson",
+  "learned",
+]);
+
 function argValue(flag: string): string | null {
   const i = process.argv.indexOf(flag);
   if (i === -1) return null;
@@ -27,12 +51,82 @@ function round(v: number, d = 4): number {
   return Math.round(v * f) / f;
 }
 
+function tokenizeContent(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/g)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !SEMANTIC_COMPARE_STOPWORDS.has(token));
+}
+
+function hasNegation(text: string): boolean {
+  return /\b(no|not|never|without|none|cannot|can't|didn't|won't|isn't|aren't|wasn't|weren't)\b/i.test(text);
+}
+
+function evaluateSemanticAbstractionSample(abstractionText: string, sourceSummaryText: string) {
+  const abstractionTokens = new Set(tokenizeContent(abstractionText));
+  const sourceTokens = new Set(tokenizeContent(sourceSummaryText));
+  const shared = Array.from(abstractionTokens).filter((token) => sourceTokens.has(token));
+  const overlapBase = Math.max(abstractionTokens.size, sourceTokens.size, 1);
+  const lexicalOverlap = shared.length / overlapBase;
+  const negationMismatch = hasNegation(abstractionText) !== hasNegation(sourceSummaryText);
+  const contradictionDetected = negationMismatch && lexicalOverlap >= 0.25;
+  const sparseSourceSummary = !sourceSummaryText.includes("- ") && sourceTokens.size < 12;
+  return {
+    lexical_overlap: round(lexicalOverlap),
+    negation_mismatch: negationMismatch,
+    contradiction_detected: contradictionDetected,
+    sparse_source_summary: sparseSourceSummary,
+  };
+}
+
+function lexicalOverlapRatio(a: string, b: string): number {
+  const aTokens = new Set(tokenizeContent(a));
+  const bTokens = new Set(tokenizeContent(b));
+  const shared = Array.from(aTokens).filter((token) => bTokens.has(token));
+  return shared.length / Math.max(aTokens.size, bTokens.size, 1);
+}
+
+function buildSemanticShadowCompareSample(
+  sourceSummaryId: string,
+  sourceSummaryTitle: string | null,
+  sourceSummaryText: string,
+  abstractions: Array<{ abstraction_kind: string | null; abstraction_text: string | null }>,
+) {
+  const l3Tokens = new Set(tokenizeContent(sourceSummaryText));
+  const l4Texts = abstractions.map((row) => String(row.abstraction_text ?? "")).filter(Boolean);
+  const l4CombinedText = l4Texts.join(" ");
+  const l4Tokens = new Set(tokenizeContent(l4CombinedText));
+  const novelL4Tokens = Array.from(l4Tokens).filter((token) => !l3Tokens.has(token));
+  const avgOverlap =
+    l4Texts.length > 0
+      ? l4Texts.reduce((sum, text) => sum + lexicalOverlapRatio(text, sourceSummaryText), 0) / l4Texts.length
+      : 0;
+  const abstractionKinds = Array.from(
+    new Set(abstractions.map((row) => String(row.abstraction_kind ?? "unknown")).filter(Boolean)),
+  ).sort();
+  return {
+    source_summary_id: sourceSummaryId,
+    source_summary_title: sourceSummaryTitle,
+    abstraction_count: abstractions.length,
+    abstraction_kinds: abstractionKinds,
+    l3_chars: sourceSummaryText.length,
+    l4_chars_total: l4CombinedText.length,
+    avg_l4_to_l3_lexical_overlap: round(avgOverlap),
+    unique_term_gain_ratio: round(novelL4Tokens.length / Math.max(l3Tokens.size, 1)),
+    novel_l4_terms_preview: novelL4Tokens.slice(0, 8),
+  };
+}
+
 async function main() {
   const scope = argValue("--scope") ?? env.MEMORY_SCOPE;
   const minReadyRatio = clampNum(Number(argValue("--min-ready-ratio") ?? "0.8"), 0, 1);
   const maxAliasRate = clampNum(Number(argValue("--max-alias-rate") ?? "0.3"), 0, 1);
   const maxArchiveRatio = clampNum(Number(argValue("--max-archive-ratio") ?? "0.95"), 0, 1);
   const minFresh30dRatio = clampNum(Number(argValue("--min-fresh-30d-ratio") ?? "0.2"), 0, 1);
+  const minSemanticFaithfulness = clampNum(Number(argValue("--min-semantic-faithfulness") ?? "0.9"), 0, 1);
+  const minSemanticCitationCoverage = clampNum(Number(argValue("--min-semantic-citation-coverage") ?? "0.8"), 0, 1);
+  const maxSemanticContradictionRisk = clampNum(Number(argValue("--max-semantic-contradiction-risk") ?? "0.2"), 0, 1);
   const strict = hasFlag("--strict");
 
   const out = await withTx(db, async (client) => {
@@ -131,6 +225,125 @@ async function main() {
       [scope],
     );
 
+    const semanticAbstractionRes = await client.query<{
+      abstractions: string;
+      avg_faithfulness: string | null;
+      avg_coverage: string | null;
+      avg_contradiction_risk: string | null;
+      avg_citation_coverage: string | null;
+    }>(
+      `
+      WITH semantic AS (
+        SELECT
+          slots,
+          jsonb_array_length(COALESCE(slots->'citations', '[]'::jsonb)) AS citations_count,
+          jsonb_array_length(COALESCE(slots->'source_event_ids', '[]'::jsonb)) AS source_event_count
+        FROM memory_nodes
+        WHERE scope = $1
+          AND type = 'concept'
+          AND slots->>'summary_kind' = 'semantic_abstraction'
+      )
+      SELECT
+        count(*)::text AS abstractions,
+        avg((slots->'quality'->>'faithfulness')::numeric)::text AS avg_faithfulness,
+        avg((slots->'quality'->>'coverage')::numeric)::text AS avg_coverage,
+        avg((slots->'quality'->>'contradiction_risk')::numeric)::text AS avg_contradiction_risk,
+        avg(
+          CASE
+            WHEN source_event_count > 0 THEN citations_count::numeric / source_event_count::numeric
+            ELSE 1
+          END
+        )::text AS avg_citation_coverage
+      FROM semantic
+      `,
+      [scope],
+    );
+
+    const semanticByKindRes = await client.query<{ abstraction_kind: string | null; n: string }>(
+      `
+      SELECT
+        NULLIF(slots->>'abstraction_kind', '') AS abstraction_kind,
+        count(*)::text AS n
+      FROM memory_nodes
+      WHERE scope = $1
+        AND type = 'concept'
+        AND slots->>'summary_kind' = 'semantic_abstraction'
+      GROUP BY 1
+      ORDER BY 1
+      `,
+      [scope],
+    );
+
+    const semanticSampleRes = await client.query<{
+      id: string;
+      title: string | null;
+      abstraction_kind: string | null;
+      abstraction_text: string | null;
+      faithfulness: string | null;
+      coverage: string | null;
+      contradiction_risk: string | null;
+      citations_count: string;
+      source_event_count: string;
+      source_summary_id: string | null;
+      source_summary_text: string | null;
+    }>(
+      `
+      SELECT
+        n.id::text AS id,
+        n.title,
+        n.slots->>'abstraction_kind' AS abstraction_kind,
+        n.text_summary AS abstraction_text,
+        n.slots->'quality'->>'faithfulness' AS faithfulness,
+        n.slots->'quality'->>'coverage' AS coverage,
+        n.slots->'quality'->>'contradiction_risk' AS contradiction_risk,
+        jsonb_array_length(COALESCE(n.slots->'citations', '[]'::jsonb))::text AS citations_count,
+        jsonb_array_length(COALESCE(n.slots->'source_event_ids', '[]'::jsonb))::text AS source_event_count,
+        n.slots->>'source_summary_id' AS source_summary_id,
+        s.text_summary AS source_summary_text
+      FROM memory_nodes n
+      LEFT JOIN memory_nodes s ON s.scope = n.scope
+        AND s.id = CASE
+          WHEN (n.slots->>'source_summary_id') ~* '^[0-9a-f-]{36}$' THEN (n.slots->>'source_summary_id')::uuid
+          ELSE NULL
+        END
+      WHERE n.scope = $1
+        AND n.type = 'concept'
+        AND n.slots->>'summary_kind' = 'semantic_abstraction'
+      ORDER BY n.updated_at DESC, n.id
+      LIMIT 20
+      `,
+      [scope],
+    );
+
+    const semanticShadowCompareRes = await client.query<{
+      source_summary_id: string;
+      source_summary_title: string | null;
+      source_summary_text: string | null;
+      abstraction_kind: string | null;
+      abstraction_text: string | null;
+    }>(
+      `
+      SELECT
+        s.id::text AS source_summary_id,
+        s.title AS source_summary_title,
+        s.text_summary AS source_summary_text,
+        a.slots->>'abstraction_kind' AS abstraction_kind,
+        a.text_summary AS abstraction_text
+      FROM memory_nodes s
+      LEFT JOIN memory_nodes a
+        ON a.scope = s.scope
+       AND a.type = 'concept'
+       AND a.slots->>'summary_kind' = 'semantic_abstraction'
+       AND a.slots->>'source_summary_id' = s.id::text
+      WHERE s.scope = $1
+        AND s.type = 'concept'
+        AND s.slots->>'summary_kind' = 'compression_rollup'
+      ORDER BY s.updated_at DESC, s.id, a.title
+      LIMIT 100
+      `,
+      [scope],
+    );
+
     const orphanRes = await client.query<{ eligible_total: string; orphan_total: string }>(
       `
       WITH eligible AS (
@@ -193,6 +406,13 @@ async function main() {
     const e = edgeRes.rows[0] ?? { edges: "0" };
     const c = compressionRes.rows[0] ?? { summaries: "0", avg_citations: "0" };
     const cq = clusterQualityRes.rows[0] ?? { part_of_count: "0", cohesion_avg_weight: "0" };
+    const sa = semanticAbstractionRes.rows[0] ?? {
+      abstractions: "0",
+      avg_faithfulness: "0",
+      avg_coverage: "0",
+      avg_contradiction_risk: "0",
+      avg_citation_coverage: "0",
+    };
     const o = orphanRes.rows[0] ?? { eligible_total: "0", orphan_total: "0" };
     const m30 = merge30dRes.rows[0] ?? { dedupe_total: "0", merged_30d: "0" };
 
@@ -213,10 +433,75 @@ async function main() {
     const avgCitations = Number(c.avg_citations ?? "0");
     const partOfCount = Number(cq.part_of_count ?? "0");
     const cohesionAvg = Number(cq.cohesion_avg_weight ?? "0");
+    const semanticAbstractions = Number(sa.abstractions ?? "0");
+    const semanticFaithfulness = Number(sa.avg_faithfulness ?? "0");
+    const semanticCoverage = Number(sa.avg_coverage ?? "0");
+    const semanticContradictionRisk = Number(sa.avg_contradiction_risk ?? "0");
+    const semanticCitationCoverage = Number(sa.avg_citation_coverage ?? "0");
     const eligibleEvents = Number(o.eligible_total ?? "0");
     const orphanEvents = Number(o.orphan_total ?? "0");
     const dedupeTotal30d = Number(m30.dedupe_total ?? "0");
     const merged30d = Number(m30.merged_30d ?? "0");
+
+    const semanticByKind = Object.fromEntries(
+      semanticByKindRes.rows.map((row) => [String(row.abstraction_kind ?? "unknown"), Number(row.n ?? "0")]),
+    );
+    const semanticSamples = semanticSampleRes.rows.map((row) => {
+      const sourceSummaryText = String(row.source_summary_text ?? "");
+      const abstractionText = String(row.abstraction_text ?? "");
+      const evalSummary = evaluateSemanticAbstractionSample(abstractionText, sourceSummaryText);
+      const citationsCount = Number(row.citations_count ?? "0");
+      const sourceEventCount = Number(row.source_event_count ?? "0");
+      return {
+        id: row.id,
+        title: row.title,
+        abstraction_kind: row.abstraction_kind,
+        source_summary_id: row.source_summary_id,
+        faithfulness: round(Number(row.faithfulness ?? "0")),
+        coverage: round(Number(row.coverage ?? "0")),
+        contradiction_risk: round(Number(row.contradiction_risk ?? "0")),
+        citation_coverage: round(sourceEventCount > 0 ? citationsCount / sourceEventCount : 1),
+        eval: evalSummary,
+      };
+    });
+    const semanticContradictionDetected = semanticSamples.filter((sample) => sample.eval.contradiction_detected).length;
+    const semanticSparseSourceSummaries = semanticSamples.filter((sample) => sample.eval.sparse_source_summary).length;
+    const shadowCompareGroups = new Map<
+      string,
+      {
+        source_summary_title: string | null;
+        source_summary_text: string;
+        abstractions: Array<{ abstraction_kind: string | null; abstraction_text: string | null }>;
+      }
+    >();
+    for (const row of semanticShadowCompareRes.rows) {
+      if (!shadowCompareGroups.has(row.source_summary_id)) {
+        shadowCompareGroups.set(row.source_summary_id, {
+          source_summary_title: row.source_summary_title,
+          source_summary_text: String(row.source_summary_text ?? ""),
+          abstractions: [],
+        });
+      }
+      const group = shadowCompareGroups.get(row.source_summary_id)!;
+      if (row.abstraction_text) {
+        group.abstractions.push({
+          abstraction_kind: row.abstraction_kind,
+          abstraction_text: row.abstraction_text,
+        });
+      }
+    }
+    const semanticShadowCompareSamples = Array.from(shadowCompareGroups.entries()).map(([sourceSummaryId, group]) =>
+      buildSemanticShadowCompareSample(sourceSummaryId, group.source_summary_title, group.source_summary_text, group.abstractions),
+    );
+    const summariesWithL4 = semanticShadowCompareSamples.filter((sample) => sample.abstraction_count > 0).length;
+    const avgAbstractionsPerSummary =
+      semanticShadowCompareSamples.length > 0
+        ? semanticShadowCompareSamples.reduce((sum, sample) => sum + sample.abstraction_count, 0) / semanticShadowCompareSamples.length
+        : 0;
+    const avgUniqueTermGainRatio =
+      semanticShadowCompareSamples.length > 0
+        ? semanticShadowCompareSamples.reduce((sum, sample) => sum + sample.unique_term_gain_ratio, 0) / semanticShadowCompareSamples.length
+        : 0;
 
     const readyRatio = embeddingExpectedTotal > 0 ? embeddingExpectedReady / embeddingExpectedTotal : 1;
     const aliasRate = dedupeTotal > 0 ? aliased / dedupeTotal : 0;
@@ -251,6 +536,24 @@ async function main() {
         value: round(fresh30dRatio),
         threshold: { op: ">=", value: minFresh30dRatio },
       },
+      {
+        name: "semantic_abstraction_faithfulness",
+        pass: semanticAbstractions === 0 || semanticFaithfulness >= minSemanticFaithfulness,
+        value: round(semanticFaithfulness),
+        threshold: { op: ">=", value: minSemanticFaithfulness },
+      },
+      {
+        name: "semantic_abstraction_citation_coverage",
+        pass: semanticAbstractions === 0 || semanticCitationCoverage >= minSemanticCitationCoverage,
+        value: round(semanticCitationCoverage),
+        threshold: { op: ">=", value: minSemanticCitationCoverage },
+      },
+      {
+        name: "semantic_abstraction_contradiction_risk",
+        pass: semanticAbstractions === 0 || semanticContradictionRisk <= maxSemanticContradictionRisk,
+        value: round(semanticContradictionRisk),
+        threshold: { op: "<=", value: maxSemanticContradictionRisk },
+      },
     ];
 
     return {
@@ -260,6 +563,9 @@ async function main() {
         max_alias_rate: maxAliasRate,
         max_archive_ratio: maxArchiveRatio,
         min_fresh_30d_ratio: minFresh30dRatio,
+        min_semantic_faithfulness: minSemanticFaithfulness,
+        min_semantic_citation_coverage: minSemanticCitationCoverage,
+        max_semantic_contradiction_risk: maxSemanticContradictionRisk,
       },
       metrics: {
         total_nodes: total,
@@ -280,6 +586,24 @@ async function main() {
         edges_per_node: round(edgesPerNode),
         compression_summaries: summaries,
         compression_avg_citations: round(avgCitations),
+        semantic_abstractions: {
+          total: semanticAbstractions,
+          by_kind: semanticByKind,
+          avg_faithfulness: round(semanticFaithfulness),
+          avg_coverage: round(semanticCoverage),
+          avg_contradiction_risk: round(semanticContradictionRisk),
+          avg_citation_coverage: round(semanticCitationCoverage),
+          contradiction_detected_count: semanticContradictionDetected,
+          sparse_source_summary_count: semanticSparseSourceSummaries,
+          samples: semanticSamples,
+        },
+        semantic_shadow_compare: {
+          source_summaries: semanticShadowCompareSamples.length,
+          source_summaries_with_l4: summariesWithL4,
+          avg_abstractions_per_summary: round(avgAbstractionsPerSummary),
+          avg_unique_term_gain_ratio: round(avgUniqueTermGainRatio),
+          samples: semanticShadowCompareSamples,
+        },
         clustering_quality: {
           cohesion: round(cohesionAvg),
           drift_orphan_rate: round(orphanRate),

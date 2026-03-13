@@ -180,6 +180,7 @@
     "incident:bundle:hosted": "bash scripts/hosted/export-incident-bundle.sh",
     "incident:publish:hosted": "bash scripts/hosted/publish-incident-bundle.sh",
     "job:compression-rollup": "tsx src/jobs/compression-rollup.ts",
+    "job:semantic-abstraction": "tsx src/jobs/semantic-abstraction.ts",
     "job:consolidation-candidates": "tsx src/jobs/consolidation-candidates.ts",
     "job:consolidation-apply": "tsx src/jobs/consolidation-apply.ts",
     "job:consolidation-redirect-edges": "tsx src/jobs/consolidation-redirect-edges.ts",

@@ -17,6 +17,7 @@ import { badRequest } from "../util/http.js";
 import { resolveTenantScope } from "./tenant.js";
 import { resolveMemoryLayerPolicy } from "./layer-policy.js";
 import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
+import type { MemoryLayerId, MemoryLayerPolicy } from "./layer-policy.js";
 
 export type RecallAuth = {
   allow_debug_embeddings: boolean;
@@ -29,6 +30,8 @@ export type RecallTelemetry = {
 export type MemoryRecallOptions = {
   stage1_exact_fallback_on_empty?: boolean;
   recall_access?: RecallStoreAccess;
+  unsafe_allow_drop_trust_anchors?: boolean;
+  unsafe_apply_layer_policy_to_retrieval?: boolean;
 };
 
 type NodeRow = RecallNodeRow;
@@ -55,6 +58,35 @@ function parseVectorText(v: string, maxPreviewDims: number): { dims: number; pre
 
 function isDraftTopic(n: NodeRow): boolean {
   return n.type === "topic" && (n.topic_state ?? "active") === "draft";
+}
+
+function resolveCompressionLayer(n: NodeRow): MemoryLayerId | null {
+  if (n.type === "event") return "L0";
+  if (n.type === "evidence") {
+    if (n.slots?.summary_kind === "write_distillation_evidence") return "L1";
+    return "L0";
+  }
+  if (n.type === "topic") return "L2";
+  if (n.type === "concept") {
+    if (typeof n.slots?.compression_layer === "string" && n.slots.compression_layer.trim()) {
+      const layer = n.slots.compression_layer.trim();
+      if (layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5") {
+        return layer;
+      }
+    }
+    if (n.slots?.summary_kind === "write_distillation_fact") return "L1";
+    if (n.slots?.summary_kind === "compression_rollup") return "L3";
+  }
+  return null;
+}
+
+function allowedLayersForPolicy(layerPolicy: MemoryLayerPolicy | null): Set<MemoryLayerId> | null {
+  if (!layerPolicy || layerPolicy.source !== "request_override") return null;
+  return new Set<MemoryLayerId>([
+    ...layerPolicy.preferred_layers,
+    ...layerPolicy.fallback_layers,
+    ...layerPolicy.trust_anchor_layers,
+  ]);
 }
 
 function pickSlotsPreview(slots: unknown, maxKeys: number): Record<string, unknown> | null {
@@ -205,7 +237,9 @@ export async function memoryRecallParsed(
   };
   const consumerAgentId = parsed.consumer_agent_id?.trim() || null;
   const consumerTeamId = parsed.consumer_team_id?.trim() || null;
-  const layerPolicy = resolveMemoryLayerPolicy(endpoint, parsed.memory_layer_preference ?? null);
+  const layerPolicy = resolveMemoryLayerPolicy(endpoint, parsed.memory_layer_preference ?? null, {
+    unsafe_allow_drop_trust_anchors: options?.unsafe_allow_drop_trust_anchors === true,
+  });
   const stage1ExactFallbackOnEmpty = options?.stage1_exact_fallback_on_empty ?? true;
   assertDim(parsed.query_embedding, 1536);
 
@@ -272,7 +306,22 @@ export async function memoryRecallParsed(
       seeds: outSeeds,
       subgraph: { nodes: [], edges: [] },
       ranked: [],
-      context: { text: "", items: [], citations: [] },
+      context: {
+        text: "",
+        items: [],
+        citations: [],
+        selection_policy: layerPolicy,
+        selection_stats: {
+          retrieved_memory_layers: [],
+          retrieved_unlayered_count: 0,
+          selected_memory_layers: [],
+          selected_unlayered_count: 0,
+          retrieval_filtered_by_layer_policy_count: 0,
+          retrieval_filtered_by_layer: {},
+          filtered_by_layer_policy_count: 0,
+          filtered_by_layer: {},
+        },
+      },
       ...(parsed.return_debug
         ? {
             debug: {
@@ -340,33 +389,60 @@ export async function memoryRecallParsed(
   }
 
   const wantSlots = parsed.include_slots || parsed.include_slots_preview;
+  const needInternalSlots = true;
   const neighborhoodNodes = await timed("stage2_nodes", () =>
     recallAccess.stage2Nodes({
       scope,
       nodeIds,
       consumerAgentId,
       consumerTeamId,
-      includeSlots: wantSlots,
+      includeSlots: wantSlots || needInternalSlots,
     }),
   );
 
   const nodeMapAll = new Map<string, NodeRow>();
   for (const n of neighborhoodNodes) nodeMapAll.set(n.id, n);
   // Filter edges to only those with both endpoints present in our node fetch budget.
-  const edgesAll: EdgeRow[] = neighborhoodEdges.filter((e) => nodeMapAll.has(e.src_id) && nodeMapAll.has(e.dst_id));
+  let filteredSeeds = seeds;
+  let filteredSeedIds = seedIds;
+  let filteredNodeMapAll = nodeMapAll;
+  let edgesAll: EdgeRow[] = neighborhoodEdges.filter((e) => nodeMapAll.has(e.src_id) && nodeMapAll.has(e.dst_id));
+  let retrievalFilteredCount = 0;
+  const retrievalFilteredByLayer = new Map<string, number>();
+  const retrievalAllowedLayers =
+    options?.unsafe_apply_layer_policy_to_retrieval === true ? allowedLayersForPolicy(layerPolicy) : null;
+  if (retrievalAllowedLayers) {
+    for (const node of nodeMapAll.values()) {
+      const layer = resolveCompressionLayer(node);
+      if (!layer || !retrievalAllowedLayers.has(layer)) {
+        const key = layer ?? "unknown";
+        retrievalFilteredCount += 1;
+        retrievalFilteredByLayer.set(key, (retrievalFilteredByLayer.get(key) ?? 0) + 1);
+      }
+    }
+    filteredNodeMapAll = new Map(
+      Array.from(nodeMapAll.entries()).filter(([, node]) => {
+        const layer = resolveCompressionLayer(node);
+        return !!layer && retrievalAllowedLayers.has(layer);
+      }),
+    );
+    filteredSeeds = seeds.filter((seed) => filteredNodeMapAll.has(seed.id));
+    filteredSeedIds = filteredSeeds.map((seed) => seed.id);
+    edgesAll = edgesAll.filter((e) => filteredNodeMapAll.has(e.src_id) && filteredNodeMapAll.has(e.dst_id));
+  }
 
   // Scoring excludes draft topics (they shouldn't influence activation/ranking),
   // but draft topics may still appear in the returned subgraph for explainability.
-  const draftTopicIds = new Set(Array.from(nodeMapAll.values()).filter(isDraftTopic).map((n) => n.id));
-  const notReadyIds = new Set(Array.from(nodeMapAll.values()).filter((n) => n.embedding_status !== "ready").map((n) => n.id));
-  const nodeMapForScoring = new Map(nodeMapAll);
+  const draftTopicIds = new Set(Array.from(filteredNodeMapAll.values()).filter(isDraftTopic).map((n) => n.id));
+  const notReadyIds = new Set(Array.from(filteredNodeMapAll.values()).filter((n) => n.embedding_status !== "ready").map((n) => n.id));
+  const nodeMapForScoring = new Map(filteredNodeMapAll);
   for (const id of draftTopicIds) nodeMapForScoring.delete(id);
   for (const id of notReadyIds) nodeMapForScoring.delete(id);
   const edgesForScoring = edgesAll.filter((e) => !draftTopicIds.has(e.src_id) && !draftTopicIds.has(e.dst_id));
   const edgesForScoringReady = edgesForScoring.filter((e) => !notReadyIds.has(e.src_id) && !notReadyIds.has(e.dst_id));
 
   // Score via spreading activation.
-  const rankedAll = spreadActivation(seeds, nodeMapForScoring, edgesForScoringReady, parsed.neighborhood_hops);
+  const rankedAll = spreadActivation(filteredSeeds, nodeMapForScoring, edgesForScoringReady, parsed.neighborhood_hops);
   const ranked = rankedAll.slice(0, parsed.ranked_limit).map((r) => {
     const node = nodeMapAll.get(r.id);
     if (!node) return r;
@@ -379,17 +455,17 @@ export async function memoryRecallParsed(
   // - nodes: max_nodes (always)
   // - edges: max_edges (always; schema already caps to 100)
   // Explainability: draft topics never affect scoring, but we may swap a few in so edges aren't "mysteriously missing".
-  const seedSet = new Set(seedIds);
+  const seedSet = new Set(filteredSeedIds);
   const coreIds: string[] = [];
-  for (const id of seedIds) {
+  for (const id of filteredSeedIds) {
     if (coreIds.length >= parsed.max_nodes) break;
-    const n = nodeMapAll.get(id);
+    const n = filteredNodeMapAll.get(id);
     if (!n || n.embedding_status !== "ready") continue;
     if (!coreIds.includes(id)) coreIds.push(id);
   }
   for (const r of rankedAll) {
     if (coreIds.length >= parsed.max_nodes) break;
-    const n = nodeMapAll.get(r.id);
+    const n = filteredNodeMapAll.get(r.id);
     if (!n || n.embedding_status !== "ready") continue;
     if (!coreIds.includes(r.id)) coreIds.push(r.id);
   }
@@ -419,7 +495,7 @@ export async function memoryRecallParsed(
     .map(([id]) => id)
     .filter((id) => {
       if (coreSet.has(id)) return false;
-      const n = nodeMapAll.get(id);
+      const n = filteredNodeMapAll.get(id);
       return !!n && n.embedding_status === "ready";
     });
 
@@ -438,7 +514,7 @@ export async function memoryRecallParsed(
   }
   const outIdSet = new Set(outIdsOrdered);
 
-  const outNodeRows = outIdsOrdered.map((id) => nodeMapAll.get(id)).filter(Boolean) as NodeRow[];
+  const outNodeRows = outIdsOrdered.map((id) => filteredNodeMapAll.get(id)).filter(Boolean) as NodeRow[];
   const outEdgeRows = edgesAll
     .filter((e) => outIdSet.has(e.src_id) && outIdSet.has(e.dst_id))
     .sort((a, b) => (b.weight * b.confidence) - (a.weight * a.confidence))
@@ -452,9 +528,9 @@ export async function memoryRecallParsed(
     for (const row of rr) ruleDefMap.set(row.rule_node_id, row);
   }
 
-  const { text: context_text, items: context_items, citations, compaction: context_compaction } = buildContext(
+  const { text: context_text, items: context_items, citations, compaction: context_compaction, selection_stats } = buildContext(
     rankedAll,
-    nodeMapAll,
+    filteredNodeMapAll,
     ruleDefMap,
     {
       tenant_id: tenancy.tenant_id,
@@ -465,6 +541,14 @@ export async function memoryRecallParsed(
       layer_policy: layerPolicy,
     },
   );
+  const retrievalFilteredByLayerOut = Object.fromEntries(
+    Array.from(retrievalFilteredByLayer.entries()).sort((a, b) => a[0].localeCompare(b[0])),
+  );
+  const selectionStatsOut = {
+    ...selection_stats,
+    retrieval_filtered_by_layer_policy_count: retrievalFilteredCount,
+    retrieval_filtered_by_layer: retrievalFilteredByLayerOut,
+  };
 
   // DTO serialization (B): stable, minimal by default.
   const outNodes: NodeDTO[] = outNodeRows.map((n) => {
@@ -599,12 +683,13 @@ export async function memoryRecallParsed(
     seeds: outSeeds,
     subgraph: { nodes: outNodes, edges: outEdges },
     ranked,
-    context: {
-      text: context_text,
-      items: context_items,
-      citations,
-      selection_policy: layerPolicy,
-    },
+      context: {
+        text: context_text,
+        items: context_items,
+        citations,
+        selection_policy: layerPolicy,
+        selection_stats: selectionStatsOut,
+      },
     ...(parsed.return_debug
       ? {
           debug: {

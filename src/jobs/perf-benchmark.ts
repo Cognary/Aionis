@@ -121,6 +121,8 @@ type OptimizationAggregate = {
     tool_candidates: string[];
     override_check: boolean;
     override_layers: string[];
+    override_drop_trust_anchors: boolean;
+    override_apply_layer_policy_to_retrieval: boolean;
   };
   total_pairs: number;
   ok_pairs: number;
@@ -137,7 +139,12 @@ type OptimizationAggregate = {
     within_token_budget_ratio: number;
     optimization_profile_applied_ratio: number;
     optimization_profile_source_frequency?: Record<string, number>;
+    retrieved_memory_layers_frequency?: Record<string, number>;
     selected_memory_layers_frequency?: Record<string, number>;
+    retrieval_filtered_by_layer_policy_count?: { mean: number; p50: number; p95: number; min: number; max: number };
+    retrieval_filtered_by_layer_frequency?: Record<string, number>;
+    filtered_by_layer_policy_count?: { mean: number; p50: number; p95: number; min: number; max: number };
+    filtered_by_layer_frequency?: Record<string, number>;
     selection_policy_frequency?: Record<string, number>;
     selection_policy_source_frequency?: Record<string, number>;
     requested_allowed_layers_frequency?: Record<string, number>;
@@ -146,12 +153,19 @@ type OptimizationAggregate = {
   override_compare?: {
     enabled: boolean;
     allowed_layers: string[];
+    drop_trust_anchors: boolean;
+    apply_layer_policy_to_retrieval: boolean;
     ok_pairs: number;
     failed_pairs: number;
     tightened_context_est_tokens: { mean: number; p50: number; p95: number };
     delta_vs_optimized_tokens: { mean: number; p50: number; p95: number; min: number; max: number };
     within_token_budget_ratio: number;
+    retrieved_memory_layers_frequency?: Record<string, number>;
     selected_memory_layers_frequency?: Record<string, number>;
+    retrieval_filtered_by_layer_policy_count?: { mean: number; p50: number; p95: number; min: number; max: number };
+    retrieval_filtered_by_layer_frequency?: Record<string, number>;
+    filtered_by_layer_policy_count?: { mean: number; p50: number; p95: number; min: number; max: number };
+    filtered_by_layer_frequency?: Record<string, number>;
     selection_policy_source_frequency?: Record<string, number>;
     requested_allowed_layers_frequency?: Record<string, number>;
     latency_ms: { optimized_p95: number; tightened_p95: number; delta_p95: number };
@@ -289,7 +303,14 @@ type AnnAccumulator = {
   sample_count: number;
 };
 
-type OptimizationBenchmarkPresetName = "endpoint_default_only" | "caller_tightened_l1" | "caller_tightened_l1_l3";
+type OptimizationBenchmarkPresetName =
+  | "endpoint_default_only"
+  | "caller_tightened_l1"
+  | "caller_tightened_l1_l3"
+  | "caller_tightened_l1_drop_anchors"
+  | "caller_tightened_l1_l3_drop_anchors"
+  | "caller_tightened_l1_drop_anchors_retrieval"
+  | "caller_tightened_l1_l3_drop_anchors_retrieval";
 
 type OptimizationBenchmarkPreset = {
   name: OptimizationBenchmarkPresetName;
@@ -297,6 +318,8 @@ type OptimizationBenchmarkPreset = {
   optimization_request_mode: "explicit" | "inherit_default";
   optimization_override_check: boolean;
   optimization_override_layers: string[];
+  optimization_override_drop_trust_anchors?: boolean;
+  optimization_override_apply_layer_policy_to_retrieval?: boolean;
 };
 
 function emptySelectorAccumulator(): SelectorAccumulator {
@@ -470,8 +493,50 @@ function parseOptimizationBenchmarkPreset(flag: string): OptimizationBenchmarkPr
       optimization_override_layers: ["L1", "L3"],
     };
   }
+  if (raw === "caller_tightened_l1_drop_anchors") {
+    return {
+      name: "caller_tightened_l1_drop_anchors",
+      optimization_check: true,
+      optimization_request_mode: "inherit_default",
+      optimization_override_check: true,
+      optimization_override_layers: ["L1"],
+      optimization_override_drop_trust_anchors: true,
+    };
+  }
+  if (raw === "caller_tightened_l1_l3_drop_anchors") {
+    return {
+      name: "caller_tightened_l1_l3_drop_anchors",
+      optimization_check: true,
+      optimization_request_mode: "inherit_default",
+      optimization_override_check: true,
+      optimization_override_layers: ["L1", "L3"],
+      optimization_override_drop_trust_anchors: true,
+    };
+  }
+  if (raw === "caller_tightened_l1_drop_anchors_retrieval") {
+    return {
+      name: "caller_tightened_l1_drop_anchors_retrieval",
+      optimization_check: true,
+      optimization_request_mode: "inherit_default",
+      optimization_override_check: true,
+      optimization_override_layers: ["L1"],
+      optimization_override_drop_trust_anchors: true,
+      optimization_override_apply_layer_policy_to_retrieval: true,
+    };
+  }
+  if (raw === "caller_tightened_l1_l3_drop_anchors_retrieval") {
+    return {
+      name: "caller_tightened_l1_l3_drop_anchors_retrieval",
+      optimization_check: true,
+      optimization_request_mode: "inherit_default",
+      optimization_override_check: true,
+      optimization_override_layers: ["L1", "L3"],
+      optimization_override_drop_trust_anchors: true,
+      optimization_override_apply_layer_policy_to_retrieval: true,
+    };
+  }
   throw new Error(
-    "invalid --optimization-benchmark-preset; expected endpoint_default_only|caller_tightened_l1|caller_tightened_l1_l3",
+    "invalid --optimization-benchmark-preset; expected endpoint_default_only|caller_tightened_l1|caller_tightened_l1_l3|caller_tightened_l1_drop_anchors|caller_tightened_l1_l3_drop_anchors|caller_tightened_l1_drop_anchors_retrieval|caller_tightened_l1_l3_drop_anchors_retrieval",
   );
 }
 
@@ -488,10 +553,12 @@ function summarizeSeries(values: number[]): { mean: number; p50: number; p95: nu
   };
 }
 
-function incrementFrequency(target: Record<string, number>, key: unknown) {
+function incrementFrequency(target: Record<string, number>, key: unknown, delta = 1) {
   const normalized = String(key ?? "").trim();
   if (!normalized) return;
-  target[normalized] = (target[normalized] ?? 0) + 1;
+  const amount = Number(delta);
+  if (!Number.isFinite(amount) || amount <= 0) return;
+  target[normalized] = (target[normalized] ?? 0) + amount;
 }
 
 function summarizeAnnAccumulator(acc: AnnAccumulator): AnnProfileAggregate {
@@ -674,6 +741,20 @@ async function main() {
     "--optimization-override-layers-json",
     optimizationBenchmarkPreset?.optimization_override_layers ?? ["L1"],
   ).filter((layer) => layer === "L0" || layer === "L1" || layer === "L2" || layer === "L3" || layer === "L4" || layer === "L5");
+  const optimizationOverrideDropTrustAnchors =
+    (
+      argValue("--optimization-override-drop-trust-anchors") ??
+      (optimizationBenchmarkPreset?.optimization_override_drop_trust_anchors ? "true" : "false")
+    )
+      .trim()
+      .toLowerCase() === "true";
+  const optimizationOverrideApplyLayerPolicyToRetrieval =
+    (
+      argValue("--optimization-override-apply-layer-policy-to-retrieval") ??
+      (optimizationBenchmarkPreset?.optimization_override_apply_layer_policy_to_retrieval ? "true" : "false")
+    )
+      .trim()
+      .toLowerCase() === "true";
   const replayCheckRaw = (argValue("--replay-check") ?? "false").trim().toLowerCase();
   const replayCheck = replayCheckRaw === "true";
   const replayPlaybookId = (argValue("--replay-playbook-id") ?? "").trim();
@@ -732,14 +813,20 @@ async function main() {
   if (apiKey) headers.set("x-api-key", apiKey);
   if (bearer) headers.set("authorization", `Bearer ${bearer}`);
 
-  const timedRequestJson = async (path: string, body: Record<string, unknown>): Promise<JsonSample> => {
+  const timedRequestJson = async (
+    path: string,
+    body: Record<string, unknown>,
+    extraHeaders?: Record<string, string>,
+  ): Promise<JsonSample> => {
     const t0 = process.hrtime.bigint();
     const ac = new AbortController();
     const tm = setTimeout(() => ac.abort(), timeoutMs);
     try {
+      const requestHeaders = new Headers(headers);
+      for (const [key, value] of Object.entries(extraHeaders ?? {})) requestHeaders.set(key, value);
       const res = await fetch(`${baseUrl}${path}`, {
         method: "POST",
-        headers,
+        headers: requestHeaders,
         body: JSON.stringify(body),
         signal: ac.signal,
       });
@@ -943,11 +1030,17 @@ async function main() {
     const optimizationByStatus: Record<string, number> = {};
     const optimizationLeversFrequency: Record<string, number> = {};
     const optimizationProfileSourceFrequency: Record<string, number> = {};
+    const retrievedMemoryLayerFrequency: Record<string, number> = {};
     const selectedMemoryLayerFrequency: Record<string, number> = {};
+    const retrievalFilteredByLayerFrequency: Record<string, number> = {};
+    const filteredByLayerFrequency: Record<string, number> = {};
     const selectionPolicyFrequency: Record<string, number> = {};
     const selectionPolicySourceFrequency: Record<string, number> = {};
     const requestedAllowedLayerFrequency: Record<string, number> = {};
+    const overrideRetrievedMemoryLayerFrequency: Record<string, number> = {};
     const overrideSelectedMemoryLayerFrequency: Record<string, number> = {};
+    const overrideRetrievalFilteredByLayerFrequency: Record<string, number> = {};
+    const overrideFilteredByLayerFrequency: Record<string, number> = {};
     const overrideSelectionPolicySourceFrequency: Record<string, number> = {};
     const overrideRequestedAllowedLayerFrequency: Record<string, number> = {};
     const baselineTokens: number[] = [];
@@ -957,6 +1050,10 @@ async function main() {
     const tokenReductionRatios: number[] = [];
     const forgottenItems: number[] = [];
     const staticBlocksSelected: number[] = [];
+    const retrievalFilteredByLayerPolicyCounts: number[] = [];
+    const filteredByLayerPolicyCounts: number[] = [];
+    const overrideRetrievalFilteredByLayerPolicyCounts: number[] = [];
+    const overrideFilteredByLayerPolicyCounts: number[] = [];
     const baselineLatency: number[] = [];
     const optimizedLatency: number[] = [];
     const tightenedLatency: number[] = [];
@@ -1057,6 +1154,13 @@ async function main() {
 
       let optimizedOverride: JsonSample | null = null;
       if (optimizationOverrideCheck) {
+        const overrideHeaders: Record<string, string> = {};
+        if (optimizationOverrideDropTrustAnchors) {
+          overrideHeaders["x-aionis-internal-allow-drop-trust-anchors"] = "true";
+        }
+        if (optimizationOverrideApplyLayerPolicyToRetrieval) {
+          overrideHeaders["x-aionis-internal-apply-layer-policy-to-retrieval"] = "true";
+        }
         optimizedOverride = await timedRequestJson("/v1/memory/context/assemble", {
           ...baseAssemblePayload(),
           ...(optimizationRequestMode === "explicit" ? { context_optimization_profile: optimizationProfile } : {}),
@@ -1068,7 +1172,7 @@ async function main() {
             char_budget_total: optimizationCharBudget,
             include_merge_trace: false,
           },
-        });
+        }, Object.keys(overrideHeaders).length > 0 ? overrideHeaders : undefined);
         const optimizedOverrideStatusKey = optimizedOverride.error
           ? `optimized_override:error:${optimizedOverride.error}`
           : `optimized_override:${optimizedOverride.status}`;
@@ -1104,15 +1208,41 @@ async function main() {
         tightenedLatency.push(optimizedOverride.ms);
         if (optimizedOverrideCost?.within_token_budget === true) overrideWithinTokenBudgetCount += 1;
         const overrideSelectionPolicy = optimizedOverride.body?.recall?.context?.selection_policy ?? null;
+        const overrideSelectionStats = optimizedOverride.body?.recall?.context?.selection_stats ?? null;
         incrementFrequency(overrideSelectionPolicySourceFrequency, overrideSelectionPolicy?.source);
         const overrideRequestedAllowedLayers = Array.isArray(overrideSelectionPolicy?.requested_allowed_layers)
           ? overrideSelectionPolicy.requested_allowed_layers
           : [];
         for (const layer of overrideRequestedAllowedLayers) incrementFrequency(overrideRequestedAllowedLayerFrequency, layer);
+        const overrideRetrievedMemoryLayers = Array.isArray(overrideSelectionStats?.retrieved_memory_layers)
+          ? overrideSelectionStats.retrieved_memory_layers
+          : [];
+        for (const layer of overrideRetrievedMemoryLayers) incrementFrequency(overrideRetrievedMemoryLayerFrequency, layer);
         const overrideSelectedMemoryLayers = Array.isArray(optimizedOverrideCost?.selected_memory_layers)
           ? optimizedOverrideCost.selected_memory_layers
           : [];
         for (const layer of overrideSelectedMemoryLayers) incrementFrequency(overrideSelectedMemoryLayerFrequency, layer);
+        const overrideRetrievalFilteredByLayerPolicyCount = Number(
+          overrideSelectionStats?.retrieval_filtered_by_layer_policy_count ?? 0,
+        );
+        overrideRetrievalFilteredByLayerPolicyCounts.push(Math.max(0, overrideRetrievalFilteredByLayerPolicyCount));
+        const overrideRetrievalFilteredByLayer =
+          overrideSelectionStats?.retrieval_filtered_by_layer &&
+          typeof overrideSelectionStats.retrieval_filtered_by_layer === "object"
+            ? overrideSelectionStats.retrieval_filtered_by_layer
+            : {};
+        for (const [layer, count] of Object.entries(overrideRetrievalFilteredByLayer)) {
+          incrementFrequency(overrideRetrievalFilteredByLayerFrequency, layer, Number(count));
+        }
+        const overrideFilteredByLayerPolicyCount = Number(overrideSelectionStats?.filtered_by_layer_policy_count ?? 0);
+        overrideFilteredByLayerPolicyCounts.push(Math.max(0, overrideFilteredByLayerPolicyCount));
+        const overrideFilteredByLayer =
+          overrideSelectionStats?.filtered_by_layer && typeof overrideSelectionStats.filtered_by_layer === "object"
+            ? overrideSelectionStats.filtered_by_layer
+            : {};
+        for (const [layer, count] of Object.entries(overrideFilteredByLayer)) {
+          incrementFrequency(overrideFilteredByLayerFrequency, layer, Number(count));
+        }
       }
       if ((baselineStageTiming && typeof baselineStageTiming === "object") || (baselineLayeredTiming && typeof baselineLayeredTiming === "object")) {
         baselineStageTimings.push({
@@ -1143,7 +1273,28 @@ async function main() {
         optimizationLeversFrequency[key] = (optimizationLeversFrequency[key] ?? 0) + 1;
       }
       const selectedMemoryLayers = Array.isArray(optimizedCost?.selected_memory_layers) ? optimizedCost.selected_memory_layers : [];
+      const selectionStats = optimized.body?.recall?.context?.selection_stats ?? null;
+      const retrievedMemoryLayers = Array.isArray(selectionStats?.retrieved_memory_layers) ? selectionStats.retrieved_memory_layers : [];
+      for (const layer of retrievedMemoryLayers) incrementFrequency(retrievedMemoryLayerFrequency, layer);
       for (const layer of selectedMemoryLayers) incrementFrequency(selectedMemoryLayerFrequency, layer);
+      const retrievalFilteredByLayerPolicyCount = Number(selectionStats?.retrieval_filtered_by_layer_policy_count ?? 0);
+      retrievalFilteredByLayerPolicyCounts.push(Math.max(0, retrievalFilteredByLayerPolicyCount));
+      const retrievalFilteredByLayer =
+        selectionStats?.retrieval_filtered_by_layer && typeof selectionStats.retrieval_filtered_by_layer === "object"
+          ? selectionStats.retrieval_filtered_by_layer
+          : {};
+      for (const [layer, count] of Object.entries(retrievalFilteredByLayer)) {
+        incrementFrequency(retrievalFilteredByLayerFrequency, layer, Number(count));
+      }
+      const filteredByLayerPolicyCount = Number(selectionStats?.filtered_by_layer_policy_count ?? 0);
+      filteredByLayerPolicyCounts.push(Math.max(0, filteredByLayerPolicyCount));
+      const filteredByLayer =
+        selectionStats?.filtered_by_layer && typeof selectionStats.filtered_by_layer === "object"
+          ? selectionStats.filtered_by_layer
+          : {};
+      for (const [layer, count] of Object.entries(filteredByLayer)) {
+        incrementFrequency(filteredByLayerFrequency, layer, Number(count));
+      }
       const selectionPolicy = optimized.body?.recall?.context?.selection_policy ?? null;
       incrementFrequency(selectionPolicyFrequency, selectionPolicy?.name);
       incrementFrequency(selectionPolicySourceFrequency, selectionPolicy?.source);
@@ -1160,6 +1311,10 @@ async function main() {
     const reductionSummary = summarizeSeries(tokenReductionRatios);
     const forgottenSummary = summarizeSeries(forgottenItems);
     const staticBlocksSummary = summarizeSeries(staticBlocksSelected);
+    const retrievalFilteredByLayerPolicySummary = summarizeSeries(retrievalFilteredByLayerPolicyCounts);
+    const filteredByLayerPolicySummary = summarizeSeries(filteredByLayerPolicyCounts);
+    const overrideRetrievalFilteredByLayerPolicySummary = summarizeSeries(overrideRetrievalFilteredByLayerPolicyCounts);
+    const overrideFilteredByLayerPolicySummary = summarizeSeries(overrideFilteredByLayerPolicyCounts);
     const baselineLatencySummary = summarizeSeries(baselineLatency);
     const optimizedLatencySummary = summarizeSeries(optimizedLatency);
     const tightenedLatencySummary = summarizeSeries(tightenedLatency);
@@ -1184,6 +1339,8 @@ async function main() {
         tool_candidates: optimizationToolCandidates,
         override_check: optimizationOverrideCheck,
         override_layers: optimizationOverrideLayers,
+        override_drop_trust_anchors: optimizationOverrideDropTrustAnchors,
+        override_apply_layer_policy_to_retrieval: optimizationOverrideApplyLayerPolicyToRetrieval,
       },
       total_pairs: optimizationSamples,
       ok_pairs: okPairs,
@@ -1216,7 +1373,12 @@ async function main() {
         within_token_budget_ratio: okPairs > 0 ? round(withinTokenBudgetCount / okPairs, 6) : 0,
         optimization_profile_applied_ratio: okPairs > 0 ? round(optimizationProfileAppliedCount / okPairs, 6) : 0,
         optimization_profile_source_frequency: optimizationProfileSourceFrequency,
+        retrieved_memory_layers_frequency: retrievedMemoryLayerFrequency,
         selected_memory_layers_frequency: selectedMemoryLayerFrequency,
+        retrieval_filtered_by_layer_policy_count: retrievalFilteredByLayerPolicySummary,
+        retrieval_filtered_by_layer_frequency: retrievalFilteredByLayerFrequency,
+        filtered_by_layer_policy_count: filteredByLayerPolicySummary,
+        filtered_by_layer_frequency: filteredByLayerFrequency,
         selection_policy_frequency: selectionPolicyFrequency,
         selection_policy_source_frequency: selectionPolicySourceFrequency,
         requested_allowed_layers_frequency: requestedAllowedLayerFrequency,
@@ -1230,6 +1392,8 @@ async function main() {
         ? {
             enabled: true,
             allowed_layers: optimizationOverrideLayers,
+            drop_trust_anchors: optimizationOverrideDropTrustAnchors,
+            apply_layer_policy_to_retrieval: optimizationOverrideApplyLayerPolicyToRetrieval,
             ok_pairs: tightenedTokens.length,
             failed_pairs: Math.max(0, optimizationSamples - tightenedTokens.length),
             tightened_context_est_tokens: {
@@ -1240,7 +1404,12 @@ async function main() {
             delta_vs_optimized_tokens: tightenedVsOptimizedTokenDeltaSummary,
             within_token_budget_ratio:
               tightenedTokens.length > 0 ? round(overrideWithinTokenBudgetCount / tightenedTokens.length, 6) : 0,
+            retrieved_memory_layers_frequency: overrideRetrievedMemoryLayerFrequency,
             selected_memory_layers_frequency: overrideSelectedMemoryLayerFrequency,
+            retrieval_filtered_by_layer_policy_count: overrideRetrievalFilteredByLayerPolicySummary,
+            retrieval_filtered_by_layer_frequency: overrideRetrievalFilteredByLayerFrequency,
+            filtered_by_layer_policy_count: overrideFilteredByLayerPolicySummary,
+            filtered_by_layer_frequency: overrideFilteredByLayerFrequency,
             selection_policy_source_frequency: overrideSelectionPolicySourceFrequency,
             requested_allowed_layers_frequency: overrideRequestedAllowedLayerFrequency,
             latency_ms: {
@@ -1801,6 +1970,8 @@ async function main() {
           optimization_request_mode: optimizationRequestMode,
           optimization_override_check: optimizationOverrideCheck,
           optimization_override_layers: optimizationOverrideLayers,
+          optimization_override_drop_trust_anchors: optimizationOverrideDropTrustAnchors,
+          optimization_override_apply_layer_policy_to_retrieval: optimizationOverrideApplyLayerPolicyToRetrieval,
           replay_check: replayCheck,
           replay_playbook_id: replayPlaybookId || null,
           replay_version: replayVersion,

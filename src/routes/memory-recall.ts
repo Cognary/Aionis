@@ -241,6 +241,7 @@ export function registerMemoryRecallRoutes(args: {
       inflight_wait_ms: gate.wait_ms,
       context_items: (out as any)?.context?.items ?? [],
       selection_policy: (out as any)?.context?.selection_policy ?? null,
+      selection_stats: (out as any)?.context?.selection_stats ?? null,
       explicit_mode: {
         mode: explicitMode.mode,
         profile: explicitMode.profile,

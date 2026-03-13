@@ -9,6 +9,10 @@ export type MemoryLayerPreferenceInput = {
   allowed_layers?: MemoryLayerId[] | null;
 };
 
+export type ResolveMemoryLayerPolicyOptions = {
+  unsafe_allow_drop_trust_anchors?: boolean;
+};
+
 export type MemoryLayerPolicy = {
   name: MemoryLayerPolicyName;
   preferred_layers: MemoryLayerId[];
@@ -46,6 +50,7 @@ function defaultPolicyForEndpoint(
 export function resolveMemoryLayerPolicy(
   endpoint: "recall" | "recall_text" | "planning_context" | "context_assemble",
   preference?: MemoryLayerPreferenceInput | null,
+  options?: ResolveMemoryLayerPolicyOptions,
 ): MemoryLayerPolicy {
   const base = defaultPolicyForEndpoint(endpoint);
   const requestedAllowedLayers = dedupeLayers(
@@ -53,13 +58,19 @@ export function resolveMemoryLayerPolicy(
   );
   if (requestedAllowedLayers.length === 0) return base;
 
-  const effectiveAllowed = new Set<MemoryLayerId>([...requestedAllowedLayers, ...base.trust_anchor_layers]);
+  const unsafeAllowDropTrustAnchors = options?.unsafe_allow_drop_trust_anchors === true;
+  const effectiveAllowed = new Set<MemoryLayerId>(
+    unsafeAllowDropTrustAnchors ? requestedAllowedLayers : [...requestedAllowedLayers, ...base.trust_anchor_layers],
+  );
   const preferredLayers = base.preferred_layers.filter((layer) => effectiveAllowed.has(layer));
   const fallbackLayers = base.fallback_layers.filter((layer) => effectiveAllowed.has(layer));
   return {
     ...base,
     preferred_layers: preferredLayers,
     fallback_layers: fallbackLayers,
+    trust_anchor_layers: unsafeAllowDropTrustAnchors
+      ? base.trust_anchor_layers.filter((layer) => effectiveAllowed.has(layer))
+      : base.trust_anchor_layers,
     source: "request_override",
     requested_allowed_layers: requestedAllowedLayers,
   };

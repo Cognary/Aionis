@@ -177,12 +177,44 @@ export type ContextCompactionDiagnostics = {
   dropped_by_section: Record<SectionId, number>;
 };
 
+export type ContextSelectionStats = {
+  retrieved_memory_layers: string[];
+  retrieved_unlayered_count: number;
+  selected_memory_layers: string[];
+  selected_unlayered_count: number;
+  retrieval_filtered_by_layer_policy_count: number;
+  retrieval_filtered_by_layer: Record<string, number>;
+  filtered_by_layer_policy_count: number;
+  filtered_by_layer: Record<string, number>;
+};
+
+type PickTopSelectionCollector = {
+  retrievedLayers: Set<string>;
+  retrievedUnlayeredCount: number;
+  filteredByLayer: Map<string, number>;
+  filteredCount: number;
+};
+
+function createPickTopSelectionCollector(): PickTopSelectionCollector {
+  return {
+    retrievedLayers: new Set<string>(),
+    retrievedUnlayeredCount: 0,
+    filteredByLayer: new Map<string, number>(),
+    filteredCount: 0,
+  };
+}
+
+function selectionLayerKey(layer: MemoryLayerId | null): string {
+  return layer ?? "unknown";
+}
+
 function pickTop(
   ranked: RankedItem[],
   nodes: Map<string, NodeRow>,
   types: Set<string>,
   limit: number,
   layerPolicy?: MemoryLayerPolicy | null,
+  selectionCollector?: PickTopSelectionCollector | null,
 ): NodeRow[] {
   const allowedLayers =
     layerPolicy?.source === "request_override"
@@ -197,7 +229,18 @@ function pickTop(
     if (!types.has(n.type)) continue;
     if (n.type === "topic" && ((n.topic_state ?? n.slots?.topic_state) === "draft")) continue;
     const layer = resolveCompressionLayer(n);
-    if (allowedLayers && (!layer || !allowedLayers.has(layer))) continue;
+    if (selectionCollector) {
+      if (layer) selectionCollector.retrievedLayers.add(layer);
+      else selectionCollector.retrievedUnlayeredCount += 1;
+    }
+    if (allowedLayers && (!layer || !allowedLayers.has(layer))) {
+      if (selectionCollector) {
+        const key = selectionLayerKey(layer);
+        selectionCollector.filteredCount += 1;
+        selectionCollector.filteredByLayer.set(key, (selectionCollector.filteredByLayer.get(key) ?? 0) + 1);
+      }
+      continue;
+    }
     out.push({ node: n, rank_index: rankIndex });
   }
   if (layerPolicy && out.length > 1) {
@@ -282,9 +325,11 @@ export function buildContext(
   items: ContextItem[];
   citations: ContextCitation[];
   compaction: ContextCompactionDiagnostics;
+  selection_stats: ContextSelectionStats;
 } {
   const items: ContextItem[] = [];
   const citations: ContextCitation[] = [];
+  const selectionCollector = createPickTopSelectionCollector();
   const compactionProfile = resolveCompactionProfile(options);
   const policy = CONTEXT_COMPACTION_POLICY[compactionProfile];
   const tokenBudget = resolveContextTokenBudget(options);
@@ -326,7 +371,7 @@ export function buildContext(
   };
 
   const layerPolicy = options?.layer_policy ?? null;
-  const topics = pickTop(ranked, nodes, new Set(["topic", "concept"]), 4, layerPolicy);
+  const topics = pickTop(ranked, nodes, new Set(["topic", "concept"]), 4, layerPolicy, selectionCollector);
   const hasCompressionConcept = topics.some(isCompressionConcept);
   for (const n of topics) {
     const uri = buildNodeUri(n, options);
@@ -345,7 +390,7 @@ export function buildContext(
     pushCitation(n);
   }
 
-  const entities = pickTop(ranked, nodes, new Set(["entity"]), 6, layerPolicy);
+  const entities = pickTop(ranked, nodes, new Set(["entity"]), 6, layerPolicy, selectionCollector);
   for (const n of entities) {
     const uri = buildNodeUri(n, options);
     items.push({
@@ -363,7 +408,7 @@ export function buildContext(
     pushCitation(n);
   }
 
-  const rawEvents = pickTop(ranked, nodes, new Set(["event", "evidence"]), hasCompressionConcept ? 24 : 10, layerPolicy);
+  const rawEvents = pickTop(ranked, nodes, new Set(["event", "evidence"]), hasCompressionConcept ? 24 : 10, layerPolicy, selectionCollector);
   const compressionCited = new Set<string>();
   if (hasCompressionConcept) {
     for (const n of topics) {
@@ -397,7 +442,7 @@ export function buildContext(
     pushCitation(n);
   }
 
-  const rules = pickTop(ranked, nodes, new Set(["rule"]), 6, layerPolicy);
+  const rules = pickTop(ranked, nodes, new Set(["rule"]), 6, layerPolicy, selectionCollector);
   for (const n of rules) {
     const d = ruleDefs.get(n.id);
     const uri = buildNodeUri(n, options);
@@ -533,5 +578,31 @@ export function buildContext(
     dropped_by_section: droppedBySection,
   };
 
-  return { text, items, citations, compaction };
+  const selectedLayers = new Set<string>();
+  let selectedUnlayeredCount = 0;
+  for (const item of items) {
+    const layer = typeof item.compression_layer === "string" ? item.compression_layer.trim() : "";
+    if (layer) selectedLayers.add(layer);
+    else selectedUnlayeredCount += 1;
+  }
+  const filteredByLayer = Object.fromEntries(
+    Array.from(selectionCollector.filteredByLayer.entries()).sort((a, b) => a[0].localeCompare(b[0])),
+  );
+
+  return {
+    text,
+    items,
+    citations,
+    compaction,
+    selection_stats: {
+      retrieved_memory_layers: Array.from(selectionCollector.retrievedLayers).sort(),
+      retrieved_unlayered_count: selectionCollector.retrievedUnlayeredCount,
+      selected_memory_layers: Array.from(selectedLayers).sort(),
+      selected_unlayered_count: selectedUnlayeredCount,
+      retrieval_filtered_by_layer_policy_count: 0,
+      retrieval_filtered_by_layer: {},
+      filtered_by_layer_policy_count: selectionCollector.filteredCount,
+      filtered_by_layer: filteredByLayer,
+    },
+  };
 }

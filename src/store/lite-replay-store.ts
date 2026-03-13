@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { fromTenantScopeKey } from "../memory/tenant.js";
 import type {
   ReplayNodeRow,
   ReplayPlaybookRow,
@@ -57,6 +58,20 @@ function replayPlaybookFromRow(row: LiteReplayRow): ReplayPlaybookRow {
     playbook_status: row.playbook_status,
     playbook_id: row.playbook_id,
   };
+}
+
+function scopeVariants(scope: string): string[] {
+  const variants = [scope];
+  const raw = fromTenantScopeKey(scope, "default", "default");
+  if (raw !== scope) variants.push(raw);
+  const match = scope.match(/^tenant:([a-zA-Z0-9._-]+)::scope:(.+)$/);
+  if (match) {
+    const [, tenantId, rawScope] = match;
+    const derivedRaw = fromTenantScopeKey(scope, tenantId, "default");
+    if (derivedRaw && !variants.includes(derivedRaw)) variants.push(derivedRaw);
+    if (rawScope && !variants.includes(rawScope)) variants.push(rawScope);
+  }
+  return variants;
 }
 
 export type LiteReplayStore = ReplayWriteMirror & {
@@ -192,28 +207,43 @@ export function createLiteReplayStore(path: string): LiteReplayStore {
       return {
         capability_version: REPLAY_STORE_ACCESS_CAPABILITY_VERSION,
         async findRunNodeByRunId(scope: string, runId: string): Promise<ReplayRunNodeRow | null> {
-          const row = getRunStmt.get(scope, runId) as LiteReplayRow | undefined;
-          return row ? replayNodeFromRow(row) : null;
+          for (const variant of scopeVariants(scope)) {
+            const row = getRunStmt.get(variant, runId) as LiteReplayRow | undefined;
+            if (row) return replayNodeFromRow(row);
+          }
+          return null;
         },
         async findStepNodeById(scope: string, stepId: string): Promise<ReplayNodeRow | null> {
           const row = getStepStmt.get(scope, stepId) as LiteReplayRow | undefined;
           return row ? replayNodeFromRow(row) : null;
         },
         async findLatestStepNodeByIndex(scope: string, runId: string, stepIndex: number): Promise<ReplayNodeRow | null> {
-          const row = getStepByIndexStmt.get(scope, runId, stepIndex) as LiteReplayRow | undefined;
-          return row ? replayNodeFromRow(row) : null;
+          for (const variant of scopeVariants(scope)) {
+            const row = getStepByIndexStmt.get(variant, runId, stepIndex) as LiteReplayRow | undefined;
+            if (row) return replayNodeFromRow(row);
+          }
+          return null;
         },
         async listReplayNodesByRunId(scope: string, runId: string): Promise<ReplayNodeRow[]> {
-          const rows = listRunNodesStmt.all(scope, runId) as LiteReplayRow[];
-          return rows.map(replayNodeFromRow);
+          for (const variant of scopeVariants(scope)) {
+            const rows = listRunNodesStmt.all(variant, runId) as LiteReplayRow[];
+            if (rows.length > 0) return rows.map(replayNodeFromRow);
+          }
+          return [];
         },
         async listReplayPlaybookVersions(scope: string, playbookId: string): Promise<ReplayPlaybookRow[]> {
-          const rows = listPlaybookVersionsStmt.all(scope, playbookId) as LiteReplayRow[];
-          return rows.map(replayPlaybookFromRow);
+          for (const variant of scopeVariants(scope)) {
+            const rows = listPlaybookVersionsStmt.all(variant, playbookId) as LiteReplayRow[];
+            if (rows.length > 0) return rows.map(replayPlaybookFromRow);
+          }
+          return [];
         },
         async getReplayPlaybookVersion(scope: string, playbookId: string, version: number): Promise<ReplayPlaybookRow | null> {
-          const row = getPlaybookVersionStmt.get(scope, playbookId, version) as LiteReplayRow | undefined;
-          return row ? replayPlaybookFromRow(row) : null;
+          for (const variant of scopeVariants(scope)) {
+            const row = getPlaybookVersionStmt.get(variant, playbookId, version) as LiteReplayRow | undefined;
+            if (row) return replayPlaybookFromRow(row);
+          }
+          return null;
         },
       };
     },

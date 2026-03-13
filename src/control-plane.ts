@@ -1690,6 +1690,7 @@ export async function recordMemoryContextAssemblyTelemetry(
   const selectedMemoryLayersJson = JSON.stringify(selectedMemoryLayers);
   const trustAnchorLayersJson = JSON.stringify(trustAnchorLayers);
   const requestedAllowedLayersJson = JSON.stringify(requestedAllowedLayers);
+  const headInsertSavepoint = "memory_context_assembly_head_insert_sp";
 
   const layers = (Array.isArray(input.layers) ? input.layers : [])
     .map((layer) => ({
@@ -1714,35 +1715,34 @@ export async function recordMemoryContextAssemblyTelemetry(
 
   try {
     await withTx(db, async (client) => {
-      let head: any;
-      try {
-        head = await client.query(
-          `
-          INSERT INTO memory_context_assembly_telemetry (
-            tenant_id,
-            scope,
-            endpoint,
-            layered_output,
-            request_id,
-            total_budget_chars,
-            used_chars,
-            remaining_chars,
-            source_items,
-            kept_items,
-            dropped_items,
-            layers_with_content,
-            merge_trace_included,
-            selection_policy_name,
-            selection_policy_source,
-            selected_memory_layers_json,
-            trust_anchor_layers_json,
-            requested_allowed_layers_json,
-            latency_ms
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-          RETURNING id
+      const headInsertAttempts: Array<{ sql: string; params: unknown[] }> = [
+        {
+          sql: `
+            INSERT INTO memory_context_assembly_telemetry (
+              tenant_id,
+              scope,
+              endpoint,
+              layered_output,
+              request_id,
+              total_budget_chars,
+              used_chars,
+              remaining_chars,
+              source_items,
+              kept_items,
+              dropped_items,
+              layers_with_content,
+              merge_trace_included,
+              selection_policy_name,
+              selection_policy_source,
+              selected_memory_layers_json,
+              trust_anchor_layers_json,
+              requested_allowed_layers_json,
+              latency_ms
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            RETURNING id
           `,
-          [
+          params: [
             tenantId,
             scope,
             endpoint,
@@ -1763,14 +1763,9 @@ export async function recordMemoryContextAssemblyTelemetry(
             requestedAllowedLayersJson,
             latencyMs,
           ],
-        );
-      } catch (insertErr: any) {
-        // Backward compatibility during rolling migration: old schema may not have new layer-policy columns
-        // or the earlier layered_output column yet.
-        if (String(insertErr?.code ?? "") !== "42703") throw insertErr;
-        try {
-          head = await client.query(
-            `
+        },
+        {
+          sql: `
             INSERT INTO memory_context_assembly_telemetry (
               tenant_id,
               scope,
@@ -1789,28 +1784,26 @@ export async function recordMemoryContextAssemblyTelemetry(
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING id
-            `,
-            [
-              tenantId,
-              scope,
-              endpoint,
-              layeredOutput,
-              requestId,
-              totalBudgetChars,
-              usedChars,
-              remainingChars,
-              sourceItems,
-              keptItems,
-              droppedItems,
-              layersWithContent,
-              mergeTraceIncluded,
-              latencyMs,
-            ],
-          );
-        } catch (legacyInsertErr: any) {
-          if (String(legacyInsertErr?.code ?? "") !== "42703") throw legacyInsertErr;
-          head = await client.query(
-            `
+          `,
+          params: [
+            tenantId,
+            scope,
+            endpoint,
+            layeredOutput,
+            requestId,
+            totalBudgetChars,
+            usedChars,
+            remainingChars,
+            sourceItems,
+            keptItems,
+            droppedItems,
+            layersWithContent,
+            mergeTraceIncluded,
+            latencyMs,
+          ],
+        },
+        {
+          sql: `
             INSERT INTO memory_context_assembly_telemetry (
               tenant_id,
               scope,
@@ -1828,25 +1821,41 @@ export async function recordMemoryContextAssemblyTelemetry(
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING id
-            `,
-            [
-              tenantId,
-              scope,
-              endpoint,
-              requestId,
-              totalBudgetChars,
-              usedChars,
-              remainingChars,
-              sourceItems,
-              keptItems,
-              droppedItems,
-              layersWithContent,
-              mergeTraceIncluded,
-              latencyMs,
-            ],
-          );
+          `,
+          params: [
+            tenantId,
+            scope,
+            endpoint,
+            requestId,
+            totalBudgetChars,
+            usedChars,
+            remainingChars,
+            sourceItems,
+            keptItems,
+            droppedItems,
+            layersWithContent,
+            mergeTraceIncluded,
+            latencyMs,
+          ],
+        },
+      ];
+      let head: any = null;
+      let lastHeadInsertErr: unknown = null;
+      for (const attempt of headInsertAttempts) {
+        await client.query(`SAVEPOINT ${headInsertSavepoint}`);
+        try {
+          head = await client.query(attempt.sql, attempt.params);
+          await client.query(`RELEASE SAVEPOINT ${headInsertSavepoint}`);
+          lastHeadInsertErr = null;
+          break;
+        } catch (insertErr: any) {
+          await client.query(`ROLLBACK TO SAVEPOINT ${headInsertSavepoint}`);
+          await client.query(`RELEASE SAVEPOINT ${headInsertSavepoint}`);
+          if (String(insertErr?.code ?? "") !== "42703") throw insertErr;
+          lastHeadInsertErr = insertErr;
         }
       }
+      if (!head) throw lastHeadInsertErr ?? new Error("memory_context_assembly_telemetry insert failed");
       const telemetryId = Number(head.rows[0]?.id ?? 0);
       if (!Number.isFinite(telemetryId) || telemetryId <= 0) return;
 

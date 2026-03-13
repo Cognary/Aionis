@@ -113,6 +113,16 @@ export function registerMemoryContextRuntimeRoutes(args: {
     recordContextAssemblyTelemetryBestEffort,
   } = args;
   const liteModeActive = env.AIONIS_EDITION === "lite" && !!liteWriteStore;
+  const allowUnsafeDropTrustAnchors = (req: any): boolean => {
+    if (env.APP_ENV === "prod") return false;
+    const raw = String(req.headers["x-aionis-internal-allow-drop-trust-anchors"] ?? "").trim().toLowerCase();
+    return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+  };
+  const allowLayerPolicyRetrievalFiltering = (req: any): boolean => {
+    if (env.APP_ENV === "prod") return false;
+    const raw = String(req.headers["x-aionis-internal-apply-layer-policy-to-retrieval"] ?? "").trim().toLowerCase();
+    return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+  };
 
   app.post("/v1/memory/recall_text", async (req: any, reply: any) => {
     if (!embedder) {
@@ -442,6 +452,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       inflight_wait_ms: gate.wait_ms,
       context_items: (out as any)?.context?.items ?? [],
       selection_policy: (out as any)?.context?.selection_policy ?? null,
+      selection_stats: (out as any)?.context?.selection_stats ?? null,
       explicit_mode: {
         mode: explicitMode.mode,
         profile: explicitMode.profile,
@@ -612,6 +623,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
         memory_layer_preference: parsed.memory_layer_preference,
       });
       const auth = buildRecallAuth(req, wantDebugEmbeddings);
+      const unsafeDropTrustAnchors = allowUnsafeDropTrustAnchors(req);
+      const applyLayerPolicyToRetrieval = allowLayerPolicyRetrievalFiltering(req);
 
       if (liteModeActive) {
         const recall = await memoryRecallParsed(
@@ -629,6 +642,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
           {
             stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
             recall_access: recallAccessForClient({} as any),
+            unsafe_allow_drop_trust_anchors: unsafeDropTrustAnchors,
+            unsafe_apply_layer_policy_to_retrieval: applyLayerPolicyToRetrieval,
           },
         );
 
@@ -690,6 +705,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
             {
               stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
               recall_access: recallAccessForClient(client),
+              unsafe_allow_drop_trust_anchors: unsafeDropTrustAnchors,
+              unsafe_apply_layer_policy_to_retrieval: applyLayerPolicyToRetrieval,
             },
           );
 
@@ -772,6 +789,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       inflight_wait_ms: gate.wait_ms,
       context_items: recallOut?.context?.items ?? [],
       selection_policy: recallOut?.context?.selection_policy ?? null,
+      selection_stats: recallOut?.context?.selection_stats ?? null,
       explicit_mode: {
         mode: explicitMode.mode,
         profile: explicitMode.profile,
@@ -865,6 +883,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const costSignals = buildLayeredContextCostSignals({
       layered_context: layeredContext,
       context_items: Array.isArray(recallOut?.context?.items) ? recallOut.context.items : [],
+      context_selection_stats: recallOut?.context?.selection_stats ?? null,
       context_est_tokens: contextEstTokens,
       context_token_budget: recallParsed.context_token_budget ?? null,
       context_char_budget: recallParsed.context_char_budget ?? null,
@@ -1057,6 +1076,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
         memory_layer_preference: parsed.memory_layer_preference,
       });
       const auth = buildRecallAuth(req, wantDebugEmbeddings);
+      const unsafeDropTrustAnchors = allowUnsafeDropTrustAnchors(req);
+      const applyLayerPolicyToRetrieval = allowLayerPolicyRetrievalFiltering(req);
       const executionContext =
         parsed.context && typeof parsed.context === "object" && !Array.isArray(parsed.context) ? parsed.context : {};
 
@@ -1076,6 +1097,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
           {
             stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
             recall_access: recallAccessForClient({} as any),
+            unsafe_allow_drop_trust_anchors: unsafeDropTrustAnchors,
+            unsafe_apply_layer_policy_to_retrieval: applyLayerPolicyToRetrieval,
           },
         );
 
@@ -1139,6 +1162,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
             {
               stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
               recall_access: recallAccessForClient(client),
+              unsafe_allow_drop_trust_anchors: unsafeDropTrustAnchors,
+              unsafe_apply_layer_policy_to_retrieval: applyLayerPolicyToRetrieval,
             },
           );
 
@@ -1223,6 +1248,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       inflight_wait_ms: gate.wait_ms,
       context_items: recallOut?.context?.items ?? [],
       selection_policy: recallOut?.context?.selection_policy ?? null,
+      selection_stats: recallOut?.context?.selection_stats ?? null,
       explicit_mode: {
         mode: explicitMode.mode,
         profile: explicitMode.profile,
@@ -1271,6 +1297,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     const costSignals = buildLayeredContextCostSignals({
       layered_context: layeredContext,
       context_items: Array.isArray(recallOut?.context?.items) ? recallOut.context.items : [],
+      context_selection_stats: recallOut?.context?.selection_stats ?? null,
       context_est_tokens: contextEstTokens,
       context_token_budget: recallParsed.context_token_budget ?? null,
       context_char_budget: recallParsed.context_char_budget ?? null,

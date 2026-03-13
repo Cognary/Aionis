@@ -348,7 +348,8 @@ console.log(writeRes.distillation, writeRes.nodes);
 4. `contextAssemble` responses now expose `cost_signals` so callers can inspect estimated context tokens, forgotten items, and active savings levers directly.
 5. `cost_signals.selected_memory_layers` exposes which memory compression layers were actually selected for the assembled context.
 6. `recall.context.selection_policy` and `recall.observability.memory_layers` expose the active endpoint-default layer preference and trust-anchor policy used during context selection.
-7. `memory_layer_preference.allowed_layers` can tighten the active layer set on `recall`, `recall_text`, `planning/context`, and `context/assemble`, but Aionis still preserves `L3/L0` trust anchors automatically.
+7. `recall.context.selection_stats` and layered `cost_signals` expose both retrieval-side and context-side layer filtering stats, so you can tell whether nodes were excluded before ranking/subgraph assembly or only during final context tightening.
+8. `memory_layer_preference.allowed_layers` can tighten the active layer set on `recall`, `recall_text`, `planning/context`, and `context/assemble`, but Aionis still preserves `L3/L0` trust anchors automatically.
 
 ## Selective Static Injection (TypeScript)
 

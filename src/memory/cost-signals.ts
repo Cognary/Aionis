@@ -14,7 +14,14 @@ export type LayeredContextCostSignals = {
   forgotten_by_reason: Record<string, number>;
   static_blocks_selected: number;
   static_blocks_rejected: number;
+  retrieved_memory_layers: string[];
+  retrieved_unlayered_count: number;
   selected_memory_layers: string[];
+  selected_unlayered_count: number;
+  retrieval_filtered_by_layer_policy_count: number;
+  retrieval_filtered_by_layer: Record<string, number>;
+  filtered_by_layer_policy_count: number;
+  filtered_by_layer: Record<string, number>;
   primary_savings_levers: string[];
 };
 
@@ -52,9 +59,55 @@ function selectedMemoryLayers(items: unknown): string[] {
   return Array.from(out).sort();
 }
 
+function normalizeSelectionStats(input: unknown) {
+  if (!input || typeof input !== "object") return null;
+  const raw = input as Record<string, unknown>;
+  const retrievedMemoryLayers = Array.isArray(raw.retrieved_memory_layers)
+    ? raw.retrieved_memory_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+  const selectedLayers = Array.isArray(raw.selected_memory_layers)
+    ? raw.selected_memory_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+  const filteredByLayer =
+    raw.filtered_by_layer && typeof raw.filtered_by_layer === "object" && !Array.isArray(raw.filtered_by_layer)
+      ? Object.fromEntries(
+          Object.entries(raw.filtered_by_layer as Record<string, unknown>)
+            .map(([key, value]) => [String(key), Number(value)])
+            .filter(([, value]) => Number.isFinite(value) && Number(value) > 0),
+        )
+      : {};
+  const retrievalFilteredByLayer =
+    raw.retrieval_filtered_by_layer &&
+    typeof raw.retrieval_filtered_by_layer === "object" &&
+    !Array.isArray(raw.retrieval_filtered_by_layer)
+      ? Object.fromEntries(
+          Object.entries(raw.retrieval_filtered_by_layer as Record<string, unknown>)
+            .map(([key, value]) => [String(key), Number(value)])
+            .filter(([, value]) => Number.isFinite(value) && Number(value) > 0),
+        )
+      : {};
+  const retrievedUnlayeredCount = Number(raw.retrieved_unlayered_count ?? 0);
+  const selectedUnlayeredCount = Number(raw.selected_unlayered_count ?? 0);
+  const retrievalFilteredCount = Number(raw.retrieval_filtered_by_layer_policy_count ?? 0);
+  const filteredCount = Number(raw.filtered_by_layer_policy_count ?? 0);
+  return {
+    retrieved_memory_layers: retrievedMemoryLayers,
+    retrieved_unlayered_count: Number.isFinite(retrievedUnlayeredCount) ? Math.max(0, Math.trunc(retrievedUnlayeredCount)) : 0,
+    selected_memory_layers: selectedLayers,
+    selected_unlayered_count: Number.isFinite(selectedUnlayeredCount) ? Math.max(0, Math.trunc(selectedUnlayeredCount)) : 0,
+    retrieval_filtered_by_layer_policy_count: Number.isFinite(retrievalFilteredCount)
+      ? Math.max(0, Math.trunc(retrievalFilteredCount))
+      : 0,
+    retrieval_filtered_by_layer: retrievalFilteredByLayer,
+    filtered_by_layer_policy_count: Number.isFinite(filteredCount) ? Math.max(0, Math.trunc(filteredCount)) : 0,
+    filtered_by_layer: filteredByLayer,
+  };
+}
+
 export function buildLayeredContextCostSignals(args: {
   layered_context?: any;
   context_items?: any[];
+  context_selection_stats?: unknown;
   context_est_tokens: number;
   context_token_budget?: number | null;
   context_char_budget?: number | null;
@@ -72,7 +125,13 @@ export function buildLayeredContextCostSignals(args: {
   const staticRejected = asNonNegativeNumber(args.layered_context?.static_injection?.rejected_blocks);
   const compactionProfile = normalizeProfile(args.context_compaction_profile) ?? "balanced";
   const optimizationProfile = normalizeProfile(args.context_optimization_profile);
-  const memoryLayers = selectedMemoryLayers(args.context_items);
+  const selectionStats = normalizeSelectionStats(args.context_selection_stats);
+  const memoryLayers = selectionStats?.selected_memory_layers ?? selectedMemoryLayers(args.context_items);
+  const retrievedMemoryLayers = selectionStats?.retrieved_memory_layers ?? [];
+  const filteredByLayerPolicyCount = selectionStats?.filtered_by_layer_policy_count ?? 0;
+  const filteredByLayer = selectionStats?.filtered_by_layer ?? {};
+  const retrievalFilteredByLayerPolicyCount = selectionStats?.retrieval_filtered_by_layer_policy_count ?? 0;
+  const retrievalFilteredByLayer = selectionStats?.retrieval_filtered_by_layer ?? {};
   const levers: string[] = [];
   if (optimizationProfile) levers.push(`optimization_profile:${optimizationProfile}`);
   if (forgottenItems > 0) levers.push("forgetting");
@@ -81,6 +140,8 @@ export function buildLayeredContextCostSignals(args: {
   if (tokenBudget !== null) levers.push("token_budget");
   if (charBudget !== null) levers.push("char_budget");
   if (memoryLayers.length > 0) levers.push(`memory_layers:${memoryLayers.join(",")}`);
+  if (retrievalFilteredByLayerPolicyCount > 0) levers.push("retrieval_layer_policy_filtering");
+  if (filteredByLayerPolicyCount > 0) levers.push("layer_policy_filtering");
 
   return {
     summary_version: "context_cost_signals_v1",
@@ -99,7 +160,14 @@ export function buildLayeredContextCostSignals(args: {
     forgotten_by_reason: forgottenByReason,
     static_blocks_selected: staticSelected,
     static_blocks_rejected: staticRejected,
+    retrieved_memory_layers: retrievedMemoryLayers,
+    retrieved_unlayered_count: selectionStats?.retrieved_unlayered_count ?? 0,
     selected_memory_layers: memoryLayers,
+    selected_unlayered_count: selectionStats?.selected_unlayered_count ?? 0,
+    retrieval_filtered_by_layer_policy_count: retrievalFilteredByLayerPolicyCount,
+    retrieval_filtered_by_layer: retrievalFilteredByLayer,
+    filtered_by_layer_policy_count: filteredByLayerPolicyCount,
+    filtered_by_layer: filteredByLayer,
     primary_savings_levers: levers,
   };
 }

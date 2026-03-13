@@ -1218,6 +1218,94 @@ async function main() {
     out.push(
       await runCheck(
         client,
+        "semantic_abstraction_slots_invalid",
+        "warning",
+        `
+        SELECT count(*)::text AS n
+        FROM memory_nodes
+        WHERE scope = $1
+          AND type = 'concept'
+          AND slots->>'summary_kind' = 'semantic_abstraction'
+          AND (
+            slots->>'compression_layer' <> 'L4'
+            OR NOT (slots ? 'source_summary_id')
+            OR COALESCE(slots->>'source_summary_id', '') = ''
+            OR NOT (slots ? 'abstraction_kind')
+            OR COALESCE(slots->>'abstraction_kind', '') = ''
+            OR NOT (slots ? 'citations')
+            OR jsonb_typeof(slots->'citations') <> 'array'
+            OR jsonb_array_length(COALESCE(slots->'citations', '[]'::jsonb)) = 0
+          )
+        `,
+        [scope],
+        `
+        SELECT id, title, slots->>'abstraction_kind' AS abstraction_kind
+        FROM memory_nodes
+        WHERE scope = $1
+          AND type = 'concept'
+          AND slots->>'summary_kind' = 'semantic_abstraction'
+          AND (
+            slots->>'compression_layer' <> 'L4'
+            OR NOT (slots ? 'source_summary_id')
+            OR COALESCE(slots->>'source_summary_id', '') = ''
+            OR NOT (slots ? 'abstraction_kind')
+            OR COALESCE(slots->>'abstraction_kind', '') = ''
+            OR NOT (slots ? 'citations')
+            OR jsonb_typeof(slots->'citations') <> 'array'
+            OR jsonb_array_length(COALESCE(slots->'citations', '[]'::jsonb)) = 0
+          )
+        ORDER BY updated_at DESC
+        LIMIT __LIMIT__
+        `,
+        [scope],
+        sampleLimit,
+        "Semantic abstractions should carry L4 slots, source_summary_id, abstraction_kind, and citations[].",
+      ),
+    );
+
+    out.push(
+      await runCheck(
+        client,
+        "semantic_abstraction_source_summary_missing",
+        "warning",
+        `
+        SELECT count(*)::text AS n
+        FROM memory_nodes n
+        LEFT JOIN memory_nodes s ON s.scope = n.scope
+          AND s.id = CASE
+            WHEN (n.slots->>'source_summary_id') ~* '^[0-9a-f-]{36}$' THEN (n.slots->>'source_summary_id')::uuid
+            ELSE NULL
+          END
+        WHERE n.scope = $1
+          AND n.type = 'concept'
+          AND n.slots->>'summary_kind' = 'semantic_abstraction'
+          AND s.id IS NULL
+        `,
+        [scope],
+        `
+        SELECT n.id, n.title, n.slots->>'source_summary_id' AS source_summary_id
+        FROM memory_nodes n
+        LEFT JOIN memory_nodes s ON s.scope = n.scope
+          AND s.id = CASE
+            WHEN (n.slots->>'source_summary_id') ~* '^[0-9a-f-]{36}$' THEN (n.slots->>'source_summary_id')::uuid
+            ELSE NULL
+          END
+        WHERE n.scope = $1
+          AND n.type = 'concept'
+          AND n.slots->>'summary_kind' = 'semantic_abstraction'
+          AND s.id IS NULL
+        ORDER BY n.updated_at DESC
+        LIMIT __LIMIT__
+        `,
+        [scope],
+        sampleLimit,
+        "Semantic abstractions should point back to an existing source_summary_id.",
+      ),
+    );
+
+    out.push(
+      await runCheck(
+        client,
         "alias_self_reference",
         "error",
         `

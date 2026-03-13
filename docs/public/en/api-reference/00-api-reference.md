@@ -195,17 +195,18 @@ Notes:
    - callers can disable fallback with `execute_fallback=false`
 6. replay `candidate / run / dispatch` responses now include machine-readable `cost_signals`.
 7. `planning/context` and `context/assemble` expose `cost_signals.selected_memory_layers`, and `recall / recall_text / planning/context / context/assemble` can all echo `recall.context.selection_policy`, so operators can inspect the applied layer policy.
-8. `recall`, `recall_text`, `planning/context`, and `context/assemble` accept `memory_layer_preference.allowed_layers` for caller-side tightening; the server still enforces `L3/L0` trust anchors.
-9. Execution backends:
+8. `recall.context.selection_stats`, `recall.observability.memory_layers`, and layered `cost_signals` expose retrieved-vs-selected layer stats plus both retrieval-side and context-side filtering counters (`retrieval_filtered_by_layer_policy_count` / `retrieval_filtered_by_layer` and `filtered_by_layer_policy_count` / `filtered_by_layer`).
+9. `recall`, `recall_text`, `planning/context`, and `context/assemble` accept `memory_layer_preference.allowed_layers` for caller-side tightening; the server still enforces `L3/L0` trust anchors.
+10. Execution backends:
    - `params.execution_backend=local_process` (default)
    - `params.execution_backend=sandbox_sync` (sandbox run sync, with command result validation)
    - `params.execution_backend=sandbox_async` (sandbox queue mode, pending execution evidence)
-10. Command execution is allowlist-gated and currently supports command-style tools (`command|shell|exec|bash`).
-11. Optional replay run execution params:
+11. Command execution is allowlist-gated and currently supports command-style tools (`command|shell|exec|bash`).
+12. Optional replay run execution params:
    - `project_id` (top-level) or `params.project_id` for sandbox budget scoping
    - `params.sensitive_review_mode=block|warn`
    - `params.allow_sensitive_exec=true` (required when `block` mode hits a sensitive command)
-12. `guided` supports repair synthesis strategies:
+13. `guided` supports repair synthesis strategies:
    - `deterministic_skip` (default): remove-step patch fallback.
    - `heuristic_patch`: command-replacement/retry patch when possible, else remove-step fallback.
    - `http_synth`: external repair synthesizer (`REPLAY_GUIDED_REPAIR_HTTP_ENDPOINT`) with heuristic fallback.

@@ -42,6 +42,53 @@ function normalizeSelectionPolicy(input: unknown) {
   };
 }
 
+function normalizeSelectionStats(input: unknown) {
+  if (!input || typeof input !== "object") return null;
+  const raw = input as Record<string, unknown>;
+  const retrievedMemoryLayers = Array.isArray(raw.retrieved_memory_layers)
+    ? raw.retrieved_memory_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+  const selectedMemoryLayers = Array.isArray(raw.selected_memory_layers)
+    ? raw.selected_memory_layers.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    : [];
+  const filteredByLayer =
+    raw.filtered_by_layer && typeof raw.filtered_by_layer === "object" && !Array.isArray(raw.filtered_by_layer)
+      ? Object.fromEntries(
+          Object.entries(raw.filtered_by_layer as Record<string, unknown>)
+            .map(([key, value]) => [String(key), Number(value)])
+            .filter(([, value]) => Number.isFinite(value) && Number(value) > 0),
+        )
+      : {};
+  const retrievalFilteredByLayer =
+    raw.retrieval_filtered_by_layer &&
+    typeof raw.retrieval_filtered_by_layer === "object" &&
+    !Array.isArray(raw.retrieval_filtered_by_layer)
+      ? Object.fromEntries(
+          Object.entries(raw.retrieval_filtered_by_layer as Record<string, unknown>)
+            .map(([key, value]) => [String(key), Number(value)])
+            .filter(([, value]) => Number.isFinite(value) && Number(value) > 0),
+        )
+      : {};
+  const retrievedUnlayeredCount = Number(raw.retrieved_unlayered_count ?? 0);
+  const selectedUnlayeredCount = Number(raw.selected_unlayered_count ?? 0);
+  const retrievalFilteredByLayerPolicyCount = Number(raw.retrieval_filtered_by_layer_policy_count ?? 0);
+  const filteredByLayerPolicyCount = Number(raw.filtered_by_layer_policy_count ?? 0);
+  return {
+    retrieved_memory_layers: retrievedMemoryLayers,
+    retrieved_unlayered_count: Number.isFinite(retrievedUnlayeredCount) ? Math.max(0, Math.trunc(retrievedUnlayeredCount)) : 0,
+    selected_memory_layers: selectedMemoryLayers,
+    selected_unlayered_count: Number.isFinite(selectedUnlayeredCount) ? Math.max(0, Math.trunc(selectedUnlayeredCount)) : 0,
+    retrieval_filtered_by_layer_policy_count: Number.isFinite(retrievalFilteredByLayerPolicyCount)
+      ? Math.max(0, Math.trunc(retrievalFilteredByLayerPolicyCount))
+      : 0,
+    retrieval_filtered_by_layer: retrievalFilteredByLayer,
+    filtered_by_layer_policy_count: Number.isFinite(filteredByLayerPolicyCount)
+      ? Math.max(0, Math.trunc(filteredByLayerPolicyCount))
+      : 0,
+    filtered_by_layer: filteredByLayer,
+  };
+}
+
 export function collectRecallTrajectoryUriLinks(args: { recall: any; tools?: any; max_per_type?: number }) {
   const cap = Math.max(1, Math.min(200, Number(args.max_per_type ?? 32)));
   const out = {
@@ -135,6 +182,7 @@ export function buildRecallObservability(args: {
   inflight_wait_ms: number;
   context_items?: unknown;
   selection_policy?: unknown;
+  selection_stats?: unknown;
   explicit_mode?: {
     mode?: string | null;
     profile?: string;
@@ -175,6 +223,7 @@ export function buildRecallObservability(args: {
   };
   const memoryLayers = selectedMemoryLayers(args.context_items);
   const selectionPolicy = normalizeSelectionPolicy(args.selection_policy);
+  const selectionStats = normalizeSelectionStats(args.selection_stats);
   return {
     stage_timings_ms: stageTimings,
     inflight_wait_ms: args.inflight_wait_ms,
@@ -212,7 +261,14 @@ export function buildRecallObservability(args: {
     stage1: args.stage1 ?? null,
     neighborhood_counts: args.neighborhood_counts ?? null,
     memory_layers: {
-      selected_layers: memoryLayers,
+      retrieved_layers: selectionStats?.retrieved_memory_layers ?? [],
+      selected_layers: selectionStats?.selected_memory_layers ?? memoryLayers,
+      retrieved_unlayered_count: selectionStats?.retrieved_unlayered_count ?? 0,
+      selected_unlayered_count: selectionStats?.selected_unlayered_count ?? 0,
+      retrieval_filtered_by_layer_policy_count: selectionStats?.retrieval_filtered_by_layer_policy_count ?? 0,
+      retrieval_filtered_by_layer: selectionStats?.retrieval_filtered_by_layer ?? {},
+      filtered_by_layer_policy_count: selectionStats?.filtered_by_layer_policy_count ?? 0,
+      filtered_by_layer: selectionStats?.filtered_by_layer ?? {},
       selection_policy: selectionPolicy,
     },
   };
