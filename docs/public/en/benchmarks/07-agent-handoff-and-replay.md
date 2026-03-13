@@ -8,6 +8,12 @@ Last updated: `2026-03-13`
 
 This page is the public benchmark disclosure for Aionis handoff and replay evidence.
 
+The simplest way to read it is as a progression:
+
+1. `without Aionis`: lossy externalized handoff,
+2. `with Aionis handoff`: preserved execution contract,
+3. `with Aionis replay`: preserved contract plus deterministic execution reuse.
+
 ## Scope Statement
 
 This disclosure covers reproducible runs for:
@@ -44,6 +50,25 @@ Interpretation:
 1. The baseline exported a lossy contract and dropped execution facts in `2/3` cases.
 2. Aionis handoff preserved the contract across process and runtime boundaries in `3/3` cases.
 3. The primary claim here is alignment quality, not token reduction.
+
+### 1b. On the same real GitHub repository, Aionis handoff preserves the full repo and test scope
+
+Repository:
+
+1. URL: `https://github.com/pallets/click.git`
+2. Commit: `cdab890e57a30a9f437b88ce9652f7bfce980c1f`
+3. Cases: `click_real_repo_001`, `click_real_repo_002`, `click_real_repo_003`
+
+| Arm | Cases | Success rate | Avg duration ms | Avg focused files | Avg pytest targets |
+| --- | --- | --- | --- | --- | --- |
+| `file_export` | `3` | `0.0%` | `11841.0` | `1.0` | `1.0` |
+| `aionis_handoff` | `3` | `100.0%` | `12033.0` | `4.0` | `2.0` |
+
+Interpretation:
+
+1. The baseline did not fail because the repo was invalid. It failed because the externalized contract dropped most of the repo and test scope.
+2. Aionis handoff preserved the full multi-file target set and the full test-target set.
+3. The key claim is contract completeness on a real repository, not latency leadership.
 
 ### 2. Real-repo strict replay is a zero-model-token execution path
 
@@ -174,11 +199,13 @@ The public values on this page come from the following disclosure artifacts in t
    `experiments/cross-boundary-aionis-bench/artifacts/cross-boundary-file_export-20260313-161731/`
 2. Cross-runtime treatment:
    `experiments/cross-boundary-aionis-bench/artifacts/cross-boundary-aionis_handoff-20260313-161732/`
-3. Real-repo strict replay:
+3. Real-repo handoff A/B:
+   `experiments/cross-boundary-aionis-bench/artifacts/cross-boundary-real-repo-handoff-ab-20260313-195606/`
+4. Real-repo strict replay:
    `experiments/cross-boundary-aionis-bench/artifacts/cross-boundary-real-repo-20260313-180521/`
-4. Replay token comparison:
+5. Replay token comparison:
    `experiments/cross-boundary-aionis-bench/artifacts/cross-boundary-real-repo-20260313-180521/manual-replay-token-comparison.json`
-5. Guided replay token notes:
+6. Guided replay token notes:
    `experiments/cross-boundary-aionis-bench/REPLAY_TOKEN_FINDINGS.md`
 
 ## Why This Matters
@@ -192,3 +219,4 @@ The public values on this page come from the following disclosure artifacts in t
 1. [Benchmark Snapshot (Public)](/public/en/benchmarks/02-benchmark-snapshot-public)
 2. [Differentiation Evidence](/public/en/benchmarks/03-differentiation-evidence)
 3. [AionisBench v0.1](/public/en/benchmarks/06-aionis-bench-v01)
+4. [Real GitHub Repo Handoff A/B](/public/en/benchmarks/10-real-repo-handoff-ab)

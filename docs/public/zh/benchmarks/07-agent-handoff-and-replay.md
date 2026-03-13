@@ -8,6 +8,12 @@ title: "Agent Handoff 与 Replay"
 
 这页是 Aionis handoff 与 replay 证据的公开 benchmark 披露页。
 
+最容易理解的阅读方式是把它看成一条三段式路径：
+
+1. `without Aionis`：弱外部化 handoff，
+2. `with Aionis handoff`：保住 execution contract，
+3. `with Aionis replay`：在保住 contract 的基础上复用确定性执行路径。
+
 ## 范围说明
 
 当前披露覆盖三类已文档化结果：
@@ -44,6 +50,25 @@ title: "Agent Handoff 与 Replay"
 1. baseline 导出的 contract 是 lossy 的，在 `2/3` case 上丢了执行事实。
 2. Aionis handoff 在跨进程、跨 runtime 边界上把 contract 保到了 `3/3`。
 3. 这组结果要证明的是对齐质量，不是 token 一定更低。
+
+### 1b. 在同一个真实 GitHub 仓库上，Aionis handoff 能保住完整 repo 和测试范围
+
+仓库：
+
+1. URL：`https://github.com/pallets/click.git`
+2. Commit：`cdab890e57a30a9f437b88ce9652f7bfce980c1f`
+3. Cases：`click_real_repo_001`、`click_real_repo_002`、`click_real_repo_003`
+
+| Arm | Cases | Success rate | Avg duration ms | Avg focused files | Avg pytest targets |
+| --- | --- | --- | --- | --- | --- |
+| `file_export` | `3` | `0.0%` | `11841.0` | `1.0` | `1.0` |
+| `aionis_handoff` | `3` | `100.0%` | `12033.0` | `4.0` | `2.0` |
+
+解读：
+
+1. baseline 失败不是因为仓库无效，而是因为外部化 contract 丢掉了大部分 repo 和测试范围。
+2. Aionis handoff 保住了完整的多文件 target set 和完整测试 target set。
+3. 这组结果的关键不是“更快”，而是“真实仓库上的 contract 完整度更高”。
 
 ### 2. 真实仓库 strict replay 是零模型 token 执行路径
 
@@ -174,11 +199,13 @@ guided repair 当前仍作为 smoke 披露。已验证的 smoke 使用了兼容 
    `experiments/cross-boundary-aionis-bench/artifacts/cross-boundary-file_export-20260313-161731/`
 2. Cross-runtime treatment：
    `experiments/cross-boundary-aionis-bench/artifacts/cross-boundary-aionis_handoff-20260313-161732/`
-3. Real-repo strict replay：
+3. Real-repo handoff A/B：
+   `experiments/cross-boundary-aionis-bench/artifacts/cross-boundary-real-repo-handoff-ab-20260313-195606/`
+4. Real-repo strict replay：
    `experiments/cross-boundary-aionis-bench/artifacts/cross-boundary-real-repo-20260313-180521/`
-4. Replay token 对比：
+5. Replay token 对比：
    `experiments/cross-boundary-aionis-bench/artifacts/cross-boundary-real-repo-20260313-180521/manual-replay-token-comparison.json`
-5. Guided replay token 说明：
+6. Guided replay token 说明：
    `experiments/cross-boundary-aionis-bench/REPLAY_TOKEN_FINDINGS.md`
 
 ## 为什么这些结果重要
@@ -192,3 +219,4 @@ guided repair 当前仍作为 smoke 披露。已验证的 smoke 使用了兼容 
 1. [Benchmark Snapshot（对外）](/public/zh/benchmarks/02-benchmark-snapshot-public)
 2. [差异化证据](/public/zh/benchmarks/03-differentiation-evidence)
 3. [AionisBench v0.1](/public/zh/benchmarks/06-aionis-bench-v01)
+4. [真实 GitHub 仓库 Handoff A/B](/public/zh/benchmarks/10-real-repo-handoff-ab)
