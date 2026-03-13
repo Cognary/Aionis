@@ -34,6 +34,19 @@ type HandoffFindCandidate = {
   updated_at?: string;
 };
 
+type PromptSafeHandoff = {
+  anchor: string;
+  handoff_kind: string;
+  file_path: string | null;
+  repo_root: string | null;
+  symbol: string | null;
+  summary: string | null;
+  handoff_text: string;
+  risk: string | null;
+  acceptance_checks: string[];
+  tags: string[];
+};
+
 function stringifyChecks(checks: string[] | undefined): string | null {
   return checks && checks.length > 0 ? checks.join(" | ") : null;
 }
@@ -96,31 +109,55 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
   };
 }
 
-function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, input: HandoffRecoverInput) {
+function buildPromptSafeHandoff(node: HandoffNode, input: HandoffRecoverInput): PromptSafeHandoff {
   const slots = node.slots && typeof node.slots === "object" ? node.slots : {};
   const acceptanceChecks = Array.isArray(slots.acceptance_checks)
     ? slots.acceptance_checks.filter((value): value is string => typeof value === "string")
     : [];
   const tags = Array.isArray(slots.tags) ? slots.tags.filter((value): value is string => typeof value === "string") : [];
   return {
-    handoff_kind: String(slots.handoff_kind ?? input.handoff_kind),
     anchor: String(slots.anchor ?? input.anchor),
+    handoff_kind: String(slots.handoff_kind ?? input.handoff_kind),
+    file_path: typeof slots.file_path === "string" ? slots.file_path : null,
+    repo_root: typeof slots.repo_root === "string" ? slots.repo_root : null,
+    symbol: typeof slots.symbol === "string" ? slots.symbol : null,
+    summary: node.text_summary,
+    handoff_text: typeof slots.handoff_text === "string" ? slots.handoff_text : "",
+    risk: typeof slots.risk === "string" ? slots.risk : null,
+    acceptance_checks: acceptanceChecks,
+    tags,
+  };
+}
+
+function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, input: HandoffRecoverInput) {
+  const promptSafe = buildPromptSafeHandoff(node, input);
+  return {
+    handoff_kind: promptSafe.handoff_kind,
+    anchor: promptSafe.anchor,
     matched_nodes: matchedNodes,
     handoff: {
       id: node.id,
       uri: node.uri,
       title: node.title,
-      summary: node.text_summary,
-      handoff_text: typeof slots.handoff_text === "string" ? slots.handoff_text : "",
-      file_path: typeof slots.file_path === "string" ? slots.file_path : null,
-      repo_root: typeof slots.repo_root === "string" ? slots.repo_root : null,
-      symbol: typeof slots.symbol === "string" ? slots.symbol : null,
-      risk: typeof slots.risk === "string" ? slots.risk : null,
-      acceptance_checks: acceptanceChecks,
-      tags,
+      summary: promptSafe.summary,
+      handoff_text: promptSafe.handoff_text,
+      file_path: promptSafe.file_path,
+      repo_root: promptSafe.repo_root,
+      symbol: promptSafe.symbol,
+      risk: promptSafe.risk,
+      acceptance_checks: promptSafe.acceptance_checks,
+      tags: promptSafe.tags,
       memory_lane: node.memory_lane ?? null,
       commit_id: node.commit_id ?? null,
       commit_uri: node.commit_uri ?? null,
+    },
+    prompt_safe_handoff: promptSafe,
+    execution_ready_handoff: {
+      file_path: promptSafe.file_path,
+      summary: promptSafe.summary,
+      handoff_text: promptSafe.handoff_text,
+      risk: promptSafe.risk,
+      acceptance_checks: promptSafe.acceptance_checks,
     },
   };
 }

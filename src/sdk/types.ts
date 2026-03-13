@@ -673,6 +673,27 @@ export type HandoffRecoverResponse = {
   anchor: string;
   matched_nodes: number;
   handoff: HandoffArtifactView;
+  prompt_safe_handoff?: {
+    anchor: string;
+    handoff_kind: string;
+    file_path?: string | null;
+    repo_root?: string | null;
+    symbol?: string | null;
+    summary?: string | null;
+    handoff_text: string;
+    risk?: string | null;
+    acceptance_checks: string[];
+    tags?: string[];
+    [k: string]: unknown;
+  };
+  execution_ready_handoff?: {
+    file_path?: string | null;
+    summary?: string | null;
+    handoff_text: string;
+    risk?: string | null;
+    acceptance_checks: string[];
+    [k: string]: unknown;
+  };
   [k: string]: unknown;
 };
 
