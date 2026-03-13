@@ -40,7 +40,7 @@
       "key": "l2_topic_vendor_comparison",
       "kind": "L2_topic",
       "title": "vendor comparison topic",
-      "text_summary": "Topic aggregation: the vendor comparison is organized around pricing, context window, and API surface. Vendor A is usage-based pricing with 200k context and an OpenAI-compatible endpoint. Vendor B is a flat enterprise plan with annual commitment, 128k context, and a proprietary SDK. Vendor C offers 1M context with REST and batch ingestion."
+      "text_summary": "Topic: Vendor A = usage-based pricing, 200k context, OpenAI-compatible endpoint; Vendor B = flat enterprise plan, annual commitment, 128k context, proprietary SDK; Vendor C = 1M context, REST and batch ingestion."
     }
   ],
   "cases": [
