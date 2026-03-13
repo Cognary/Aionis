@@ -1,0 +1,73 @@
+{
+  "actor": "l2_topic_aggregation_benchmark",
+  "context_char_budget": 360,
+  "context_token_budget": 120,
+  "records": [
+    {
+      "key": "evt_vendor_a",
+      "title": "vendor A pricing and api note",
+      "text_summary": "Vendor A notes. Pricing is usage-based pricing. Context window is 200k context. Integration path is an OpenAI-compatible endpoint. Noise includes old procurement questions and archived SSO notes."
+    },
+    {
+      "key": "evt_vendor_b",
+      "title": "vendor B enterprise note",
+      "text_summary": "Vendor B notes. Pricing is flat enterprise plan with annual commitment. Context window is 128k context. API surface relies on a proprietary SDK. Noise includes old partner program chatter and security questionnaire backlog."
+    },
+    {
+      "key": "evt_vendor_c",
+      "title": "vendor C ingestion note",
+      "text_summary": "Vendor C notes. Context window is 1M context. The platform exposes REST and batch ingestion APIs. Noise includes historical launch notes and unrelated benchmark screenshots."
+    },
+    {
+      "key": "l1_fact_vendor_price",
+      "kind": "L1_fact",
+      "title": "vendor pricing facts",
+      "text_summary": "Stable facts: Vendor A uses usage-based pricing. Vendor B uses a flat enterprise plan with annual commitment."
+    },
+    {
+      "key": "l1_fact_vendor_context",
+      "kind": "L1_fact",
+      "title": "vendor context window facts",
+      "text_summary": "Stable facts: Vendor A offers 200k context, Vendor B offers 128k context, and Vendor C offers 1M context."
+    },
+    {
+      "key": "l1_fact_vendor_api",
+      "kind": "L1_fact",
+      "title": "vendor api facts",
+      "text_summary": "Stable facts: Vendor A exposes an OpenAI-compatible endpoint. Vendor B depends on a proprietary SDK. Vendor C supports REST and batch ingestion."
+    },
+    {
+      "key": "l2_topic_vendor_comparison",
+      "kind": "L2_topic",
+      "title": "vendor comparison topic",
+      "text_summary": "Topic aggregation: the vendor comparison is organized around pricing, context window, and API surface. Vendor A is usage-based pricing with 200k context and an OpenAI-compatible endpoint. Vendor B is a flat enterprise plan with annual commitment, 128k context, and a proprietary SDK. Vendor C offers 1M context with REST and batch ingestion."
+    }
+  ],
+  "cases": [
+    {
+      "id": "research_l2_001",
+      "query_text": "Which vendor uses usage-based pricing and what context window does it provide?",
+      "critical_facts": [
+        "usage-based pricing",
+        "200k context"
+      ]
+    },
+    {
+      "id": "research_l2_002",
+      "query_text": "Which vendor uses a flat enterprise plan with annual commitment and what API surface does it require?",
+      "critical_facts": [
+        "flat enterprise plan",
+        "annual commitment",
+        "proprietary SDK"
+      ]
+    },
+    {
+      "id": "research_l2_003",
+      "query_text": "Which vendor offers 1M context and what ingestion interfaces are available?",
+      "critical_facts": [
+        "1M context",
+        "REST and batch ingestion"
+      ]
+    }
+  ]
+}
