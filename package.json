@@ -239,7 +239,8 @@
     "lint:fix": "npm run -s lint -- --fix",
     "job:l2-topic-aggregation-benchmark": "tsx src/jobs/l2-topic-aggregation-benchmark.ts",
     "job:l3-deterministic-compression-benchmark": "tsx src/jobs/l3-deterministic-compression-benchmark.ts",
-    "job:l4-exploratory-shadow-benchmark": "tsx src/jobs/l4-exploratory-shadow-benchmark.ts"
+    "job:l4-exploratory-shadow-benchmark": "tsx src/jobs/l4-exploratory-shadow-benchmark.ts",
+    "job:l5-serving-compaction-benchmark": "tsx src/jobs/l5-serving-compaction-benchmark.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

@@ -1,0 +1,52 @@
+{
+  "actor": "l5_serving_compaction_benchmark",
+  "context_char_budget": 360,
+  "context_token_budget": 120,
+  "records": [
+    {
+      "key": "evt_parser_scope_1",
+      "title": "parser option handling investigation",
+      "text_summary": "The parser option handling path in Click flows through add_to_parser in src/click/core.py. Regression validation belongs in tests/test_parser.py and tests/test_options.py. Ignore shell completion cleanup and unrelated CI notes."
+    },
+    {
+      "key": "evt_parser_scope_2",
+      "title": "parser option handling evidence",
+      "text_summary": "Focused work for the parser task should stay on src/click/core.py and the paired test files tests/test_parser.py plus tests/test_options.py. Old release notes and benchmark noise are not relevant."
+    },
+    {
+      "key": "evt_parser_scope_3",
+      "title": "parser option handling duplicate evidence",
+      "text_summary": "Stable task scope: inspect add_to_parser in src/click/core.py and validate with tests/test_parser.py and tests/test_options.py. Do not branch into shell completion or docs formatting."
+    },
+    {
+      "key": "l1_fact_parser",
+      "kind": "L1_fact",
+      "title": "parser option handling fact",
+      "text_summary": "Stable fact: Click parser option handling should inspect add_to_parser in src/click/core.py and verify with tests/test_parser.py and tests/test_options.py."
+    },
+    {
+      "key": "l2_topic_parser_scope",
+      "kind": "L2_topic",
+      "title": "parser option handling topic",
+      "text_summary": "Topic: parser option handling focuses on add_to_parser in src/click/core.py with tests/test_parser.py and tests/test_options.py."
+    },
+    {
+      "key": "l3_rollup_parser_scope",
+      "kind": "L3_rollup",
+      "title": "compression rollup parser scope",
+      "text_summary": "Rollup: parser option handling -> src/click/core.py, add_to_parser, tests/test_parser.py, tests/test_options.py."
+    }
+  ],
+  "cases": [
+    {
+      "id": "click_l5_001",
+      "query_text": "What served context should preserve the implementation path and focused tests for Click parser option handling?",
+      "critical_facts": ["src/click/core.py", "add_to_parser", "tests/test_parser.py", "tests/test_options.py"]
+    },
+    {
+      "id": "click_l5_002",
+      "query_text": "Which code path and test files should remain visible after serving-side compaction for this Click task?",
+      "critical_facts": ["src/click/core.py", "tests/test_parser.py", "tests/test_options.py"]
+    }
+  ]
+}

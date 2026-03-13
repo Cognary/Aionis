@@ -126,6 +126,28 @@ Release criterion:
 
 - only after L2-L4 quality is stable
 
+### Current L5 Status
+
+`L5` now has a first exploratory benchmark harness with two arms:
+
+- `balanced_serving`
+- `aggressive_serving`
+
+The current fixtures reuse the same `L0 + L1 + L2 + L3` graph and vary only serving-time compaction policy.
+
+Current result:
+
+- `fact_recall_rate`: flat
+- `context_est_tokens`: flat
+- `selected_memory_layers`: flat
+- `context_chars`: materially lower under `aggressive`
+
+Interpretation:
+
+- `L5` currently behaves as a **served payload reduction layer**
+- it is **not yet** a proven `context_est_tokens` reduction layer
+- this is an interpretable positive result, but narrower than a full token-budget claim
+
 ---
 
 ## Fixture Strategy
