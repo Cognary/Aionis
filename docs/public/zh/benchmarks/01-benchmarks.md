@@ -23,7 +23,8 @@ title: "基准测试"
 2. [性能基线](/public/zh/benchmarks/05-performance-baseline)
 3. [差异化证据](/public/zh/benchmarks/03-differentiation-evidence)
 4. [AionisBench v0.1](/public/zh/benchmarks/06-aionis-bench-v01)
-5. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
+5. [Agent Handoff 与 Replay](/public/zh/benchmarks/07-agent-handoff-and-replay)
+6. [治理周报](/public/zh/benchmarks/04-governance-weekly-report)
 
 ## 证据维度
 
@@ -53,4 +54,5 @@ title: "基准测试"
 
 1. [差异化证据](/public/zh/benchmarks/03-differentiation-evidence)
 2. [性能基线](/public/zh/benchmarks/05-performance-baseline)
-3. [运维与生产](/public/zh/operate-production/00-operate-production)
+3. [Agent Handoff 与 Replay](/public/zh/benchmarks/07-agent-handoff-and-replay)
+4. [运维与生产](/public/zh/operate-production/00-operate-production)
