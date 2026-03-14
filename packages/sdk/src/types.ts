@@ -570,6 +570,16 @@ export type ReplayPlaybookGetInput = {
   playbook_id: string;
 };
 
+export type ReplayPlaybookCandidateInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  playbook_id: string;
+  version?: number;
+  params?: Record<string, unknown>;
+  mode?: ReplayRunMode;
+};
+
 export type ReplayPlaybookPromoteInput = {
   tenant_id?: string;
   scope?: string;
@@ -590,6 +600,18 @@ export type ReplayPlaybookRunInput = {
   mode?: ReplayRunMode;
   version?: number;
   params?: Record<string, unknown>;
+  max_steps?: number;
+};
+
+export type ReplayPlaybookDispatchInput = {
+  tenant_id?: string;
+  scope?: string;
+  project_id?: string;
+  actor?: string;
+  playbook_id: string;
+  version?: number;
+  params?: Record<string, unknown>;
+  mode?: ReplayRunMode;
   max_steps?: number;
 };
 
@@ -1208,6 +1230,117 @@ export type MemoryWriteResponse = {
   [k: string]: unknown;
 };
 
+export type HandoffStoreInput = {
+  tenant_id?: string;
+  scope?: string;
+  actor?: string;
+  memory_lane?: "private" | "shared";
+  anchor: string;
+  file_path?: string;
+  repo_root?: string;
+  symbol?: string;
+  handoff_kind?: "patch_handoff" | "review_handoff" | "task_handoff";
+  title?: string;
+  summary: string;
+  handoff_text: string;
+  risk?: string;
+  acceptance_checks?: string[];
+  tags?: string[];
+  target_files?: string[];
+  next_action?: string;
+  must_change?: string[];
+  must_remove?: string[];
+  must_keep?: string[];
+};
+
+export type HandoffRecoverInput = {
+  tenant_id?: string;
+  scope?: string;
+  anchor: string;
+  repo_root?: string;
+  file_path?: string;
+  symbol?: string;
+  handoff_kind?: "patch_handoff" | "review_handoff" | "task_handoff";
+  memory_lane?: "private" | "shared";
+  limit?: number;
+};
+
+export type HandoffArtifactView = {
+  id: string;
+  uri?: string | null;
+  type?: string | null;
+  client_id?: string | null;
+  handoff_kind: string;
+  anchor: string;
+  file_path?: string | null;
+  repo_root?: string | null;
+  symbol?: string | null;
+  title?: string | null;
+  summary: string | null;
+  handoff_text: string;
+  risk?: string | null;
+  acceptance_checks: string[];
+  tags: string[];
+  target_files?: string[];
+  next_action?: string | null;
+  must_change?: string[];
+  must_remove?: string[];
+  must_keep?: string[];
+  memory_lane?: "private" | "shared" | null;
+  commit_id?: string | null;
+  commit_uri?: string | null;
+  [k: string]: unknown;
+};
+
+export type HandoffStoreResponse = {
+  tenant_id?: string;
+  scope?: string;
+  commit_id: string;
+  commit_uri?: string;
+  handoff: HandoffArtifactView | null;
+  [k: string]: unknown;
+};
+
+export type HandoffRecoverResponse = {
+  tenant_id: string;
+  scope: string;
+  handoff_kind: string;
+  anchor: string;
+  matched_nodes: number;
+  handoff: HandoffArtifactView;
+  prompt_safe_handoff?: {
+    anchor: string;
+    handoff_kind: string;
+    file_path?: string | null;
+    repo_root?: string | null;
+    symbol?: string | null;
+    summary?: string | null;
+    handoff_text: string;
+    risk?: string | null;
+    acceptance_checks: string[];
+    tags?: string[];
+    [k: string]: unknown;
+  };
+  execution_ready_handoff?: {
+    anchor?: string;
+    handoff_kind?: string;
+    file_path?: string | null;
+    repo_root?: string | null;
+    symbol?: string | null;
+    target_files?: string[];
+    next_action?: string;
+    summary?: string | null;
+    handoff_text: string;
+    risk?: string | null;
+    must_change?: string[];
+    must_remove?: string[];
+    must_keep?: string[];
+    acceptance_checks: string[];
+    [k: string]: unknown;
+  };
+  [k: string]: unknown;
+};
+
 export type HealthResponse = {
   ok: boolean;
   memory_store_backend?: string;
@@ -1725,6 +1858,79 @@ export type ReplayPlaybookRepairReviewResponse = {
     }>;
     [k: string]: unknown;
   };
+  [k: string]: unknown;
+};
+
+export type ReplayDeterministicGateResult = {
+  enabled?: boolean;
+  requested_mode?: "simulate" | "strict" | "guided";
+  effective_mode?: "simulate" | "strict" | "guided";
+  decision?: "disabled" | "matched" | "promoted_to_strict" | "fallback_to_requested_mode" | "rejected";
+  mismatch_reasons?: string[];
+  inference_skipped?: boolean;
+  playbook_status?: string;
+  required_statuses?: string[];
+  status_match?: boolean;
+  matchers_match?: boolean;
+  policy_constraints_match?: boolean;
+  matched?: boolean;
+  request_matcher_fingerprint?: string | null;
+  playbook_matcher_fingerprint?: string | null;
+  request_policy_fingerprint?: string | null;
+  playbook_policy_fingerprint?: string | null;
+  [k: string]: unknown;
+};
+
+export type ReplayCostSignals = {
+  summary_version?: "replay_cost_signals_v1";
+  deterministic_replay_eligible?: boolean;
+  primary_inference_skipped?: boolean;
+  estimated_primary_model_calls_avoided?: number;
+  fallback_executed?: boolean;
+  requested_mode?: "simulate" | "strict" | "guided";
+  effective_mode?: "simulate" | "strict" | "guided";
+  mismatch_reasons?: string[];
+  primary_savings_levers?: string[];
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookCandidateResponse = {
+  tenant_id?: string;
+  scope: string;
+  playbook?: {
+    playbook_id?: string;
+    version?: number;
+    status?: string;
+    name?: string | null;
+    uri?: string;
+    node_id?: string;
+    [k: string]: unknown;
+  };
+  candidate?: {
+    eligible_for_deterministic_replay?: boolean;
+    recommended_mode?: "simulate" | "strict" | "guided";
+    next_action?: string;
+    mismatch_reasons?: string[];
+    rejectable?: boolean;
+    [k: string]: unknown;
+  };
+  deterministic_gate?: ReplayDeterministicGateResult;
+  cost_signals?: ReplayCostSignals;
+  [k: string]: unknown;
+};
+
+export type ReplayPlaybookDispatchResponse = {
+  tenant_id?: string;
+  scope: string;
+  dispatch?: {
+    decision?: "deterministic_replay_executed" | "fallback_replay_executed" | "candidate_only";
+    primary_inference_skipped?: boolean;
+    fallback_executed?: boolean;
+    [k: string]: unknown;
+  };
+  candidate?: ReplayPlaybookCandidateResponse;
+  replay?: ReplayPlaybookRunResponse | null;
+  cost_signals?: ReplayCostSignals;
   [k: string]: unknown;
 };
 

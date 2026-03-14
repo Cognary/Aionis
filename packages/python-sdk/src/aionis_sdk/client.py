@@ -53,7 +53,10 @@ if TYPE_CHECKING:
         MemorySessionCreateInput,
         MemorySessionEventsListInput,
         MemoryWriteInput,
+        AutomationValidateInput,
         ReplayPlaybookCompileInput,
+        ReplayPlaybookCandidateInput,
+        ReplayPlaybookDispatchInput,
         ReplayPlaybookGetInput,
         ReplayPlaybookPromoteInput,
         ReplayPlaybookRepairInput,
@@ -382,6 +385,9 @@ class AionisClient:
     def replay_playbook_get(self, payload: "ReplayPlaybookGetInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/replay/playbooks/get", payload, request_options)
 
+    def replay_playbook_candidate(self, payload: "ReplayPlaybookCandidateInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/playbooks/candidate", payload, request_options)
+
     def replay_playbook_promote(self, payload: "ReplayPlaybookPromoteInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/replay/playbooks/promote", payload, request_options)
 
@@ -397,6 +403,12 @@ class AionisClient:
 
     def replay_playbook_run(self, payload: "ReplayPlaybookRunInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/replay/playbooks/run", payload, request_options)
+
+    def replay_playbook_dispatch(self, payload: "ReplayPlaybookDispatchInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/memory/replay/playbooks/dispatch", payload, request_options)
+
+    def automation_graph_validate(self, payload: "AutomationValidateInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/graph/validate", payload, request_options)
 
     def health(self, **request_options: Any) -> Dict[str, Any]:
         return self._request("/health", {}, request_options, method="GET")

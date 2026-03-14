@@ -107,6 +107,10 @@ import type {
   PlanningContextInput,
   PlanningContextResponse,
   HealthResponse,
+  HandoffRecoverInput,
+  HandoffRecoverResponse,
+  HandoffStoreInput,
+  HandoffStoreResponse,
   MemoryArchiveRehydrateInput,
   MemoryArchiveRehydrateResponse,
   MemoryEventWriteInput,
@@ -133,6 +137,10 @@ import type {
   RequestOptions,
   ReplayPlaybookCompileInput,
   ReplayPlaybookCompileResponse,
+  ReplayPlaybookCandidateInput,
+  ReplayPlaybookCandidateResponse,
+  ReplayPlaybookDispatchInput,
+  ReplayPlaybookDispatchResponse,
   ReplayPlaybookGetInput,
   ReplayPlaybookGetResponse,
   ReplayPlaybookPromoteInput,
@@ -323,6 +331,14 @@ export class AionisClient {
     return this.requestPost<PlanningContextInput, PlanningContextResponse>("/v1/memory/planning/context", input, opts);
   }
 
+  async handoffStore(input: HandoffStoreInput, opts?: RequestOptions): Promise<AionisResponse<HandoffStoreResponse>> {
+    return this.requestPost<HandoffStoreInput, HandoffStoreResponse>("/v1/handoff/store", input, opts);
+  }
+
+  async handoffRecover(input: HandoffRecoverInput, opts?: RequestOptions): Promise<AionisResponse<HandoffRecoverResponse>> {
+    return this.requestPost<HandoffRecoverInput, HandoffRecoverResponse>("/v1/handoff/recover", input, opts);
+  }
+
   async find(input: MemoryFindInput, opts?: RequestOptions): Promise<AionisResponse<MemoryFindResponse>> {
     return this.requestPost<MemoryFindInput, MemoryFindResponse>("/v1/memory/find", input, opts);
   }
@@ -477,6 +493,17 @@ export class AionisClient {
     return this.requestPost<ReplayPlaybookGetInput, ReplayPlaybookGetResponse>("/v1/memory/replay/playbooks/get", input, opts);
   }
 
+  async replayPlaybookCandidate(
+    input: ReplayPlaybookCandidateInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookCandidateResponse>> {
+    return this.requestPost<ReplayPlaybookCandidateInput, ReplayPlaybookCandidateResponse>(
+      "/v1/memory/replay/playbooks/candidate",
+      input,
+      opts,
+    );
+  }
+
   async replayPlaybookPromote(
     input: ReplayPlaybookPromoteInput,
     opts?: RequestOptions,
@@ -508,6 +535,17 @@ export class AionisClient {
 
   async replayPlaybookRun(input: ReplayPlaybookRunInput, opts?: RequestOptions): Promise<AionisResponse<ReplayPlaybookRunResponse>> {
     return this.requestPost<ReplayPlaybookRunInput, ReplayPlaybookRunResponse>("/v1/memory/replay/playbooks/run", input, opts);
+  }
+
+  async replayPlaybookDispatch(
+    input: ReplayPlaybookDispatchInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<ReplayPlaybookDispatchResponse>> {
+    return this.requestPost<ReplayPlaybookDispatchInput, ReplayPlaybookDispatchResponse>(
+      "/v1/memory/replay/playbooks/dispatch",
+      input,
+      opts,
+    );
   }
 
   async automationCreate(input: AutomationCreateInput, opts?: RequestOptions): Promise<AionisResponse<AutomationCreateResponse>> {
@@ -556,6 +594,13 @@ export class AionisClient {
 
   async automationValidate(input: AutomationValidateInput, opts?: RequestOptions): Promise<AionisResponse<AutomationValidateResponse>> {
     return this.requestPost<AutomationValidateInput, AutomationValidateResponse>("/v1/automations/validate", input, opts);
+  }
+
+  async automationGraphValidate(
+    input: AutomationValidateInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<AutomationValidateResponse>> {
+    return this.requestPost<AutomationValidateInput, AutomationValidateResponse>("/v1/automations/graph/validate", input, opts);
   }
 
   async automationRun(input: AutomationRunInput, opts?: RequestOptions): Promise<AionisResponse<AutomationRunResponse>> {

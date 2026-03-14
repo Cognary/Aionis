@@ -594,6 +594,16 @@ class ReplayPlaybookGetInput(TypedDict, total=False):
     playbook_id: str
 
 
+class ReplayPlaybookCandidateInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    playbook_id: str
+    version: int
+    params: Dict[str, Any]
+    mode: ReplayRunMode
+
+
 class ReplayPlaybookPromoteInput(TypedDict, total=False):
     tenant_id: str
     scope: str
@@ -614,6 +624,18 @@ class ReplayPlaybookRunInput(TypedDict, total=False):
     mode: ReplayRunMode
     version: int
     params: Dict[str, Any]
+    max_steps: int
+
+
+class ReplayPlaybookDispatchInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    project_id: str
+    actor: str
+    playbook_id: str
+    version: int
+    params: Dict[str, Any]
+    mode: ReplayRunMode
     max_steps: int
 
 
@@ -738,8 +760,48 @@ class ReplayPlaybookCompileResponse(TypedDict, total=False):
     compile_summary: Dict[str, Any]
 
 
+class ReplayDeterministicGateResult(TypedDict, total=False):
+    enabled: bool
+    requested_mode: ReplayRunMode
+    effective_mode: ReplayRunMode
+    decision: Literal["disabled", "matched", "promoted_to_strict", "fallback_to_requested_mode", "rejected"]
+    mismatch_reasons: List[str]
+    inference_skipped: bool
+    playbook_status: str
+    required_statuses: List[str]
+    status_match: bool
+    matchers_match: bool
+    policy_constraints_match: bool
+    matched: bool
+    request_matcher_fingerprint: Optional[str]
+    playbook_matcher_fingerprint: Optional[str]
+    request_policy_fingerprint: Optional[str]
+    playbook_policy_fingerprint: Optional[str]
+
+
+class ReplayCostSignals(TypedDict, total=False):
+    summary_version: Literal["replay_cost_signals_v1"]
+    deterministic_replay_eligible: bool
+    primary_inference_skipped: bool
+    estimated_primary_model_calls_avoided: int
+    fallback_executed: bool
+    requested_mode: ReplayRunMode
+    effective_mode: ReplayRunMode
+    mismatch_reasons: List[str]
+    primary_savings_levers: List[str]
+
+
 class ReplayPlaybookGetResponse(TypedDict, total=False):
     pass
+
+
+class ReplayPlaybookCandidateResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    playbook: Dict[str, Any]
+    candidate: Dict[str, Any]
+    deterministic_gate: ReplayDeterministicGateResult
+    cost_signals: ReplayCostSignals
 
 
 class ReplayPlaybookPromoteResponse(TypedDict, total=False):
@@ -748,6 +810,15 @@ class ReplayPlaybookPromoteResponse(TypedDict, total=False):
 
 class ReplayPlaybookRunResponse(TypedDict, total=False):
     pass
+
+
+class ReplayPlaybookDispatchResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    dispatch: Dict[str, Any]
+    candidate: ReplayPlaybookCandidateResponse
+    replay: Optional[ReplayPlaybookRunResponse]
+    cost_signals: ReplayCostSignals
 
 
 class ReplayPlaybookRepairResponse(TypedDict, total=False):
@@ -863,6 +934,20 @@ class SandboxRunArtifactInput(TypedDict, total=False):
     include_result: bool
     include_metadata: bool
     bundle_inline: bool
+
+
+class AutomationValidateInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    graph: Dict[str, Any]
+
+
+class AutomationValidateResponse(TypedDict, total=False):
+    valid: bool
+    graph: Dict[str, Any]
+    errors: List[Dict[str, Any]]
+    warnings: List[Dict[str, Any]]
+    metadata: Dict[str, Any]
 
 
 class SandboxRunCancelInput(TypedDict, total=False):
@@ -1156,6 +1241,8 @@ __all__ = [
     "ContextLayerName",
     "PlanningContextInput",
     "PlanningContextResponse",
+    "AutomationValidateInput",
+    "AutomationValidateResponse",
     "DecisionLinkMode",
     "FeedbackOutcome",
     "MemoryArchiveRehydrateInput",
@@ -1177,6 +1264,12 @@ __all__ = [
     "MemoryWriteInput",
     "ReplayPlaybookCompileInput",
     "ReplayPlaybookCompileResponse",
+    "ReplayPlaybookCandidateInput",
+    "ReplayPlaybookCandidateResponse",
+    "ReplayPlaybookDispatchInput",
+    "ReplayPlaybookDispatchResponse",
+    "ReplayCostSignals",
+    "ReplayDeterministicGateResult",
     "ReplayPlaybookGetInput",
     "ReplayPlaybookGetResponse",
     "ReplayPlaybookPromoteInput",
