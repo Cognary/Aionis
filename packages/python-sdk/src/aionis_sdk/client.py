@@ -38,6 +38,28 @@ if TYPE_CHECKING:
         ControlTenantQuotaInput,
         ControlTenantsQuery,
         ControlTenantTimeseriesQuery,
+        AutomationAssignReviewerInput,
+        AutomationCompensationPolicyMatrixInput,
+        AutomationCreateInput,
+        AutomationGetInput,
+        AutomationListInput,
+        AutomationPromoteInput,
+        AutomationRunApproveRepairInput,
+        AutomationRunAssignReviewerInput,
+        AutomationRunCancelInput,
+        AutomationRunCompensationAssignInput,
+        AutomationRunCompensationRecordActionInput,
+        AutomationRunCompensationRetryInput,
+        AutomationRunGetInput,
+        AutomationRunInput,
+        AutomationRunListInput,
+        AutomationRunRejectRepairInput,
+        AutomationRunResumeInput,
+        AutomationShadowReportInput,
+        AutomationShadowReviewInput,
+        AutomationShadowValidateDispatchInput,
+        AutomationShadowValidateInput,
+        AutomationTelemetryInput,
         BackendCapabilityErrorDetails,
         ContextAssembleInput,
         PlanningContextInput,
@@ -409,6 +431,107 @@ class AionisClient:
 
     def automation_graph_validate(self, payload: "AutomationValidateInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/automations/graph/validate", payload, request_options)
+
+    def automation_create(self, payload: "AutomationCreateInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/create", payload, request_options)
+
+    def automation_get(self, payload: "AutomationGetInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/get", payload, request_options)
+
+    def automation_list(self, payload: "AutomationListInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/list", payload, request_options)
+
+    def automation_telemetry(self, payload: "AutomationTelemetryInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/telemetry", payload, request_options)
+
+    def automation_assign_reviewer(self, payload: "AutomationAssignReviewerInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/assign_reviewer", payload, request_options)
+
+    def automation_promote(self, payload: "AutomationPromoteInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/promote", payload, request_options)
+
+    def automation_validate(self, payload: "AutomationValidateInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/validate", payload, request_options)
+
+    def automation_shadow_report(self, payload: "AutomationShadowReportInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/shadow/report", payload, request_options)
+
+    def automation_shadow_review(self, payload: "AutomationShadowReviewInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/shadow/review", payload, request_options)
+
+    def automation_shadow_validate(self, payload: "AutomationShadowValidateInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/shadow/validate", payload, request_options)
+
+    def automation_shadow_validate_dispatch(
+        self,
+        payload: "AutomationShadowValidateDispatchInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/automations/shadow/validate/dispatch", payload, request_options)
+
+    def automation_compensation_policy_matrix(
+        self,
+        payload: "AutomationCompensationPolicyMatrixInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/automations/compensation/policy_matrix", payload, request_options)
+
+    def automation_run(self, payload: "AutomationRunInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/run", payload, request_options)
+
+    def automation_run_get(self, payload: "AutomationRunGetInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/runs/get", payload, request_options)
+
+    def automation_run_list(self, payload: "AutomationRunListInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/runs/list", payload, request_options)
+
+    def automation_run_assign_reviewer(
+        self,
+        payload: "AutomationRunAssignReviewerInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/automations/runs/assign_reviewer", payload, request_options)
+
+    def automation_run_cancel(self, payload: "AutomationRunCancelInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/runs/cancel", payload, request_options)
+
+    def automation_run_approve_repair(
+        self,
+        payload: "AutomationRunApproveRepairInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/automations/runs/approve_repair", payload, request_options)
+
+    def automation_run_compensation_retry(
+        self,
+        payload: "AutomationRunCompensationRetryInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/automations/runs/compensation/retry", payload, request_options)
+
+    def automation_run_compensation_assign(
+        self,
+        payload: "AutomationRunCompensationAssignInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/automations/runs/compensation/assign", payload, request_options)
+
+    def automation_run_compensation_record_action(
+        self,
+        payload: "AutomationRunCompensationRecordActionInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/automations/runs/compensation/record_action", payload, request_options)
+
+    def automation_run_resume(self, payload: "AutomationRunResumeInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/automations/runs/resume", payload, request_options)
+
+    def automation_run_reject_repair(
+        self,
+        payload: "AutomationRunRejectRepairInput",
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/automations/runs/reject_repair", payload, request_options)
 
     def health(self, **request_options: Any) -> Dict[str, Any]:
         return self._request("/health", {}, request_options, method="GET")

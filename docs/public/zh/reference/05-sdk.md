@@ -6,12 +6,24 @@ title: "SDK 指南"
 
 Aionis 提供官方 TypeScript 和 Python SDK。
 
+当前状态：
+
+1. TypeScript SDK 和 Python SDK 现在都覆盖了开发者主线上的 `memory`、`handoff`、`policy`、`replay`、`sandbox`、`automations` 路由。
+2. 在 `2026-03-14`，Aionis 针对 `65` 条非 admin、非 control-plane 路由做了 route-to-SDK 审计，结果是两套 SDK 都 `no missing`。
+3. TypeScript 包还内置了 Phase 1 本地开发 CLI，也就是 `aionis dev`。
+
 ## 安装
 
 ### TypeScript
 
 ```bash
 npm install @aionis/sdk
+```
+
+TypeScript 包还直接提供：
+
+```bash
+npx aionis --help
 ```
 
 ### Python
@@ -24,15 +36,45 @@ pip install aionis-sdk
 
 每个环境至少配置这几项：
 
-1. `baseUrl`
-2. `tenantId`
-3. `scope`
-4. `apiKey` 或 bearer token
+1. `base_url`
+2. `api_key` 或 bearer token
+3. 按请求传 `tenant_id`
+4. 按请求传 `scope`
 
 字段命名映射：
 
-1. TypeScript: `baseUrl`
+1. TypeScript: `base_url`
 2. Python: `base_url`
+
+## 覆盖范围快照
+
+截至 `2026-03-14`，SDK 已经覆盖完整的开发者主线路由：
+
+1. memory 的 write / recall / context / session / event
+2. handoff 的 store / recover
+3. policy 的 evaluate / select / decision / run / feedback
+4. replay 的 run、playbook compile/get/candidate/run/dispatch/promote/repair/review
+5. sandbox 的 session / execute / get / logs / artifact / cancel
+6. automation 的 create / get / list / validate / graph-validate / shadow / run
+
+边界说明：
+
+1. 这里明确排除了 `server-only`、`admin`、`control-plane` 路由。
+2. 这些面仍然不属于默认公开 SDK 承诺。
+
+## 本地开发 CLI
+
+TypeScript 包现在还带一套 Phase 1 Lite 开发 CLI：
+
+1. `aionis dev`
+2. `aionis stop`
+3. `aionis health`
+4. `aionis doctor`
+5. `aionis selfcheck`
+
+如果你希望直接通过 SDK 包管理本地 Lite 运行时，就用这套 CLI。
+
+具体用法见：[SDK CLI](/public/zh/reference/09-sdk-cli)
 
 ## Quick Start（TypeScript）
 
@@ -40,17 +82,19 @@ pip install aionis-sdk
 import { AionisClient } from "@aionis/sdk";
 
 const client = new AionisClient({
-  baseUrl: "https://api.aionisos.com",
-  tenantId: "default",
-  scope: "default",
-  apiKey: process.env.AIONIS_API_KEY,
+  base_url: "https://api.aionisos.com",
+  api_key: process.env.AIONIS_API_KEY,
 });
 
 const writeRes = await client.write({
+  tenant_id: "default",
+  scope: "default",
   input_text: "Customer prefers email follow-up",
 });
 
 const recallRes = await client.recallText({
+  tenant_id: "default",
+  scope: "default",
   query_text: "preferred follow-up channel",
 });
 

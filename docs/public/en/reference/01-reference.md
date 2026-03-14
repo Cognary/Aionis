@@ -19,6 +19,7 @@ Use this section for stable contracts, SDK usage, and governance-related referen
 1. [API Reference](/public/en/api-reference/00-api-reference)
 2. [SDK Guide](/public/en/reference/05-sdk)
 3. [SDK Compatibility Matrix](/public/en/reference/06-sdk-compatibility-matrix)
+4. [SDK CLI](/public/en/reference/09-sdk-cli)
 
 ### Operate policy rollouts
 

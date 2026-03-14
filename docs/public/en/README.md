@@ -31,6 +31,18 @@ Recent handoff and replay evidence now also shows:
 
 See [Layer 1 Capability Matrix](/public/en/benchmarks/14-layer1-capability-matrix) for the full controlled A/B view.
 
+## SDK and CLI Snapshot
+
+1. TypeScript SDK and Python SDK now cover the audited developer-facing route surface.
+2. On `2026-03-14`, Aionis ran a `65`-route SDK audit over non-admin, non-control-plane routes and found `no missing` surface in either SDK.
+3. The TypeScript package now also ships a Phase 1 local developer CLI: `aionis dev`, `stop`, `health`, `doctor`, and `selfcheck`.
+
+Start with:
+
+1. [SDK Guide](/public/en/reference/05-sdk)
+2. [SDK Compatibility Matrix](/public/en/reference/06-sdk-compatibility-matrix)
+3. [SDK CLI](/public/en/reference/09-sdk-cli)
+
 ## Start Here
 
 1. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)

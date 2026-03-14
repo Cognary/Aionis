@@ -958,6 +958,309 @@ class SandboxRunCancelInput(TypedDict, total=False):
     reason: str
 
 
+AutomationDefStatus = Literal["draft", "shadow", "active", "disabled"]
+AutomationRunLifecycleState = Literal["queued", "running", "paused", "compensating", "terminal"]
+AutomationRunPauseReason = Literal["approval_required", "repair_required", "dependency_wait", "operator_pause"]
+AutomationRunTerminalOutcome = Literal["succeeded", "failed", "cancelled", "failed_compensated", "cancelled_compensated"]
+AutomationNodeKind = Literal["playbook", "approval", "condition", "artifact_gate"]
+AutomationNodeLifecycleState = Literal["pending", "ready", "running", "paused", "retrying", "compensating", "terminal"]
+AutomationNodePauseReason = Literal["approval_required", "repair_required"]
+AutomationNodeTerminalOutcome = Literal["succeeded", "failed", "rejected", "skipped", "compensated"]
+
+
+class AutomationCreateInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    automation_id: str
+    name: str
+    status: AutomationDefStatus
+    graph: Dict[str, Any]
+    input_contract: Dict[str, Any]
+    output_contract: Dict[str, Any]
+    metadata: Dict[str, Any]
+
+
+class AutomationTelemetryInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    automation_id: str
+    window_hours: int
+    incident_limit: int
+
+
+class AutomationGetInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    automation_id: str
+    version: int
+
+
+class AutomationListInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    status: AutomationDefStatus
+    promotion_only: bool
+    reviewer: str
+    limit: int
+
+
+class AutomationAssignReviewerInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    automation_id: str
+    reviewer: str
+    note: str
+
+
+class AutomationShadowReportInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    automation_id: str
+    shadow_version: int
+    active_version: int
+
+
+class AutomationShadowReviewInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    automation_id: str
+    shadow_version: int
+    verdict: Literal["approved", "needs_changes", "rejected"]
+    note: str
+
+
+class AutomationShadowValidateInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    automation_id: str
+    shadow_version: int
+    mode: Literal["enqueue", "inline"]
+    note: str
+    params: Dict[str, Any]
+
+
+class AutomationShadowValidateDispatchInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    automation_id: str
+    limit: int
+    dry_run: bool
+
+
+class AutomationCompensationPolicyMatrixInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+
+
+class AutomationRunInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    automation_id: str
+    version: int
+    params: Dict[str, Any]
+    options: Dict[str, Any]
+
+
+class AutomationPromoteInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    automation_id: str
+    from_version: int
+    target_status: AutomationDefStatus
+    note: str
+    metadata: Dict[str, Any]
+
+
+class AutomationRunGetInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run_id: str
+    include_nodes: bool
+
+
+class AutomationRunListInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    automation_id: str
+    actionable_only: bool
+    compensation_only: bool
+    reviewer: str
+    compensation_owner: str
+    escalation_owner: str
+    workflow_bucket: Literal["retry", "manual_cleanup", "escalate", "observe", "other"]
+    sla_status: Literal["unset", "on_track", "at_risk", "breached", "met"]
+    limit: int
+
+
+class AutomationRunCompensationRecordActionInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    action: Literal["manual_cleanup_started", "manual_cleanup_completed", "engineering_escalated", "observation_noted"]
+    note: str
+    external_ref: str
+
+
+class AutomationRunCompensationAssignInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    owner: str
+    escalation_owner: str
+    sla_target_at: str
+    note: str
+
+
+class AutomationRunAssignReviewerInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    reviewer: str
+    note: str
+
+
+class AutomationRunCancelInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    reason: str
+
+
+class AutomationRunApproveRepairInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    reason: str
+
+
+class AutomationRunCompensationRetryInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    reason: str
+
+
+class AutomationRunResumeInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    reason: str
+
+
+class AutomationRunRejectRepairInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    run_id: str
+    reason: str
+
+
+class AutomationCreateResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    automation: Dict[str, Any]
+
+
+class AutomationGetResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    automation: Dict[str, Any]
+
+
+class AutomationListResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    items: List[Dict[str, Any]]
+
+
+class AutomationShadowReportResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    report: Dict[str, Any]
+
+
+class AutomationShadowValidateResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    validation: Dict[str, Any]
+
+
+class AutomationShadowValidateDispatchResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    dispatch: Dict[str, Any]
+
+
+class AutomationCompensationPolicyMatrixResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    matrix: Dict[str, Any]
+
+
+class AutomationPromoteResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    automation: Dict[str, Any]
+
+
+class AutomationTelemetryResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    telemetry: Dict[str, Any]
+
+
+class AutomationRunNodeView(TypedDict, total=False):
+    node_id: str
+    kind: AutomationNodeKind
+    lifecycle_state: AutomationNodeLifecycleState
+    terminal_outcome: AutomationNodeTerminalOutcome
+    pause_reason: AutomationNodePauseReason
+    payload: Dict[str, Any]
+
+
+class AutomationRunView(TypedDict, total=False):
+    run_id: str
+    lifecycle_state: AutomationRunLifecycleState
+    terminal_outcome: AutomationRunTerminalOutcome
+    pause_reason: AutomationRunPauseReason
+    automation_id: str
+    version: int
+    nodes: List[AutomationRunNodeView]
+    metadata: Dict[str, Any]
+
+
+class AutomationRunResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run: AutomationRunView
+
+
+class AutomationRunGetResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    run: AutomationRunView
+
+
+class AutomationRunListResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    items: List[AutomationRunView]
+
+
 class SandboxSessionCreateResponse(TypedDict, total=False):
     tenant_id: str
     scope: str

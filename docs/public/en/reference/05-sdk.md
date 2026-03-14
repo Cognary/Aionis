@@ -6,6 +6,12 @@ title: "SDK Guide"
 
 Aionis provides official SDKs for TypeScript and Python.
 
+Current state:
+
+1. TypeScript SDK and Python SDK now cover the main developer-facing `memory`, `handoff`, `policy`, `replay`, `sandbox`, and `automations` routes.
+2. On `2026-03-14`, Aionis ran a route-to-SDK audit over `65` non-admin, non-control-plane routes and found `no missing` surfaces in either SDK.
+3. The TypeScript package also ships the Phase 1 local developer CLI via `aionis dev`.
+
 ## Packages
 
 1. TypeScript: `@aionis/sdk`
@@ -19,6 +25,12 @@ Aionis provides official SDKs for TypeScript and Python.
 npm install @aionis/sdk
 ```
 
+The TypeScript package also exposes:
+
+```bash
+npx aionis --help
+```
+
 ### Python
 
 ```bash
@@ -30,13 +42,13 @@ pip install aionis-sdk
 Configure once per environment:
 
 1. base URL
-2. `tenant_id`
-3. `scope`
-4. auth (`api_key` or bearer token)
+2. auth (`api_key` or bearer token)
+3. per-request `tenant_id`
+4. per-request `scope`
 
 SDK field mapping:
 
-1. TypeScript: `baseUrl`
+1. TypeScript: `base_url`
 2. Python: `base_url`
 
 ## Quick Start (TypeScript)
@@ -45,17 +57,19 @@ SDK field mapping:
 import { AionisClient } from "@aionis/sdk";
 
 const client = new AionisClient({
-  baseUrl: "https://api.aionisos.com",
-  tenantId: "default",
-  scope: "default",
-  apiKey: process.env.AIONIS_API_KEY,
+  base_url: "https://api.aionisos.com",
+  api_key: process.env.AIONIS_API_KEY,
 });
 
 const writeRes = await client.write({
+  tenant_id: "default",
+  scope: "default",
   input_text: "Customer prefers email follow-up",
 });
 
 const recallRes = await client.recallText({
+  tenant_id: "default",
+  scope: "default",
   query_text: "preferred follow-up channel",
 });
 
@@ -87,12 +101,43 @@ print(write_res.get("commit_uri"), recall_res.get("request_id"))
 3. TypeScript policy loop: `rulesEvaluate`, `toolsSelect`, `toolsDecision`, `toolsRun`, `toolsFeedback`
 4. TypeScript replay: `replayPlaybookGet`, `replayPlaybookCandidate`, `replayPlaybookRun`, `replayPlaybookDispatch`
 5. TypeScript continuity helpers: `handoffStore`, `handoffRecover`
-6. Python SDK uses snake_case naming for overlapping core flows, such as `write`, `recall`, `recall_text`, and `context_assemble`
+6. TypeScript automation helpers: `automationCreate`, `automationValidate`, `automationGraphValidate`, `automationRun`
+7. Python SDK uses snake_case naming for overlapping core flows, such as `write`, `recall`, `recall_text`, `handoff_store`, `replay_playbook_dispatch`, and `automation_graph_validate`
 
 Notes:
 
-1. The current TypeScript client exposes the newest summary-first helpers and continuity helpers first.
-2. Python SDK coverage is narrower today; when a helper is missing there, use the same HTTP routes directly.
+1. The current TypeScript client exposes the newest summary-first helpers, continuity helpers, and the Phase 1 CLI.
+2. The Python SDK mirrors the same main developer-facing route surface, but stays Pythonic with snake_case naming and plain-dict responses.
+
+## Coverage Snapshot
+
+As of `2026-03-14`, the public SDK surface covers the full audited developer path:
+
+1. memory write/recall/context/session/event routes
+2. handoff store/recover
+3. policy evaluation, tool selection, decision, run, and feedback
+4. replay run, playbook compile/get/candidate/run/dispatch/promote/repair/review
+5. sandbox session/execute/get/logs/artifact/cancel
+6. automation create/get/list/validate/graph-validate/shadow/run surfaces
+
+Boundary:
+
+1. This statement excludes `server-only`, `admin`, and `control-plane` routes.
+2. Those surfaces remain intentionally outside the default public SDK promise.
+
+## Local Developer CLI
+
+The TypeScript package now includes a Phase 1 Lite developer CLI:
+
+1. `aionis dev`
+2. `aionis stop`
+3. `aionis health`
+4. `aionis doctor`
+5. `aionis selfcheck`
+
+Use it when you want the SDK package to manage a local Lite runtime during development.
+
+See [SDK CLI](/public/en/reference/09-sdk-cli) for command details.
 
 ## Find Summary (TypeScript)
 
