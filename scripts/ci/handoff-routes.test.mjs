@@ -1,9 +1,23 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const require = createRequire(import.meta.url);
+
+const LITE_SQLITE_UNAVAILABLE =
+  (() => {
+    try {
+      const mod = require("node:sqlite");
+      return typeof mod?.DatabaseSync !== "function";
+    } catch {
+      return true;
+    }
+  })()
+    ? "requires Node.js with node:sqlite support"
+    : false;
 
 function extractFirstJsonObject(text) {
   let start = -1;
@@ -57,7 +71,7 @@ function runSnippet(source) {
   return lines[lines.length - 1] ?? "";
 }
 
-test("native handoff routes store and recover exact handoff artifact in lite mode", () => {
+test("native handoff routes store and recover exact handoff artifact in lite mode", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const out = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";
     import os from "node:os";
@@ -164,7 +178,7 @@ test("native handoff routes store and recover exact handoff artifact in lite mod
   assert.equal(parsed.recoverBody.matched_nodes, 1);
 });
 
-test("native handoff recover prefers the newest matching handoff", () => {
+test("native handoff recover prefers the newest matching handoff", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const out = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";
     import os from "node:os";
@@ -269,7 +283,7 @@ test("native handoff recover prefers the newest matching handoff", () => {
   assert.equal(parsed.recoverBody.handoff.handoff_text, "New handoff text");
 });
 
-test("native handoff recover preserves lookup slots under pii redaction", () => {
+test("native handoff recover preserves lookup slots under pii redaction", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const out = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";
     import os from "node:os";
@@ -358,7 +372,7 @@ test("native handoff recover preserves lookup slots under pii redaction", () => 
   assert.equal(parsed.recoverBody.handoff.file_path, "packages/sdk/src/cli.ts");
 });
 
-test("native handoff recover can disambiguate by repo_root", () => {
+test("native handoff recover can disambiguate by repo_root", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const out = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";
     import os from "node:os";
@@ -459,7 +473,7 @@ test("native handoff recover can disambiguate by repo_root", () => {
   assert.equal(parsed.recoverBody.handoff.handoff_text, "Repo A handoff");
 });
 
-test("native handoff store accepts task_handoff without file_path", () => {
+test("native handoff store accepts task_handoff without file_path", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const out = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";
     import os from "node:os";
@@ -540,7 +554,7 @@ test("native handoff store accepts task_handoff without file_path", () => {
   assert.equal(parsed.storeBody.handoff.next_action, "Request final approval");
 });
 
-test("native handoff routes preserve authenticated private ownership in lite mode", () => {
+test("native handoff routes preserve authenticated private ownership in lite mode", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const out = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";
     import os from "node:os";
