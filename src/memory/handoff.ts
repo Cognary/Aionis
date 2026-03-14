@@ -200,6 +200,8 @@ function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, inpu
     handoff: {
       id: node.id,
       uri: node.uri,
+      handoff_kind: promptSafe.handoff_kind,
+      anchor: promptSafe.anchor,
       title: node.title,
       summary: promptSafe.summary,
       handoff_text: promptSafe.handoff_text,

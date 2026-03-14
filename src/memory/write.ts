@@ -173,6 +173,16 @@ function nodeEmbedText(n: PreparedNode, fallbackEventText: string | undefined): 
   return summary ?? title ?? null;
 }
 
+function restoreStableSystemSlots(original: Record<string, unknown>, redacted: Record<string, unknown>): Record<string, unknown> {
+  const summaryKind = typeof original.summary_kind === "string" ? original.summary_kind : null;
+  if (summaryKind !== "handoff") return redacted;
+  const out = { ...redacted };
+  for (const key of ["summary_kind", "handoff_kind", "anchor", "file_path", "repo_root", "symbol"]) {
+    if (key in original) out[key] = original[key];
+  }
+  return out;
+}
+
 function assertSingleScopeWrite(scope: string, scopePublic: string, nodes: PreparedNode[], edges: PreparedEdge[]): void {
   const crossScopeNode = nodes.find((n) => n.scope !== scope);
   if (crossScopeNode) {
@@ -297,7 +307,7 @@ export async function prepareMemoryWrite(
     let slots = n.slots ?? {};
     if (opts.piiRedaction) {
       const r = redactJsonStrings(slots);
-      slots = (r.value ?? {}) as Record<string, unknown>;
+      slots = restoreStableSystemSlots(slots, (r.value ?? {}) as Record<string, unknown>);
       bump(r.counts);
     }
 
