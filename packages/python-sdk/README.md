@@ -5,7 +5,7 @@ Python SDK for Aionis Memory Graph API.
 ## Install
 
 ```bash
-pip install aionis-sdk
+pip install aionis-sdk==0.2.18
 ```
 
 ## Usage

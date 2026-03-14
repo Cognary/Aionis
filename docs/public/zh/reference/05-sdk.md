@@ -17,19 +17,19 @@ Aionis 提供官方 TypeScript 和 Python SDK。
 ### TypeScript
 
 ```bash
-npm install @aionis/sdk
+npm install @aionis/sdk@0.2.18
 ```
 
 TypeScript 包还直接提供：
 
 ```bash
-npx aionis --help
+npx @aionis/sdk@0.2.18 --help
 ```
 
 ### Python
 
 ```bash
-pip install aionis-sdk
+pip install aionis-sdk==0.2.18
 ```
 
 ## 客户端初始化

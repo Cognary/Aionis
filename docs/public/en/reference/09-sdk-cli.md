@@ -9,13 +9,13 @@ The TypeScript package now ships a Phase 1 local developer CLI.
 Install:
 
 ```bash
-npm install @aionis/sdk
+npm install @aionis/sdk@0.2.18
 ```
 
 Run without a global install:
 
 ```bash
-npx aionis --help
+npx @aionis/sdk@0.2.18 --help
 ```
 
 ## What It Is

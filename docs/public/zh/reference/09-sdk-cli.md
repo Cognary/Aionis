@@ -9,13 +9,13 @@ TypeScript SDK 现在内置了一套 Phase 1 本地开发 CLI。
 安装：
 
 ```bash
-npm install @aionis/sdk
+npm install @aionis/sdk@0.2.18
 ```
 
 不用全局安装也能直接跑：
 
 ```bash
-npx aionis --help
+npx @aionis/sdk@0.2.18 --help
 ```
 
 ## 它是什么

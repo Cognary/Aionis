@@ -22,19 +22,19 @@ Current state:
 ### TypeScript
 
 ```bash
-npm install @aionis/sdk
+npm install @aionis/sdk@0.2.18
 ```
 
 The TypeScript package also exposes:
 
 ```bash
-npx aionis --help
+npx @aionis/sdk@0.2.18 --help
 ```
 
 ### Python
 
 ```bash
-pip install aionis-sdk
+pip install aionis-sdk==0.2.18
 ```
 
 ## Client Setup

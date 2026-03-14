@@ -5,13 +5,13 @@ TypeScript SDK for Aionis Memory Graph API.
 ## Install
 
 ```bash
-npm i @aionis/sdk
+npm i @aionis/sdk@0.2.18
 ```
 
 The package also exposes the local developer CLI:
 
 ```bash
-npx aionis --help
+npx @aionis/sdk@0.2.18 --help
 ```
 
 ## Usage
