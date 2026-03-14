@@ -1,13 +1,23 @@
 import "dotenv/config";
 import { loadEnv } from "../config.js";
 import { closeDb, createDb, withTx } from "../db.js";
+import { createEmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import { findUnassignedEventIds, runTopicClusterForEventIds } from "./topicClusterLib.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
+const embeddingSurfacePolicy = createEmbeddingSurfacePolicy({
+  providerConfigured: false,
+  enabledSurfaces: env.EMBEDDING_ENABLED_SURFACES_JSON,
+});
 
 async function run() {
   const scope = env.MEMORY_SCOPE;
+  if (!embeddingSurfacePolicy.isEnabled("topic_cluster")) {
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify({ ok: true, scope, skipped: true, reason: "embedding_surface_disabled:topic_cluster" }, null, 2));
+    return;
+  }
 
   const out = await withTx(db, async (client) => {
     const eventIds = await findUnassignedEventIds(client, scope, env.TOPIC_CLUSTER_BATCH_SIZE);

@@ -1,4 +1,5 @@
 import type { Env } from "../config.js";
+import type { EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import { buildReplayLearningProjectionDefaults } from "../memory/replay-learning.js";
 import { createSandboxSession, enqueueSandboxRun, getSandboxRun } from "../memory/sandbox.js";
 import { HttpError } from "../util/http.js";
@@ -132,6 +133,7 @@ export function createReplayRuntimeOptionBuilders(args: {
   env: Env;
   store: StoreLike;
   embedder: any;
+  embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: any;
   liteReplayAccess?: any;
   liteReplayStore?: any;
@@ -144,6 +146,7 @@ export function createReplayRuntimeOptionBuilders(args: {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy,
     embeddedRuntime,
     liteReplayAccess,
     liteReplayStore,
@@ -152,6 +155,7 @@ export function createReplayRuntimeOptionBuilders(args: {
     writeAccessShadowMirrorV2,
     enforceSandboxTenantBudget,
   } = args;
+  const writeEmbedder = embeddingSurfacePolicy?.providerFor("write_auto_embed", embedder) ?? embedder;
 
   function buildReplayRepairReviewOptions() {
     return {
@@ -163,7 +167,7 @@ export function createReplayRuntimeOptionBuilders(args: {
       shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
       shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
       writeAccessShadowMirrorV2,
-      embedder,
+      embedder: writeEmbedder,
       embeddedRuntime,
       replayAccess: liteReplayAccess,
       replayMirror: liteReplayStore,
@@ -219,7 +223,7 @@ export function createReplayRuntimeOptionBuilders(args: {
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
         writeAccessShadowMirrorV2,
-        embedder,
+        embedder: writeEmbedder,
         embeddedRuntime,
         replayAccess: liteReplayAccess,
         replayMirror: liteReplayStore,

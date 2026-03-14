@@ -1,6 +1,7 @@
 import { ZodError } from "zod";
 import { CAPABILITY_CONTRACT } from "../capability-contract.js";
 import type { Env } from "../config.js";
+import type { EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import { recordMemoryRequestTelemetry } from "../control-plane.js";
 import {
   RECALL_STORE_ACCESS_CAPABILITY_VERSION,
@@ -53,6 +54,7 @@ export function logMemoryApiConfig(args: {
   app: any;
   env: Env;
   embedder: any;
+  embeddingSurfacePolicy: EmbeddingSurfacePolicy;
   embeddedRuntime: any;
   recallStoreCapabilities: any;
   writeStoreCapabilities: any;
@@ -68,6 +70,7 @@ export function logMemoryApiConfig(args: {
     app,
     env,
     embedder,
+    embeddingSurfacePolicy,
     embeddedRuntime,
     recallStoreCapabilities,
     writeStoreCapabilities,
@@ -87,6 +90,8 @@ export function logMemoryApiConfig(args: {
       app_env: env.APP_ENV,
       embedding_provider: embedder?.name ?? "none",
       embedding_dim: embedder?.dim ?? null,
+      embedding_enabled_surfaces: embeddingSurfacePolicy.enabled_surfaces,
+      embedding_provider_configured: embeddingSurfacePolicy.provider_configured,
       scope: env.MEMORY_SCOPE,
       tenant_id: env.MEMORY_TENANT_ID,
       memory_store_backend: resolveRuntimeMemoryStoreBackend(env),
@@ -368,6 +373,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     embedRecallTextQuery,
     mapRecallTextEmbeddingError,
     recordContextAssemblyTelemetryBestEffort,
+    embeddingSurfacePolicy,
     withReplayRepairReviewDefaults,
     buildReplayRepairReviewOptions,
     buildAutomationReplayRunOptions,
@@ -410,6 +416,8 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     registerAdminControlConfigRoutes({
       app,
       db,
+      embeddingSurfacePolicy,
+      embeddingProviderName: embedder?.name ?? null,
       requireAdminToken,
       emitControlAudit,
       tenantQuotaResolver,
@@ -436,6 +444,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy,
     embeddedRuntime,
     liteWriteStore,
     writeAccessForClient,
@@ -453,6 +462,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy,
     embeddedRuntime,
     liteWriteStore,
     writeAccessForClient,
@@ -480,6 +490,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy,
     embeddedRuntime,
     liteWriteStore,
     writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
@@ -522,6 +533,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy,
     embeddedRuntime,
     liteWriteStore,
     recallTextEmbedBatcher,
@@ -568,6 +580,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy,
     embeddedRuntime,
     liteReplayAccess,
     liteReplayStore,

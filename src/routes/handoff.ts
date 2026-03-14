@@ -1,4 +1,5 @@
 import type { Env } from "../config.js";
+import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import { buildHandoffWriteBody, recoverHandoff } from "../memory/handoff.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
 import { HandoffRecoverRequest, HandoffStoreRequest } from "../memory/schemas.js";
@@ -23,6 +24,7 @@ export function registerHandoffRoutes(args: {
   env: Env;
   store: StoreLike;
   embedder: any;
+  embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: any;
   liteWriteStore?: LiteWriteStoreLike | null;
   writeAccessForClient: (client: any) => any;
@@ -38,6 +40,7 @@ export function registerHandoffRoutes(args: {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy: embeddingSurfacePolicyArg,
     embeddedRuntime,
     liteWriteStore,
     writeAccessForClient,
@@ -48,6 +51,9 @@ export function registerHandoffRoutes(args: {
     tenantFromBody,
     acquireInflightSlot,
   } = args;
+  const embeddingSurfacePolicy =
+    embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
+  const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
 
   app.post("/v1/handoff/store", async (req: any, reply: any) => {
     const principal = await requireMemoryPrincipal(req);
@@ -71,7 +77,7 @@ export function registerHandoffRoutes(args: {
           piiRedaction: env.PII_REDACTION,
           allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
         },
-        embedder,
+        writeEmbedder,
       );
       const out = liteWriteStore
         ? await liteWriteStore.withTx(() =>

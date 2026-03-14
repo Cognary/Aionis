@@ -4,6 +4,7 @@ import { loadEnv } from "../config.js";
 import { closeDb, createDb, withTx } from "../db.js";
 import { runTopicClusterForEventIds } from "./topicClusterLib.js";
 import { createEmbeddingProviderFromEnv } from "../embeddings/index.js";
+import { createEmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { runEmbedBackfill } from "./embedBackfillLib.js";
 import { sha256Hex } from "../util/crypto.js";
@@ -24,6 +25,10 @@ try {
   console.error(`embedding provider disabled in worker: ${String(e?.message ?? e)}`);
   embedder = null;
 }
+const embeddingSurfacePolicy = createEmbeddingSurfacePolicy({
+  providerConfigured: !!embedder,
+  enabledSurfaces: env.EMBEDDING_ENABLED_SURFACES_JSON,
+});
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -133,6 +138,18 @@ async function processBatch(): Promise<{
     await withTx(db, async (client) => {
       try {
         if (r.event_type === "embed_nodes") {
+          if (!embeddingSurfacePolicy.isEnabled("write_auto_embed")) {
+            await client.query(
+              `UPDATE memory_outbox
+               SET
+                 payload = payload || $3::jsonb,
+                 last_error = NULL,
+                 published_at = now()
+               WHERE id = $1 AND claimed_at::text = $2`,
+              [r.id, r.claimed_at, JSON.stringify({ skipped: true, reason: "embedding_surface_disabled:write_auto_embed" })],
+            );
+            return;
+          }
           const nodes = Array.isArray(r.payload?.nodes) ? r.payload.nodes : [];
           const parsedNodes = nodes
             .map((x: any) => ({ id: String(x?.id ?? ""), text: String(x?.text ?? "") }))
@@ -208,6 +225,18 @@ async function processBatch(): Promise<{
         }
 
         if (r.event_type === "topic_cluster") {
+          if (!embeddingSurfacePolicy.isEnabled("topic_cluster")) {
+            await client.query(
+              `UPDATE memory_outbox
+               SET
+                 payload = payload || $3::jsonb,
+                 last_error = NULL,
+                 published_at = now()
+               WHERE id = $1 AND claimed_at::text = $2`,
+              [r.id, r.claimed_at, JSON.stringify({ skipped: true, reason: "embedding_surface_disabled:topic_cluster" })],
+            );
+            return;
+          }
           const eventIds = Array.isArray(r.payload?.event_ids) ? (r.payload.event_ids as string[]) : [];
           let payloadPatch: Record<string, unknown> = {};
 

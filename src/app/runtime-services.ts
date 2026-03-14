@@ -6,6 +6,7 @@ import {
 } from "../control-plane.js";
 import { createNoopDb } from "../db.js";
 import { createEmbeddingProviderFromEnv } from "../embeddings/index.js";
+import { createEmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import {
   SandboxExecutor,
   parseAllowedSandboxCommands,
@@ -171,6 +172,10 @@ export async function createRuntimeServices(env: Env) {
   const liteRecallAccess = liteRecallStore?.createRecallAccess() ?? null;
 
   const embedder = createEmbeddingProviderFromEnv(process.env);
+  const embeddingSurfacePolicy = createEmbeddingSurfacePolicy({
+    providerConfigured: !!embedder,
+    enabledSurfaces: env.EMBEDDING_ENABLED_SURFACES_JSON,
+  });
   const sandboxExecutor = new SandboxExecutor(store, {
     enabled: env.SANDBOX_ENABLED,
     mode: env.SANDBOX_EXECUTOR_MODE,
@@ -393,6 +398,7 @@ export async function createRuntimeServices(env: Env) {
     recallTextEmbedCache,
     recallTextEmbedInflight,
     recallTextEmbedBatcher,
+    embeddingSurfacePolicy,
     recallInflightGate,
     writeInflightGate,
   };

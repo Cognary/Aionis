@@ -1,4 +1,5 @@
 import type { Env } from "../config.js";
+import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import {
   replayPlaybookCandidate,
   replayPlaybookCompileFromRun,
@@ -26,6 +27,7 @@ export function registerMemoryReplayCoreRoutes(args: {
   env: Env;
   store: StoreLike;
   embedder: any;
+  embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: any;
   liteReplayAccess?: any;
   liteReplayStore?: any;
@@ -43,6 +45,7 @@ export function registerMemoryReplayCoreRoutes(args: {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy: embeddingSurfacePolicyArg,
     embeddedRuntime,
     liteReplayAccess,
     liteReplayStore,
@@ -55,6 +58,9 @@ export function registerMemoryReplayCoreRoutes(args: {
     tenantFromBody,
     acquireInflightSlot,
   } = args;
+  const embeddingSurfacePolicy =
+    embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
+  const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
 
   const writeDefaults = {
     defaultScope: env.MEMORY_SCOPE,
@@ -65,7 +71,7 @@ export function registerMemoryReplayCoreRoutes(args: {
     shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
     shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
     writeAccessShadowMirrorV2,
-    embedder,
+    embedder: writeEmbedder,
     embeddedRuntime,
     replayAccess: liteReplayAccess ?? null,
     replayMirror: liteReplayStore ?? null,

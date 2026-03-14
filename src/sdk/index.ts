@@ -54,6 +54,7 @@ export {
   type ControlApiKeyRotateInput,
   type ControlAuditEventsQuery,
   type ControlAuditEventsResponse,
+  type ControlRuntimeConfigResponse,
   type ControlIncidentPublishJobInput,
   type ControlIncidentPublishJobResponse,
   type ControlIncidentPublishJobsQuery,

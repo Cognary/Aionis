@@ -1,5 +1,6 @@
 import type { Db } from "../db.js";
 import type { Env } from "../config.js";
+import { assertEmbeddingSurfaceForbidden } from "../embeddings/surface-policy.js";
 import { HttpError } from "../util/http.js";
 import { sanitizeBudgetCap, type SandboxTenantBudgetPolicy } from "./runtime-services.js";
 
@@ -496,6 +497,7 @@ export function createSandboxBudgetService(args: {
     scopeRaw: string,
     projectIdRaw?: string | null,
   ): Promise<void> => {
+    assertEmbeddingSurfaceForbidden("sandbox_budget_gate");
     const resolved = await resolveSandboxTenantBudget(tenantIdRaw, scopeRaw, projectIdRaw);
     if (!resolved) return;
 

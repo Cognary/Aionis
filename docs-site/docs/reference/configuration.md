@@ -27,7 +27,8 @@ This page summarizes key runtime configuration groups.
 
 1. `EMBEDDING_PROVIDER`
 2. `EMBEDDING_DIM`
-3. Provider-specific key/model variables.
+3. `EMBEDDING_ENABLED_SURFACES_JSON`
+4. Provider-specific key/model variables.
 
 ## Limits and quotas
 
@@ -40,14 +41,31 @@ This page summarizes key runtime configuration groups.
 1. Keep separate env values for dev/staging/prod.
 2. Store secrets outside source control.
 3. Validate config with staging smoke and production gate before rollout.
+4. Use the built-in feature bundle commands when you want a copy-ready starting point for common default-off toggles.
+
+## Feature bundle shortcuts
+
+Use these commands when you want a managed `.env` block for common operating modes:
+
+```bash
+npm run -s env:bundle:local-safe
+npm run -s env:bundle:experimental
+npm run -s env:bundle:team-shared
+npm run -s env:bundle:high-risk
+```
+
+Guide:
+
+1. [Tutorial: Feature Bundles](/guide/tutorials/feature-bundles)
 
 ## Configuration workflow
 
 1. Define the baseline runtime and database settings.
 2. Enable auth and tenant isolation.
 3. Add embedding provider configuration if semantic recall is required.
-4. Turn on limits and quotas before exposure to shared traffic.
-5. Promote the exact validated config set to the next environment.
+4. Explicitly enable only the embedding surfaces you want to run.
+5. Turn on limits and quotas before exposure to shared traffic.
+6. Promote the exact validated config set to the next environment.
 
 ## Baseline production settings
 
@@ -65,6 +83,6 @@ This page summarizes key runtime configuration groups.
 
 1. Confirm `MEMORY_AUTH_MODE` is not `off`.
 2. Confirm `DATABASE_URL` points to the intended environment.
-3. Confirm embedding settings match the retrieval behavior you expect.
+3. Confirm embedding settings and enabled surfaces match the retrieval behavior you expect.
 4. Confirm quotas and rate limits are enabled for shared use.
 5. Confirm CORS and proxy settings match the real network path.
