@@ -1,0 +1,148 @@
+:root {
+  --vp-c-brand-1: #1aa784;
+  --vp-c-brand-2: #168f72;
+  --vp-c-brand-3: #11745d;
+  --vp-c-brand-soft: rgba(26, 167, 132, 0.14);
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #1aa784 0%, #9fe870 100%);
+  --vp-home-hero-image-background-image: radial-gradient(circle at center, rgba(26, 167, 132, 0.2), rgba(11, 21, 20, 0));
+  --vp-home-hero-image-filter: blur(48px);
+}
+
+.VPNavBar {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+}
+
+.VPHome {
+  background:
+    radial-gradient(circle at top left, rgba(26, 167, 132, 0.12), transparent 32%),
+    radial-gradient(circle at top right, rgba(159, 232, 112, 0.18), transparent 24%),
+    linear-gradient(180deg, #f6fbf9 0%, #ffffff 42%, #f8fafc 100%);
+}
+
+.VPHomeHero .container {
+  padding-top: 24px;
+}
+
+.VPHomeHero .main {
+  max-width: 720px;
+}
+
+.VPHomeHero .text {
+  letter-spacing: -0.03em;
+}
+
+.VPFeature {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.06);
+}
+
+.draft-strip,
+.proof-grid,
+.doc-path-grid,
+.conversion-grid {
+  margin: 24px auto 0;
+  max-width: 1152px;
+  padding: 0 24px 32px;
+}
+
+.draft-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.draft-chip,
+.proof-card,
+.doc-path-card {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
+}
+
+.draft-chip {
+  padding: 14px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  text-align: center;
+}
+
+.proof-grid,
+.doc-path-grid,
+.conversion-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.proof-card,
+.doc-path-card,
+.conversion-card {
+  padding: 22px;
+}
+
+.proof-card h3,
+.doc-path-card h3,
+.conversion-card h3 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.proof-card p,
+.doc-path-card p,
+.conversion-card p {
+  margin: 0;
+  color: #334155;
+}
+
+.conversion-card {
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(236, 253, 245, 0.9), rgba(255, 255, 255, 0.94));
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
+}
+
+.proof-kicker,
+.path-kicker {
+  display: inline-flex;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: rgba(26, 167, 132, 0.1);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #0f766e;
+}
+
+.path-link {
+  display: inline-block;
+  margin-top: 16px;
+  font-weight: 700;
+}
+
+.vp-doc h1 {
+  letter-spacing: -0.02em;
+}
+
+.vp-doc a {
+  font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .draft-strip,
+  .proof-grid,
+  .doc-path-grid,
+  .conversion-grid {
+    grid-template-columns: 1fr;
+  }
+}

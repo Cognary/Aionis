@@ -1,0 +1,8 @@
+{
+  "tenant_id": "default",
+  "scope": "docs_v2_verified",
+  "uri": "aionis://default/docs_v2_verified/event/ebdf76de-3fd6-5264-812e-680b9fcf9b5d",
+  "include_meta": true,
+  "include_slots_preview": true,
+  "slots_preview_keys": 2
+}

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Aionis Docs V2 Draft">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#081311"/>
+      <stop offset="100%" stop-color="#0f2a23"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#1aa784"/>
+      <stop offset="100%" stop-color="#9fe870"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="995" cy="126" r="176" fill="#1aa784" fill-opacity="0.14"/>
+  <circle cx="160" cy="520" r="220" fill="#9fe870" fill-opacity="0.08"/>
+  <rect x="84" y="76" width="170" height="42" rx="21" fill="#163c35"/>
+  <text x="169" y="103" fill="#9fe870" font-family="Inter, Arial, sans-serif" font-size="20" text-anchor="middle">Docs V2 Draft</text>
+  <text x="84" y="236" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="700">Aionis</text>
+  <text x="84" y="312" fill="url(#accent)" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="700">Execution memory for agents</text>
+  <text x="84" y="378" fill="#d7efe7" font-family="Inter, Arial, sans-serif" font-size="28">Continue work across sessions, handoffs, replay, and review.</text>
+  <text x="84" y="444" fill="#b9d5cb" font-family="Inter, Arial, sans-serif" font-size="24">Memory under budget. Exact handoff recovery. Replayable execution. Inspectable policy.</text>
+</svg>

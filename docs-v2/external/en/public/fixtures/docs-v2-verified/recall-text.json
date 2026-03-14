@@ -1,0 +1,6 @@
+{
+  "tenant_id": "default",
+  "scope": "docs_v2_verified",
+  "query_text": "preferred follow-up channel",
+  "limit": 5
+}

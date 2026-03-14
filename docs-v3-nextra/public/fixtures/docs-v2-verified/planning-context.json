@@ -1,0 +1,33 @@
+{
+  "tenant_id": "default",
+  "scope": "docs_v2_verified",
+  "query_text": "How should the next agent continue this rollout task?",
+  "context": {
+    "version": 1,
+    "run": {
+      "id": "docs_v2_verified_run_001"
+    },
+    "intent": "rollout_followup",
+    "agent": {
+      "id": "docs_v2_agent",
+      "team_id": "docs_v2_team"
+    },
+    "tool": {
+      "name": "bash"
+    },
+    "request": {
+      "endpoint": "/docs-v2/complete-flow",
+      "method": "POST"
+    }
+  },
+  "tool_candidates": [
+    "bash",
+    "curl",
+    "psql"
+  ],
+  "tool_strict": true,
+  "include_shadow": false,
+  "rules_limit": 50,
+  "return_layered_context": true,
+  "context_optimization_profile": "balanced"
+}

@@ -1,0 +1,13 @@
+{
+  "tenant_id": "default",
+  "scope": "docs_v2_verified",
+  "input_text": "Customer prefers email follow-up and wants a safe rollout plan.",
+  "memory_lane": "shared",
+  "nodes": [
+    {
+      "type": "event",
+      "memory_lane": "shared",
+      "text_summary": "Customer prefers email follow-up and wants a safe rollout plan."
+    }
+  ]
+}

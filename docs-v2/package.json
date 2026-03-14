@@ -1,0 +1,16 @@
+{
+  "name": "aionis-docs-v2-draft",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Standalone VitePress draft for Aionis docs-v2",
+  "scripts": {
+    "dev": "vitepress dev external/en --host 0.0.0.0 --port 4273",
+    "build": "vitepress build external/en",
+    "preview": "vitepress preview external/en --host 0.0.0.0 --port 4274"
+  },
+  "devDependencies": {
+    "vite": "^5.4.14",
+    "vitepress": "^1.6.3"
+  }
+}

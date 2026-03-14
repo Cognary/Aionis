@@ -1,0 +1,9 @@
+{
+  "tenant_id": "default",
+  "scope": "docs_v2_verified",
+  "text_contains": "rollout",
+  "include_slots_preview": true,
+  "slots_preview_keys": 2,
+  "limit": 10,
+  "offset": 0
+}

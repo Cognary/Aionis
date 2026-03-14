@@ -1,0 +1,35 @@
+{
+  "tenant_id": "default",
+  "scope": "docs_v2_verified",
+  "run_id": "docs_v2_verified_run_001",
+  "decision_id": "<replace-with-decision-id-from-tools-select>",
+  "outcome": "positive",
+  "context": {
+    "version": 1,
+    "run": {
+      "id": "docs_v2_verified_run_001"
+    },
+    "intent": "rollout_followup",
+    "agent": {
+      "id": "docs_v2_agent",
+      "team_id": "docs_v2_team"
+    },
+    "tool": {
+      "name": "bash"
+    },
+    "request": {
+      "endpoint": "/docs-v2/complete-flow",
+      "method": "POST"
+    }
+  },
+  "candidates": [
+    "bash",
+    "curl",
+    "psql"
+  ],
+  "selected_tool": "bash",
+  "target": "tool",
+  "include_shadow": false,
+  "rules_limit": 50,
+  "input_text": "Operator confirmed the selected tool was appropriate for this rollout step."
+}

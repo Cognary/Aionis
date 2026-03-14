@@ -1,0 +1,22 @@
+{
+  "name": "aionis-docs-v3-nextra",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Standalone Nextra draft for the next Aionis external docs site",
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0 --port 4373",
+    "build": "next build --webpack",
+    "start": "next start --hostname 0.0.0.0 --port 4374"
+  },
+  "dependencies": {
+    "next": "^16.1.6",
+    "nextra": "^4.6.1",
+    "nextra-theme-docs": "^4.6.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14"
+  }
+}

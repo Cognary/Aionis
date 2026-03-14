@@ -1,0 +1,44 @@
+{
+  "tenant_id": "default",
+  "scope": "docs_v2_verified",
+  "query_text": "Assemble the rollout context for the next step.",
+  "context": {
+    "version": 1,
+    "run": {
+      "id": "docs_v2_verified_run_001"
+    },
+    "intent": "rollout_followup",
+    "agent": {
+      "id": "docs_v2_agent",
+      "team_id": "docs_v2_team"
+    },
+    "tool": {
+      "name": "bash"
+    },
+    "request": {
+      "endpoint": "/docs-v2/context-assemble",
+      "method": "POST"
+    }
+  },
+  "include_rules": true,
+  "include_shadow": false,
+  "rules_limit": 50,
+  "tool_candidates": [
+    "bash",
+    "curl",
+    "psql"
+  ],
+  "tool_strict": true,
+  "return_layered_context": true,
+  "context_layers": {
+    "enabled": [
+      "facts",
+      "episodes",
+      "rules",
+      "tools",
+      "citations"
+    ],
+    "char_budget_total": 3200
+  },
+  "context_optimization_profile": "balanced"
+}

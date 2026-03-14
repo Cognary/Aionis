@@ -1,0 +1,6 @@
+{
+  "tenant_id": "default",
+  "scope": "docs_v2_verified",
+  "anchor": "docs_v2_handoff_001",
+  "handoff_kind": "task_handoff"
+}

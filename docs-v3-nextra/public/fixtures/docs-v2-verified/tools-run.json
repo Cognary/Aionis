@@ -1,0 +1,8 @@
+{
+  "tenant_id": "default",
+  "scope": "docs_v2_verified",
+  "run_id": "docs_v2_verified_run_002",
+  "decision_limit": 10,
+  "include_feedback": true,
+  "feedback_limit": 10
+}

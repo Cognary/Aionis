@@ -1,0 +1,32 @@
+{
+  "tenant_id": "default",
+  "scope": "docs_v2_verified",
+  "run_id": "docs_v2_verified_run_002",
+  "decision_id": "8fc0263a-48d6-4e91-9380-69e4c4ec7869",
+  "outcome": "positive",
+  "context": {
+    "version": 1,
+    "run": {
+      "id": "docs_v2_verified_run_002"
+    },
+    "intent": "rollout_followup_tools_run",
+    "agent": {
+      "id": "docs_v2_agent",
+      "team_id": "docs_v2_team"
+    },
+    "tool": {
+      "name": "bash"
+    }
+  },
+  "candidates": [
+    "bash",
+    "curl",
+    "psql"
+  ],
+  "selected_tool": "bash",
+  "include_shadow": false,
+  "rules_limit": 50,
+  "target": "tool",
+  "note": "tools-run verification feedback",
+  "input_text": "positive feedback for tools-run verification"
+}
