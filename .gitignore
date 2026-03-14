@@ -17,6 +17,7 @@ pgdata
 **/.astro
 .vitepress/cache
 **/.vitepress/cache
+packages/sdk/*.tgz
 
 # Python build artifacts
 *.egg-info
