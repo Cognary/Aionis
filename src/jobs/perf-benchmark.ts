@@ -1629,7 +1629,6 @@ async function main() {
 
         const baselineCost = costSignalsForEndpoint(endpoint, baseline.body);
         const previewCost = costSignalsForEndpoint(endpoint, preview.body);
-        const baselineSelectionStats = selectionStatsForEndpoint(endpoint, baseline.body);
         const previewSelectionStats = selectionStatsForEndpoint(endpoint, preview.body);
         const previewSelectionPolicy = selectionPolicyForEndpoint(endpoint, preview.body);
         const baselineTokens = Number(baselineCost?.context_est_tokens ?? 0);

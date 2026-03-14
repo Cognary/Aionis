@@ -43,7 +43,7 @@ function makePayload(fixture: Fixture, scope: string, tenantId: string) {
 
 async function postJson(baseUrl:string, endpoint:string, body:unknown, extraHeaders?: Record<string,string>) {
   const response = await fetch(`${baseUrl}${endpoint}`, { method:'POST', headers:{ 'content-type':'application/json', ...(extraHeaders??{}) }, body: JSON.stringify(body) });
-  let parsed:any=null; try { parsed = await response.json(); } catch {}
+  let parsed:any=null; try { parsed = await response.json(); } catch { /* ignore non-JSON responses */ }
   return { status: response.status, ok: response.ok, body: parsed };
 }
 function textForEndpoint(endpoint:EndpointName, body:any):string { if(endpoint==='recall_text') return typeof body?.context?.text==='string'?body.context.text:''; if(endpoint==='planning_context') return typeof body?.recall?.context?.text==='string'?body.recall.context.text:''; return typeof body?.layered_context?.merged_text==='string'?body.layered_context.merged_text:''; }

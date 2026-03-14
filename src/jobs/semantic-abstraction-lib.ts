@@ -150,7 +150,6 @@ export function buildSemanticAbstractions(input: SemanticAbstractionInput): Sema
   const maxTextLen = Math.max(120, Math.trunc(input.maxTextLen || 700));
   const summaryPoints = parseKeyPoints(input.sourceSummaryText);
   const eventPoints = parseEventPoints(input.sourceEventSummaries);
-  const points = summaryPoints.length > 0 ? summaryPoints : eventPoints;
   const allPoints = [...summaryPoints];
   for (const point of eventPoints) {
     if (allPoints.some((existing) => existing.toLowerCase() === point.toLowerCase())) continue;

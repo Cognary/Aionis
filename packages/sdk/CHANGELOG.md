@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.19] - 2026-03-14
+
+### Changed
+
+1. Aligned the TypeScript SDK release line to `0.2.19` for the current coordinated release batch.
+2. No TypeScript SDK API surface change in this patch release.
+
 ## [0.2.18] - 2026-03-14
 
 ### Changed

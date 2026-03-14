@@ -850,7 +850,7 @@ async function runSelfcheck(options: CliOptions) {
       Number((compile.data as any)?.usage?.total_tokens ?? (compile.data as any)?.compile_summary?.usage_estimate?.total_tokens ?? 0),
   };
 
-  emit(options.json, out, Boolean(out.ok) ? "Aionis selfcheck passed" : "Aionis selfcheck found issues");
+  emit(options.json, out, out.ok ? "Aionis selfcheck passed" : "Aionis selfcheck found issues");
   if (!out.ok) process.exitCode = 1;
 }
 
