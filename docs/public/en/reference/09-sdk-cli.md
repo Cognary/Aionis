@@ -36,12 +36,19 @@ Phase 1 boundary:
 2. it does not manage server or cloud runtime lifecycles
 3. `stop` only manages processes started and tracked by the CLI
 
+Bootstrap path when no local repo is available:
+
+1. search local runtime roots
+2. reuse cached runtime under `~/.aionis/runtime`
+3. download a versioned runtime bundle when available
+4. fall back to a GitHub source archive bootstrap path
+
 ## Quick Start
 
 Start Lite:
 
 ```bash
-npx aionis dev --runtime-root /path/to/Aionis
+npx @aionis/sdk@0.2.18 dev
 ```
 
 Check health:
@@ -53,19 +60,19 @@ npx aionis health --base-url http://127.0.0.1:3321
 Run doctor:
 
 ```bash
-npx aionis doctor --runtime-root /path/to/Aionis --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.18 doctor --base-url http://127.0.0.1:3321
 ```
 
 Run selfcheck:
 
 ```bash
-npx aionis selfcheck --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.18 selfcheck --base-url http://127.0.0.1:3321
 ```
 
 Stop the tracked Lite process:
 
 ```bash
-npx aionis stop --port 3321
+npx @aionis/sdk@0.2.18 stop --port 3321
 ```
 
 ## Command Notes
@@ -79,14 +86,20 @@ Useful flags:
 1. `--runtime-root /path/to/Aionis`
 2. `--host 127.0.0.1`
 3. `--port 3321`
-4. `--foreground`
-5. `--json`
+4. `--runtime-version 0.2.18`
+5. `--runtime-cache-dir ~/.aionis/runtime`
+6. `--force-download`
+7. `--offline`
+8. `--foreground`
+9. `--json`
 
 If `--runtime-root` is omitted, the CLI searches:
 
 1. the current working tree
 2. parent directories
 3. common local paths such as `~/Desktop/Aionis`
+4. cached runtime bootstrap output
+5. remote runtime bootstrap sources
 
 ### `aionis doctor`
 
@@ -94,13 +107,15 @@ If `--runtime-root` is omitted, the CLI searches:
 
 1. `node:sqlite` support
 2. runtime root discovery
-3. `dist/index.js`
-4. `scripts/start-lite.sh`
-5. tracked pid file
-6. pid liveness
-7. log path
-8. write and replay SQLite paths
-9. runtime health
+3. runtime cache root
+4. runtime manifest
+5. `dist/index.js`
+6. `scripts/start-lite.sh`
+7. tracked pid file
+8. pid liveness
+9. log path
+10. write and replay SQLite paths
+11. runtime health
 
 ### `aionis selfcheck`
 

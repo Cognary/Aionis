@@ -36,12 +36,19 @@ Phase 1 边界：
 2. 不负责 Server 或 Cloud runtime 生命周期
 3. `stop` 只管理由 CLI 自己启动并追踪的进程
 
+如果本地没有 Aionis 仓库，当前 bootstrap 路径是：
+
+1. 先搜索本地 runtime root
+2. 复用 `~/.aionis/runtime` 下的缓存 runtime
+3. 有可用 bundle 时下载版本化 runtime bundle
+4. bundle 不可用时回退到 GitHub 源码归档 bootstrap
+
 ## 快速开始
 
 启动 Lite：
 
 ```bash
-npx aionis dev --runtime-root /path/to/Aionis
+npx @aionis/sdk@0.2.18 dev
 ```
 
 检查健康：
@@ -53,19 +60,19 @@ npx aionis health --base-url http://127.0.0.1:3321
 运行 doctor：
 
 ```bash
-npx aionis doctor --runtime-root /path/to/Aionis --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.18 doctor --base-url http://127.0.0.1:3321
 ```
 
 运行 selfcheck：
 
 ```bash
-npx aionis selfcheck --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.18 selfcheck --base-url http://127.0.0.1:3321
 ```
 
 停止当前端口上由 CLI 追踪的 Lite：
 
 ```bash
-npx aionis stop --port 3321
+npx @aionis/sdk@0.2.18 stop --port 3321
 ```
 
 ## 命令说明
@@ -79,14 +86,20 @@ npx aionis stop --port 3321
 1. `--runtime-root /path/to/Aionis`
 2. `--host 127.0.0.1`
 3. `--port 3321`
-4. `--foreground`
-5. `--json`
+4. `--runtime-version 0.2.18`
+5. `--runtime-cache-dir ~/.aionis/runtime`
+6. `--force-download`
+7. `--offline`
+8. `--foreground`
+9. `--json`
 
 如果不传 `--runtime-root`，CLI 会自动搜索：
 
 1. 当前工作区
 2. 父级目录
 3. 常见本地路径，比如 `~/Desktop/Aionis`
+4. 已缓存的 runtime bootstrap 目录
+5. 远程 runtime bootstrap 源
 
 ### `aionis doctor`
 
@@ -94,13 +107,15 @@ npx aionis stop --port 3321
 
 1. `node:sqlite` 支持
 2. runtime root 发现
-3. `dist/index.js`
-4. `scripts/start-lite.sh`
-5. pid 文件
-6. pid 是否仍存活
-7. 日志路径
-8. write / replay SQLite 路径
-9. runtime health
+3. runtime cache root
+4. runtime manifest
+5. `dist/index.js`
+6. `scripts/start-lite.sh`
+7. pid 文件
+8. pid 是否仍存活
+9. 日志路径
+10. write / replay SQLite 路径
+11. runtime health
 
 ### `aionis selfcheck`
 

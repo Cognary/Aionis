@@ -1,9 +1,18 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -16,6 +25,10 @@ type CliOptions = {
   host: string;
   port: number;
   runtimeRoot?: string;
+  runtimeVersion: string;
+  runtimeCacheDir: string;
+  forceDownload: boolean;
+  offline: boolean;
   foreground: boolean;
   json: boolean;
   timeoutMs: number;
@@ -31,6 +44,14 @@ const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 3321;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_STATE_DIR = join(homedir(), ".aionis", "dev");
+const DEFAULT_RUNTIME_CACHE_DIR = join(homedir(), ".aionis", "runtime");
+
+type RuntimeResolution = {
+  runtimeRoot: string;
+  source: "local_repo" | "cached_runtime" | "downloaded_bundle" | "downloaded_source";
+  version: string;
+  cacheRoot?: string;
+};
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -92,10 +113,14 @@ function resolveOptions(flags: Map<string, string | boolean>): CliOptions {
   const port = Number(flags.get("port") || process.env.AIONIS_DEV_PORT || DEFAULT_PORT);
   const baseUrl = String(flags.get("base-url") || process.env.AIONIS_BASE_URL || `http://${host}:${port}`);
   const runtimeRoot = typeof flags.get("runtime-root") === "string" ? String(flags.get("runtime-root")) : process.env.AIONIS_RUNTIME_ROOT;
+  const runtimeVersion = String(flags.get("runtime-version") || process.env.AIONIS_RUNTIME_VERSION || packageVersion());
+  const runtimeCacheDir = String(flags.get("runtime-cache-dir") || process.env.AIONIS_RUNTIME_CACHE_DIR || DEFAULT_RUNTIME_CACHE_DIR);
+  const forceDownload = Boolean(flags.get("force-download"));
+  const offline = Boolean(flags.get("offline"));
   const foreground = Boolean(flags.get("foreground"));
   const json = Boolean(flags.get("json"));
   const timeoutMs = Number(flags.get("timeout-ms") || process.env.AIONIS_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
-  return { baseUrl, host, port, runtimeRoot, foreground, json, timeoutMs };
+  return { baseUrl, host, port, runtimeRoot, runtimeVersion, runtimeCacheDir, forceDownload, offline, foreground, json, timeoutMs };
 }
 
 function printHelp() {
@@ -104,16 +129,16 @@ function printHelp() {
       "Aionis CLI (Phase 1)",
       "",
       "Usage:",
-      "  aionis dev [--port 3321] [--host 127.0.0.1] [--runtime-root /path/to/Aionis] [--foreground]",
+      "  aionis dev [--port 3321] [--host 127.0.0.1] [--runtime-root /path/to/Aionis] [--runtime-version 0.2.18] [--force-download] [--offline] [--foreground]",
       "  aionis stop [--port 3321] [--json]",
       "  aionis health [--base-url http://127.0.0.1:3321] [--json]",
-      "  aionis doctor [--runtime-root /path/to/Aionis] [--base-url http://127.0.0.1:3321] [--json]",
+      "  aionis doctor [--runtime-root /path/to/Aionis] [--runtime-version 0.2.18] [--runtime-cache-dir ~/.aionis/runtime] [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis selfcheck [--base-url http://127.0.0.1:3321] [--json]",
       "",
       "Notes:",
       "  - Phase 1 is a local Lite developer CLI.",
       "  - `aionis dev` starts or attaches to a local Lite runtime.",
-      "  - If runtime root is not given, the CLI searches the current tree and common local paths.",
+      "  - If runtime root is not given, the CLI searches local paths first, then runtime cache, then bootstrap download.",
       "",
     ].join("\n"),
   );
@@ -168,6 +193,11 @@ function readJson(path: string): Record<string, unknown> | null {
   }
 }
 
+function packageVersion(): string {
+  const pkg = readJson(filePathFromHere("..", "package.json"));
+  return typeof pkg?.version === "string" ? pkg.version : "0.0.0";
+}
+
 function isRuntimeRoot(path: string): boolean {
   const pkg = readJson(join(path, "package.json"));
   return Boolean(pkg && pkg.name === "aionis-memory-graph" && typeof pkg.scripts === "object" && pkg.scripts && "start:lite" in pkg.scripts);
@@ -199,6 +229,192 @@ function resolveRuntimeRoot(explicit?: string): string | null {
   return null;
 }
 
+function runtimePlatformKey() {
+  return `${process.platform}-${process.arch}`;
+}
+
+function runtimeCacheRoot(options: CliOptions) {
+  return join(resolve(options.runtimeCacheDir), options.runtimeVersion, runtimePlatformKey());
+}
+
+function runtimeBundleRoot(options: CliOptions) {
+  return join(runtimeCacheRoot(options), "bundle");
+}
+
+function runtimeSourceRoot(options: CliOptions) {
+  return join(runtimeCacheRoot(options), "source");
+}
+
+function runtimeDownloadsRoot(options: CliOptions) {
+  return join(runtimeCacheRoot(options), "downloads");
+}
+
+function runtimeManifestFile(options: CliOptions) {
+  return join(runtimeCacheRoot(options), "runtime-manifest.json");
+}
+
+function defaultBundleUrl(version: string) {
+  const platform = runtimePlatformKey();
+  return `https://github.com/Cognary/Aionis/releases/download/v${version}/aionis-lite-v${version}-${platform}.tar.gz`;
+}
+
+function defaultSourceUrl(version: string) {
+  return `https://github.com/Cognary/Aionis/archive/refs/tags/v${version}.tar.gz`;
+}
+
+function fallbackSourceUrl() {
+  return "https://github.com/Cognary/Aionis/archive/refs/heads/main.tar.gz";
+}
+
+function checksumSidecarUrl(url: string) {
+  return `${url}.sha256`;
+}
+
+function emitInfo(options: CliOptions, line: string) {
+  if (!options.json) process.stderr.write(`${line}\n`);
+}
+
+function sha256File(path: string) {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function extractExpectedSha(text: string, artifactName: string) {
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = line.match(/^([a-fA-F0-9]{64})\s+\*?(.+)$/);
+    if (!match) continue;
+    if (basename(match[2]) === artifactName) return match[1].toLowerCase();
+  }
+  const single = text.trim().match(/^([a-fA-F0-9]{64})$/);
+  return single ? single[1].toLowerCase() : null;
+}
+
+async function downloadToFile(url: string, outPath: string) {
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error(`download failed ${res.status} ${res.statusText} for ${url}`);
+  const arrayBuffer = await res.arrayBuffer();
+  writeFileSync(outPath, Buffer.from(arrayBuffer));
+}
+
+async function maybeVerifyChecksum(url: string, archivePath: string) {
+  try {
+    const res = await fetch(checksumSidecarUrl(url), { redirect: "follow" });
+    if (!res.ok) return { verified: false, detail: "checksum_sidecar_missing" };
+    const text = await res.text();
+    const expected = extractExpectedSha(text, basename(archivePath));
+    if (!expected) return { verified: false, detail: "checksum_sidecar_unparseable" };
+    const actual = sha256File(archivePath);
+    if (actual !== expected) {
+      throw new Error(`checksum mismatch for ${basename(archivePath)} expected ${expected} got ${actual}`);
+    }
+    return { verified: true, detail: expected };
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("checksum mismatch")) throw err;
+    return { verified: false, detail: "checksum_unavailable" };
+  }
+}
+
+function extractTarball(archivePath: string, destinationDir: string) {
+  mkdirSync(destinationDir, { recursive: true });
+  const extracted = spawnSync("tar", ["-xzf", archivePath, "-C", destinationDir], {
+    stdio: "inherit",
+  });
+  if (extracted.status !== 0) {
+    throw new Error(`failed to extract ${archivePath} into ${destinationDir}`);
+  }
+}
+
+function findRuntimeRootCandidate(baseDir: string, depth = 3): string | null {
+  if (!existsSync(baseDir)) return null;
+  if (isRuntimeRoot(baseDir)) return baseDir;
+  if (depth <= 0) return null;
+  for (const entry of readdirSync(baseDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const candidate = findRuntimeRootCandidate(join(baseDir, entry.name), depth - 1);
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
+function writeRuntimeManifest(options: CliOptions, payload: Record<string, unknown>) {
+  mkdirSync(runtimeCacheRoot(options), { recursive: true });
+  writeFileSync(runtimeManifestFile(options), `${JSON.stringify(payload, null, 2)}\n`);
+}
+
+async function bootstrapRuntime(options: CliOptions): Promise<RuntimeResolution> {
+  const explicitRoot = resolveRuntimeRoot(options.runtimeRoot);
+  if (explicitRoot) {
+    return { runtimeRoot: explicitRoot, source: "local_repo", version: options.runtimeVersion };
+  }
+
+  const cached = findRuntimeRootCandidate(runtimeBundleRoot(options)) ?? findRuntimeRootCandidate(runtimeSourceRoot(options));
+  if (cached && !options.forceDownload) {
+    return { runtimeRoot: cached, source: "cached_runtime", version: options.runtimeVersion, cacheRoot: runtimeCacheRoot(options) };
+  }
+  if (options.offline) {
+    throw new Error(`offline mode enabled and no cached runtime found in ${runtimeCacheRoot(options)}`);
+  }
+
+  mkdirSync(runtimeDownloadsRoot(options), { recursive: true });
+
+  const bundleUrl = process.env.AIONIS_RUNTIME_BUNDLE_URL || defaultBundleUrl(options.runtimeVersion);
+  const sourceUrl = process.env.AIONIS_RUNTIME_SOURCE_URL || defaultSourceUrl(options.runtimeVersion);
+  const sourceFallback = process.env.AIONIS_RUNTIME_SOURCE_FALLBACK_URL || fallbackSourceUrl();
+
+  const bundleArchive = join(runtimeDownloadsRoot(options), basename(new URL(bundleUrl).pathname) || `bundle-${options.runtimeVersion}.tar.gz`);
+  const sourceArchive = join(runtimeDownloadsRoot(options), basename(new URL(sourceUrl).pathname) || `source-${options.runtimeVersion}.tar.gz`);
+  const fallbackArchive = join(runtimeDownloadsRoot(options), basename(new URL(sourceFallback).pathname) || "source-main.tar.gz");
+
+  try {
+    emitInfo(options, `Aionis runtime not found locally. Downloading runtime bundle ${options.runtimeVersion} for ${runtimePlatformKey()}...`);
+    await downloadToFile(bundleUrl, bundleArchive);
+    const checksum = await maybeVerifyChecksum(bundleUrl, bundleArchive);
+    rmSync(runtimeBundleRoot(options), { recursive: true, force: true });
+    extractTarball(bundleArchive, runtimeBundleRoot(options));
+    const runtimeRoot = findRuntimeRootCandidate(runtimeBundleRoot(options));
+    if (!runtimeRoot) throw new Error(`downloaded runtime bundle did not contain a valid Lite runtime: ${bundleUrl}`);
+    writeRuntimeManifest(options, {
+      mode: "bundle",
+      version: options.runtimeVersion,
+      platform: runtimePlatformKey(),
+      source_url: bundleUrl,
+      verified_checksum: checksum.verified ? checksum.detail : null,
+      verification_state: checksum.detail,
+      runtime_root: runtimeRoot,
+    });
+    return { runtimeRoot, source: "downloaded_bundle", version: options.runtimeVersion, cacheRoot: runtimeCacheRoot(options) };
+  } catch (bundleErr) {
+    emitInfo(options, `Runtime bundle unavailable. Falling back to source bootstrap.`);
+    const sourceTargets = [
+      { url: sourceUrl, archive: sourceArchive, ref: `v${options.runtimeVersion}` },
+      { url: sourceFallback, archive: fallbackArchive, ref: "main" },
+    ];
+    let lastErr: unknown = bundleErr;
+    for (const target of sourceTargets) {
+      try {
+        emitInfo(options, `Downloading Aionis source ${target.ref}...`);
+        await downloadToFile(target.url, target.archive);
+        rmSync(runtimeSourceRoot(options), { recursive: true, force: true });
+        extractTarball(target.archive, runtimeSourceRoot(options));
+        const runtimeRoot = findRuntimeRootCandidate(runtimeSourceRoot(options), 4);
+        if (!runtimeRoot) throw new Error(`downloaded source did not contain a valid Lite runtime: ${target.url}`);
+        writeRuntimeManifest(options, {
+          mode: "source",
+          version: options.runtimeVersion,
+          source_ref: target.ref,
+          source_url: target.url,
+          runtime_root: runtimeRoot,
+        });
+        return { runtimeRoot, source: "downloaded_source", version: options.runtimeVersion, cacheRoot: runtimeCacheRoot(options) };
+      } catch (sourceErr) {
+        lastErr = sourceErr;
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+  }
+}
+
 function hasNodeSqliteSupport(): boolean {
   const probe = spawnSync(process.execPath, ["-e", 'import("node:sqlite").then(()=>process.exit(0)).catch(()=>process.exit(1))'], {
     stdio: "ignore",
@@ -210,7 +426,22 @@ function canBuildRuntime(runtimeRoot: string): boolean {
   return existsSync(join(runtimeRoot, "package.json"));
 }
 
+function ensureRuntimeDependencies(runtimeRoot: string) {
+  if (existsSync(join(runtimeRoot, "node_modules"))) return;
+  const hasPackageLock = existsSync(join(runtimeRoot, "package-lock.json"));
+  const installArgs = hasPackageLock ? ["ci"] : ["install"];
+  const installed = spawnSync("npm", installArgs, {
+    cwd: runtimeRoot,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (installed.status !== 0) {
+    throw new Error(`failed to install runtime dependencies in ${runtimeRoot}`);
+  }
+}
+
 function ensureRuntimeBuilt(runtimeRoot: string) {
+  ensureRuntimeDependencies(runtimeRoot);
   if (existsSync(join(runtimeRoot, "dist", "index.js"))) return;
   const built = spawnSync("npm", ["run", "-s", "build"], {
     cwd: runtimeRoot,
@@ -268,13 +499,11 @@ async function runDev(options: CliOptions) {
     // start new instance
   }
 
-  const runtimeRoot = resolveRuntimeRoot(options.runtimeRoot);
-  if (!runtimeRoot) {
-    throw new Error("could not resolve Aionis runtime root; pass --runtime-root /path/to/Aionis");
-  }
   if (!hasNodeSqliteSupport()) {
     throw new Error("current Node.js lacks node:sqlite support; use Node 22+");
   }
+  const runtime = await bootstrapRuntime(options);
+  const runtimeRoot = runtime.runtimeRoot;
   if (!canBuildRuntime(runtimeRoot)) {
     throw new Error(`invalid runtime root: ${runtimeRoot}`);
   }
@@ -295,6 +524,7 @@ async function runDev(options: CliOptions) {
         base_url: options.baseUrl,
         pid,
         runtime_root: runtimeRoot,
+        runtime_source: runtime.source,
         log_path: logPath,
       }, `Attached to existing Lite process ${pid} at ${options.baseUrl}`);
       return;
@@ -339,6 +569,9 @@ async function runDev(options: CliOptions) {
     base_url: options.baseUrl,
     pid: child.pid,
     runtime_root: runtimeRoot,
+    runtime_source: runtime.source,
+    runtime_version: runtime.version,
+    runtime_cache_root: runtime.cacheRoot ?? null,
     log_path: logPath,
     edition: health.data?.aionis_edition ?? null,
     backend: health.data?.memory_store_backend ?? null,
@@ -402,7 +635,7 @@ async function runStop(options: CliOptions) {
 }
 
 async function runDoctor(options: CliOptions) {
-  const runtimeRoot = resolveRuntimeRoot(options.runtimeRoot);
+  const runtimeRoot = resolveRuntimeRoot(options.runtimeRoot) ?? findRuntimeRootCandidate(runtimeBundleRoot(options)) ?? findRuntimeRootCandidate(runtimeSourceRoot(options), 4);
   ensureStateDir();
   const pidPath = runtimePidFile(options.port);
   const logPath = runtimeLogFile(options.port);
@@ -419,6 +652,16 @@ async function runDoctor(options: CliOptions) {
       name: "runtime_root",
       ok: Boolean(runtimeRoot),
       detail: runtimeRoot ?? "runtime root not found",
+    },
+    {
+      name: "runtime_cache_root",
+      ok: existsSync(runtimeCacheRoot(options)),
+      detail: existsSync(runtimeCacheRoot(options)) ? runtimeCacheRoot(options) : `missing (${runtimeCacheRoot(options)})`,
+    },
+    {
+      name: "runtime_manifest",
+      ok: existsSync(runtimeManifestFile(options)),
+      detail: existsSync(runtimeManifestFile(options)) ? runtimeManifestFile(options) : `missing (${runtimeManifestFile(options)})`,
     },
     {
       name: "runtime_dist",
@@ -479,7 +722,7 @@ async function runDoctor(options: CliOptions) {
   }
 
   const ok = checks.every((c) => c.ok);
-  emit(options.json, { ok, checks }, renderDoctor(checks));
+  emit(options.json, { ok, checks, runtime_version: options.runtimeVersion, runtime_platform: runtimePlatformKey() }, renderDoctor(checks));
   if (!ok) process.exitCode = 1;
 }
 

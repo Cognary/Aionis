@@ -14,6 +14,12 @@ The package also exposes the local developer CLI:
 npx @aionis/sdk@0.2.18 --help
 ```
 
+If you do not have a local Aionis repository, `aionis dev` can now bootstrap Lite by:
+
+1. checking the local runtime cache
+2. trying a versioned runtime bundle
+3. falling back to a GitHub source archive bootstrap path
+
 ## Usage
 
 ```ts
@@ -126,6 +132,14 @@ The bundled Phase 1 developer CLI supports:
 3. `aionis health`
 4. `aionis doctor`
 5. `aionis selfcheck`
+
+Useful `aionis dev` flags:
+
+1. `--runtime-root /path/to/Aionis`
+2. `--runtime-version 0.2.18`
+3. `--runtime-cache-dir ~/.aionis/runtime`
+4. `--force-download`
+5. `--offline`
 
 Admin/control methods (require `admin_token`):
 
