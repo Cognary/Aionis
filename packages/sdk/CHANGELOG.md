@@ -6,6 +6,15 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.18] - 2026-03-14
+
+### Changed
+
+1. Added Phase 1 local developer CLI coverage to the TypeScript package: `aionis dev`, `stop`, `health`, `doctor`, and `selfcheck`.
+2. Added public handoff client coverage (`handoffStore`, `handoffRecover`) and fixed Lite handoff lookup stability under PII redaction.
+3. Added replay candidate/dispatch and automation graph-validate coverage to align the audited developer route surface.
+4. Synced package documentation to the current SDK coverage audit and CLI entrypoint.
+
 ## [0.2.17] - 2026-03-08
 
 ### Changed

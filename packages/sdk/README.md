@@ -8,6 +8,12 @@ TypeScript SDK for Aionis Memory Graph API.
 npm i @aionis/sdk
 ```
 
+The package also exposes the local developer CLI:
+
+```bash
+npx aionis --help
+```
+
 ## Usage
 
 ```ts
@@ -56,32 +62,70 @@ If you set custom headers manually, the SDK will not override existing auth head
 11. `packImport`
 12. `archiveRehydrate`
 13. `nodesActivate`
-14. `sandboxCreateSession`
-15. `sandboxExecute`
-16. `sandboxRunGet`
-17. `sandboxRunLogs`
-18. `sandboxRunArtifact`
-19. `sandboxRunCancel`
-20. `rulesEvaluate`
-21. `rulesState`
-22. `toolsSelect`
-23. `toolsDecision`
-24. `toolsRun`
-25. `toolsFeedback`
-26. `feedback`
-27. `replayRunStart`
-28. `replayStepBefore`
-29. `replayStepAfter`
-30. `replayRunEnd`
-31. `replayRunGet`
-32. `replayPlaybookCompileFromRun`
-33. `replayPlaybookGet`
-34. `replayPlaybookPromote`
-35. `replayPlaybookRepair`
-36. `replayPlaybookRepairReview`
-37. `replayPlaybookRun`
-38. `health`
-39. `getCapabilityContract`
+14. `handoffStore`
+15. `handoffRecover`
+16. `sandboxCreateSession`
+17. `sandboxExecute`
+18. `sandboxRunGet`
+19. `sandboxRunLogs`
+20. `sandboxRunArtifact`
+21. `sandboxRunCancel`
+22. `rulesEvaluate`
+23. `rulesState`
+24. `toolsSelect`
+25. `toolsDecision`
+26. `toolsRun`
+27. `toolsFeedback`
+28. `feedback`
+29. `replayRunStart`
+30. `replayStepBefore`
+31. `replayStepAfter`
+32. `replayRunEnd`
+33. `replayRunGet`
+34. `replayPlaybookCompileFromRun`
+35. `replayPlaybookGet`
+36. `replayPlaybookCandidate`
+37. `replayPlaybookPromote`
+38. `replayPlaybookRepair`
+39. `replayPlaybookRepairReview`
+40. `replayPlaybookRun`
+41. `replayPlaybookDispatch`
+42. `automationCreate`
+43. `automationGet`
+44. `automationList`
+45. `automationTelemetry`
+46. `automationAssignReviewer`
+47. `automationPromote`
+48. `automationValidate`
+49. `automationGraphValidate`
+50. `automationShadowReport`
+51. `automationShadowReview`
+52. `automationShadowValidate`
+53. `automationShadowValidateDispatch`
+54. `automationCompensationPolicyMatrix`
+55. `automationRun`
+56. `automationRunGet`
+57. `automationRunList`
+58. `automationRunAssignReviewer`
+59. `automationRunCancel`
+60. `automationRunApproveRepair`
+61. `automationRunCompensationRetry`
+62. `automationRunCompensationAssign`
+63. `automationRunCompensationRecordAction`
+64. `automationRunResume`
+65. `automationRunRejectRepair`
+66. `health`
+67. `getCapabilityContract`
+
+## CLI Commands
+
+The bundled Phase 1 developer CLI supports:
+
+1. `aionis dev`
+2. `aionis stop`
+3. `aionis health`
+4. `aionis doctor`
+5. `aionis selfcheck`
 
 Admin/control methods (require `admin_token`):
 
