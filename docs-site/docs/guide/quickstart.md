@@ -76,6 +76,13 @@ Clone and configure the repository:
 git clone https://github.com/Cognary/Aionis.git
 cd Aionis
 cp .env.example .env
+npm run -s env:bundle:local-safe
+```
+
+If you want a more evaluation-oriented local bundle for recall and context optimization:
+
+```bash
+npm run -s env:bundle:experimental
 ```
 
 Use these local `.env` defaults for a first smoke path:
@@ -153,6 +160,13 @@ Use Server if you want the self-hosted production-shaped local path:
 git clone https://github.com/Cognary/Aionis.git
 cd Aionis
 cp .env.example .env
+npm run -s env:bundle:local-safe
+```
+
+For a shared non-local team environment, start from:
+
+```bash
+npm run -s env:bundle:team-shared
 ```
 
 Use these local `.env` defaults:

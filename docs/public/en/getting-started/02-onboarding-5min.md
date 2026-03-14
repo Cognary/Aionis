@@ -70,9 +70,16 @@ If your deployment uses JWT auth instead of API key, replace `X-Api-Key` with:
 git clone https://github.com/Cognary/Aionis.git
 cd Aionis
 cp .env.example .env
+npm run -s env:bundle:local-safe
 npm install
 npm run build
 npm run start:lite
+```
+
+If you want a more evaluation-oriented local bundle for recall and context optimization:
+
+```bash
+npm run -s env:bundle:experimental
 ```
 
 Health check:
@@ -125,6 +132,18 @@ If you are trying Lite public beta:
 git clone https://github.com/Cognary/Aionis.git
 cd Aionis
 cp .env.example .env
+```
+
+If you want a managed `.env` starting point before refining settings by hand:
+
+```bash
+npm run -s env:bundle:local-safe
+```
+
+For shared non-local team environments:
+
+```bash
+npm run -s env:bundle:team-shared
 ```
 
 Recommended local `.env` minimum:
@@ -182,5 +201,6 @@ Your onboarding is complete when:
 2. Run the Lite operator checklist: [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
 3. Review Lite public beta scope: [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
 4. Use the public troubleshooting path when local behavior diverges: [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)
-5. Build a full memory workflow: [Build Memory Workflows](/public/en/guides/01-build-memory)
-6. Explore API contracts: [API Reference](/public/en/api-reference/00-api-reference)
+5. Use copy-ready feature bundles: [Feature Bundles](https://doc.aionisos.com/guide/tutorials/feature-bundles)
+6. Build a full memory workflow: [Build Memory Workflows](/public/en/guides/01-build-memory)
+7. Explore API contracts: [API Reference](/public/en/api-reference/00-api-reference)

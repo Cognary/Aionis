@@ -28,6 +28,13 @@ flowchart LR
 git clone https://github.com/Cognary/Aionis.git
 cd Aionis
 cp .env.example .env
+npm run -s env:bundle:local-safe
+```
+
+If you want a more evaluation-oriented local bundle for recall and context optimization:
+
+```bash
+npm run -s env:bundle:experimental
 ```
 
 Recommended local `.env` values:
@@ -88,6 +95,21 @@ curl -sS "$BASE_URL/v1/memory/write" \
     "nodes":[{"type":"event","memory_lane":"shared","text_summary":"hosted onboarding write"}]
   }' | jq
 ```
+
+## Bundle shortcuts
+
+If you want copy-ready `.env` presets instead of flipping feature flags manually:
+
+```bash
+npm run -s env:bundle:local-safe
+npm run -s env:bundle:experimental
+npm run -s env:bundle:team-shared
+npm run -s env:bundle:high-risk
+```
+
+Guide:
+
+1. [Tutorial: Feature Bundles](/guide/tutorials/feature-bundles)
 
 ## Success criteria
 

@@ -46,7 +46,7 @@ That is the product: less rediscovery, more continuation.
 
 See the [Layer 1 Capability Matrix](https://doc.aionisos.com/public/en/benchmarks/14-layer1-capability-matrix) for the controlled A/B layout.
 
-[Start in 5 Minutes](./docs/public/en/getting-started/02-onboarding-5min.md) · [Choose Lite or Server](./docs/public/en/getting-started/07-choose-lite-vs-server.md) · [Docs](https://doc.aionisos.com) · [Lite Public Beta](./docs/public/en/getting-started/05-lite-public-beta-boundary.md)
+[Start in 5 Minutes](./docs/public/en/getting-started/02-onboarding-5min.md) · [Choose Lite or Server](./docs/public/en/getting-started/07-choose-lite-vs-server.md) · [Feature Bundles](https://doc.aionisos.com/guide/tutorials/feature-bundles) · [Docs](https://doc.aionisos.com) · [Lite Public Beta](./docs/public/en/getting-started/05-lite-public-beta-boundary.md)
 
 **SDK and CLI state:**
 
@@ -280,6 +280,7 @@ Product path guide:
 
 1. [Choose Lite vs Server](https://doc.aionisos.com/public/en/getting-started/07-choose-lite-vs-server)
 2. [5-Minute Onboarding](https://doc.aionisos.com/public/en/getting-started/02-onboarding-5min)
+3. [Feature Bundles](https://doc.aionisos.com/guide/tutorials/feature-bundles)
 
 ## Server Quickstart
 
@@ -287,8 +288,15 @@ Product path guide:
 git clone https://github.com/Cognary/Aionis.git
 cd Aionis
 cp .env.example .env
+npm run -s env:bundle:local-safe
 make stack-up
 curl -fsS http://localhost:3001/health
+```
+
+If you are preparing a shared team or staging environment instead of a conservative local one:
+
+```bash
+npm run -s env:bundle:team-shared
 ```
 
 Minimal write + recall:
@@ -319,9 +327,16 @@ For a single-user local runtime without Docker or external Postgres:
 git clone https://github.com/Cognary/Aionis.git
 cd Aionis
 cp .env.example .env
+npm run -s env:bundle:local-safe
 npm install
 npm run build
 npm run start:lite
+```
+
+If you want a slightly more aggressive evaluation setup for recall and context optimization:
+
+```bash
+npm run -s env:bundle:experimental
 ```
 
 Before treating Lite as anything beyond a local beta path:

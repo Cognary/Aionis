@@ -25,6 +25,7 @@ const pageDescriptionOverrides: Record<string, string> = {
   '/guide/operations-and-gates': 'Operate Aionis reliably with policy gates, incident debugging, and replay diagnostics.',
   '/guide/deploy': 'Deploy Aionis in production with environment setup, rollout strategy, and reliability controls.',
   '/guide/troubleshooting': 'Diagnose and fix common Aionis integration and runtime issues quickly.',
+  '/guide/tutorials/feature-bundles': 'Apply copy-ready Aionis feature bundles for conservative local use, experiments, shared environments, and approved high-risk windows.',
   '/api': 'Aionis API reference for memory, policy loop, replay, and sandbox endpoints.',
   '/operations': 'Operations handbook for Aionis go-live, monitoring, incident response, and runbooks.',
   '/reference': 'Reference docs for configuration, security, FAQ, changelog, and roadmap.'
@@ -200,6 +201,7 @@ export default defineConfig({
           items: [
             { text: 'Tutorials Overview', link: '/guide/tutorials/' },
             { text: 'Environment Template', link: '/guide/tutorials/env-template' },
+            { text: 'Feature Bundles', link: '/guide/tutorials/feature-bundles' },
             { text: 'Agent Integration', link: '/guide/tutorials/agent-integration' },
             { text: 'Incident Replay', link: '/guide/tutorials/incident-replay' },
             { text: 'Release Gate', link: '/guide/tutorials/release-gate' },

@@ -69,9 +69,16 @@ curl -sS "$BASE_URL/v1/memory/recall_text" \
 git clone https://github.com/Cognary/Aionis.git
 cd Aionis
 cp .env.example .env
+npm run -s env:bundle:local-safe
 npm install
 npm run build
 npm run start:lite
+```
+
+如果你想要更偏评估的本地 bundle，用来测试 recall 和 context optimization：
+
+```bash
+npm run -s env:bundle:experimental
 ```
 
 健康检查：
@@ -124,6 +131,18 @@ Lite 当前有意保留这两个 server-only 外层面：
 git clone https://github.com/Cognary/Aionis.git
 cd Aionis
 cp .env.example .env
+```
+
+如果你想先用一套托管的 `.env` 起点，而不是手动逐个切开关：
+
+```bash
+npm run -s env:bundle:local-safe
+```
+
+如果是共享测试环境或团队环境：
+
+```bash
+npm run -s env:bundle:team-shared
 ```
 
 本地最小 `.env` 推荐：
@@ -192,7 +211,9 @@ make stack-down
    [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
 4. 本地行为和预期不一致时，走统一排障路径：
    [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)
-5. 继续搭完整 memory workflow：
+5. 使用可复制的功能 bundle：
+   [Feature Bundles](https://doc.aionisos.com/guide/tutorials/feature-bundles)
+6. 继续搭完整 memory workflow：
    [构建 Memory Workflow](/public/zh/guides/01-build-memory)
-6. 查看 API 契约：
+7. 查看 API 契约：
    [API Reference](/public/zh/api-reference/00-api-reference)

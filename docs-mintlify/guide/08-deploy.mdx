@@ -38,6 +38,27 @@ DATABASE_URL=postgres://<user>:<pass>@<managed-postgres-host>:5432/<db>
 4. Enable auth, quota, rate-limit, and CORS controls.
 5. Run core gate before cutover.
 
+## Feature bundle starting points
+
+If you want a faster starting point before refining per-environment secrets and network settings, apply one of the built-in feature bundles:
+
+```bash
+npm run -s env:bundle:team-shared
+```
+
+For local evaluation:
+
+```bash
+npm run -s env:bundle:local-safe
+npm run -s env:bundle:experimental
+```
+
+Do not use `env:bundle:high-risk` as a normal production baseline. Reserve it for short-lived, explicitly approved operator windows.
+
+See:
+
+1. [Tutorial: Feature Bundles](/guide/tutorials/feature-bundles)
+
 ## Cutover steps
 
 1. Freeze schema-changing work in cutover window.

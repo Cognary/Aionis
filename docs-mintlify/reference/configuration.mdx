@@ -34,6 +34,20 @@ This page summarizes key runtime configuration groups.
 1. Keep separate env values for dev/staging/prod.
 2. Store secrets outside source control.
 3. Validate config with staging smoke and production gate before rollout.
+4. Use the built-in feature bundle commands when you want a copy-ready starting point for common default-off toggles.
+
+## Feature bundle shortcuts
+
+```bash
+npm run -s env:bundle:local-safe
+npm run -s env:bundle:experimental
+npm run -s env:bundle:team-shared
+npm run -s env:bundle:high-risk
+```
+
+Guide:
+
+1. [Tutorial: Feature Bundles](/guide/tutorials/feature-bundles)
 
 ## Baseline production settings
 

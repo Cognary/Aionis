@@ -67,6 +67,7 @@
             "pages": [
               "guide/tutorials/index",
               "guide/tutorials/env-template",
+              "guide/tutorials/feature-bundles",
               "guide/tutorials/agent-integration",
               "guide/tutorials/incident-replay",
               "guide/tutorials/release-gate",
