@@ -37,16 +37,16 @@ jobs:
       GATEB_REQUIRE_API_SMOKE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.require_api_smoke || 'false' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -104,7 +104,7 @@ jobs:
 
       - name: Upload Gate B artifacts
         if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gtm-phase2-gate-artifacts
           path: artifacts/gtm/gate_b/

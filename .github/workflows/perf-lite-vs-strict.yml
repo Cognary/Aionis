@@ -70,10 +70,10 @@ jobs:
       LITE_VS_STRICT_OUT_DIR: artifacts/perf/lite_vs_strict_ci
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -195,7 +195,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: perf-lite-vs-strict-artifacts
           path: ${{ env.LITE_VS_STRICT_OUT_DIR }}
@@ -216,7 +216,7 @@ jobs:
 
       - name: Upload diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: perf-lite-vs-strict-diagnostics
           path: /tmp/perf_lite_vs_strict_diag/

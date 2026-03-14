@@ -62,10 +62,10 @@ jobs:
       REQUIRE_TTFV_SIGNAL: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.require_ttfv_signal || 'true' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -198,7 +198,7 @@ jobs:
 
       - name: Upload GTM artifacts
         if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gtm-phase1-artifacts
           path: |
@@ -210,7 +210,7 @@ jobs:
 
       - name: Upload GTM review package
         if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gtm-phase1-review-package
           path: |
@@ -221,7 +221,7 @@ jobs:
 
       - name: Upload GTM fix tasks
         if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gtm-phase1-fix-tasks
           path: |
@@ -233,7 +233,7 @@ jobs:
 
       - name: Upload GTM fix CSV export
         if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.upload_artifacts) }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gtm-phase1-fix-csv
           path: |
