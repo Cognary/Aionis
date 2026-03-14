@@ -117,6 +117,7 @@ export type ContextBuildOptions = {
   context_char_budget?: number | null;
   context_compaction_profile?: ContextCompactionProfile | null;
   layer_policy?: MemoryLayerPolicy | null;
+  internal_allow_l4_preview?: boolean | null;
 };
 
 type ContextCitation = {
@@ -272,6 +273,15 @@ function isCompressionConcept(n: NodeRow): boolean {
   return n.type === "concept" && n.slots?.summary_kind === "compression_rollup";
 }
 
+function isSemanticAbstractionConcept(n: NodeRow): boolean {
+  return n.type === "concept" && n.slots?.summary_kind === "semantic_abstraction";
+}
+
+function isSummaryFirstConcept(n: NodeRow, options?: ContextBuildOptions): boolean {
+  if (isCompressionConcept(n)) return true;
+  return options?.internal_allow_l4_preview === true && isSemanticAbstractionConcept(n);
+}
+
 export function estimateTokenCountFromText(text: string): number {
   const chars = text.length;
   if (chars <= 0) return 0;
@@ -372,7 +382,7 @@ export function buildContext(
 
   const layerPolicy = options?.layer_policy ?? null;
   const topics = pickTop(ranked, nodes, new Set(["topic", "concept"]), 4, layerPolicy, selectionCollector);
-  const hasCompressionConcept = topics.some(isCompressionConcept);
+  const hasSummaryFirstConcept = topics.some((n) => isSummaryFirstConcept(n, options));
   for (const n of topics) {
     const uri = buildNodeUri(n, options);
     items.push({
@@ -408,21 +418,27 @@ export function buildContext(
     pushCitation(n);
   }
 
-  const rawEvents = pickTop(ranked, nodes, new Set(["event", "evidence"]), hasCompressionConcept ? 24 : 10, layerPolicy, selectionCollector);
+  const rawEvents = pickTop(ranked, nodes, new Set(["event", "evidence"]), hasSummaryFirstConcept ? 24 : 10, layerPolicy, selectionCollector);
   const compressionCited = new Set<string>();
-  if (hasCompressionConcept) {
+  if (hasSummaryFirstConcept) {
     for (const n of topics) {
-      if (!isCompressionConcept(n)) continue;
+      if (!isSummaryFirstConcept(n, options)) continue;
       const refs = Array.isArray(n.slots?.citations) ? (n.slots.citations as any[]) : [];
       for (const c of refs) {
-        if (!c || typeof c !== "object") continue;
-        const id = typeof c.node_id === "string" ? c.node_id : null;
+        const id =
+          c && typeof c === "object"
+            ? typeof c.node_id === "string"
+              ? c.node_id
+              : null
+            : typeof c === "string"
+              ? c
+              : null;
         if (!id) continue;
         compressionCited.add(id);
       }
     }
   }
-  const eventBase = hasCompressionConcept ? rawEvents.filter((n) => !compressionCited.has(n.id)).slice(0, 5) : rawEvents.slice(0, 10);
+  const eventBase = hasSummaryFirstConcept ? rawEvents.filter((n) => !compressionCited.has(n.id)).slice(0, 5) : rawEvents.slice(0, 10);
   const events = compactMode ? eventBase.slice(0, policy.max_event_lines_compact) : eventBase;
   for (const n of events) {
     const uri = buildNodeUri(n, options);
@@ -472,13 +488,20 @@ export function buildContext(
     for (const n of topics) {
       const label = n.title ?? n.id;
       const summary = n.text_summary ? `: ${n.text_summary}` : "";
-      if (isCompressionConcept(n)) {
+      if (isSummaryFirstConcept(n, options)) {
         const covered = Number(n.slots?.source_event_count ?? 0);
-        addLine("topics", `- ${label}${summary} (node:${n.id}, compression, covers=${covered})`, 10);
+        const summaryKind = typeof n.slots?.summary_kind === "string" ? n.slots.summary_kind : "summary";
+        addLine("topics", `- ${label}${summary} (node:${n.id}, ${summaryKind}, covers=${covered})`, 10);
         const refs = Array.isArray(n.slots?.citations) ? (n.slots.citations as any[]) : [];
         for (const c of refs.slice(0, compactMode ? policy.max_topic_evidence_lines : 3)) {
-          if (!c || typeof c !== "object") continue;
-          const refNode = typeof c.node_id === "string" ? c.node_id : null;
+          const refNode =
+            c && typeof c === "object"
+              ? typeof c.node_id === "string"
+                ? c.node_id
+                : null
+              : typeof c === "string"
+                ? c
+                : null;
           if (!refNode) continue;
           addLine("topics", `  evidence_node=${refNode}`, 90);
         }

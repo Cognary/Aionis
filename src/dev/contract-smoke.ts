@@ -3973,9 +3973,117 @@ async function run() {
   });
   const layeredOut = await memoryRecallParsed(layeredFake as any, baseReq, "default", "default", { allow_debug_embeddings: false });
   assert.deepEqual((layeredOut.context as any).selection_stats?.retrieved_memory_layers, ["L0", "L1", "L2", "L3"]);
-  assert.deepEqual((layeredOut.context as any).selection_stats?.selected_memory_layers, ["L0", "L1", "L2", "L3"]);
+  assert.deepEqual((layeredOut.context as any).selection_stats?.selected_memory_layers, ["L1", "L2", "L3"]);
   assert.equal((layeredOut.context as any).selection_stats?.retrieved_unlayered_count, 0);
   assert.equal((layeredOut.context as any).selection_stats?.selected_unlayered_count, 0);
+  const seedConceptL4Id = "00000000-0000-0000-0000-000000000006";
+  const l4PreviewFake = new FakePgClient({
+    stage1: [
+      {
+        id: seedConceptL4Id,
+        type: "concept",
+        title: "Deploy lesson",
+        text_summary: "prefer draining cache traffic before retry",
+        tier: "warm",
+        salience: 0.85,
+        confidence: 0.94,
+        similarity: 0.91,
+      },
+      {
+        id: seedEventId,
+        type: "event",
+        title: null,
+        text_summary: "cache flag required manual drain before recovery",
+        tier: "hot",
+        salience: 0.7,
+        confidence: 0.88,
+        similarity: 0.9,
+      },
+    ],
+    edges: [],
+    nodeIds: [],
+    nodes: [
+      {
+        id: seedConceptL4Id,
+        scope: "default",
+        type: "concept",
+        tier: "warm",
+        title: "Deploy lesson",
+        text_summary: "prefer draining cache traffic before retry",
+        slots: {
+          summary_kind: "semantic_abstraction",
+          abstraction_kind: "lesson",
+          compression_layer: "L4",
+          source_event_count: 1,
+          citations: [seedEventId],
+        },
+        embedding_status: "ready",
+        embedding_model: "minimax:embo-01",
+        topic_state: null,
+        member_count: null,
+        raw_ref: null,
+        evidence_ref: null,
+        salience: 0.85,
+        importance: 0.85,
+        confidence: 0.94,
+        last_activated: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        commit_id: "00000000-0000-0000-0000-0000000000d6",
+      },
+      {
+        id: seedEventId,
+        scope: "default",
+        type: "event",
+        tier: "hot",
+        title: null,
+        text_summary: "cache flag required manual drain before recovery",
+        slots: {},
+        embedding_status: "ready",
+        embedding_model: "minimax:embo-01",
+        topic_state: null,
+        member_count: null,
+        raw_ref: "raw://seed",
+        evidence_ref: null,
+        salience: 0.7,
+        importance: 0.7,
+        confidence: 0.88,
+        last_activated: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        commit_id: "00000000-0000-0000-0000-0000000000d7",
+      },
+    ],
+    ruleDefs: [],
+    debugEmbeddings: [],
+  });
+  const l4RecallPreviewOut = await memoryRecallParsed(
+    l4PreviewFake as any,
+    baseReq,
+    "default",
+    "default",
+    { allow_debug_embeddings: false },
+    undefined,
+    "recall",
+    { internal_allow_l4_selection: true },
+  );
+  assert.deepEqual((l4RecallPreviewOut.context as any).selection_stats?.selected_memory_layers, ["L0", "L4"]);
+  assert.equal(l4RecallPreviewOut.context.items.some((item: any) => item.node_id === seedEventId), true);
+  const l4PlanningPreviewOut = await memoryRecallParsed(
+    l4PreviewFake as any,
+    baseReq,
+    "default",
+    "default",
+    { allow_debug_embeddings: false },
+    undefined,
+    "planning_context",
+    { internal_allow_l4_selection: true },
+  );
+  assert.equal((l4PlanningPreviewOut.context as any).selection_policy?.name, "planning_context");
+  assert.deepEqual((l4PlanningPreviewOut.context as any).selection_policy?.trust_anchor_layers, ["L4", "L3", "L0"]);
+  assert.deepEqual((l4PlanningPreviewOut.context as any).selection_stats?.selected_memory_layers, ["L4"]);
+  assert.equal(l4PlanningPreviewOut.context.items.some((item: any) => item.node_id === seedEventId), false);
+  assert.match(l4PlanningPreviewOut.context.text, /semantic_abstraction/);
   const tightenedOut = await memoryRecallParsed(
     fake as any,
     MemoryRecallRequest.parse({

@@ -188,6 +188,7 @@
     "job:consolidation-health-slo": "tsx src/jobs/consolidation-health-slo.ts",
     "job:consolidation-replay-determinism": "tsx src/jobs/consolidation-replay-determinism.ts",
     "job:quality-eval": "tsx src/jobs/quality-eval.ts",
+    "dev:generate-l4-preview-benchmark-seed": "tsx src/dev/generate-l4-preview-benchmark-seed.ts",
     "job:health-gate": "bash scripts/health-gate.sh",
     "ops:embedding-untracked-repair": "bash scripts/admin/embedding-untracked-repair.sh",
     "e2e:phase4-smoke": "bash examples/long_term_phase4_smoke.sh",

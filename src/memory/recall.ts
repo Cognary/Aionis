@@ -541,6 +541,8 @@ export async function memoryRecallParsed(
       context_char_budget: parsed.context_char_budget,
       context_compaction_profile: parsed.context_compaction_profile,
       layer_policy: layerPolicy,
+      internal_allow_l4_preview:
+        options?.internal_allow_l4_selection === true && (endpoint === "planning_context" || endpoint === "context_assemble"),
     },
   );
   const retrievalFilteredByLayerOut = Object.fromEntries(

@@ -77,6 +77,42 @@ type BenchmarkJson = {
       latency_ms?: { optimized_p95: number; tightened_p95: number; delta_p95: number };
     };
   } | null;
+  l4_preview?: {
+    enabled: boolean;
+    params?: {
+      samples?: number;
+      query_text?: string;
+      profile?: string;
+      request_mode?: string;
+      token_budget?: number;
+      char_budget_total?: number;
+      tool_candidates?: string[];
+    };
+    endpoints?: Record<
+      "planning_context" | "context_assemble",
+      {
+        endpoint: "planning_context" | "context_assemble";
+        total_pairs: number;
+        ok_pairs: number;
+        failed_pairs: number;
+        by_status: Record<string, number>;
+        transport_error_count: number;
+        summary?: {
+          baseline_context_est_tokens?: { mean: number; p50: number; p95: number };
+          preview_context_est_tokens?: { mean: number; p50: number; p95: number };
+          delta_vs_baseline_tokens?: { mean: number; p50: number; p95: number; min: number; max: number };
+          baseline_selected_memory_layers_frequency?: Record<string, number>;
+          preview_selected_memory_layers_frequency?: Record<string, number>;
+          preview_retrieved_memory_layers_frequency?: Record<string, number>;
+          preview_selection_policy_source_frequency?: Record<string, number>;
+          preview_policy_l4_enabled_ratio?: number;
+          preview_includes_l4_ratio?: number;
+          preview_l4_deduped_l0_ratio?: number;
+          latency_ms?: { baseline_p95: number; preview_p95: number; delta_p95: number };
+        };
+      }
+    >;
+  } | null;
   replay?: {
     enabled: boolean;
     total_samples: number;
@@ -402,6 +438,7 @@ async function main() {
   const failureLines: string[] = [];
   const recommendationLines: string[] = [];
   const optimizationLines: string[] = [];
+  const l4PreviewLines: string[] = [];
   const replayLines: string[] = [];
   const sandboxLines: string[] = [];
   const annLines: string[] = [];
@@ -638,6 +675,66 @@ async function main() {
       }
     }
 
+    const l4Preview = bench?.l4_preview;
+    if (l4Preview?.enabled) {
+      const endpointEntries = Object.entries(l4Preview.endpoints ?? {}) as Array<
+        [
+          "planning_context" | "context_assemble",
+          NonNullable<NonNullable<BenchmarkJson["l4_preview"]>["endpoints"]>[keyof NonNullable<NonNullable<BenchmarkJson["l4_preview"]>["endpoints"]>],
+        ]
+      >;
+      for (const [endpoint, endpointSummary] of endpointEntries) {
+        l4PreviewLines.push(`- scale=${scale} endpoint=${endpoint}: ok_pairs=${endpointSummary.ok_pairs}/${endpointSummary.total_pairs}`);
+        const baselineTokens = endpointSummary.summary?.baseline_context_est_tokens;
+        const previewTokens = endpointSummary.summary?.preview_context_est_tokens;
+        const deltaTokens = endpointSummary.summary?.delta_vs_baseline_tokens;
+        if (baselineTokens && previewTokens && deltaTokens) {
+          l4PreviewLines.push(
+            `  - context_est_tokens p95 baseline=${round(baselineTokens.p95)} preview=${round(previewTokens.p95)} delta_mean=${round(deltaTokens.mean)} delta_p95=${round(deltaTokens.p95)}`,
+          );
+        }
+        const baselineSelectedLayers = Object.entries(endpointSummary.summary?.baseline_selected_memory_layers_frequency ?? {})
+          .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+          .map(([k, v]) => `${k} x${v}`)
+          .join(", ");
+        if (baselineSelectedLayers) {
+          l4PreviewLines.push(`  - baseline selected_memory_layers: ${baselineSelectedLayers}`);
+        }
+        const previewSelectedLayers = Object.entries(endpointSummary.summary?.preview_selected_memory_layers_frequency ?? {})
+          .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+          .map(([k, v]) => `${k} x${v}`)
+          .join(", ");
+        if (previewSelectedLayers) {
+          l4PreviewLines.push(`  - preview selected_memory_layers: ${previewSelectedLayers}`);
+        }
+        const previewRetrievedLayers = Object.entries(endpointSummary.summary?.preview_retrieved_memory_layers_frequency ?? {})
+          .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+          .map(([k, v]) => `${k} x${v}`)
+          .join(", ");
+        if (previewRetrievedLayers) {
+          l4PreviewLines.push(`  - preview retrieved_memory_layers: ${previewRetrievedLayers}`);
+        }
+        const previewPolicySources = Object.entries(endpointSummary.summary?.preview_selection_policy_source_frequency ?? {})
+          .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+          .map(([k, v]) => `${k} x${v}`)
+          .join(", ");
+        if (previewPolicySources) {
+          l4PreviewLines.push(`  - preview selection_policy_sources: ${previewPolicySources}`);
+        }
+        if (endpointSummary.summary?.preview_includes_l4_ratio !== undefined) {
+          l4PreviewLines.push(
+            `  - preview_policy_l4_enabled_ratio=${round(Number(endpointSummary.summary.preview_policy_l4_enabled_ratio ?? 0) * 100, 2)}%; preview_includes_l4_ratio=${round(Number(endpointSummary.summary.preview_includes_l4_ratio) * 100, 2)}%; preview_l4_deduped_l0_ratio=${round(Number(endpointSummary.summary.preview_l4_deduped_l0_ratio ?? 0) * 100, 2)}%`,
+          );
+        }
+        const previewLatency = endpointSummary.summary?.latency_ms;
+        if (previewLatency) {
+          l4PreviewLines.push(
+            `  - latency p95 baseline=${round(previewLatency.baseline_p95)} ms preview=${round(previewLatency.preview_p95)} ms delta=${round(previewLatency.delta_p95)} ms`,
+          );
+        }
+      }
+    }
+
     const replay = bench?.replay;
     if (replay?.enabled) {
       const recommendedModes = Object.entries(replay.candidate?.recommended_mode_frequency ?? {})
@@ -809,6 +906,10 @@ ${failureLines.length > 0 ? failureLines.join("\n") : "- no failures observed in
 ## Context Optimization Signals
 
 ${optimizationLines.length > 0 ? optimizationLines.join("\n") : "- no optimization check data found in benchmark artifacts"}
+
+## L4 Preview Signals
+
+${l4PreviewLines.length > 0 ? l4PreviewLines.join("\n") : "- no l4 preview data found in benchmark artifacts"}
 
 ## Replay Optimization Signals
 

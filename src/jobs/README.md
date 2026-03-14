@@ -686,6 +686,34 @@ Preset behavior:
 5. `caller_tightened_l1_drop_anchors_retrieval` / `caller_tightened_l1_l3_drop_anchors_retrieval` -> same unsafe measurement, plus retrieval-plane filtering before ranking/subgraph assembly; ignored in `APP_ENV=prod`
 6. explicit flags such as `--optimization-request-mode`, `--optimization-override-check`, `--optimization-override-layers-json`, `--optimization-override-drop-trust-anchors`, and `--optimization-override-apply-layer-policy-to-retrieval` still override preset defaults
 
+Optional internal `L4` serving preview sampling (planning/context + context/assemble only; ignored in `APP_ENV=prod` unless the runtime accepts `x-aionis-internal-allow-l4-serving`):
+
+```bash
+npm run job:perf-benchmark -- \
+  --base-url http://localhost:3001 \
+  --scope perf \
+  --tenant-id default \
+  --mode recall \
+  --l4-preview-check true \
+  --l4-preview-samples 12 \
+  --l4-preview-query-text "prepare production deploy context" \
+  --optimization-request-mode inherit_default
+```
+
+This writes a separate `l4_preview` section into the benchmark artifact. It does not affect `optimization` gates, and it only compares:
+
+1. endpoint-default baseline
+2. internal preview with `x-aionis-internal-allow-l4-serving: true`
+
+Per endpoint (`planning_context`, `context_assemble`) the artifact reports baseline vs preview token estimates, selected/retrieved memory layer frequencies, `preview_includes_l4_ratio`, `preview_l4_deduped_l0_ratio`, and latency deltas.
+
+Two preview-specific diagnostics matter:
+
+1. `preview_policy_l4_enabled_ratio` -> whether the runtime actually exposed `L4` in the preview selection policy (`preferred_layers` / `trust_anchor_layers`)
+2. `preview_includes_l4_ratio` -> whether `L4` still appeared in selected memory layers even if the preview policy was not active
+
+If `preview_includes_l4_ratio > 0` but `preview_policy_l4_enabled_ratio = 0`, the benchmark is likely hitting a stale API process or a runtime that has not picked up the internal preview code path yet.
+
 Optional replay-dispatch evidence sampling (collects deterministic replay eligibility, dispatch decisions, and `result_summary` coverage for one existing playbook):
 
 ```bash

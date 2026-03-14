@@ -177,6 +177,42 @@ type OptimizationAggregate = {
   };
 };
 
+type L4PreviewEndpointAggregate = {
+  endpoint: "planning_context" | "context_assemble";
+  total_pairs: number;
+  ok_pairs: number;
+  failed_pairs: number;
+  by_status: Record<string, number>;
+  transport_error_count: number;
+  summary: {
+    baseline_context_est_tokens: { mean: number; p50: number; p95: number };
+    preview_context_est_tokens: { mean: number; p50: number; p95: number };
+    delta_vs_baseline_tokens: { mean: number; p50: number; p95: number; min: number; max: number };
+    baseline_selected_memory_layers_frequency: Record<string, number>;
+    preview_selected_memory_layers_frequency: Record<string, number>;
+    preview_retrieved_memory_layers_frequency: Record<string, number>;
+    preview_selection_policy_source_frequency: Record<string, number>;
+    preview_policy_l4_enabled_ratio: number;
+    preview_includes_l4_ratio: number;
+    preview_l4_deduped_l0_ratio: number;
+    latency_ms: { baseline_p95: number; preview_p95: number; delta_p95: number };
+  };
+};
+
+type L4PreviewAggregate = {
+  enabled: boolean;
+  params: {
+    samples: number;
+    query_text: string;
+    profile: "balanced" | "aggressive";
+    request_mode: "explicit" | "inherit_default";
+    token_budget: number;
+    char_budget_total: number;
+    tool_candidates: string[];
+  };
+  endpoints: Record<"planning_context" | "context_assemble", L4PreviewEndpointAggregate>;
+};
+
 type ReplayOptimizationAggregate = {
   enabled: boolean;
   params: {
@@ -755,6 +791,9 @@ async function main() {
     )
       .trim()
       .toLowerCase() === "true";
+  const l4PreviewCheck = (argValue("--l4-preview-check") ?? "false").trim().toLowerCase() === "true";
+  const l4PreviewSamples = clampInt(Number(argValue("--l4-preview-samples") ?? "12"), 1, 2000);
+  const l4PreviewQueryText = (argValue("--l4-preview-query-text") ?? optimizationQueryText).trim();
   const replayCheckRaw = (argValue("--replay-check") ?? "false").trim().toLowerCase();
   const replayCheck = replayCheckRaw === "true";
   const replayPlaybookId = (argValue("--replay-playbook-id") ?? "").trim();
@@ -1427,6 +1466,272 @@ async function main() {
     };
   }
 
+  let l4Preview: L4PreviewAggregate | null = null;
+  if (l4PreviewCheck) {
+    type L4PreviewEndpointName = "planning_context" | "context_assemble";
+    const previewToolCandidates = ["kubectl", "bash"];
+    const staticContextBlocks = [
+      {
+        id: "deploy_bootstrap",
+        title: "Deploy Bootstrap",
+        content: "Require approval before prod deploy, capture rollback refs, verify canary health, and confirm owner sign-off.",
+        intents: ["deploy"],
+        tools: ["kubectl"],
+        priority: 90,
+      },
+      {
+        id: "prod_change_guard",
+        title: "Prod Change Guard",
+        content: "Production changes must include blast-radius check, rollback path, and post-deploy verification commands.",
+        intents: ["deploy", "change"],
+        tags: ["prod", "safety"],
+        tools: ["kubectl", "bash"],
+        priority: 85,
+      },
+    ];
+    const basePlanningPayload = () => ({
+      tenant_id: tenantId,
+      scope,
+      query_text: l4PreviewQueryText,
+      tool_candidates: previewToolCandidates,
+      context: {
+        intent: "deploy",
+        environment: "prod",
+        actor: "perf_benchmark_l4_preview",
+      },
+      context_token_budget: optimizationTokenBudget,
+      static_context_blocks: staticContextBlocks,
+    });
+    const baseAssemblePayload = () => ({
+      ...basePlanningPayload(),
+      include_rules: false,
+      return_layered_context: true,
+      context_layers: {
+        enabled: ["facts", "episodes", "static", "tools", "citations"],
+        char_budget_total: optimizationCharBudget,
+        include_merge_trace: false,
+      },
+    });
+    const costSignalsForEndpoint = (endpoint: L4PreviewEndpointName, body: any): any =>
+      endpoint === "planning_context" ? body?.cost_signals ?? body?.planning_summary ?? null : body?.cost_signals ?? body?.assembly_summary ?? null;
+    const selectionStatsForEndpoint = (endpoint: L4PreviewEndpointName, body: any): any =>
+      endpoint === "planning_context" ? body?.recall?.context?.selection_stats ?? null : body?.recall?.context?.selection_stats ?? null;
+    const selectionPolicyForEndpoint = (endpoint: L4PreviewEndpointName, body: any): any =>
+      endpoint === "planning_context" ? body?.recall?.context?.selection_policy ?? null : body?.recall?.context?.selection_policy ?? null;
+    const endpointStatus: Record<L4PreviewEndpointName, Record<string, number>> = {
+      planning_context: {},
+      context_assemble: {},
+    };
+    const endpointTransportErrors: Record<L4PreviewEndpointName, number> = {
+      planning_context: 0,
+      context_assemble: 0,
+    };
+    const endpointBaselineTokens: Record<L4PreviewEndpointName, number[]> = {
+      planning_context: [],
+      context_assemble: [],
+    };
+    const endpointPreviewTokens: Record<L4PreviewEndpointName, number[]> = {
+      planning_context: [],
+      context_assemble: [],
+    };
+    const endpointDeltaTokens: Record<L4PreviewEndpointName, number[]> = {
+      planning_context: [],
+      context_assemble: [],
+    };
+    const endpointBaselineLatency: Record<L4PreviewEndpointName, number[]> = {
+      planning_context: [],
+      context_assemble: [],
+    };
+    const endpointPreviewLatency: Record<L4PreviewEndpointName, number[]> = {
+      planning_context: [],
+      context_assemble: [],
+    };
+    const endpointBaselineSelectedLayers: Record<L4PreviewEndpointName, Record<string, number>> = {
+      planning_context: {},
+      context_assemble: {},
+    };
+    const endpointPreviewSelectedLayers: Record<L4PreviewEndpointName, Record<string, number>> = {
+      planning_context: {},
+      context_assemble: {},
+    };
+    const endpointPreviewRetrievedLayers: Record<L4PreviewEndpointName, Record<string, number>> = {
+      planning_context: {},
+      context_assemble: {},
+    };
+    const endpointPreviewSelectionPolicySources: Record<L4PreviewEndpointName, Record<string, number>> = {
+      planning_context: {},
+      context_assemble: {},
+    };
+    const endpointPreviewIncludesL4Count: Record<L4PreviewEndpointName, number> = {
+      planning_context: 0,
+      context_assemble: 0,
+    };
+    const endpointPreviewPolicyL4EnabledCount: Record<L4PreviewEndpointName, number> = {
+      planning_context: 0,
+      context_assemble: 0,
+    };
+    const endpointPreviewL4DedupedL0Count: Record<L4PreviewEndpointName, number> = {
+      planning_context: 0,
+      context_assemble: 0,
+    };
+    const endpointOkPairs: Record<L4PreviewEndpointName, number> = {
+      planning_context: 0,
+      context_assemble: 0,
+    };
+    const previewHeaders = { "x-aionis-internal-allow-l4-serving": "true" };
+
+    for (let i = 0; i < l4PreviewSamples; i += 1) {
+      if (paceMs > 0) await sleepMs(paceMs);
+
+      const baselinePlanning = await timedRequestJson(
+        "/v1/memory/planning/context",
+        {
+          ...basePlanningPayload(),
+          ...(optimizationRequestMode === "explicit" ? { context_optimization_profile: optimizationProfile } : {}),
+        },
+      );
+      const previewPlanning = await timedRequestJson(
+        "/v1/memory/planning/context",
+        {
+          ...basePlanningPayload(),
+          ...(optimizationRequestMode === "explicit" ? { context_optimization_profile: optimizationProfile } : {}),
+        },
+        previewHeaders,
+      );
+      const baselineAssemble = await timedRequestJson(
+        "/v1/memory/context/assemble",
+        {
+          ...baseAssemblePayload(),
+          ...(optimizationRequestMode === "explicit" ? { context_optimization_profile: optimizationProfile } : {}),
+        },
+      );
+      const previewAssemble = await timedRequestJson(
+        "/v1/memory/context/assemble",
+        {
+          ...baseAssemblePayload(),
+          ...(optimizationRequestMode === "explicit" ? { context_optimization_profile: optimizationProfile } : {}),
+        },
+        previewHeaders,
+      );
+
+      const pairs: Array<[L4PreviewEndpointName, JsonSample, JsonSample]> = [
+        ["planning_context", baselinePlanning, previewPlanning],
+        ["context_assemble", baselineAssemble, previewAssemble],
+      ];
+      for (const [endpoint, baseline, preview] of pairs) {
+        const baselineStatusKey = baseline.error ? `baseline:error:${baseline.error}` : `baseline:${baseline.status}`;
+        const previewStatusKey = preview.error ? `preview:error:${preview.error}` : `preview:${preview.status}`;
+        endpointStatus[endpoint][baselineStatusKey] = (endpointStatus[endpoint][baselineStatusKey] ?? 0) + 1;
+        endpointStatus[endpoint][previewStatusKey] = (endpointStatus[endpoint][previewStatusKey] ?? 0) + 1;
+        if (baseline.error) endpointTransportErrors[endpoint] += 1;
+        if (preview.error) endpointTransportErrors[endpoint] += 1;
+        if (!baseline.ok || !preview.ok) continue;
+
+        const baselineCost = costSignalsForEndpoint(endpoint, baseline.body);
+        const previewCost = costSignalsForEndpoint(endpoint, preview.body);
+        const baselineSelectionStats = selectionStatsForEndpoint(endpoint, baseline.body);
+        const previewSelectionStats = selectionStatsForEndpoint(endpoint, preview.body);
+        const previewSelectionPolicy = selectionPolicyForEndpoint(endpoint, preview.body);
+        const baselineTokens = Number(baselineCost?.context_est_tokens ?? 0);
+        const previewTokens = Number(previewCost?.context_est_tokens ?? 0);
+        endpointBaselineLatency[endpoint].push(baseline.ms);
+        endpointPreviewLatency[endpoint].push(preview.ms);
+        if (!(baselineTokens > 0)) continue;
+
+        endpointOkPairs[endpoint] += 1;
+        endpointBaselineTokens[endpoint].push(baselineTokens);
+        endpointPreviewTokens[endpoint].push(Math.max(0, previewTokens));
+        endpointDeltaTokens[endpoint].push(round(Math.max(0, previewTokens) - baselineTokens, 6));
+
+        const baselineSelectedLayers = Array.isArray(baselineCost?.selected_memory_layers) ? baselineCost.selected_memory_layers : [];
+        const previewSelectedLayers = Array.isArray(previewCost?.selected_memory_layers) ? previewCost.selected_memory_layers : [];
+        const previewRetrievedLayers = Array.isArray(previewSelectionStats?.retrieved_memory_layers)
+          ? previewSelectionStats.retrieved_memory_layers
+          : [];
+        const previewPreferredLayers = Array.isArray(previewSelectionPolicy?.preferred_layers)
+          ? previewSelectionPolicy.preferred_layers
+          : [];
+        const previewTrustAnchorLayers = Array.isArray(previewSelectionPolicy?.trust_anchor_layers)
+          ? previewSelectionPolicy.trust_anchor_layers
+          : [];
+        for (const layer of baselineSelectedLayers) incrementFrequency(endpointBaselineSelectedLayers[endpoint], layer);
+        for (const layer of previewSelectedLayers) incrementFrequency(endpointPreviewSelectedLayers[endpoint], layer);
+        for (const layer of previewRetrievedLayers) incrementFrequency(endpointPreviewRetrievedLayers[endpoint], layer);
+        incrementFrequency(endpointPreviewSelectionPolicySources[endpoint], previewSelectionPolicy?.source);
+
+        const previewHasL4 = previewSelectedLayers.some((layer: unknown) => String(layer) === "L4");
+        const baselineHasL0 = baselineSelectedLayers.some((layer: unknown) => String(layer) === "L0");
+        const previewHasL0 = previewSelectedLayers.some((layer: unknown) => String(layer) === "L0");
+        const previewPolicyHasL4 =
+          previewPreferredLayers.some((layer: unknown) => String(layer) === "L4")
+          || previewTrustAnchorLayers.some((layer: unknown) => String(layer) === "L4");
+        if (previewPolicyHasL4) endpointPreviewPolicyL4EnabledCount[endpoint] += 1;
+        if (previewHasL4) endpointPreviewIncludesL4Count[endpoint] += 1;
+        if (previewHasL4 && baselineHasL0 && !previewHasL0) endpointPreviewL4DedupedL0Count[endpoint] += 1;
+      }
+    }
+
+    const buildEndpointAggregate = (endpoint: L4PreviewEndpointName): L4PreviewEndpointAggregate => {
+      const baselineTokenSummary = summarizeSeries(endpointBaselineTokens[endpoint]);
+      const previewTokenSummary = summarizeSeries(endpointPreviewTokens[endpoint]);
+      const deltaTokenSummary = summarizeSeries(endpointDeltaTokens[endpoint]);
+      const baselineLatencySummary = summarizeSeries(endpointBaselineLatency[endpoint]);
+      const previewLatencySummary = summarizeSeries(endpointPreviewLatency[endpoint]);
+      const okPairs = endpointOkPairs[endpoint];
+      return {
+        endpoint,
+        total_pairs: l4PreviewSamples,
+        ok_pairs: okPairs,
+        failed_pairs: Math.max(0, l4PreviewSamples - okPairs),
+        by_status: endpointStatus[endpoint],
+        transport_error_count: endpointTransportErrors[endpoint],
+        summary: {
+          baseline_context_est_tokens: {
+            mean: baselineTokenSummary.mean,
+            p50: baselineTokenSummary.p50,
+            p95: baselineTokenSummary.p95,
+          },
+          preview_context_est_tokens: {
+            mean: previewTokenSummary.mean,
+            p50: previewTokenSummary.p50,
+            p95: previewTokenSummary.p95,
+          },
+          delta_vs_baseline_tokens: deltaTokenSummary,
+          baseline_selected_memory_layers_frequency: endpointBaselineSelectedLayers[endpoint],
+          preview_selected_memory_layers_frequency: endpointPreviewSelectedLayers[endpoint],
+          preview_retrieved_memory_layers_frequency: endpointPreviewRetrievedLayers[endpoint],
+          preview_selection_policy_source_frequency: endpointPreviewSelectionPolicySources[endpoint],
+          preview_policy_l4_enabled_ratio:
+            okPairs > 0 ? round(endpointPreviewPolicyL4EnabledCount[endpoint] / okPairs, 6) : 0,
+          preview_includes_l4_ratio: okPairs > 0 ? round(endpointPreviewIncludesL4Count[endpoint] / okPairs, 6) : 0,
+          preview_l4_deduped_l0_ratio: okPairs > 0 ? round(endpointPreviewL4DedupedL0Count[endpoint] / okPairs, 6) : 0,
+          latency_ms: {
+            baseline_p95: baselineLatencySummary.p95,
+            preview_p95: previewLatencySummary.p95,
+            delta_p95: round(previewLatencySummary.p95 - baselineLatencySummary.p95, 6),
+          },
+        },
+      };
+    };
+
+    l4Preview = {
+      enabled: true,
+      params: {
+        samples: l4PreviewSamples,
+        query_text: l4PreviewQueryText,
+        profile: optimizationProfile,
+        request_mode: optimizationRequestMode,
+        token_budget: optimizationTokenBudget,
+        char_budget_total: optimizationCharBudget,
+        tool_candidates: previewToolCandidates,
+      },
+      endpoints: {
+        planning_context: buildEndpointAggregate("planning_context"),
+        context_assemble: buildEndpointAggregate("context_assemble"),
+      },
+    };
+  }
+
   let replay: ReplayOptimizationAggregate | null = null;
   if (replayCheck) {
     const replayByStatus: Record<string, number> = {};
@@ -1972,6 +2277,9 @@ async function main() {
           optimization_override_layers: optimizationOverrideLayers,
           optimization_override_drop_trust_anchors: optimizationOverrideDropTrustAnchors,
           optimization_override_apply_layer_policy_to_retrieval: optimizationOverrideApplyLayerPolicyToRetrieval,
+          l4_preview_check: l4PreviewCheck,
+          l4_preview_samples: l4PreviewSamples,
+          l4_preview_query_text: l4PreviewQueryText,
           replay_check: replayCheck,
           replay_playbook_id: replayPlaybookId || null,
           replay_version: replayVersion,
@@ -2005,6 +2313,7 @@ async function main() {
         cases: caseSummaries,
         compression,
         optimization,
+        l4_preview: l4Preview,
         replay,
         sandbox,
         ann,
