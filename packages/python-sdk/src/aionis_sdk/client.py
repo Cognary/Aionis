@@ -66,6 +66,8 @@ if TYPE_CHECKING:
         MemoryArchiveRehydrateInput,
         MemoryEventWriteInput,
         MemoryFindInput,
+        HandoffRecoverInput,
+        HandoffStoreInput,
         MemoryNodesActivateInput,
         MemoryResolveInput,
         MemoryPackExportInput,
@@ -306,6 +308,12 @@ class AionisClient:
 
     def planning_context(self, payload: "PlanningContextInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/planning/context", payload, request_options)
+
+    def handoff_store(self, payload: "HandoffStoreInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/handoff/store", payload, request_options)
+
+    def handoff_recover(self, payload: "HandoffRecoverInput", **request_options: Any) -> Dict[str, Any]:
+        return self._request("/v1/handoff/recover", payload, request_options)
 
     def find(self, payload: "MemoryFindInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/find", payload, request_options)

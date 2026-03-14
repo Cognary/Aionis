@@ -320,6 +320,86 @@ class MemoryResolveInput(TypedDict, total=False):
     slots_preview_keys: int
 
 
+class HandoffStoreInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    actor: str
+    memory_lane: Literal["private", "shared"]
+    anchor: str
+    file_path: str
+    repo_root: str
+    symbol: str
+    handoff_kind: Literal["patch_handoff", "review_handoff", "task_handoff"]
+    title: str
+    summary: str
+    handoff_text: str
+    risk: str
+    acceptance_checks: List[str]
+    tags: List[str]
+    target_files: List[str]
+    next_action: str
+    must_change: List[str]
+    must_remove: List[str]
+    must_keep: List[str]
+
+
+class HandoffRecoverInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    anchor: str
+    repo_root: str
+    file_path: str
+    symbol: str
+    handoff_kind: Literal["patch_handoff", "review_handoff", "task_handoff"]
+    memory_lane: Literal["private", "shared"]
+    limit: int
+
+
+class HandoffArtifactView(TypedDict, total=False):
+    id: str
+    uri: Optional[str]
+    type: Optional[str]
+    client_id: Optional[str]
+    handoff_kind: str
+    anchor: str
+    file_path: Optional[str]
+    repo_root: Optional[str]
+    symbol: Optional[str]
+    title: Optional[str]
+    summary: Optional[str]
+    handoff_text: str
+    risk: Optional[str]
+    acceptance_checks: List[str]
+    tags: List[str]
+    target_files: List[str]
+    next_action: Optional[str]
+    must_change: List[str]
+    must_remove: List[str]
+    must_keep: List[str]
+    memory_lane: Optional[Literal["private", "shared"]]
+    commit_id: Optional[str]
+    commit_uri: Optional[str]
+
+
+class HandoffStoreResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    commit_id: str
+    commit_uri: str
+    handoff: Optional[HandoffArtifactView]
+
+
+class HandoffRecoverResponse(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    handoff_kind: str
+    anchor: str
+    matched_nodes: int
+    handoff: HandoffArtifactView
+    prompt_safe_handoff: Dict[str, Any]
+    execution_ready_handoff: Dict[str, Any]
+
+
 class MemorySessionCreateInput(TypedDict, total=False):
     tenant_id: str
     scope: str
