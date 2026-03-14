@@ -42,15 +42,17 @@ Start with:
 1. [SDK Guide](/public/en/reference/05-sdk)
 2. [SDK Compatibility Matrix](/public/en/reference/06-sdk-compatibility-matrix)
 3. [SDK CLI](/public/en/reference/09-sdk-cli)
+4. [Python SDK + Aionis CLI](/public/en/getting-started/08-python-sdk-with-cli)
 
 ## Start Here
 
 1. [Choose Lite vs Server](/public/en/getting-started/07-choose-lite-vs-server)
 2. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
-3. [Embedding Setup](/public/en/getting-started/03-embedding-setup)
-4. [Build Memory Workflows](/public/en/guides/01-build-memory)
-5. [Playground](/public/en/guides/02-playground)
-6. [Docs Navigation Map](/public/en/overview/02-docs-navigation)
+3. [Python SDK + Aionis CLI](/public/en/getting-started/08-python-sdk-with-cli)
+4. [Embedding Setup](/public/en/getting-started/03-embedding-setup)
+5. [Build Memory Workflows](/public/en/guides/01-build-memory)
+6. [Playground](/public/en/guides/02-playground)
+7. [Docs Navigation Map](/public/en/overview/02-docs-navigation)
 
 ## Choose Your Product Path
 
