@@ -4,6 +4,7 @@ import { accessSync, constants as fsConstants } from "node:fs";
 import net from "node:net";
 import type pg from "pg";
 import type { EmbeddingProvider } from "../embeddings/types.js";
+import { assertEmbeddingSurfaceForbidden } from "../embeddings/surface-policy.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import {
   createPostgresReplayStoreAccess,
@@ -1851,6 +1852,7 @@ function evaluateReplayDeterministicGate(args: {
   playbookStatus: string | null;
   playbookSlots: Record<string, unknown>;
 }): ReplayDeterministicGateEvaluation {
+  assertEmbeddingSurfaceForbidden("replay_deterministic_gate");
   const gate = resolveReplayDeterministicGate(args.gateInput);
   const playbookStatus = args.playbookStatus ?? "draft";
   const playbookMatchers = asObject(args.playbookSlots.matchers) ?? {};

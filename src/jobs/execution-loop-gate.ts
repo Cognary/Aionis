@@ -2,6 +2,7 @@ import "dotenv/config";
 import type pg from "pg";
 import { loadEnv } from "../config.js";
 import { closeDb, createDb, withTx } from "../db.js";
+import { assertEmbeddingSurfaceForbidden } from "../embeddings/surface-policy.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
@@ -76,6 +77,7 @@ type GateCheck = {
 };
 
 async function main() {
+  assertEmbeddingSurfaceForbidden("execution_loop_gate");
   const scope = argValue("--scope") ?? env.MEMORY_SCOPE;
   const windowHours = clampInt(Number(argValue("--window-hours") ?? "24"), 1, 24 * 30);
   const minFeedbackEvents = clampInt(Number(argValue("--min-feedback-events") ?? "10"), 0, 1_000_000);

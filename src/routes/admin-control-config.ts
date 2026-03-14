@@ -6,6 +6,11 @@ import {
   upsertTenantQuotaProfile,
 } from "../control-plane.js";
 import type { Db } from "../db.js";
+import {
+  EMBEDDING_ALLOWED_SURFACES,
+  EMBEDDING_FORBIDDEN_SURFACES,
+  type EmbeddingSurfacePolicy,
+} from "../embeddings/surface-policy.js";
 import { normalizeSandboxBudgetScope } from "../app/sandbox-budget.js";
 import { HttpError } from "../util/http.js";
 
@@ -53,6 +58,8 @@ type TenantQuotaResolverLike = {
 export function registerAdminControlConfigRoutes(args: {
   app: any;
   db: Db;
+  embeddingSurfacePolicy: EmbeddingSurfacePolicy;
+  embeddingProviderName?: string | null;
   requireAdminToken: (req: any) => void;
   emitControlAudit: (
     req: any,
@@ -95,6 +102,8 @@ export function registerAdminControlConfigRoutes(args: {
   const {
     app,
     db,
+    embeddingSurfacePolicy,
+    embeddingProviderName,
     requireAdminToken,
     emitControlAudit,
     tenantQuotaResolver,
@@ -107,6 +116,22 @@ export function registerAdminControlConfigRoutes(args: {
     upsertSandboxProjectBudgetProfile,
     deleteSandboxProjectBudgetProfile,
   } = args;
+
+  app.get("/v1/admin/control/runtime-config", async (req: any, reply: any) => {
+    requireAdminToken(req);
+    return reply.code(200).send({
+      ok: true,
+      runtime_config: {
+        embeddings: {
+          provider: embeddingProviderName ?? null,
+          provider_configured: embeddingSurfacePolicy.provider_configured,
+          enabled_surfaces: [...embeddingSurfacePolicy.enabled_surfaces],
+          allowed_surfaces: [...EMBEDDING_ALLOWED_SURFACES],
+          forbidden_surfaces: [...EMBEDDING_FORBIDDEN_SURFACES],
+        },
+      },
+    });
+  });
 
   app.put("/v1/admin/control/tenant-quotas/:tenant_id", async (req: any, reply: any) => {
     requireAdminToken(req);

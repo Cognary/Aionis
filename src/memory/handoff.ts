@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { assertEmbeddingSurfaceForbidden } from "../embeddings/surface-policy.js";
 import { memoryFind, memoryFindLite } from "./find.js";
 import { memoryResolve, memoryResolveLite } from "./resolve.js";
 import {
@@ -257,6 +258,7 @@ export async function recoverHandoff(args: {
   consumerAgentId?: string | null;
   consumerTeamId?: string | null;
 }) {
+  assertEmbeddingSurfaceForbidden("handoff_recover");
   const parsed = HandoffRecoverRequest.parse(args.input);
   const normalizedFilePath = normalizeOptionalString(parsed.file_path);
   const normalizedRepoRoot = normalizeOptionalString(parsed.repo_root);

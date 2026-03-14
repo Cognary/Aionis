@@ -1,4 +1,5 @@
 import type { Env } from "../config.js";
+import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "../memory/write.js";
 import type { WriteStoreAccess } from "../store/write-access.js";
 import { HttpError } from "../util/http.js";
@@ -127,6 +128,7 @@ export function registerMemoryWriteRoutes(args: {
   env: Env;
   store: StoreLike;
   embedder: any;
+  embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: any;
   liteWriteStore?: LiteWriteStoreLike | null;
   writeAccessForClient: (client: any) => any;
@@ -143,6 +145,7 @@ export function registerMemoryWriteRoutes(args: {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy: embeddingSurfacePolicyArg,
     embeddedRuntime,
     liteWriteStore,
     writeAccessForClient,
@@ -154,6 +157,10 @@ export function registerMemoryWriteRoutes(args: {
     acquireInflightSlot,
     runTopicClusterForEventIds,
   } = args;
+  const embeddingSurfacePolicy =
+    embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
+  const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
+  const topicClusterSurfaceEnabled = embeddingSurfacePolicy.isEnabled("topic_cluster");
 
   app.post("/v1/memory/write", async (req: any, reply: any) => {
     const t0 = performance.now();
@@ -172,7 +179,7 @@ export function registerMemoryWriteRoutes(args: {
           piiRedaction: env.PII_REDACTION,
           allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
         },
-        embedder,
+        writeEmbedder,
       );
       if (env.MEMORY_WRITE_REQUIRE_NODES && prepared.nodes.length === 0) {
         throw new HttpError(
@@ -188,10 +195,14 @@ export function registerMemoryWriteRoutes(args: {
         );
       }
 
-      const policy = computeEffectiveWritePolicy(prepared, {
+      const computedPolicy = computeEffectiveWritePolicy(prepared, {
         autoTopicClusterOnWrite: env.AUTO_TOPIC_CLUSTER_ON_WRITE,
         topicClusterAsyncOnWrite: env.TOPIC_CLUSTER_ASYNC_ON_WRITE,
       });
+      const policy = {
+        ...computedPolicy,
+        trigger_topic_cluster: computedPolicy.trigger_topic_cluster && topicClusterSurfaceEnabled,
+      };
 
       const liteModeActive = env.AIONIS_EDITION === "lite" && !!liteWriteStore;
       const forcedLiteTopicClusterAsync = liteModeActive && policy.trigger_topic_cluster && !policy.topic_cluster_async;
@@ -249,7 +260,7 @@ export function registerMemoryWriteRoutes(args: {
       const liteInlineEmbedding = liteModeActive
         ? await completeLiteInlineEmbeddings({
             prepared,
-            embedder,
+            embedder: writeEmbedder,
             liteWriteStore,
           })
         : null;
@@ -264,6 +275,17 @@ export function registerMemoryWriteRoutes(args: {
             tenant_id: out.tenant_id ?? prepared.tenant_id ?? env.MEMORY_TENANT_ID,
             requested_async: false,
             applied_async: true,
+          },
+        });
+      }
+      if (computedPolicy.trigger_topic_cluster && !policy.trigger_topic_cluster) {
+        warnings.push({
+          code: "embedding_surface_disabled_topic_cluster",
+          message: "topic clustering requested but disabled by embedding surface policy",
+          details: {
+            scope: out.scope ?? prepared.scope_public ?? env.MEMORY_SCOPE,
+            tenant_id: out.tenant_id ?? prepared.tenant_id ?? env.MEMORY_TENANT_ID,
+            surface: "topic_cluster",
           },
         });
       }

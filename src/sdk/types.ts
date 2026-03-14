@@ -1990,6 +1990,21 @@ export type ControlAuditEventsResponse = {
   events: Array<Record<string, unknown>>;
 };
 
+export type ControlRuntimeConfigResponse = {
+  ok: boolean;
+  runtime_config: {
+    embeddings: {
+      provider: string | null;
+      provider_configured: boolean;
+      enabled_surfaces: string[];
+      allowed_surfaces: string[];
+      forbidden_surfaces: string[];
+      [k: string]: unknown;
+    };
+    [k: string]: unknown;
+  };
+};
+
 export type ControlTenantDashboardResponse = {
   ok: boolean;
   dashboard: Record<string, unknown>;

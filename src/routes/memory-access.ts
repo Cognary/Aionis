@@ -1,4 +1,5 @@
 import type { Env } from "../config.js";
+import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import { memoryFind, memoryFindLite } from "../memory/find.js";
 import { exportMemoryPack, importMemoryPack } from "../memory/packs.js";
 import { memoryResolve, memoryResolveLite } from "../memory/resolve.js";
@@ -18,6 +19,7 @@ export function registerMemoryAccessRoutes(args: {
   env: Env;
   store: StoreLike;
   embedder: any;
+  embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: any;
   liteWriteStore?: any;
   writeAccessShadowMirrorV2: boolean;
@@ -35,6 +37,7 @@ export function registerMemoryAccessRoutes(args: {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy: embeddingSurfacePolicyArg,
     embeddedRuntime,
     liteWriteStore,
     writeAccessShadowMirrorV2,
@@ -47,6 +50,9 @@ export function registerMemoryAccessRoutes(args: {
     tenantFromBody,
     acquireInflightSlot,
   } = args;
+  const embeddingSurfacePolicy =
+    embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
+  const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
 
   const writeDefaults = {
     defaultScope: env.MEMORY_SCOPE,
@@ -57,7 +63,7 @@ export function registerMemoryAccessRoutes(args: {
     shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
     shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
       writeAccessShadowMirrorV2,
-      embedder,
+      embedder: writeEmbedder,
       embeddedRuntime,
       liteWriteStore,
     };

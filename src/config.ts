@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import { z } from "zod";
+import { parseEmbeddingEnabledSurfacesJson } from "./embeddings/surface-policy.js";
 
 const RuntimeModeSchema = z.enum(["local", "service", "cloud"]);
 const EditionSchema = z.enum(["server", "lite"]);
@@ -207,6 +208,10 @@ const EnvSchema = z.object({
     .transform((v) => (v ?? "false").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  EMBEDDING_ENABLED_SURFACES_JSON: z
+    .string()
+    .default("")
+    .transform((v) => parseEmbeddingEnabledSurfacesJson(v)),
   EMBEDDING_DIM: z.coerce.number().int().positive().default(1536),
   ADMIN_TOKEN: z.string().optional(),
   RATE_LIMIT_ENABLED: z

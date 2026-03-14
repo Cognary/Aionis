@@ -1,6 +1,7 @@
 import { buildRecallObservability, collectRecallTrajectoryUriLinks } from "../app/recall-observability.js";
 import { applyContextOptimizationProfile } from "../app/context-optimization-profile.js";
 import { buildAssemblySummary, buildPlanningSummary } from "../app/planning-summary.js";
+import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import { buildLayeredContextCostSignals } from "../memory/cost-signals.js";
 import { memoryRecallParsed } from "../memory/recall.js";
 import { ContextAssembleRequest, MemoryRecallRequest, MemoryRecallTextRequest, PlanningContextRequest } from "../memory/schemas.js";
@@ -27,6 +28,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
   env: Env;
   store: StoreLike;
   embedder: any;
+  embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: any;
   liteWriteStore?: any;
   recallTextEmbedBatcher: any;
@@ -86,6 +88,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     env,
     store,
     embedder,
+    embeddingSurfacePolicy: embeddingSurfacePolicyArg,
     embeddedRuntime,
     liteWriteStore,
     recallTextEmbedBatcher,
@@ -112,7 +115,30 @@ export function registerMemoryContextRuntimeRoutes(args: {
     mapRecallTextEmbeddingError,
     recordContextAssemblyTelemetryBestEffort,
   } = args;
+  const embeddingSurfacePolicy =
+    embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
   const liteModeActive = env.AIONIS_EDITION === "lite" && !!liteWriteStore;
+  const resolveSurfaceEmbedder = (
+    surface: "recall_text" | "planning_context" | "context_assemble",
+    reply: any,
+  ) => {
+    if (!embeddingSurfacePolicy.isEnabled(surface)) {
+      reply.code(409).send({
+        error: "embedding_surface_disabled",
+        message: `embedding surface disabled: ${surface}`,
+        details: { surface },
+      });
+      return null;
+    }
+    if (!embedder) {
+      reply.code(400).send({
+        error: "no_embedding_provider",
+        message: `Configure EMBEDDING_PROVIDER to use ${surface}.`,
+      });
+      return null;
+    }
+    return embedder;
+  };
   const allowUnsafeDropTrustAnchors = (req: any): boolean => {
     if (env.APP_ENV === "prod") return false;
     const raw = String(req.headers["x-aionis-internal-allow-drop-trust-anchors"] ?? "").trim().toLowerCase();
@@ -130,9 +156,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
   };
 
   app.post("/v1/memory/recall_text", async (req: any, reply: any) => {
-    if (!embedder) {
-      return reply.code(400).send({ error: "no_embedding_provider", message: "Configure EMBEDDING_PROVIDER to use recall_text." });
-    }
+    const surfaceEmbedder = resolveSurfaceEmbedder("recall_text", reply);
+    if (!surfaceEmbedder) return;
 
     const t0 = performance.now();
     const timings: Record<string, number> = {};
@@ -206,7 +231,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     let out: any;
     try {
       try {
-        const emb = await embedRecallTextQuery(embedder, q);
+        const emb = await embedRecallTextQuery(surfaceEmbedder, q);
         vec = emb.vec;
         embedMs = emb.ms;
         embedCacheHit = emb.cache_hit;
@@ -221,7 +246,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
             recall_text: {
               scope,
               tenant_id: parsed.tenant_id ?? env.MEMORY_TENANT_ID,
-              embedding_provider: embedder.name,
+              embedding_provider: surfaceEmbedder.name,
               query_len: q.length,
               mapped_error: mapped.code,
               mapped_status: mapped.statusCode,
@@ -373,7 +398,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           tenant_id: (out as any).tenant_id ?? recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
           limit: recallParsed.limit,
           hops: recallParsed.neighborhood_hops,
-          embedding_provider: embedder.name,
+          embedding_provider: surfaceEmbedder.name,
           embed_ms: embedMs,
           embed_cache_hit: embedCacheHit,
           embed_singleflight_join: embedSingleflightJoin,
@@ -489,13 +514,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
       stage1: (out as any)?.debug?.stage1 ?? null,
       neighborhood_counts: (out as any)?.debug?.neighborhood_counts ?? null,
     });
-    return reply.code(200).send({ ...out, query: { text: q, embedding_provider: embedder.name }, trajectory, observability });
+    return reply.code(200).send({ ...out, query: { text: q, embedding_provider: surfaceEmbedder.name }, trajectory, observability });
   });
 
   app.post("/v1/memory/planning/context", async (req: any, reply: any) => {
-    if (!embedder) {
-      return reply.code(400).send({ error: "no_embedding_provider", message: "Configure EMBEDDING_PROVIDER to use planning context." });
-    }
+    const surfaceEmbedder = resolveSurfaceEmbedder("planning_context", reply);
+    if (!surfaceEmbedder) return;
 
     const t0 = performance.now();
     const timings: Record<string, number> = {};
@@ -578,7 +602,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     try {
       let vec: number[];
       try {
-        const emb = await embedRecallTextQuery(embedder, q);
+        const emb = await embedRecallTextQuery(surfaceEmbedder, q);
         vec = emb.vec;
         embedMs = emb.ms;
         embedCacheHit = emb.cache_hit;
@@ -593,7 +617,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
             planning_context: {
               scope,
               tenant_id: parsed.tenant_id ?? env.MEMORY_TENANT_ID,
-              embedding_provider: embedder.name,
+              embedding_provider: surfaceEmbedder.name,
               query_len: q.length,
               mapped_error: mapped.code,
               mapped_status: mapped.statusCode,
@@ -934,7 +958,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     return reply.code(200).send({
       tenant_id: tenantIdOut,
       scope: recallOut.scope,
-      query: { text: q, embedding_provider: embedder.name },
+      query: { text: q, embedding_provider: surfaceEmbedder.name },
       recall: {
         ...recallOut,
         trajectory,
@@ -949,9 +973,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
   });
 
   app.post("/v1/memory/context/assemble", async (req: any, reply: any) => {
-    if (!embedder) {
-      return reply.code(400).send({ error: "no_embedding_provider", message: "Configure EMBEDDING_PROVIDER to use context assembly." });
-    }
+    const surfaceEmbedder = resolveSurfaceEmbedder("context_assemble", reply);
+    if (!surfaceEmbedder) return;
 
     const t0 = performance.now();
     const timings: Record<string, number> = {};
@@ -1034,7 +1057,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     try {
       let vec: number[];
       try {
-        const emb = await embedRecallTextQuery(embedder, q);
+        const emb = await embedRecallTextQuery(surfaceEmbedder, q);
         vec = emb.vec;
         embedMs = emb.ms;
         embedCacheHit = emb.cache_hit;
@@ -1049,7 +1072,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
             context_assemble: {
               scope,
               tenant_id: parsed.tenant_id ?? env.MEMORY_TENANT_ID,
-              embedding_provider: embedder.name,
+              embedding_provider: surfaceEmbedder.name,
               query_len: q.length,
               mapped_error: mapped.code,
               mapped_status: mapped.statusCode,
@@ -1400,7 +1423,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     return reply.code(200).send({
       tenant_id: tenantIdOut,
       scope: recallOut.scope,
-      query: { text: q, embedding_provider: embedder.name },
+      query: { text: q, embedding_provider: surfaceEmbedder.name },
       recall: {
         ...recallOut,
         trajectory,

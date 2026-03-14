@@ -63,6 +63,7 @@ import type {
   ControlApiKeyRotateInput,
   ControlAuditEventsQuery,
   ControlAuditEventsResponse,
+  ControlRuntimeConfigResponse,
   ControlIncidentPublishJobInput,
   ControlIncidentPublishJobResponse,
   ControlIncidentPublishJobsQuery,
@@ -782,6 +783,10 @@ export class AionisClient {
     opts?: RequestOptions,
   ): Promise<AionisResponse<ControlAuditEventsResponse>> {
     return this.requestGet<ControlAuditEventsResponse>("/v1/admin/control/audit-events", query, opts);
+  }
+
+  async controlGetRuntimeConfig(opts?: RequestOptions): Promise<AionisResponse<ControlRuntimeConfigResponse>> {
+    return this.requestGet<ControlRuntimeConfigResponse>("/v1/admin/control/runtime-config", undefined, opts);
   }
 
   async controlGetTenantDashboard(
