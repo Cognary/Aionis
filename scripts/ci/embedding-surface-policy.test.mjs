@@ -81,6 +81,24 @@ test("loadEnv rejects forbidden embedding surfaces in enabled list", () => {
   assert.match(parsed.message, /forbidden surface: handoff_recover/);
 });
 
+test("loadEnv accepts shell-quoted EMBEDDING_ENABLED_SURFACES_JSON", () => {
+  const out = runSnippet(`
+    import { loadEnv } from "./src/config.ts";
+
+    process.env.AIONIS_EDITION = "lite";
+    process.env.AIONIS_MODE = "local";
+    process.env.EMBEDDING_ENABLED_SURFACES_JSON = "'[\\"recall_text\\",\\"planning_context\\"]'";
+
+    const env = loadEnv();
+    process.stdout.write("__RESULT__" + JSON.stringify({
+      surfaces: env.EMBEDDING_ENABLED_SURFACES_JSON,
+    }));
+  `);
+
+  const parsed = JSON.parse(out);
+  assert.deepEqual(parsed.surfaces, ["recall_text", "planning_context"]);
+});
+
 test("recall_text returns embedding_surface_disabled when the surface is turned off", () => {
   const out = runSnippet(`
     import { createHttpApp } from "./src/host/bootstrap.ts";
@@ -180,28 +198,48 @@ test("recall_text returns embedding_surface_disabled when the surface is turned 
 
 test("write route suppresses auto-embed when write_auto_embed surface is disabled", () => {
   const out = runSnippet(`
-    import { DatabaseSync } from "node:sqlite";
-    import { mkdtempSync, rmSync } from "node:fs";
-    import os from "node:os";
-    import path from "node:path";
     import { createHttpApp } from "./src/host/bootstrap.ts";
     import { registerHostErrorHandler } from "./src/host/http-host.ts";
     import { registerMemoryWriteRoutes } from "./src/routes/memory-write.ts";
-    import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
     import { createEmbeddingSurfacePolicy } from "./src/embeddings/surface-policy.ts";
 
     const main = async () => {
-      const tmpDir = mkdtempSync(path.join(os.tmpdir(), "aionis-embed-surface-write-"));
-      const sqlitePath = path.join(tmpDir, "write.sqlite");
-      const writeAccess = createLiteWriteStore(sqlitePath);
       const app = createHttpApp({ TRUST_PROXY: false });
       registerHostErrorHandler(app);
+      const insertedNodes = [];
+      let commitCounter = 0;
+
+      const writeAccess = {
+        capability_version: 2,
+        capabilities: { shadow_mirror_v2: false },
+        async nodeScopesByIds() { return new Map(); },
+        async parentCommitHash() { return null; },
+        async insertCommit() {
+          commitCounter += 1;
+          return "41000000-0000-0000-0000-" + String(commitCounter).padStart(12, "0");
+        },
+        async insertNode(args) {
+          insertedNodes.push({
+            id: args.id,
+            embedding_status: args.embeddingStatus,
+            embedding_last_error: args.embeddingLastError,
+          });
+        },
+        async insertRuleDef() {},
+        async upsertEdge() {},
+        async readyEmbeddingNodeIds() { return new Set(); },
+        async insertOutboxEvent() {},
+        async appendAfterTopicClusterEventIds() {},
+        async mirrorCommitArtifactsToShadowV2() {
+          throw new Error("write capability unsupported: shadow_mirror_v2");
+        },
+      };
 
       try {
         registerMemoryWriteRoutes({
           app,
           env: {
-            AIONIS_EDITION: "lite",
+            AIONIS_EDITION: "server",
             MEMORY_SCOPE: "default",
             MEMORY_TENANT_ID: "default",
             MAX_TEXT_LEN: 4096,
@@ -217,7 +255,7 @@ test("write route suppresses auto-embed when write_auto_embed surface is disable
             TOPIC_MAX_CANDIDATES_PER_EVENT: 32,
             TOPIC_CLUSTER_STRATEGY: "online_knn",
           },
-          store: { withTx: async () => { throw new Error("lite write should not use store.withTx"); } },
+          store: { withTx: async (fn) => fn({}) },
           embedder: {
             name: "fake-embedder",
             embed: async (texts) => texts.map(() => Array.from({ length: 1536 }, (_, idx) => (idx === 0 ? 1 : 0))),
@@ -227,8 +265,8 @@ test("write route suppresses auto-embed when write_auto_embed surface is disable
             enabledSurfaces: ["recall_text"],
           }),
           embeddedRuntime: null,
-          liteWriteStore: writeAccess,
-          writeAccessForClient: () => { throw new Error("lite write should not use postgres write access"); },
+          liteWriteStore: null,
+          writeAccessForClient: () => writeAccess,
           requireMemoryPrincipal: async () => ({ sub: "tester" }),
           withIdentityFromRequest: (_req, body) => body,
           enforceRateLimit: async () => {},
@@ -258,21 +296,13 @@ test("write route suppresses auto-embed when write_auto_embed surface is disable
           },
         });
 
-        const db = new DatabaseSync(sqlitePath);
-        const row = db.prepare(
-          "SELECT embedding_status, embedding_last_error FROM lite_memory_nodes WHERE id = ? LIMIT 1",
-        ).get("41000000-0000-0000-0000-000000000001");
-        db.close();
-
         process.stdout.write("__RESULT__" + JSON.stringify({
           status: res.statusCode,
           body: JSON.parse(res.body),
-          row,
+          insertedNodes,
         }));
       } finally {
         await app.close();
-        await writeAccess.close();
-        rmSync(tmpDir, { recursive: true, force: true });
       }
     };
 
@@ -285,8 +315,9 @@ test("write route suppresses auto-embed when write_auto_embed surface is disable
   const parsed = JSON.parse(out);
   assert.equal(parsed.status, 200);
   assert.equal(parsed.body.embedding_backfill, undefined);
-  assert.equal(parsed.row.embedding_status, "failed");
-  assert.equal(parsed.row.embedding_last_error, "auto_embed_disabled_or_no_provider");
+  assert.equal(parsed.insertedNodes.length, 1);
+  assert.equal(parsed.insertedNodes[0].embedding_status, "failed");
+  assert.equal(parsed.insertedNodes[0].embedding_last_error, "auto_embed_disabled_or_no_provider");
 });
 
 test("admin control runtime config exposes embedding surface policy snapshot", () => {

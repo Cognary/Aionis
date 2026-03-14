@@ -46,10 +46,26 @@ export function parseEmbeddingEnabledSurfacesJson(raw: string): EmbeddingAllowed
   const input = String(raw ?? "").trim();
   if (!input) return [...DEFAULT_ENABLED_EMBEDDING_SURFACES];
 
+  const candidates = [input];
+  if (
+    (input.startsWith("'") && input.endsWith("'") && input.length >= 2)
+    || (input.startsWith("\"") && input.endsWith("\"") && input.length >= 2)
+  ) {
+    candidates.push(input.slice(1, -1).trim());
+  }
+
   let parsed: unknown = [];
-  try {
-    parsed = JSON.parse(input);
-  } catch {
+  let parsedOk = false;
+  for (const candidate of candidates) {
+    try {
+      parsed = JSON.parse(candidate);
+      parsedOk = true;
+      break;
+    } catch {
+      continue;
+    }
+  }
+  if (!parsedOk) {
     throw new Error("EMBEDDING_ENABLED_SURFACES_JSON must be a valid JSON array");
   }
   if (!Array.isArray(parsed)) {
