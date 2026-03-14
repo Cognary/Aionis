@@ -45,8 +45,9 @@ Start here:
 1. [Build Memory Workflows](/public/en/guides/01-build-memory)
 2. [API Reference](/public/en/api-reference/00-api-reference)
 3. [SDK Guide](/public/en/reference/05-sdk)
-4. [Integrations Overview](/public/en/integrations/00-overview)
-5. [Codex Local](/public/en/integrations/05-codex-local)
+4. [Python SDK + Aionis CLI](/public/en/getting-started/08-python-sdk-with-cli)
+5. [Integrations Overview](/public/en/integrations/00-overview)
+6. [Codex Local](/public/en/integrations/05-codex-local)
 
 ### Path C: Self-Hosted Server
 

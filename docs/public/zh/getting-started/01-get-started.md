@@ -45,8 +45,9 @@ title: "快速开始"
 1. [构建记忆工作流](/public/zh/guides/01-build-memory)
 2. [API 参考](/public/zh/api-reference/00-api-reference)
 3. [SDK 指南](/public/zh/reference/05-sdk)
-4. [集成总览](/public/zh/integrations/00-overview)
-5. [Codex 本地集成](/public/zh/integrations/05-codex-local)
+4. [Python SDK + Aionis CLI](/public/zh/getting-started/08-python-sdk-with-cli)
+5. [集成总览](/public/zh/integrations/00-overview)
+6. [Codex 本地集成](/public/zh/integrations/05-codex-local)
 
 ### 路径 C：自托管 Server
 

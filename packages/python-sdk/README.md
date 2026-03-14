@@ -8,6 +8,30 @@ Python SDK for Aionis Memory Graph API.
 pip install aionis-sdk==0.2.18
 ```
 
+## Local Lite Runtime
+
+The Python SDK is a client package.
+
+For local development, use the official Aionis CLI from the TypeScript package to start Lite:
+
+```bash
+npx @aionis/sdk@0.2.19 dev
+```
+
+Then point the Python client at the local base URL:
+
+```python
+from aionis_sdk import AionisClient
+
+client = AionisClient(base_url="http://127.0.0.1:3321")
+```
+
+This is the recommended path for:
+
+1. Python SDK evaluation
+2. local write/recall/handoff/replay testing
+3. single-machine developer setup without a separate local Aionis repo
+
 ## Usage
 
 ```python
@@ -15,7 +39,7 @@ import os
 from aionis_sdk import AionisClient
 
 client = AionisClient(
-    base_url="http://localhost:3001",
+    base_url="http://127.0.0.1:3321",
     timeout_s=10.0,
     api_key=os.getenv("API_KEY"),           # optional: X-Api-Key
     auth_bearer=os.getenv("AUTH_BEARER"),   # optional: Authorization: Bearer <token>
@@ -34,6 +58,10 @@ out = client.write(
 
 print(out["status"], out["request_id"], out["data"]["commit_id"])
 ```
+
+For a complete Python + CLI first-run flow, see:
+
+1. [Python SDK + Aionis CLI](https://doc.aionisos.com/public/en/getting-started/08-python-sdk-with-cli)
 
 ## Typed payloads
 

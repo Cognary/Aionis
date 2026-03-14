@@ -11,6 +11,7 @@ Current state:
 1. TypeScript SDK and Python SDK now cover the main developer-facing `memory`, `handoff`, `policy`, `replay`, `sandbox`, and `automations` routes.
 2. On `2026-03-14`, Aionis ran a route-to-SDK audit over `65` non-admin, non-control-plane routes and found `no missing` surfaces in either SDK.
 3. The TypeScript package also ships the Phase 1 local developer CLI via `aionis dev`.
+4. The recommended local workflow for Python uses the same official CLI rather than a separate Python runtime launcher.
 
 ## Packages
 
@@ -35,6 +36,12 @@ npx @aionis/sdk@0.2.18 --help
 
 ```bash
 pip install aionis-sdk==0.2.18
+```
+
+For local Lite startup, use:
+
+```bash
+npx @aionis/sdk@0.2.19 dev
 ```
 
 ## Client Setup
@@ -82,17 +89,22 @@ console.log(writeRes.commit_uri, recallRes.request_id);
 from aionis_sdk import AionisClient
 
 client = AionisClient(
-    base_url="https://api.aionisos.com",
-    tenant_id="default",
-    scope="default",
-    api_key="<your-api-key>",
+    base_url="http://127.0.0.1:3321",
 )
 
-write_res = client.write(input_text="Customer prefers email follow-up")
-recall_res = client.recall_text(query_text="preferred follow-up channel")
+write_res = client.write({"scope": "default", "input_text": "Customer prefers email follow-up"})
+recall_res = client.recall_text({"scope": "default", "query_text": "preferred follow-up channel"})
 
 print(write_res.get("commit_uri"), recall_res.get("request_id"))
 ```
+
+Recommended local developer sequence:
+
+1. `pip install aionis-sdk==0.2.18`
+2. `npx @aionis/sdk@0.2.19 dev`
+3. `AionisClient(base_url=\"http://127.0.0.1:3321\")`
+
+See [Python SDK + Aionis CLI](/public/en/getting-started/08-python-sdk-with-cli) for the full onboarding flow.
 
 ## Core SDK Methods
 
@@ -108,6 +120,7 @@ Notes:
 
 1. The current TypeScript client exposes the newest summary-first helpers, continuity helpers, and the Phase 1 CLI.
 2. The Python SDK mirrors the same main developer-facing route surface, but stays Pythonic with snake_case naming and plain-dict responses.
+3. Local runtime startup is intentionally centralized in one CLI so TypeScript and Python do not drift into two separate bootstrap flows.
 
 ## Coverage Snapshot
 

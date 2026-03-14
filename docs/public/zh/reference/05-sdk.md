@@ -11,6 +11,7 @@ Aionis 提供官方 TypeScript 和 Python SDK。
 1. TypeScript SDK 和 Python SDK 现在都覆盖了开发者主线上的 `memory`、`handoff`、`policy`、`replay`、`sandbox`、`automations` 路由。
 2. 在 `2026-03-14`，Aionis 针对 `65` 条非 admin、非 control-plane 路由做了 route-to-SDK 审计，结果是两套 SDK 都 `no missing`。
 3. TypeScript 包还内置了 Phase 1 本地开发 CLI，也就是 `aionis dev`。
+4. Python 的本地开发推荐复用这套官方 CLI，而不是再维护一套独立 Python runtime 启动器。
 
 ## 安装
 
@@ -30,6 +31,12 @@ npx @aionis/sdk@0.2.18 --help
 
 ```bash
 pip install aionis-sdk==0.2.18
+```
+
+如果你要在本地启动 Lite，推荐直接用：
+
+```bash
+npx @aionis/sdk@0.2.19 dev
 ```
 
 ## 客户端初始化
@@ -76,6 +83,8 @@ TypeScript 包现在还带一套 Phase 1 Lite 开发 CLI：
 
 具体用法见：[SDK CLI](/public/zh/reference/09-sdk-cli)
 
+Python 本地开发也推荐复用这套 CLI，再让 Python client 连接本地地址。
+
 ## Quick Start（TypeScript）
 
 ```ts
@@ -100,6 +109,29 @@ const recallRes = await client.recallText({
 
 console.log(writeRes.commit_uri, recallRes.request_id);
 ```
+
+## Quick Start（Python）
+
+```python
+from aionis_sdk import AionisClient
+
+client = AionisClient(
+    base_url="http://127.0.0.1:3321",
+)
+
+write_res = client.write({"scope": "default", "input_text": "Customer prefers email follow-up"})
+recall_res = client.recall_text({"scope": "default", "query_text": "preferred follow-up channel"})
+
+print(write_res.get("commit_uri"), recall_res.get("request_id"))
+```
+
+推荐的本地开发顺序：
+
+1. `pip install aionis-sdk==0.2.18`
+2. `npx @aionis/sdk@0.2.19 dev`
+3. `AionisClient(base_url=\"http://127.0.0.1:3321\")`
+
+完整上手见：[Python SDK + Aionis CLI](/public/zh/getting-started/08-python-sdk-with-cli)
 
 ## Find Summary（TypeScript）
 
