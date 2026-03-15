@@ -119,16 +119,17 @@ Added optional fields for:
 
 ## Real Workflow Feedback
 
-Real OpenClaw workflow validation fed back into Phase 1 in two useful ways:
+Real OpenClaw workflow validation fed back into Phase 1 in three useful ways:
 
 1. core repeated continuity A/B on three workflow slices now shows `execution_packet_v1` matching legacy completion while reducing token burn and wall-clock
-2. the narrow `markdown parser fallback` slice did not turn into a headline win; after packet and handoff tightening it moved from completion regression to completion parity, while still improving token use and wall-clock
+2. the narrow `markdown parser fallback` slice was later recovered into a supporting completion slice: it is now a completion win, but not an efficiency win
+3. `ControlProfile` is no longer contract-only; it is now projected through handoff continuity and consumed by the real adapter runtime
 
 Current reading:
 
 1. the packet contract is directionally correct
 2. packet shaping and handoff source material still matter on narrow rendering tasks
-3. Phase 1 should continue by improving structured continuity source material and packet projection before broadening claims
+3. runtime control adoption can be done additively by projecting profile data through continuity, rather than by replacing the existing loop-control surface
 
 ## What This Means Architecturally
 
@@ -145,15 +146,27 @@ handoff/store
 
 This is the first actual kernel-path realization of the execution continuity ADR.
 
+The effective Phase 1 runtime loop is now:
+
+```text
+handoff/store
+  -> durable execution projection in slots
+  -> handoff/recover
+  -> execution_state_v1 / execution_packet_v1 / control_profile_v1
+  -> adapter before_agent_start
+  -> context_assemble + runtime threshold selection
+  -> continuity-aware execution control
+```
+
 ## What Has Not Landed Yet
 
 The following are still pending:
 
 1. route-independent persistence store for `ExecutionState` beyond handoff slots
 2. systematic write-path generation of state-bearing projections outside handoff flows
-3. runtime adoption of `ControlProfile`
-4. benchmark-level verification against current strongest real workflow slices
-5. dedicated packet-first route helpers instead of static-block bridge logic
+3. repeated benchmark-level verification against current strongest real workflow slices with `ControlProfile` active on the real path
+4. dedicated packet-first route helpers instead of static-block bridge logic
+5. broader runtime surfaces consuming `ControlProfile` beyond the current adapter path
 
 ## Verification At This Checkpoint
 
@@ -161,6 +174,8 @@ Passed at this checkpoint:
 
 1. TypeScript compile for the execution-continuity branch
 2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1.test.mjs](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1.test.mjs)
+3. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1-integration.test.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1-integration.test.ts)
+4. adapter-side runtime threshold adoption tests on the OpenClaw path
 
 ## Current Assessment
 
@@ -168,24 +183,25 @@ This checkpoint is strong enough to say:
 
 1. the ADR is now executable, not only descriptive
 2. Phase 1 is being implemented in the correct additive direction
-3. continuity state is beginning to become first-class in real route paths
+3. continuity state is becoming first-class in real route paths
+4. `ControlProfile` is now active in the current OpenClaw runtime path
 
 It is not strong enough yet to say:
 
 1. `ExecutionState` is now the universal source of truth for all coding-task continuity
-2. `ControlProfile` is active in runtime control
-3. the real benchmark path has already been revalidated on the new continuity contract
+2. every runtime host now consumes `ControlProfile`
+3. the real benchmark path has already been revalidated across the strongest repeated workflow slices with `ControlProfile` active
 
 ## Recommended Next Move
 
 The next highest-value step is:
 
-1. add a narrow integration smoke for `handoff/store -> handoff/recover -> context_assemble`
+1. re-run the strongest real workflow slices with `ControlProfile` active on the real path
 
-That smoke should prove that:
+That verification should prove that:
 
-1. store writes structured execution projections
-2. recover restores them
-3. context assembly consumes them into continuity-aware static blocks
+1. profile projection is not merely type-level
+2. adapter thresholds are actually being tightened by continuity-delivered profile data
+3. the current positive real workflow story does not regress when profile adoption is enabled
 
-Only after that should the branch move into runtime control profile adoption.
+Only after that should the branch broaden `ControlProfile` adoption to additional runtime surfaces.
