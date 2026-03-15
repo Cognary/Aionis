@@ -124,12 +124,14 @@ Real OpenClaw workflow validation fed back into Phase 1 in three useful ways:
 1. core repeated continuity A/B on three workflow slices now shows `execution_packet_v1` matching legacy completion while reducing token burn and wall-clock
 2. the narrow `markdown parser fallback` slice was later recovered into a supporting completion slice: it is now a completion win, but not an efficiency win
 3. `ControlProfile` is no longer contract-only; it is now projected through handoff continuity and consumed by the real adapter runtime
+4. the first controlled nightly revalidation on the strongest real workflow slice is now positive with `ControlProfile` active on the real path
 
 Current reading:
 
 1. the packet contract is directionally correct
 2. packet shaping and handoff source material still matter on narrow rendering tasks
 3. runtime control adoption can be done additively by projecting profile data through continuity, rather than by replacing the existing loop-control surface
+4. the strongest real workflow slice now has an initial controlled nightly signal showing `ControlProfile` adoption improves reviewer-ready completion while also reducing token burn and wall-clock
 
 ## What This Means Architecturally
 
@@ -176,6 +178,29 @@ Passed at this checkpoint:
 2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1.test.mjs](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1.test.mjs)
 3. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1-integration.test.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1-integration.test.ts)
 4. adapter-side runtime threshold adoption tests on the OpenClaw path
+5. first controlled nightly real-workflow validation on `glm_dashboard_auth_drift_reviewer_ready_workflow`
+
+Nightly validation artifact:
+
+1. [/Users/lucio/.aionis-openclaw-plugin-nightly/clawbot-aionis-adapter/artifacts/openclaw-real-workflow-scenario/20260315133004/summary.json](/Users/lucio/.aionis-openclaw-plugin-nightly/clawbot-aionis-adapter/artifacts/openclaw-real-workflow-scenario/20260315133004/summary.json)
+
+Nightly result at this checkpoint:
+
+1. baseline
+   - `reviewer_ready_rate = 0.6667`
+   - `workflow_completed_rate = 0.6667`
+   - `avg_total_tokens = 23888.33`
+   - `avg_wall_clock_ms = 94546`
+2. treatment
+   - `reviewer_ready_rate = 1`
+   - `workflow_completed_rate = 1`
+   - `avg_total_tokens = 21865.67`
+   - `avg_wall_clock_ms = 68498.33`
+3. delta
+   - `reviewer_ready_gain = 0.3333`
+   - `workflow_completion_gain = 0.3333`
+   - `avg_token_delta = -2022.67`
+   - `avg_rediscovery_delta = -0.6667`
 
 ## Current Assessment
 
@@ -185,23 +210,25 @@ This checkpoint is strong enough to say:
 2. Phase 1 is being implemented in the correct additive direction
 3. continuity state is becoming first-class in real route paths
 4. `ControlProfile` is now active in the current OpenClaw runtime path
+5. the first controlled nightly revalidation is positive on the strongest real workflow slice
 
 It is not strong enough yet to say:
 
 1. `ExecutionState` is now the universal source of truth for all coding-task continuity
 2. every runtime host now consumes `ControlProfile`
-3. the real benchmark path has already been revalidated across the strongest repeated workflow slices with `ControlProfile` active
+3. the strongest repeated real-workflow publication set with `ControlProfile` active has been fully refreshed across multiple top slices
 
 ## Recommended Next Move
 
 The next highest-value step is:
 
-1. re-run the strongest real workflow slices with `ControlProfile` active on the real path
+1. convert the initial controlled nightly signal into a refreshed repeated publication set across the strongest real workflow slices
 
 That verification should prove that:
 
 1. profile projection is not merely type-level
 2. adapter thresholds are actually being tightened by continuity-delivered profile data
 3. the current positive real workflow story does not regress when profile adoption is enabled
+4. the first positive nightly result is not a one-off artifact of a single strongest slice
 
 Only after that should the branch broaden `ControlProfile` adoption to additional runtime surfaces.
