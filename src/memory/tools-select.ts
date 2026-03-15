@@ -14,6 +14,50 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { buildToolsSelectionSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri } from "./uri.js";
+import { ControlProfileV1Schema } from "../execution/types.js";
+
+function inferBroadToolKind(name: string): "scan" | "test" | null {
+  const lowered = name.toLowerCase();
+  if (!lowered.includes("broad")) return null;
+  if (lowered.includes("test")) return "test";
+  if (lowered.includes("scan")) return "scan";
+  return null;
+}
+
+export function applyControlProfileCandidateFilter(
+  candidates: string[],
+  rawContext: unknown,
+): {
+  filteredCandidates: string[];
+  deniedByProfile: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" | "control_profile" }>;
+} {
+  const context =
+    rawContext && typeof rawContext === "object" ? (rawContext as Record<string, unknown>) : null;
+  const parsedProfile = ControlProfileV1Schema.safeParse(context?.control_profile_v1);
+
+  if (!parsedProfile.success) {
+    return { filteredCandidates: candidates, deniedByProfile: [] };
+  }
+
+  const profile = parsedProfile.data;
+  const filteredCandidates: string[] = [];
+  const deniedByProfile: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" | "control_profile" }> = [];
+
+  for (const candidate of candidates) {
+    const broadKind = inferBroadToolKind(candidate);
+    if (broadKind === "scan" && profile.allow_broad_scan === false) {
+      deniedByProfile.push({ name: candidate, reason: "control_profile" });
+      continue;
+    }
+    if (broadKind === "test" && profile.allow_broad_test === false) {
+      deniedByProfile.push({ name: candidate, reason: "control_profile" });
+      continue;
+    }
+    filteredCandidates.push(candidate);
+  }
+
+  return { filteredCandidates, deniedByProfile };
+}
 
 function summarizeToolConflicts(explain: any): string[] {
   const conflicts = Array.isArray(explain?.conflicts) ? explain.conflicts : [];
@@ -48,6 +92,10 @@ export async function selectTools(
     { defaultScope, defaultTenantId },
   );
   const normalizedCandidates = normalizeToolCandidates(parsed.candidates);
+  const { filteredCandidates, deniedByProfile } = applyControlProfileCandidateFilter(
+    normalizedCandidates,
+    parsed.context,
+  );
 
   const rules = await evaluateRulesAppliedOnly((client ?? ({} as pg.PoolClient)), {
     scope: tenancy.scope,
@@ -61,11 +109,17 @@ export async function selectTools(
     liteWriteStore: opts.liteWriteStore ?? null,
   });
 
-  const selection = applyToolPolicy(normalizedCandidates, rules.applied.policy, { strict: parsed.strict });
+  const selection = applyToolPolicy(filteredCandidates, rules.applied.policy, { strict: parsed.strict });
+  if (deniedByProfile.length > 0) {
+    selection.denied = deniedByProfile.concat(selection.denied);
+  }
 
   let shadow_selection: any = undefined;
   if (parsed.include_shadow) {
-    shadow_selection = applyToolPolicy(normalizedCandidates, (rules.applied as any).shadow_policy ?? {}, { strict: false });
+    shadow_selection = applyToolPolicy(filteredCandidates, (rules.applied as any).shadow_policy ?? {}, { strict: false });
+    if (deniedByProfile.length > 0) {
+      shadow_selection.denied = deniedByProfile.concat(shadow_selection.denied);
+    }
   }
 
   const tool_conflicts_summary = summarizeToolConflicts((rules.applied as any)?.tool_explain);
@@ -82,6 +136,7 @@ export async function selectTools(
     rules_limit: parsed.rules_limit,
     matched_rules: rules.matched,
     tool_conflicts_summary,
+    denied_by_control_profile: deniedByProfile.map((entry) => entry.name),
     ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
   };
   const decisionRes: { id: string; created_at: string } = opts.liteWriteStore
