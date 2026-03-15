@@ -105,7 +105,8 @@ export function registerHandoffRoutes(args: {
         await embeddedRuntime.applyWrite(prepared, out);
       }
 
-      const handoffNode = Array.isArray(out.nodes) ? out.nodes[0] : null;
+      const handoffNode = Array.isArray(out.nodes) ? (out.nodes[0] as any) : null;
+      const handoffSlots = handoffNode && handoffNode.slots && typeof handoffNode.slots === "object" ? handoffNode.slots : null;
       return reply.code(200).send({
         tenant_id: out.tenant_id,
         scope: out.scope,
@@ -135,6 +136,8 @@ export function registerHandoffRoutes(args: {
               memory_lane: body.memory_lane,
             }
           : null,
+        execution_state_v1: handoffSlots && "execution_state_v1" in handoffSlots ? (handoffSlots as any).execution_state_v1 : undefined,
+        execution_packet_v1: handoffSlots && "execution_packet_v1" in handoffSlots ? (handoffSlots as any).execution_packet_v1 : undefined,
       });
     } finally {
       gate.release();

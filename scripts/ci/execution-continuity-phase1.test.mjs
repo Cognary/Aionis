@@ -11,6 +11,7 @@ test("execution continuity phase 1 scaffold exists", async () => {
   const packet = await readFile(path.join(ROOT, "src/execution/packet.ts"), "utf8");
   const profiles = await readFile(path.join(ROOT, "src/execution/profiles.ts"), "utf8");
   const handoff = await readFile(path.join(ROOT, "src/memory/handoff.ts"), "utf8");
+  const handoffRoute = await readFile(path.join(ROOT, "src/routes/handoff.ts"), "utf8");
 
   assert.match(plan, /ExecutionState v1/);
   assert.match(plan, /ExecutionPacket v1/);
@@ -23,6 +24,8 @@ test("execution continuity phase 1 scaffold exists", async () => {
   assert.match(profiles, /controlProfileDefaults/);
   assert.match(handoff, /execution_packet_v1/);
   assert.match(handoff, /buildExecutionProjectionFromRecoveredHandoff/);
+  assert.match(handoff, /readStoredExecutionProjection/);
+  assert.match(handoffRoute, /execution_state_v1/);
   const contextRuntime = await readFile(path.join(ROOT, "src/routes/memory-context-runtime.ts"), "utf8");
   assert.match(contextRuntime, /mergeExecutionPacketStaticBlocks/);
   assert.match(contextRuntime, /execution_packet_v1_present/);

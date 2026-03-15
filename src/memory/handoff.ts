@@ -10,7 +10,7 @@ import {
   type MemoryResolveInput,
   type MemoryWriteInput,
 } from "./schemas.js";
-import { buildExecutionPacketV1, ExecutionStateV1Schema, type ExecutionPacketV1, type ExecutionStateV1, type ReviewerContract, type ResumeAnchor } from "../execution/index.js";
+import { buildExecutionPacketV1, ExecutionPacketV1Schema, ExecutionStateV1Schema, type ExecutionPacketV1, type ExecutionStateV1, type ReviewerContract, type ResumeAnchor } from "../execution/index.js";
 import { HttpError } from "../util/http.js";
 
 type LiteWriteStoreLike = {
@@ -55,6 +55,7 @@ type RecoveredExecutionProjection = {
   execution_state_v1: ExecutionStateV1;
   execution_packet_v1: ExecutionPacketV1;
 };
+
 type ExecutionReadyHandoff = {
   anchor: string;
   handoff_kind: string;
@@ -82,12 +83,114 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   return out.length > 0 ? out : undefined;
 }
 
+function buildStoredPromptSafeHandoff(input: {
+  anchor: string;
+  handoff_kind: string;
+  file_path?: string | null;
+  repo_root?: string | null;
+  symbol?: string | null;
+  summary: string;
+  handoff_text: string;
+  risk?: string | null;
+  acceptance_checks?: string[];
+  tags?: string[];
+}): PromptSafeHandoff {
+  return {
+    anchor: input.anchor,
+    handoff_kind: input.handoff_kind,
+    file_path: input.file_path ?? null,
+    repo_root: input.repo_root ?? null,
+    symbol: input.symbol ?? null,
+    summary: input.summary,
+    handoff_text: input.handoff_text,
+    risk: input.risk ?? null,
+    acceptance_checks: input.acceptance_checks ?? [],
+    tags: input.tags ?? [],
+  };
+}
+
+function buildStoredExecutionReadyHandoff(input: {
+  anchor: string;
+  handoff_kind: string;
+  file_path?: string | null;
+  repo_root?: string | null;
+  symbol?: string | null;
+  summary: string;
+  handoff_text: string;
+  risk?: string | null;
+  acceptance_checks?: string[];
+  target_files?: string[];
+  next_action?: string | null;
+  must_change?: string[];
+  must_remove?: string[];
+  must_keep?: string[];
+}): ExecutionReadyHandoff {
+  const targetFiles = Array.isArray(input.target_files) ? input.target_files.filter((value) => typeof value === "string" && value.trim().length > 0) : [];
+  return {
+    anchor: input.anchor,
+    handoff_kind: input.handoff_kind,
+    file_path: input.file_path ?? null,
+    repo_root: input.repo_root ?? null,
+    symbol: input.symbol ?? null,
+    target_files: targetFiles.length > 0 ? targetFiles : (input.file_path ? [input.file_path] : []),
+    next_action: normalizeOptionalString(input.next_action ?? undefined) ?? input.handoff_text,
+    summary: input.summary,
+    handoff_text: input.handoff_text,
+    risk: input.risk ?? null,
+    must_change: Array.isArray(input.must_change) ? input.must_change.filter((value) => typeof value === "string" && value.trim().length > 0) : [],
+    must_remove: Array.isArray(input.must_remove) ? input.must_remove.filter((value) => typeof value === "string" && value.trim().length > 0) : [],
+    must_keep: Array.isArray(input.must_keep) ? input.must_keep.filter((value) => typeof value === "string" && value.trim().length > 0) : [],
+    acceptance_checks: Array.isArray(input.acceptance_checks)
+      ? input.acceptance_checks.filter((value) => typeof value === "string" && value.trim().length > 0)
+      : [],
+  };
+}
+
 export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
   const parsed = HandoffStoreRequest.parse(input);
   const raw = input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
   const producerAgentId = normalizeOptionalString(typeof raw.producer_agent_id === "string" ? raw.producer_agent_id : undefined);
   const ownerAgentId = normalizeOptionalString(typeof raw.owner_agent_id === "string" ? raw.owner_agent_id : undefined);
   const ownerTeamId = normalizeOptionalString(typeof raw.owner_team_id === "string" ? raw.owner_team_id : undefined);
+  const promptSafe = buildStoredPromptSafeHandoff({
+    anchor: parsed.anchor,
+    handoff_kind: parsed.handoff_kind,
+    file_path: parsed.file_path ?? null,
+    repo_root: parsed.repo_root ?? null,
+    symbol: parsed.symbol ?? null,
+    summary: parsed.summary,
+    handoff_text: parsed.handoff_text,
+    risk: parsed.risk ?? null,
+    acceptance_checks: parsed.acceptance_checks ?? [],
+    tags: parsed.tags ?? [],
+  });
+  const executionReady = buildStoredExecutionReadyHandoff({
+    anchor: parsed.anchor,
+    handoff_kind: parsed.handoff_kind,
+    file_path: parsed.file_path ?? null,
+    repo_root: parsed.repo_root ?? null,
+    symbol: parsed.symbol ?? null,
+    summary: parsed.summary,
+    handoff_text: parsed.handoff_text,
+    risk: parsed.risk ?? null,
+    acceptance_checks: parsed.acceptance_checks ?? [],
+    target_files: parsed.target_files ?? [],
+    next_action: parsed.next_action ?? parsed.handoff_text,
+    must_change: parsed.must_change ?? [],
+    must_remove: parsed.must_remove ?? [],
+    must_keep: parsed.must_keep ?? [],
+  });
+  const executionProjection = buildExecutionProjectionFromRecoveredHandoff(
+    {
+      id: `handoff-anchor:${parsed.anchor}`,
+      uri: `aionis://handoff/${parsed.anchor}`,
+      title: parsed.title ?? `Handoff ${parsed.anchor}`,
+      text_summary: parsed.summary,
+      memory_lane: parsed.memory_lane,
+    },
+    promptSafe,
+    executionReady,
+  );
   const handoffText = [
     `anchor=${parsed.anchor}`,
     parsed.file_path ? `file=${parsed.file_path}` : null,
@@ -138,6 +241,8 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
           must_change: parsed.must_change ?? [],
           must_remove: parsed.must_remove ?? [],
           must_keep: parsed.must_keep ?? [],
+          execution_state_v1: executionProjection.execution_state_v1,
+          execution_packet_v1: executionProjection.execution_packet_v1,
         },
       },
     ],
@@ -260,10 +365,26 @@ function buildExecutionProjectionFromRecoveredHandoff(node: HandoffNode, promptS
   };
 }
 
+function readStoredExecutionProjection(node: HandoffNode): RecoveredExecutionProjection | null {
+  const slots = node.slots && typeof node.slots === "object" ? node.slots : null;
+  if (!slots) return null;
+  const rawState = (slots as Record<string, unknown>).execution_state_v1;
+  const rawPacket = (slots as Record<string, unknown>).execution_packet_v1;
+  if (!rawState || !rawPacket) return null;
+  try {
+    return {
+      execution_state_v1: ExecutionStateV1Schema.parse(rawState),
+      execution_packet_v1: ExecutionPacketV1Schema.parse(rawPacket),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, input: HandoffRecoverInput) {
   const promptSafe = buildPromptSafeHandoff(node, input);
   const executionReady = buildExecutionReadyHandoff(node, input, promptSafe);
-  const executionProjection = buildExecutionProjectionFromRecoveredHandoff(node, promptSafe, executionReady);
+  const executionProjection = readStoredExecutionProjection(node) ?? buildExecutionProjectionFromRecoveredHandoff(node, promptSafe, executionReady);
   return {
     handoff_kind: promptSafe.handoff_kind,
     anchor: promptSafe.anchor,
