@@ -726,6 +726,19 @@ export type HandoffStoreResponse = {
     evidence_refs: string[];
     [k: string]: unknown;
   };
+  control_profile_v1?: {
+    version: 1;
+    profile: "triage" | "patch" | "review" | "resume";
+    max_same_tool_streak: number;
+    max_no_progress_streak: number;
+    max_duplicate_observation_streak: number;
+    max_steps: number;
+    allow_broad_scan: boolean;
+    allow_broad_test: boolean;
+    escalate_on_blocker: boolean;
+    reviewer_ready_required: boolean;
+    [k: string]: unknown;
+  };
   [k: string]: unknown;
 };
 
@@ -822,6 +835,19 @@ export type HandoffRecoverResponse = {
       [k: string]: unknown;
     } | null;
     evidence_refs: string[];
+    [k: string]: unknown;
+  };
+  control_profile_v1?: {
+    version: 1;
+    profile: "triage" | "patch" | "review" | "resume";
+    max_same_tool_streak: number;
+    max_no_progress_streak: number;
+    max_duplicate_observation_streak: number;
+    max_steps: number;
+    allow_broad_scan: boolean;
+    allow_broad_test: boolean;
+    escalate_on_blocker: boolean;
+    reviewer_ready_required: boolean;
     [k: string]: unknown;
   };
   [k: string]: unknown;

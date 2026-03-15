@@ -10,7 +10,19 @@ import {
   type MemoryResolveInput,
   type MemoryWriteInput,
 } from "./schemas.js";
-import { buildExecutionPacketV1, ExecutionPacketV1Schema, ExecutionStateV1Schema, type ExecutionPacketV1, type ExecutionStateV1, type ReviewerContract, type ResumeAnchor } from "../execution/index.js";
+import {
+  buildExecutionPacketV1,
+  controlProfileDefaults,
+  ControlProfileV1Schema,
+  ExecutionPacketV1Schema,
+  ExecutionStateV1Schema,
+  type ControlProfileName,
+  type ControlProfileV1,
+  type ExecutionPacketV1,
+  type ExecutionStateV1,
+  type ReviewerContract,
+  type ResumeAnchor,
+} from "../execution/index.js";
 import { HttpError } from "../util/http.js";
 
 type LiteWriteStoreLike = {
@@ -54,6 +66,7 @@ type PromptSafeHandoff = {
 type RecoveredExecutionProjection = {
   execution_state_v1: ExecutionStateV1;
   execution_packet_v1: ExecutionPacketV1;
+  control_profile_v1: ControlProfileV1;
 };
 
 type ExecutionReadyHandoff = {
@@ -243,6 +256,7 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
           must_keep: parsed.must_keep ?? [],
           execution_state_v1: executionProjection.execution_state_v1,
           execution_packet_v1: executionProjection.execution_packet_v1,
+          control_profile_v1: executionProjection.control_profile_v1,
         },
       },
     ],
@@ -358,10 +372,12 @@ function buildExecutionProjectionFromRecoveredHandoff(node: HandoffNode, promptS
     hard_constraints: executionReady.must_change,
     evidence_refs: [node.uri].filter((value): value is string => typeof value === "string" && value.length > 0),
   });
+  const controlProfile = deriveControlProfile(state.current_stage);
 
   return {
     execution_state_v1: state,
     execution_packet_v1: packet,
+    control_profile_v1: controlProfile,
   };
 }
 
@@ -370,15 +386,25 @@ function readStoredExecutionProjection(node: HandoffNode): RecoveredExecutionPro
   if (!slots) return null;
   const rawState = (slots as Record<string, unknown>).execution_state_v1;
   const rawPacket = (slots as Record<string, unknown>).execution_packet_v1;
+  const rawControlProfile = (slots as Record<string, unknown>).control_profile_v1;
   if (!rawState || !rawPacket) return null;
   try {
+    const parsedState = ExecutionStateV1Schema.parse(rawState);
     return {
-      execution_state_v1: ExecutionStateV1Schema.parse(rawState),
+      execution_state_v1: parsedState,
       execution_packet_v1: ExecutionPacketV1Schema.parse(rawPacket),
+      control_profile_v1: rawControlProfile
+        ? ControlProfileV1Schema.parse(rawControlProfile)
+        : deriveControlProfile(parsedState.current_stage),
     };
   } catch {
     return null;
   }
+}
+
+function deriveControlProfile(stage: ExecutionStateV1["current_stage"]): ControlProfileV1 {
+  const profileName = (stage === "resume" ? "resume" : stage) satisfies ControlProfileName;
+  return controlProfileDefaults(profileName);
 }
 
 function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, input: HandoffRecoverInput) {

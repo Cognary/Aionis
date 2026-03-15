@@ -138,6 +138,7 @@ export function registerHandoffRoutes(args: {
           : null,
         execution_state_v1: handoffSlots && "execution_state_v1" in handoffSlots ? (handoffSlots as any).execution_state_v1 : undefined,
         execution_packet_v1: handoffSlots && "execution_packet_v1" in handoffSlots ? (handoffSlots as any).execution_packet_v1 : undefined,
+        control_profile_v1: handoffSlots && "control_profile_v1" in handoffSlots ? (handoffSlots as any).control_profile_v1 : undefined,
       });
     } finally {
       gate.release();

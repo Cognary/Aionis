@@ -107,8 +107,10 @@ test("execution continuity flow: handoff store -> recover -> context assemble", 
   assert.equal(recovered.anchor, "auth-drift-001");
   assert.ok(recovered.execution_state_v1);
   assert.ok(recovered.execution_packet_v1);
+  assert.ok(recovered.control_profile_v1);
   assert.equal(recovered.execution_packet_v1.state_id, "handoff-anchor:auth-drift-001");
   assert.equal(recovered.execution_state_v1.resume_anchor?.anchor, "auth-drift-001");
+  assert.equal(recovered.control_profile_v1?.profile, "resume");
 
   const parsedAssemble = ContextAssembleRequest.parse({
     tenant_id: "default",
