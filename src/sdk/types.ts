@@ -708,6 +708,64 @@ export type HandoffRecoverResponse = {
     acceptance_checks: string[];
     [k: string]: unknown;
   };
+  execution_state_v1?: {
+    state_id: string;
+    scope: string;
+    task_brief: string;
+    current_stage: "triage" | "patch" | "review" | "resume";
+    active_role: "orchestrator" | "triage" | "patch" | "review" | "resume";
+    owned_files: string[];
+    modified_files: string[];
+    pending_validations: string[];
+    completed_validations: string[];
+    last_accepted_hypothesis?: string | null;
+    rejected_paths: string[];
+    unresolved_blockers: string[];
+    rollback_notes: string[];
+    reviewer_contract?: {
+      standard: string;
+      required_outputs: string[];
+      acceptance_checks: string[];
+      rollback_required: boolean;
+      [k: string]: unknown;
+    } | null;
+    resume_anchor?: {
+      anchor: string;
+      file_path?: string | null;
+      symbol?: string | null;
+      repo_root?: string | null;
+      [k: string]: unknown;
+    } | null;
+    updated_at: string;
+    version: 1;
+    [k: string]: unknown;
+  };
+  execution_packet_v1?: {
+    version: 1;
+    state_id: string;
+    task_brief: string;
+    hard_constraints: string[];
+    accepted_facts: string[];
+    rejected_paths: string[];
+    pending_validations: string[];
+    rollback_notes: string[];
+    review_contract?: {
+      standard: string;
+      required_outputs: string[];
+      acceptance_checks: string[];
+      rollback_required: boolean;
+      [k: string]: unknown;
+    } | null;
+    resume_anchor?: {
+      anchor: string;
+      file_path?: string | null;
+      symbol?: string | null;
+      repo_root?: string | null;
+      [k: string]: unknown;
+    } | null;
+    evidence_refs: string[];
+    [k: string]: unknown;
+  };
   [k: string]: unknown;
 };
 

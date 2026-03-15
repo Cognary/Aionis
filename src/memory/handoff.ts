@@ -10,6 +10,7 @@ import {
   type MemoryResolveInput,
   type MemoryWriteInput,
 } from "./schemas.js";
+import { buildExecutionPacketV1, ExecutionStateV1Schema, type ExecutionPacketV1, type ExecutionStateV1, type ReviewerContract, type ResumeAnchor } from "../execution/index.js";
 import { HttpError } from "../util/http.js";
 
 type LiteWriteStoreLike = {
@@ -48,6 +49,12 @@ type PromptSafeHandoff = {
   tags: string[];
 };
 
+
+
+type RecoveredExecutionProjection = {
+  execution_state_v1: ExecutionStateV1;
+  execution_packet_v1: ExecutionPacketV1;
+};
 type ExecutionReadyHandoff = {
   anchor: string;
   handoff_kind: string;
@@ -191,9 +198,72 @@ function buildExecutionReadyHandoff(node: HandoffNode, input: HandoffRecoverInpu
   };
 }
 
+function buildReviewerContractFromHandoff(executionReady: ExecutionReadyHandoff): ReviewerContract | null {
+  const requiredOutputs = [
+    executionReady.next_action ? `next_action:${executionReady.next_action}` : null,
+    executionReady.target_files.length > 0 ? `target_files:${executionReady.target_files.join(", ")}` : null,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
+
+  if (executionReady.acceptance_checks.length === 0 && requiredOutputs.length === 0) return null;
+
+  return {
+    standard: executionReady.summary ?? executionReady.handoff_text,
+    required_outputs: requiredOutputs,
+    acceptance_checks: executionReady.acceptance_checks,
+    rollback_required: executionReady.must_keep.length > 0 || executionReady.must_remove.length > 0,
+  };
+}
+
+function buildResumeAnchorFromHandoff(executionReady: ExecutionReadyHandoff): ResumeAnchor | null {
+  const anchor = executionReady.anchor?.trim();
+  if (!anchor) return null;
+  return {
+    anchor,
+    file_path: executionReady.file_path ?? null,
+    symbol: executionReady.symbol ?? null,
+    repo_root: executionReady.repo_root ?? null,
+  };
+}
+
+function buildExecutionProjectionFromRecoveredHandoff(node: HandoffNode, promptSafe: PromptSafeHandoff, executionReady: ExecutionReadyHandoff): RecoveredExecutionProjection {
+  const reviewerContract = buildReviewerContractFromHandoff(executionReady);
+  const resumeAnchor = buildResumeAnchorFromHandoff(executionReady);
+  const state = ExecutionStateV1Schema.parse({
+    state_id: node.id,
+    scope: node.uri || promptSafe.anchor,
+    task_brief: promptSafe.summary ?? executionReady.handoff_text,
+    current_stage: "resume",
+    active_role: "resume",
+    owned_files: executionReady.target_files,
+    modified_files: executionReady.target_files,
+    pending_validations: executionReady.acceptance_checks,
+    completed_validations: [],
+    last_accepted_hypothesis: promptSafe.summary ?? null,
+    rejected_paths: executionReady.must_remove,
+    unresolved_blockers: promptSafe.risk ? [promptSafe.risk] : [],
+    rollback_notes: executionReady.must_keep,
+    reviewer_contract: reviewerContract,
+    resume_anchor: resumeAnchor,
+    updated_at: new Date().toISOString(),
+    version: 1,
+  });
+
+  const packet = buildExecutionPacketV1({
+    state,
+    hard_constraints: executionReady.must_change,
+    evidence_refs: [node.uri].filter((value): value is string => typeof value === "string" && value.length > 0),
+  });
+
+  return {
+    execution_state_v1: state,
+    execution_packet_v1: packet,
+  };
+}
+
 function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, input: HandoffRecoverInput) {
   const promptSafe = buildPromptSafeHandoff(node, input);
   const executionReady = buildExecutionReadyHandoff(node, input, promptSafe);
+  const executionProjection = buildExecutionProjectionFromRecoveredHandoff(node, promptSafe, executionReady);
   return {
     handoff_kind: promptSafe.handoff_kind,
     anchor: promptSafe.anchor,
@@ -223,6 +293,7 @@ function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, inpu
     },
     prompt_safe_handoff: promptSafe,
     execution_ready_handoff: executionReady,
+    ...executionProjection,
   };
 }
 
