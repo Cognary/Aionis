@@ -23,4 +23,7 @@ test("execution continuity phase 1 scaffold exists", async () => {
   assert.match(profiles, /controlProfileDefaults/);
   assert.match(handoff, /execution_packet_v1/);
   assert.match(handoff, /buildExecutionProjectionFromRecoveredHandoff/);
+  const contextRuntime = await readFile(path.join(ROOT, "src/routes/memory-context-runtime.ts"), "utf8");
+  assert.match(contextRuntime, /mergeExecutionPacketStaticBlocks/);
+  assert.match(contextRuntime, /execution_packet_v1_present/);
 });
