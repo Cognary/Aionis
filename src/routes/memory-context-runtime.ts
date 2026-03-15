@@ -50,7 +50,11 @@ function executionPacketToStaticBlocks(packet: ExecutionPacketV1): Array<{
       `execution-packet-${packet.state_id}-brief`,
       "Execution Brief",
       [
+        `current_stage=${packet.current_stage}`,
+        `active_role=${packet.active_role}`,
         `task_brief=${packet.task_brief}`,
+        packet.target_files.length > 0 ? `target_files=${packet.target_files.join(" | ")}` : null,
+        packet.next_action ? `next_action=${packet.next_action}` : null,
         packet.hard_constraints.length > 0 ? `hard_constraints=${packet.hard_constraints.join(" | ")}` : null,
         packet.pending_validations.length > 0 ? `pending_validations=${packet.pending_validations.join(" | ")}` : null,
       ].filter(Boolean).join("; "),
@@ -61,6 +65,7 @@ function executionPacketToStaticBlocks(packet: ExecutionPacketV1): Array<{
       [
         packet.accepted_facts.length > 0 ? `accepted_facts=${packet.accepted_facts.join(" | ")}` : null,
         packet.rejected_paths.length > 0 ? `rejected_paths=${packet.rejected_paths.join(" | ")}` : null,
+        packet.unresolved_blockers.length > 0 ? `unresolved_blockers=${packet.unresolved_blockers.join(" | ")}` : null,
         packet.rollback_notes.length > 0 ? `rollback_notes=${packet.rollback_notes.join(" | ")}` : null,
         packet.evidence_refs.length > 0 ? `evidence_refs=${packet.evidence_refs.join(" | ")}` : null,
       ].filter(Boolean).join("; "),
@@ -105,11 +110,20 @@ function buildPacketFromExecutionState(stateInput: ExecutionStateV1): ExecutionP
   return ExecutionPacketV1Schema.parse({
     version: 1,
     state_id: state.state_id,
+    current_stage: state.current_stage,
+    active_role: state.active_role,
     task_brief: state.task_brief,
+    target_files: state.owned_files.length > 0 ? state.owned_files : state.modified_files,
+    next_action: state.pending_validations.length > 0
+      ? `Complete pending validations: ${state.pending_validations.join(" | ")}`
+      : state.unresolved_blockers.length > 0
+        ? `Resolve blockers: ${state.unresolved_blockers.join(" | ")}`
+        : null,
     hard_constraints: [],
     accepted_facts: state.last_accepted_hypothesis ? [`accepted_hypothesis:${state.last_accepted_hypothesis}`] : [],
     rejected_paths: state.rejected_paths,
     pending_validations: state.pending_validations,
+    unresolved_blockers: state.unresolved_blockers,
     rollback_notes: state.rollback_notes,
     review_contract: state.reviewer_contract,
     resume_anchor: state.resume_anchor,

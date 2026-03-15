@@ -117,6 +117,19 @@ Added optional fields for:
 2. `HandoffRecoverResponse`
 3. `ContextAssembleInput`
 
+## Real Workflow Feedback
+
+Real OpenClaw workflow validation fed back into Phase 1 in two useful ways:
+
+1. core repeated continuity A/B on three workflow slices now shows `execution_packet_v1` matching legacy completion while reducing token burn and wall-clock
+2. the narrow `markdown parser fallback` slice did not turn into a headline win; after packet and handoff tightening it moved from completion regression to completion parity, while still improving token use and wall-clock
+
+Current reading:
+
+1. the packet contract is directionally correct
+2. packet shaping and handoff source material still matter on narrow rendering tasks
+3. Phase 1 should continue by improving structured continuity source material and packet projection before broadening claims
+
 ## What This Means Architecturally
 
 At this checkpoint, the minimum continuity loop is now present:

@@ -124,5 +124,8 @@ test("execution continuity flow: handoff store -> recover -> context assemble", 
   assert.ok(staticBlocks.length >= 2);
   assert.ok(staticBlocks.some((block) => String(block.title).includes("Execution Brief")));
   assert.ok(staticBlocks.some((block) => String(block.content).includes("task_brief=")));
+  assert.ok(staticBlocks.some((block) => String(block.content).includes("current_stage=")));
+  assert.ok(staticBlocks.some((block) => String(block.content).includes("target_files=")));
+  assert.ok(staticBlocks.some((block) => String(block.content).includes("next_action=")));
   assert.ok(staticBlocks.some((block) => String(block.content).includes("acceptance_checks=")));
 });
