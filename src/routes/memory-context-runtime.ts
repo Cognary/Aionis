@@ -117,7 +117,7 @@ function buildPacketFromExecutionState(stateInput: ExecutionStateV1): ExecutionP
   });
 }
 
-function mergeExecutionPacketStaticBlocks(parsed: {
+export function mergeExecutionPacketStaticBlocks(parsed: {
   static_context_blocks?: any[];
   execution_packet_v1?: ExecutionPacketV1;
   execution_state_v1?: ExecutionStateV1;

@@ -1,0 +1,178 @@
+---
+title: "Aionis Execution Continuity Phase 1 Progress"
+---
+
+# Aionis Execution Continuity Phase 1 Progress
+
+Date: `2026-03-15`  
+Status: `active additive implementation`
+
+Related:
+
+1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md)
+2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE1_PLAN_2026-03-15.md](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE1_PLAN_2026-03-15.md)
+3. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/2026-03-14-generic-adapter-core-architecture.md](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/2026-03-14-generic-adapter-core-architecture.md)
+
+## Executive Summary
+
+Execution continuity has moved out of pure ADR status and into additive kernel implementation.
+
+At this checkpoint, Aionis now has:
+
+1. explicit `ExecutionState v1` and `ExecutionPacket v1` schemas
+2. explicit `ControlProfile v1` defaults
+3. `handoff/store` producing state-bearing continuity projections
+4. `handoff/recover` restoring stored continuity projections when available
+5. `planning_context` and `context/assemble` able to consume execution-state or execution-packet inputs without public route breakage
+
+This is not a kernel rewrite.
+
+It is the first internal continuity contract landed behind the existing route family.
+
+## What Landed
+
+### 1. Phase 1 kernel scaffold
+
+New internal kernel scaffold:
+
+1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/types.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/types.ts)
+2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/packet.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/packet.ts)
+3. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/profiles.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/profiles.ts)
+4. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/index.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/index.ts)
+
+Core abstractions now present:
+
+1. `ExecutionState v1`
+2. `ExecutionPacket v1`
+3. `ControlProfile v1`
+
+### 2. Handoff recovery projection
+
+`handoff/recover` now returns structured continuity projections when available.
+
+Primary file:
+
+1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/handoff.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/handoff.ts)
+
+Behavior at this checkpoint:
+
+1. normalize prompt-safe handoff as before
+2. normalize execution-ready handoff as before
+3. additionally produce:
+   - `execution_state_v1`
+   - `execution_packet_v1`
+4. prefer stored structured projection over reconstructing it on every recover call
+
+### 3. Handoff store projection persistence
+
+`handoff/store` now persists execution continuity projections into node slots.
+
+Primary files:
+
+1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/handoff.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/handoff.ts)
+2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/routes/handoff.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/routes/handoff.ts)
+
+Behavior at this checkpoint:
+
+1. `buildHandoffWriteBody(...)` writes `execution_state_v1` and `execution_packet_v1` into the handoff event node slots
+2. store response now exposes those projections as optional response fields
+3. recover prefers those stored projections when present
+
+This gives the continuity path a durable source material instead of relying on repeated text reconstruction.
+
+### 4. Context assembly consumption
+
+`planning_context` and `context/assemble` now accept structure-aware continuity input.
+
+Primary files:
+
+1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/schemas.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/schemas.ts)
+2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/routes/memory-context-runtime.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/routes/memory-context-runtime.ts)
+
+Behavior at this checkpoint:
+
+1. route input schemas accept optional:
+   - `execution_state_v1`
+   - `execution_packet_v1`
+2. route runtime converts the packet into static continuity blocks
+3. those blocks are merged ahead of caller-supplied static blocks
+4. current public route semantics stay intact
+
+Implementation rule used here:
+
+`ExecutionPacket -> static continuity blocks -> existing layered context assembly`
+
+This was chosen to avoid rewriting the full context orchestrator in Phase 1.
+
+### 5. SDK type synchronization
+
+Updated SDK contract surfaces:
+
+1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/sdk/types.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/sdk/types.ts)
+2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/packages/sdk/src/types.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/packages/sdk/src/types.ts)
+
+Added optional fields for:
+
+1. `HandoffStoreResponse`
+2. `HandoffRecoverResponse`
+3. `ContextAssembleInput`
+
+## What This Means Architecturally
+
+At this checkpoint, the minimum continuity loop is now present:
+
+```text
+handoff/store
+  -> durable execution projection in slots
+  -> handoff/recover
+  -> execution_state_v1 / execution_packet_v1
+  -> planning_context / context_assemble
+  -> continuity-aware assembled context
+```
+
+This is the first actual kernel-path realization of the execution continuity ADR.
+
+## What Has Not Landed Yet
+
+The following are still pending:
+
+1. route-independent persistence store for `ExecutionState` beyond handoff slots
+2. systematic write-path generation of state-bearing projections outside handoff flows
+3. runtime adoption of `ControlProfile`
+4. benchmark-level verification against current strongest real workflow slices
+5. dedicated packet-first route helpers instead of static-block bridge logic
+
+## Verification At This Checkpoint
+
+Passed at this checkpoint:
+
+1. TypeScript compile for the execution-continuity branch
+2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1.test.mjs](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1.test.mjs)
+
+## Current Assessment
+
+This checkpoint is strong enough to say:
+
+1. the ADR is now executable, not only descriptive
+2. Phase 1 is being implemented in the correct additive direction
+3. continuity state is beginning to become first-class in real route paths
+
+It is not strong enough yet to say:
+
+1. `ExecutionState` is now the universal source of truth for all coding-task continuity
+2. `ControlProfile` is active in runtime control
+3. the real benchmark path has already been revalidated on the new continuity contract
+
+## Recommended Next Move
+
+The next highest-value step is:
+
+1. add a narrow integration smoke for `handoff/store -> handoff/recover -> context_assemble`
+
+That smoke should prove that:
+
+1. store writes structured execution projections
+2. recover restores them
+3. context assembly consumes them into continuity-aware static blocks
+
+Only after that should the branch move into runtime control profile adoption.
