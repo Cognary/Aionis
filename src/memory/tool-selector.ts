@@ -4,7 +4,7 @@ import type { PolicyPatch } from "./rule-policy.js";
 export type ToolDecision = {
   candidates: string[];
   allowed: string[];
-  denied: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" }>;
+  denied: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" | "control_profile" }>;
   preferred: string[];
   ordered: string[];
   selected: string | null;
@@ -39,7 +39,7 @@ export function applyToolPolicy(candidatesIn: string[], patch: PolicyPatch, opts
   const allowSet = allow.length > 0 ? new Set(allow) : null;
 
   const applyAllowDeny = (useAllow: boolean) => {
-    const deniedLocal: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" }> = [];
+    const deniedLocal: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" | "control_profile" }> = [];
     const allowedLocal: string[] = [];
     for (const c of candidates) {
       if (deny.has(c)) {

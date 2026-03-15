@@ -5,6 +5,7 @@ import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../em
 import { buildLayeredContextCostSignals } from "../memory/cost-signals.js";
 import { memoryRecallParsed } from "../memory/recall.js";
 import { ContextAssembleRequest, MemoryRecallRequest, MemoryRecallTextRequest, PlanningContextRequest } from "../memory/schemas.js";
+import { ExecutionPacketV1Schema, ExecutionStateV1Schema, type ExecutionPacketV1, type ExecutionStateV1 } from "../execution/index.js";
 import { evaluateRules } from "../memory/rules-evaluate.js";
 import { selectTools } from "../memory/tools-select.js";
 import { estimateTokenCountFromText } from "../memory/context.js";
@@ -22,6 +23,128 @@ type GateLike = {
   release: () => void;
   wait_ms: number;
 };
+
+function toStaticContextBlock(id: string, title: string, content: string) {
+  return {
+    id,
+    title,
+    content,
+    tags: ["execution-packet", "continuity"],
+    intents: ["resume", "review", "continuity"],
+    priority: 95,
+    always_include: true,
+  };
+}
+
+function executionPacketToStaticBlocks(packet: ExecutionPacketV1): Array<{
+  id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  intents: string[];
+  priority: number;
+  always_include: boolean;
+}> {
+  const blocks = [
+    toStaticContextBlock(
+      `execution-packet-${packet.state_id}-brief`,
+      "Execution Brief",
+      [
+        `current_stage=${packet.current_stage}`,
+        `active_role=${packet.active_role}`,
+        `task_brief=${packet.task_brief}`,
+        packet.target_files.length > 0 ? `target_files=${packet.target_files.join(" | ")}` : null,
+        packet.next_action ? `next_action=${packet.next_action}` : null,
+        packet.hard_constraints.length > 0 ? `hard_constraints=${packet.hard_constraints.join(" | ")}` : null,
+        packet.pending_validations.length > 0 ? `pending_validations=${packet.pending_validations.join(" | ")}` : null,
+      ].filter(Boolean).join("; "),
+    ),
+    toStaticContextBlock(
+      `execution-packet-${packet.state_id}-state`,
+      "Execution State",
+      [
+        packet.accepted_facts.length > 0 ? `accepted_facts=${packet.accepted_facts.join(" | ")}` : null,
+        packet.rejected_paths.length > 0 ? `rejected_paths=${packet.rejected_paths.join(" | ")}` : null,
+        packet.unresolved_blockers.length > 0 ? `unresolved_blockers=${packet.unresolved_blockers.join(" | ")}` : null,
+        packet.rollback_notes.length > 0 ? `rollback_notes=${packet.rollback_notes.join(" | ")}` : null,
+        packet.evidence_refs.length > 0 ? `evidence_refs=${packet.evidence_refs.join(" | ")}` : null,
+      ].filter(Boolean).join("; "),
+    ),
+  ].filter((block) => block.content.trim().length > 0);
+
+  if (packet.review_contract) {
+    blocks.push(
+      toStaticContextBlock(
+        `execution-packet-${packet.state_id}-review`,
+        "Reviewer Contract",
+        [
+          `standard=${packet.review_contract.standard}`,
+          packet.review_contract.required_outputs.length > 0 ? `required_outputs=${packet.review_contract.required_outputs.join(" | ")}` : null,
+          packet.review_contract.acceptance_checks.length > 0 ? `acceptance_checks=${packet.review_contract.acceptance_checks.join(" | ")}` : null,
+          `rollback_required=${packet.review_contract.rollback_required ? "true" : "false"}`,
+        ].filter(Boolean).join("; "),
+      ),
+    );
+  }
+
+  if (packet.resume_anchor) {
+    blocks.push(
+      toStaticContextBlock(
+        `execution-packet-${packet.state_id}-resume`,
+        "Resume Anchor",
+        [
+          `anchor=${packet.resume_anchor.anchor}`,
+          packet.resume_anchor.file_path ? `file_path=${packet.resume_anchor.file_path}` : null,
+          packet.resume_anchor.symbol ? `symbol=${packet.resume_anchor.symbol}` : null,
+          packet.resume_anchor.repo_root ? `repo_root=${packet.resume_anchor.repo_root}` : null,
+        ].filter(Boolean).join("; "),
+      ),
+    );
+  }
+
+  return blocks;
+}
+
+function buildPacketFromExecutionState(stateInput: ExecutionStateV1): ExecutionPacketV1 {
+  const state = ExecutionStateV1Schema.parse(stateInput);
+  return ExecutionPacketV1Schema.parse({
+    version: 1,
+    state_id: state.state_id,
+    current_stage: state.current_stage,
+    active_role: state.active_role,
+    task_brief: state.task_brief,
+    target_files: state.owned_files.length > 0 ? state.owned_files : state.modified_files,
+    next_action: state.pending_validations.length > 0
+      ? `Complete pending validations: ${state.pending_validations.join(" | ")}`
+      : state.unresolved_blockers.length > 0
+        ? `Resolve blockers: ${state.unresolved_blockers.join(" | ")}`
+        : null,
+    hard_constraints: [],
+    accepted_facts: state.last_accepted_hypothesis ? [`accepted_hypothesis:${state.last_accepted_hypothesis}`] : [],
+    rejected_paths: state.rejected_paths,
+    pending_validations: state.pending_validations,
+    unresolved_blockers: state.unresolved_blockers,
+    rollback_notes: state.rollback_notes,
+    review_contract: state.reviewer_contract,
+    resume_anchor: state.resume_anchor,
+    evidence_refs: [],
+  });
+}
+
+export function mergeExecutionPacketStaticBlocks(parsed: {
+  static_context_blocks?: any[];
+  execution_packet_v1?: ExecutionPacketV1;
+  execution_state_v1?: ExecutionStateV1;
+}) {
+  const base = Array.isArray(parsed.static_context_blocks) ? parsed.static_context_blocks : [];
+  const packet = parsed.execution_packet_v1
+    ? ExecutionPacketV1Schema.parse(parsed.execution_packet_v1)
+    : parsed.execution_state_v1
+      ? buildPacketFromExecutionState(parsed.execution_state_v1)
+      : null;
+  if (!packet) return base;
+  return [...executionPacketToStaticBlocks(packet), ...base];
+}
 
 export function registerMemoryContextRuntimeRoutes(args: {
   app: any;
@@ -892,6 +1015,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
           rules_matched: out.rules?.matched ?? 0,
           tools_selected: out.tools?.selection?.selected ?? null,
           return_layered_context: parsed.return_layered_context,
+          execution_packet_v1_present: !!parsed.execution_packet_v1,
+          execution_state_v1_present: !!parsed.execution_state_v1,
           ms,
           timings_ms: timings,
         },
@@ -899,6 +1024,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       "memory planning_context",
     );
 
+    const effectiveStaticBlocks = mergeExecutionPacketStaticBlocks(parsed);
     const layeredContext = parsed.return_layered_context
       ? assembleLayeredContext({
           recall: recallOut,
@@ -907,7 +1033,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           query_text: parsed.query_text,
           execution_context: parsed.context,
           tool_candidates: parsed.tool_candidates,
-          static_blocks: parsed.static_context_blocks ?? null,
+          static_blocks: effectiveStaticBlocks ?? null,
           static_injection: parsed.static_injection ?? null,
           config: parsed.context_layers ?? null,
         })
@@ -1315,6 +1441,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       neighborhood_counts: recallOut?.debug?.neighborhood_counts ?? null,
     });
 
+    const effectiveStaticBlocks = mergeExecutionPacketStaticBlocks(parsed);
     const layeredContext = parsed.return_layered_context
       ? assembleLayeredContext({
           recall: recallOut,
@@ -1323,7 +1450,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           query_text: parsed.query_text,
           execution_context: parsed.context,
           tool_candidates: parsed.tool_candidates,
-          static_blocks: parsed.static_context_blocks ?? null,
+          static_blocks: effectiveStaticBlocks ?? null,
           static_injection: parsed.static_injection ?? null,
           config: parsed.context_layers ?? null,
         })
@@ -1383,6 +1510,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
           has_tool_candidates: Array.isArray(parsed.tool_candidates) && parsed.tool_candidates.length > 0,
           tool_candidates: parsed.tool_candidates?.length ?? 0,
           return_layered_context: parsed.return_layered_context,
+          execution_packet_v1_present: !!parsed.execution_packet_v1,
+          execution_state_v1_present: !!parsed.execution_state_v1,
           embed_ms: embedMs,
           embed_cache_hit: embedCacheHit,
           embed_singleflight_join: embedSingleflightJoin,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ExecutionPacketV1Schema, ExecutionStateV1Schema } from "../execution/types.js";
 
 export const UUID = z.string().uuid();
 
@@ -272,6 +273,8 @@ export const PlanningContextRequest = z.object({
   context_layers: ContextLayerConfig.optional(),
   static_context_blocks: z.array(StaticContextBlock).max(100).optional(),
   static_injection: StaticInjectionPolicy.optional(),
+  execution_state_v1: ExecutionStateV1Schema.optional(),
+  execution_packet_v1: ExecutionPacketV1Schema.optional(),
 });
 
 export type ContextLayerConfigInput = z.infer<typeof ContextLayerConfig>;
@@ -314,6 +317,8 @@ export const ContextAssembleRequest = z.object({
   context_layers: ContextLayerConfig.optional(),
   static_context_blocks: z.array(StaticContextBlock).max(100).optional(),
   static_injection: StaticInjectionPolicy.optional(),
+  execution_state_v1: ExecutionStateV1Schema.optional(),
+  execution_packet_v1: ExecutionPacketV1Schema.optional(),
 });
 
 export type ContextAssembleInput = z.infer<typeof ContextAssembleRequest>;
