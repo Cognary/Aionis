@@ -125,6 +125,7 @@ Real OpenClaw workflow validation fed back into Phase 1 in three useful ways:
 2. the narrow `markdown parser fallback` slice was later recovered into a supporting completion slice: it is now a completion win, but not an efficiency win
 3. `ControlProfile` is no longer contract-only; it is now projected through handoff continuity and consumed by the real adapter runtime
 4. the first controlled nightly revalidation on the strongest real workflow slice is now positive with `ControlProfile` active on the real path
+5. the three strongest real workflow slices now have refreshed `ControlProfile`-active results on the actual runtime path
 
 Current reading:
 
@@ -132,6 +133,10 @@ Current reading:
 2. packet shaping and handoff source material still matter on narrow rendering tasks
 3. runtime control adoption can be done additively by projecting profile data through continuity, rather than by replacing the existing loop-control surface
 4. the strongest real workflow slice now has an initial controlled nightly signal showing `ControlProfile` adoption improves reviewer-ready completion while also reducing token burn and wall-clock
+5. the refreshed strongest slice set now shows a stable completion story with mixed efficiency:
+   - dashboard auth drift remains a completion and efficiency win
+   - pairing / approval recovery remains a completion win, but not an efficiency win
+   - service token drift repair remains a completion win, but not an efficiency win
 
 ## What This Means Architecturally
 
@@ -183,6 +188,8 @@ Passed at this checkpoint:
 Nightly validation artifact:
 
 1. [/Users/lucio/.aionis-openclaw-plugin-nightly/clawbot-aionis-adapter/artifacts/openclaw-real-workflow-scenario/20260315133004/summary.json](/Users/lucio/.aionis-openclaw-plugin-nightly/clawbot-aionis-adapter/artifacts/openclaw-real-workflow-scenario/20260315133004/summary.json)
+2. [/Users/lucio/Desktop/clawbot-aionis-adapter/evidence/openclaw-real-workflow-scenario/20260315134050/summary.json](/Users/lucio/Desktop/clawbot-aionis-adapter/evidence/openclaw-real-workflow-scenario/20260315134050/summary.json)
+3. [/Users/lucio/Desktop/clawbot-aionis-adapter/evidence/openclaw-real-workflow-scenario/20260315134824/summary.json](/Users/lucio/Desktop/clawbot-aionis-adapter/evidence/openclaw-real-workflow-scenario/20260315134824/summary.json)
 
 Nightly result at this checkpoint:
 
@@ -202,6 +209,19 @@ Nightly result at this checkpoint:
    - `avg_token_delta = -2022.67`
    - `avg_rediscovery_delta = -0.6667`
 
+Additional strongest-slice revalidation at this checkpoint:
+
+1. pairing / approval recovery
+   - baseline `reviewer_ready_rate = 0`
+   - treatment `reviewer_ready_rate = 1`
+   - baseline `avg_total_tokens = 18851.67`
+   - treatment `avg_total_tokens = 23374.67`
+2. service token drift repair
+   - baseline `reviewer_ready_rate = 0`
+   - treatment `reviewer_ready_rate = 0.6667`
+   - baseline `avg_total_tokens = 17623`
+   - treatment `avg_total_tokens = 24731.33`
+
 ## Current Assessment
 
 This checkpoint is strong enough to say:
@@ -211,18 +231,19 @@ This checkpoint is strong enough to say:
 3. continuity state is becoming first-class in real route paths
 4. `ControlProfile` is now active in the current OpenClaw runtime path
 5. the first controlled nightly revalidation is positive on the strongest real workflow slice
+6. the strongest real workflow story remains positive across the refreshed three-slice set after `ControlProfile` adoption
 
 It is not strong enough yet to say:
 
 1. `ExecutionState` is now the universal source of truth for all coding-task continuity
 2. every runtime host now consumes `ControlProfile`
-3. the strongest repeated real-workflow publication set with `ControlProfile` active has been fully refreshed across multiple top slices
+3. the strongest repeated real-workflow publication set with `ControlProfile` active has been fully refreshed and published across multiple top slices
 
 ## Recommended Next Move
 
 The next highest-value step is:
 
-1. convert the initial controlled nightly signal into a refreshed repeated publication set across the strongest real workflow slices
+1. publish the refreshed strongest repeated real-workflow set with `ControlProfile` active into the adapter benchmark docs and public evidence index
 
 That verification should prove that:
 
