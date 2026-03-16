@@ -12,7 +12,7 @@ import type {
   WriteStoreAccess,
 } from "./write-access.js";
 import { WRITE_STORE_ACCESS_CAPABILITY_VERSION } from "./write-access.js";
-import { createSqliteDatabase } from "./sqlite-compat.js";
+import { createSqliteDatabase, type SqliteDatabase } from "./sqlite-compat.js";
 
 type LiteSessionNodeView = {
   id: string;
@@ -254,9 +254,24 @@ export type LiteWriteStore = WriteStoreAccess & {
     consumerAgentId?: string | null;
     consumerTeamId?: string | null;
   }): Promise<LiteResolveNodeRow | null>;
-  resolveEdge(scope: string, id: string): Promise<LiteResolveEdgeRow | null>;
-  resolveCommit(scope: string, id: string): Promise<LiteResolveCommitRow | null>;
-  resolveDecision(scope: string, id: string): Promise<LiteResolveDecisionRow | null>;
+  resolveEdge(args: {
+    scope: string;
+    id: string;
+    consumerAgentId?: string | null;
+    consumerTeamId?: string | null;
+  }): Promise<LiteResolveEdgeRow | null>;
+  resolveCommit(args: {
+    scope: string;
+    id: string;
+    consumerAgentId?: string | null;
+    consumerTeamId?: string | null;
+  }): Promise<LiteResolveCommitRow | null>;
+  resolveDecision(args: {
+    scope: string;
+    id: string;
+    consumerAgentId?: string | null;
+    consumerTeamId?: string | null;
+  }): Promise<LiteResolveDecisionRow | null>;
   listRuleCandidates(args: {
     scope: string;
     limit: number;
@@ -431,6 +446,51 @@ function nodeVisible(
   return row.memory_lane === "shared"
     || (!!consumerAgentId && row.memory_lane === "private" && row.owner_agent_id === consumerAgentId)
     || (!!consumerTeamId && row.memory_lane === "private" && row.owner_team_id === consumerTeamId);
+}
+
+function commitVisible(
+  db: SqliteDatabase,
+  scope: string,
+  commitId: string,
+  consumerAgentId: string | null,
+  consumerTeamId: string | null,
+): boolean {
+  const hiddenCount = Number(
+    (
+      db.prepare(
+        `SELECT count(*) AS count
+         FROM lite_memory_nodes
+         WHERE scope = ?
+           AND commit_id = ?
+           AND NOT (
+             memory_lane = 'shared'
+             OR (? IS NOT NULL AND memory_lane = 'private' AND owner_agent_id = ?)
+             OR (? IS NOT NULL AND memory_lane = 'private' AND owner_team_id = ?)
+           )`,
+      ).get(scope, commitId, consumerAgentId, consumerAgentId, consumerTeamId, consumerTeamId) as { count: number } | undefined
+    )?.count ?? 0,
+  );
+  return hiddenCount === 0;
+}
+
+function decisionSourceRulesVisible(
+  db: SqliteDatabase,
+  scope: string,
+  sourceRuleIds: string[],
+  consumerAgentId: string | null,
+  consumerTeamId: string | null,
+): boolean {
+  if (sourceRuleIds.length === 0) return true;
+  for (const ruleId of sourceRuleIds) {
+    const row = db.prepare(
+      `SELECT memory_lane, owner_agent_id, owner_team_id
+       FROM lite_memory_nodes
+       WHERE scope = ? AND id = ?
+       LIMIT 1`,
+    ).get(scope, ruleId) as { memory_lane: "private" | "shared"; owner_agent_id: string | null; owner_team_id: string | null } | undefined;
+    if (row && !nodeVisible(row, consumerAgentId, consumerTeamId)) return false;
+  }
+  return true;
 }
 
 function jsonContains(actual: unknown, expected: unknown): boolean {
@@ -735,15 +795,21 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
       return row ? { ...row, commit_scope: args.scope } : null;
     },
 
-    async resolveEdge(scope: string, id: string): Promise<LiteResolveEdgeRow | null> {
+    async resolveEdge(args): Promise<LiteResolveEdgeRow | null> {
       const row = db.prepare(
         `SELECT
            e.id,
            e.type,
            e.src_id,
            s.type AS src_type,
+           s.memory_lane AS src_memory_lane,
+           s.owner_agent_id AS src_owner_agent_id,
+           s.owner_team_id AS src_owner_team_id,
            e.dst_id,
            d.type AS dst_type,
+           d.memory_lane AS dst_memory_lane,
+           d.owner_agent_id AS dst_owner_agent_id,
+           d.owner_team_id AS dst_owner_team_id,
            e.weight,
            e.confidence,
            e.decay_rate,
@@ -754,16 +820,48 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
          JOIN lite_memory_nodes d ON d.id = e.dst_id AND d.scope = e.scope
          WHERE e.scope = ? AND e.id = ?
          LIMIT 1`,
-      ).get(scope, id) as Omit<LiteResolveEdgeRow, "last_activated" | "commit_scope"> | undefined;
+      ).get(args.scope, args.id) as (
+        Omit<LiteResolveEdgeRow, "last_activated" | "commit_scope">
+        & {
+          src_memory_lane: "private" | "shared";
+          src_owner_agent_id: string | null;
+          src_owner_team_id: string | null;
+          dst_memory_lane: "private" | "shared";
+          dst_owner_agent_id: string | null;
+          dst_owner_team_id: string | null;
+        }
+      ) | undefined;
       if (!row) return null;
+      if (
+        !nodeVisible(
+          {
+            memory_lane: row.src_memory_lane,
+            owner_agent_id: row.src_owner_agent_id,
+            owner_team_id: row.src_owner_team_id,
+          },
+          args.consumerAgentId ?? null,
+          args.consumerTeamId ?? null,
+        )
+        || !nodeVisible(
+          {
+            memory_lane: row.dst_memory_lane,
+            owner_agent_id: row.dst_owner_agent_id,
+            owner_team_id: row.dst_owner_team_id,
+          },
+          args.consumerAgentId ?? null,
+          args.consumerTeamId ?? null,
+        )
+      ) {
+        return null;
+      }
       return {
         ...row,
         last_activated: null,
-        commit_scope: scope,
+        commit_scope: args.scope,
       };
     },
 
-    async resolveCommit(scope: string, id: string): Promise<LiteResolveCommitRow | null> {
+    async resolveCommit(args): Promise<LiteResolveCommitRow | null> {
       const row = db.prepare(
         `SELECT
            c.id,
@@ -780,7 +878,7 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
          FROM lite_memory_commits c
          WHERE c.scope = ? AND c.id = ?
          LIMIT 1`,
-      ).get(scope, id) as {
+      ).get(args.scope, args.id) as {
         id: string;
         parent_id: string | null;
         input_sha256: string;
@@ -794,6 +892,7 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
         edge_count: number;
       } | undefined;
       if (!row) return null;
+      if (!commitVisible(db, args.scope, row.id, args.consumerAgentId ?? null, args.consumerTeamId ?? null)) return null;
       let diffJson: unknown = {};
       try {
         diffJson = JSON.parse(row.diff_json);
@@ -819,13 +918,13 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
                FROM lite_memory_execution_decisions
                WHERE scope = ?
                  AND commit_id = ?`,
-            ).get(scope, row.id) as { count: number } | undefined
+            ).get(args.scope, row.id) as { count: number } | undefined
           )?.count ?? 0,
         ),
       };
     },
 
-    async resolveDecision(scope: string, id: string): Promise<LiteResolveDecisionRow | null> {
+    async resolveDecision(args): Promise<LiteResolveDecisionRow | null> {
       const row = db.prepare(
         `SELECT
            id,
@@ -844,7 +943,7 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
          WHERE scope = ?
            AND id = ?
          LIMIT 1`,
-      ).get(scope, id) as {
+      ).get(args.scope, args.id) as {
         id: string;
         scope: string;
         decision_kind: "tools_select";
@@ -859,6 +958,19 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
         created_at: string;
       } | undefined;
       if (!row) return null;
+      const sourceRuleIds = parseJsonArray(row.source_rule_ids_json).map((v) => String(v));
+      if (
+        (row.commit_id && !commitVisible(db, args.scope, row.commit_id, args.consumerAgentId ?? null, args.consumerTeamId ?? null))
+        || !decisionSourceRulesVisible(
+          db,
+          args.scope,
+          sourceRuleIds,
+          args.consumerAgentId ?? null,
+          args.consumerTeamId ?? null,
+        )
+      ) {
+        return null;
+      }
       return {
         id: row.id,
         scope: row.scope,
@@ -868,11 +980,11 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
         candidates_json: parseJsonArray(row.candidates_json),
         context_sha256: row.context_sha256,
         policy_sha256: row.policy_sha256,
-        source_rule_ids: parseJsonArray(row.source_rule_ids_json).map((v) => String(v)),
+        source_rule_ids: sourceRuleIds,
         metadata_json: parseJsonObject(row.metadata_json),
         commit_id: row.commit_id,
         created_at: row.created_at,
-        commit_scope: row.commit_id ? scope : null,
+        commit_scope: row.commit_id ? args.scope : null,
       };
     },
 

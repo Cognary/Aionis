@@ -19,6 +19,10 @@ export type ReplayMirrorNodeRecord = {
   title: string | null;
   text_summary: string | null;
   slots_json: string;
+  memory_lane: "private" | "shared";
+  producer_agent_id: string | null;
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
   created_at: string;
   updated_at: string;
   commit_id: string | null;
@@ -101,6 +105,10 @@ function extractReplayMirrorNodes(
       title: toStringOrNull(node.title),
       text_summary: toStringOrNull(node.text_summary),
       slots_json: JSON.stringify(slots),
+      memory_lane: (toStringOrNull(node.memory_lane) === "shared" ? "shared" : "private"),
+      producer_agent_id: toStringOrNull(node.producer_agent_id),
+      owner_agent_id: toStringOrNull(node.owner_agent_id),
+      owner_team_id: toStringOrNull(node.owner_team_id),
       created_at: nowIso,
       updated_at: nowIso,
       commit_id: out.commit_id ?? null,
@@ -140,7 +148,7 @@ export async function applyReplayMemoryWrite(
   });
   if (opts.embeddedRuntime) await opts.embeddedRuntime.applyWrite(prepared as any, out as any);
   if (opts.replayMirror) {
-    const replayNodes = extractReplayMirrorNodes(writeReq, out, opts);
+    const replayNodes = extractReplayMirrorNodes(prepared, out, opts);
     if (replayNodes.length > 0) {
       await opts.replayMirror.upsertReplayNodes(replayNodes);
     }

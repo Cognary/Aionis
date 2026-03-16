@@ -990,11 +990,15 @@ class ReplayAccessFixturePgClient {
             type: "event",
             title: "run",
             text_summary: "run",
-            slots: { replay_kind: "run", run_id: "run-1" },
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            commit_id: "00000000-0000-0000-0000-000000000ac1",
-          } as any,
+          slots: { replay_kind: "run", run_id: "run-1" },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          commit_id: "00000000-0000-0000-0000-000000000ac1",
+          memory_lane: "shared",
+          producer_agent_id: null,
+          owner_agent_id: null,
+          owner_team_id: null,
+        } as any,
         ] as T[],
         rowCount: 1,
       };
@@ -1008,11 +1012,15 @@ class ReplayAccessFixturePgClient {
             type: "procedure",
             title: "step",
             text_summary: "step",
-            slots: { replay_kind: "step", step_id: "step-1" },
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            commit_id: "00000000-0000-0000-0000-000000000ac2",
-          } as any,
+          slots: { replay_kind: "step", step_id: "step-1" },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          commit_id: "00000000-0000-0000-0000-000000000ac2",
+          memory_lane: "shared",
+          producer_agent_id: null,
+          owner_agent_id: null,
+          owner_team_id: null,
+        } as any,
         ] as T[],
         rowCount: 1,
       };
@@ -1026,11 +1034,15 @@ class ReplayAccessFixturePgClient {
             type: "procedure",
             title: "step-index",
             text_summary: "step-index",
-            slots: { replay_kind: "step", step_id: "step-2", step_index: 2 },
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            commit_id: "00000000-0000-0000-0000-000000000ac3",
-          } as any,
+          slots: { replay_kind: "step", step_id: "step-2", step_index: 2 },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          commit_id: "00000000-0000-0000-0000-000000000ac3",
+          memory_lane: "shared",
+          producer_agent_id: null,
+          owner_agent_id: null,
+          owner_team_id: null,
+        } as any,
         ] as T[],
         rowCount: 1,
       };
@@ -1048,6 +1060,10 @@ class ReplayAccessFixturePgClient {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             commit_id: "00000000-0000-0000-0000-000000000ac1",
+            memory_lane: "shared",
+            producer_agent_id: null,
+            owner_agent_id: null,
+            owner_team_id: null,
           } as any,
           {
             id: "00000000-0000-0000-0000-000000000a02",
@@ -1058,6 +1074,10 @@ class ReplayAccessFixturePgClient {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             commit_id: "00000000-0000-0000-0000-000000000ac2",
+            memory_lane: "shared",
+            producer_agent_id: null,
+            owner_agent_id: null,
+            owner_team_id: null,
           } as any,
         ] as T[],
         rowCount: 2,
@@ -1079,6 +1099,10 @@ class ReplayAccessFixturePgClient {
             version_num: 2,
             playbook_status: "active",
             playbook_id: "pb-1",
+            memory_lane: "shared",
+            producer_agent_id: null,
+            owner_agent_id: null,
+            owner_team_id: null,
           } as any,
         ] as T[],
         rowCount: 1,
@@ -1821,13 +1845,14 @@ async function run() {
 
   const replayAccessFixture = new ReplayAccessFixturePgClient();
   const replayAdapter = createPostgresReplayStoreAccess(replayAccessFixture as any);
+  const replayVisibility = { consumerAgentId: "agent_contract", consumerTeamId: null };
   assert.doesNotThrow(() => assertReplayStoreAccessContract(replayAdapter));
-  assert.equal((await replayAdapter.findRunNodeByRunId("default", "run-1"))?.id, "00000000-0000-0000-0000-000000000a01");
-  assert.equal((await replayAdapter.findStepNodeById("default", "step-1"))?.id, "00000000-0000-0000-0000-000000000a02");
-  assert.equal((await replayAdapter.findLatestStepNodeByIndex("default", "run-1", 2))?.id, "00000000-0000-0000-0000-000000000a03");
-  assert.equal((await replayAdapter.listReplayNodesByRunId("default", "run-1")).length, 2);
-  assert.equal((await replayAdapter.listReplayPlaybookVersions("default", "pb-1"))[0]?.version_num, 2);
-  assert.equal((await replayAdapter.getReplayPlaybookVersion("default", "pb-1", 2))?.playbook_status, "active");
+  assert.equal((await replayAdapter.findRunNodeByRunId("default", "run-1", replayVisibility))?.id, "00000000-0000-0000-0000-000000000a01");
+  assert.equal((await replayAdapter.findStepNodeById("default", "step-1", replayVisibility))?.id, "00000000-0000-0000-0000-000000000a02");
+  assert.equal((await replayAdapter.findLatestStepNodeByIndex("default", "run-1", 2, replayVisibility))?.id, "00000000-0000-0000-0000-000000000a03");
+  assert.equal((await replayAdapter.listReplayNodesByRunId("default", "run-1", replayVisibility)).length, 2);
+  assert.equal((await replayAdapter.listReplayPlaybookVersions("default", "pb-1", replayVisibility))[0]?.version_num, 2);
+  assert.equal((await replayAdapter.getReplayPlaybookVersion("default", "pb-1", 2, replayVisibility))?.playbook_status, "active");
 
   if (hasNodeSqliteSupport()) {
     const liteReplayDir = await fs.mkdtemp(path.join(os.tmpdir(), "aionis-lite-replay-"));
@@ -1850,6 +1875,10 @@ async function run() {
       title: "lite run",
       text_summary: "lite run",
       slots_json: JSON.stringify({ replay_kind: "run", run_id: "run-lite", goal: "demo" }),
+      memory_lane: "shared",
+      producer_agent_id: null,
+      owner_agent_id: null,
+      owner_team_id: null,
       created_at: "2026-03-11T00:00:00.000Z",
       updated_at: "2026-03-11T00:00:00.000Z",
       commit_id: "00000000-0000-0000-0000-000000000bc1",
@@ -1868,13 +1897,17 @@ async function run() {
       title: "lite playbook",
       text_summary: "lite playbook",
       slots_json: JSON.stringify({ replay_kind: "playbook", playbook_id: "pb-lite", version: 3, status: "active" }),
+      memory_lane: "shared",
+      producer_agent_id: null,
+      owner_agent_id: null,
+      owner_team_id: null,
       created_at: "2026-03-11T00:00:01.000Z",
       updated_at: "2026-03-11T00:00:01.000Z",
       commit_id: "00000000-0000-0000-0000-000000000bc2",
     },
     ]);
-    assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite"))?.title, "lite run");
-    assert.equal((await liteReplayAccess.listReplayPlaybookVersions("default", "pb-lite"))[0]?.version_num, 3);
+    assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite", replayVisibility))?.title, "lite run");
+    assert.equal((await liteReplayAccess.listReplayPlaybookVersions("default", "pb-lite", replayVisibility))[0]?.version_num, 3);
 
     const replayWriteFixture = new WriteAccessFixturePgClient();
     await applyReplayMemoryWrite(
@@ -1914,7 +1947,7 @@ async function run() {
         replayMirror: liteReplayStore,
       },
     );
-    assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite-helper"))?.text_summary, "Replay run helper");
+    assert.equal((await liteReplayAccess.findRunNodeByRunId("default", "run-lite-helper", replayVisibility))?.text_summary, "Replay run helper");
     await liteReplayStore.close();
     await fs.rm(liteReplayDir, { recursive: true, force: true });
 
@@ -5158,6 +5191,9 @@ async function run() {
     {
       tenant_id: "default",
       scope: "default",
+      consumer_agent_id: "agent_replay",
+      producer_agent_id: "agent_replay",
+      owner_agent_id: "agent_replay",
       run_id: replayLifecycleRunId,
       goal: "deploy api",
       metadata: { source: "contract_smoke" },
@@ -5174,6 +5210,9 @@ async function run() {
     {
       tenant_id: "default",
       scope: "default",
+      consumer_agent_id: "agent_replay",
+      producer_agent_id: "agent_replay",
+      owner_agent_id: "agent_replay",
       run_id: replayLifecycleRunId,
       step_id: replayLifecycleStepId,
       step_index: 1,
@@ -5193,6 +5232,9 @@ async function run() {
     {
       tenant_id: "default",
       scope: "default",
+      consumer_agent_id: "agent_replay",
+      producer_agent_id: "agent_replay",
+      owner_agent_id: "agent_replay",
       run_id: replayLifecycleRunId,
       step_id: replayLifecycleStepId,
       status: "success",
@@ -5210,6 +5252,9 @@ async function run() {
     {
       tenant_id: "default",
       scope: "default",
+      consumer_agent_id: "agent_replay",
+      producer_agent_id: "agent_replay",
+      owner_agent_id: "agent_replay",
       run_id: replayLifecycleRunId,
       status: "success",
       summary: "deploy replay finished",
@@ -5225,6 +5270,7 @@ async function run() {
     {
       tenant_id: "default",
       scope: "default",
+      consumer_agent_id: "agent_replay",
       run_id: replayLifecycleRunId,
       include_steps: true,
       include_artifacts: true,

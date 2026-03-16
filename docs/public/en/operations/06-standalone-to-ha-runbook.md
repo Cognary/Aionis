@@ -37,6 +37,7 @@ RATE_LIMIT_ENABLED=true
 TENANT_QUOTA_ENABLED=true
 RATE_LIMIT_BYPASS_LOOPBACK=false
 TRUST_PROXY=true
+TRUSTED_PROXY_CIDRS=10.0.0.0/8,192.168.0.0/16
 CORS_ALLOW_ORIGINS=https://your-app.example.com
 DATABASE_URL=postgres://<user>:<pass>@<managed-postgres-host>:5432/<db>
 ```
@@ -45,7 +46,8 @@ Requirements:
 
 1. Never expose production with `MEMORY_AUTH_MODE=off`.
 2. Use secret manager values for keys/tokens.
-3. Keep standalone image for local/demo only.
+3. When `TRUST_PROXY=true`, set `TRUSTED_PROXY_CIDRS` to the exact proxy/load-balancer ranges you operate.
+4. Keep standalone image for local/demo only.
 
 ## Promotion Checklist (Tier 0/1 -> Tier 2)
 

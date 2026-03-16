@@ -152,6 +152,90 @@ test("lite find and resolve routes use sqlite inspection path", () => {
         metadataJson: { source: "find-resolve-test" },
         commitId,
       });
+      const privateCommitId = await liteWriteStore.insertCommit({
+        scope: "default",
+        parentCommitId: commitId,
+        inputSha256: "lite-find-resolve-private",
+        diffJson: JSON.stringify({ nodes: ["private"] }),
+        actor: "lite-inspect-test",
+        modelVersion: null,
+        promptVersion: null,
+        commitHash: "lite-find-resolve-private-commit",
+      });
+      await liteWriteStore.insertNode({
+        id: "60000000-0000-0000-0000-000000000003",
+        scope: "default",
+        clientId: "private_event",
+        type: "event",
+        tier: "hot",
+        title: "Private rollback",
+        textSummary: "owner only rollback trace",
+        slotsJson: JSON.stringify({ severity: "critical" }),
+        rawRef: null,
+        evidenceRef: null,
+        embeddingVector: JSON.stringify(Array.from({ length: 1536 }, () => 0)),
+        embeddingModel: "client",
+        memoryLane: "private",
+        producerAgentId: "owner-agent",
+        ownerAgentId: "owner-agent",
+        ownerTeamId: null,
+        embeddingStatus: "ready",
+        embeddingLastError: null,
+        salience: 0.8,
+        importance: 0.9,
+        confidence: 0.95,
+        redactionVersion: 1,
+        commitId: privateCommitId,
+      });
+      await liteWriteStore.insertNode({
+        id: "60000000-0000-0000-0000-000000000004",
+        scope: "default",
+        clientId: "private_topic",
+        type: "topic",
+        tier: "hot",
+        title: "Private deploy topic",
+        textSummary: "owner only deploy thread",
+        slotsJson: JSON.stringify({ topic_state: "active", member_count: 1 }),
+        rawRef: null,
+        evidenceRef: null,
+        embeddingVector: JSON.stringify(Array.from({ length: 1536 }, () => 0)),
+        embeddingModel: "client",
+        memoryLane: "private",
+        producerAgentId: "owner-agent",
+        ownerAgentId: "owner-agent",
+        ownerTeamId: null,
+        embeddingStatus: "ready",
+        embeddingLastError: null,
+        salience: 0.8,
+        importance: 0.9,
+        confidence: 0.95,
+        redactionVersion: 1,
+        commitId: privateCommitId,
+      });
+      await liteWriteStore.upsertEdge({
+        id: "60000000-0000-0000-0000-0000000000e2",
+        scope: "default",
+        type: "part_of",
+        srcId: "60000000-0000-0000-0000-000000000003",
+        dstId: "60000000-0000-0000-0000-000000000004",
+        weight: 0.9,
+        confidence: 0.9,
+        decayRate: 0.02,
+        commitId: privateCommitId,
+      });
+      await liteWriteStore.insertExecutionDecision({
+        id: "70000000-0000-0000-0000-0000000000d2",
+        scope: "default",
+        decisionKind: "tools_select",
+        runId: "lite-run-private",
+        selectedTool: "kubectl",
+        candidatesJson: ["kubectl"],
+        contextSha256: "ctx-sha-private",
+        policySha256: "policy-sha-private",
+        sourceRuleIds: ["60000000-0000-0000-0000-000000000004"],
+        metadataJson: { source: "find-resolve-private-test" },
+        commitId: privateCommitId,
+      });
 
       const app = createHttpApp({ TRUST_PROXY: false });
       registerHostErrorHandler(app);
@@ -228,6 +312,51 @@ test("lite find and resolve routes use sqlite inspection path", () => {
             uri: "aionis://default/default/decision/70000000-0000-0000-0000-0000000000d1",
           },
         });
+        const resolvePrivateEdgeBlocked = await app.inject({
+          method: "POST",
+          url: "/v1/memory/resolve",
+          payload: {
+            uri: "aionis://default/default/edge/60000000-0000-0000-0000-0000000000e2",
+          },
+        });
+        const resolvePrivateEdgeOwner = await app.inject({
+          method: "POST",
+          url: "/v1/memory/resolve",
+          payload: {
+            uri: "aionis://default/default/edge/60000000-0000-0000-0000-0000000000e2",
+            consumer_agent_id: "owner-agent",
+          },
+        });
+        const resolvePrivateCommitBlocked = await app.inject({
+          method: "POST",
+          url: "/v1/memory/resolve",
+          payload: {
+            uri: "aionis://default/default/commit/" + privateCommitId,
+          },
+        });
+        const resolvePrivateCommitOwner = await app.inject({
+          method: "POST",
+          url: "/v1/memory/resolve",
+          payload: {
+            uri: "aionis://default/default/commit/" + privateCommitId,
+            consumer_agent_id: "owner-agent",
+          },
+        });
+        const resolvePrivateDecisionBlocked = await app.inject({
+          method: "POST",
+          url: "/v1/memory/resolve",
+          payload: {
+            uri: "aionis://default/default/decision/70000000-0000-0000-0000-0000000000d2",
+          },
+        });
+        const resolvePrivateDecisionOwner = await app.inject({
+          method: "POST",
+          url: "/v1/memory/resolve",
+          payload: {
+            uri: "aionis://default/default/decision/70000000-0000-0000-0000-0000000000d2",
+            consumer_agent_id: "owner-agent",
+          },
+        });
 
         process.stdout.write("__RESULT__" + JSON.stringify({
           findStatus: findRes.statusCode,
@@ -240,6 +369,12 @@ test("lite find and resolve routes use sqlite inspection path", () => {
           resolveCommitBody: JSON.parse(resolveCommitRes.body),
           resolveDecisionStatus: resolveDecisionRes.statusCode,
           resolveDecisionBody: JSON.parse(resolveDecisionRes.body),
+          resolvePrivateEdgeBlockedStatus: resolvePrivateEdgeBlocked.statusCode,
+          resolvePrivateEdgeOwnerStatus: resolvePrivateEdgeOwner.statusCode,
+          resolvePrivateCommitBlockedStatus: resolvePrivateCommitBlocked.statusCode,
+          resolvePrivateCommitOwnerStatus: resolvePrivateCommitOwner.statusCode,
+          resolvePrivateDecisionBlockedStatus: resolvePrivateDecisionBlocked.statusCode,
+          resolvePrivateDecisionOwnerStatus: resolvePrivateDecisionOwner.statusCode,
         }));
       } finally {
         await app.close();
@@ -280,4 +415,10 @@ test("lite find and resolve routes use sqlite inspection path", () => {
   assert.equal(parsed.resolveDecisionBody.resolve_summary.payload_kind, "decision");
   assert.equal(parsed.resolveDecisionBody.decision.selected_tool, "kubectl");
   assert.equal(parsed.resolveDecisionBody.decision.commit_id, parsed.resolveCommitBody.commit.id);
+  assert.equal(parsed.resolvePrivateEdgeBlockedStatus, 404);
+  assert.equal(parsed.resolvePrivateEdgeOwnerStatus, 200);
+  assert.equal(parsed.resolvePrivateCommitBlockedStatus, 404);
+  assert.equal(parsed.resolvePrivateCommitOwnerStatus, 200);
+  assert.equal(parsed.resolvePrivateDecisionBlockedStatus, 404);
+  assert.equal(parsed.resolvePrivateDecisionOwnerStatus, 200);
 });

@@ -160,6 +160,8 @@ function buildResolveSummary(args: {
 export async function memoryResolve(client: pg.PoolClient, body: unknown, defaultScope: string, defaultTenantId: string) {
   const parsed = MemoryResolveRequest.parse(body);
   const uriParts = parseAionisUri(parsed.uri);
+  const consumerAgentId = parsed.consumer_agent_id?.trim() || null;
+  const consumerTeamId = parsed.consumer_team_id?.trim() || null;
 
   const requestTenant = parsed.tenant_id?.trim();
   const requestScope = parsed.scope?.trim();
@@ -203,9 +205,19 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
       JOIN memory_nodes dst ON dst.id = e.dst_id AND dst.scope = e.scope
       LEFT JOIN memory_commits c ON c.id = e.commit_id
       WHERE e.scope = $1 AND e.id = $2::uuid
+        AND (
+          src.memory_lane = 'shared'::memory_lane
+          OR (src.memory_lane = 'private'::memory_lane AND src.owner_agent_id = $3::text)
+          OR ($4::text IS NOT NULL AND src.memory_lane = 'private'::memory_lane AND src.owner_team_id = $4::text)
+        )
+        AND (
+          dst.memory_lane = 'shared'::memory_lane
+          OR (dst.memory_lane = 'private'::memory_lane AND dst.owner_agent_id = $3::text)
+          OR ($4::text IS NOT NULL AND dst.memory_lane = 'private'::memory_lane AND dst.owner_team_id = $4::text)
+        )
       LIMIT 1
       `,
-      [tenancy.scope_key, uriParts.id],
+      [tenancy.scope_key, uriParts.id, consumerAgentId, consumerTeamId],
     );
     const row = rr.rows[0];
     if (!row) {
@@ -284,9 +296,20 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
         ) AS decision_count
       FROM memory_commits c
       WHERE c.scope = $1 AND c.id = $2::uuid
+        AND NOT EXISTS (
+          SELECT 1
+          FROM memory_nodes n
+          WHERE n.scope = c.scope
+            AND n.commit_id = c.id
+            AND NOT (
+              n.memory_lane = 'shared'::memory_lane
+              OR (n.memory_lane = 'private'::memory_lane AND n.owner_agent_id = $3::text)
+              OR ($4::text IS NOT NULL AND n.memory_lane = 'private'::memory_lane AND n.owner_team_id = $4::text)
+            )
+        )
       LIMIT 1
       `,
-      [tenancy.scope_key, uriParts.id],
+      [tenancy.scope_key, uriParts.id, consumerAgentId, consumerTeamId],
     );
     const row = rr.rows[0];
     if (!row) {
@@ -360,9 +383,34 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
       FROM memory_execution_decisions d
       LEFT JOIN memory_commits c ON c.id = d.commit_id
       WHERE d.scope = $1 AND d.id = $2::uuid
+        AND (
+          d.commit_id IS NULL
+          OR NOT EXISTS (
+            SELECT 1
+            FROM memory_nodes n
+            WHERE n.scope = d.scope
+              AND n.commit_id = d.commit_id
+              AND NOT (
+                n.memory_lane = 'shared'::memory_lane
+                OR (n.memory_lane = 'private'::memory_lane AND n.owner_agent_id = $3::text)
+                OR ($4::text IS NOT NULL AND n.memory_lane = 'private'::memory_lane AND n.owner_team_id = $4::text)
+              )
+          )
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM memory_nodes src_rule
+          WHERE src_rule.scope = d.scope
+            AND src_rule.id::text = ANY(d.source_rule_ids::text[])
+            AND NOT (
+              src_rule.memory_lane = 'shared'::memory_lane
+              OR (src_rule.memory_lane = 'private'::memory_lane AND src_rule.owner_agent_id = $3::text)
+              OR ($4::text IS NOT NULL AND src_rule.memory_lane = 'private'::memory_lane AND src_rule.owner_team_id = $4::text)
+            )
+        )
       LIMIT 1
       `,
-      [tenancy.scope_key, uriParts.id],
+      [tenancy.scope_key, uriParts.id, consumerAgentId, consumerTeamId],
     );
     const row = rr.rows[0];
     if (!row) {
@@ -408,8 +456,6 @@ export async function memoryResolve(client: pg.PoolClient, body: unknown, defaul
     };
   }
 
-  const consumerAgentId = parsed.consumer_agent_id?.trim() || null;
-  const consumerTeamId = parsed.consumer_team_id?.trim() || null;
   const rr = await client.query<NodeRow>(
     `
     SELECT
@@ -528,6 +574,8 @@ export async function memoryResolveLite(
 ) {
   const parsed = MemoryResolveRequest.parse(body);
   const uriParts = parseAionisUri(parsed.uri);
+  const consumerAgentId = parsed.consumer_agent_id?.trim() || null;
+  const consumerTeamId = parsed.consumer_team_id?.trim() || null;
 
   const requestTenant = parsed.tenant_id?.trim();
   const requestScope = parsed.scope?.trim();
@@ -550,7 +598,12 @@ export async function memoryResolveLite(
   };
 
   if (uriParts.type === "edge") {
-    const row = await liteWriteStore.resolveEdge(tenancy.scope_key, uriParts.id) as LiteResolveEdgeRow | null;
+    const row = await liteWriteStore.resolveEdge({
+      scope: tenancy.scope_key,
+      id: uriParts.id,
+      consumerAgentId,
+      consumerTeamId,
+    }) as LiteResolveEdgeRow | null;
     if (!row) {
       throw new HttpError(404, "edge_not_found_in_scope", "edge URI was not found in this scope", { uri: parsed.uri });
     }
@@ -596,7 +649,12 @@ export async function memoryResolveLite(
   }
 
   if (uriParts.type === "commit") {
-    const row = await liteWriteStore.resolveCommit(tenancy.scope_key, uriParts.id) as LiteResolveCommitRow | null;
+    const row = await liteWriteStore.resolveCommit({
+      scope: tenancy.scope_key,
+      id: uriParts.id,
+      consumerAgentId,
+      consumerTeamId,
+    }) as LiteResolveCommitRow | null;
     if (!row) {
       throw new HttpError(404, "commit_not_found_in_scope", "commit URI was not found in this scope", { uri: parsed.uri });
     }
@@ -648,7 +706,12 @@ export async function memoryResolveLite(
   }
 
   if (uriParts.type === "decision") {
-    const row = await liteWriteStore.resolveDecision(tenancy.scope_key, uriParts.id) as LiteResolveDecisionRow | null;
+    const row = await liteWriteStore.resolveDecision({
+      scope: tenancy.scope_key,
+      id: uriParts.id,
+      consumerAgentId,
+      consumerTeamId,
+    }) as LiteResolveDecisionRow | null;
     if (!row) {
       throw new HttpError(404, "decision_not_found_in_scope", "decision URI was not found in this scope", {
         uri: parsed.uri,
@@ -696,8 +759,8 @@ export async function memoryResolveLite(
     scope: tenancy.scope_key,
     id: uriParts.id,
     type: uriParts.type,
-    consumerAgentId: parsed.consumer_agent_id?.trim() || null,
-    consumerTeamId: parsed.consumer_team_id?.trim() || null,
+    consumerAgentId,
+    consumerTeamId,
   }) as LiteResolveNodeRow | null;
   if (!row) {
     throw new HttpError(404, "node_not_found_in_scope_or_visibility", "node URI was not found in this scope/visibility", {
