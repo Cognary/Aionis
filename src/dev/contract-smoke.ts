@@ -1711,6 +1711,10 @@ async function run() {
     upsertEdge: async () => {},
     readyEmbeddingNodeIds: async () => new Set<string>(),
     insertOutboxEvent: async () => {},
+    upsertAssociationCandidates: async () => {},
+    listAssociationCandidatesForSource: async () => [],
+    markAssociationCandidatePromoted: async () => {},
+    updateAssociationCandidateStatus: async () => {},
     appendAfterTopicClusterEventIds: async () => {},
     mirrorCommitArtifactsToShadowV2: async () => ({ commits: 0, nodes: 0, edges: 0, outbox: 0 }),
   };
@@ -1922,6 +1926,7 @@ async function run() {
           {
             client_id: "replay:run:run-lite-helper",
             type: "event",
+            memory_lane: "shared",
             title: "Replay Run",
             text_summary: "Replay run helper",
             slots: {
@@ -2241,6 +2246,10 @@ async function run() {
             upsertEdge: async () => {},
             readyEmbeddingNodeIds: async () => new Set<string>(),
             insertOutboxEvent: async () => {},
+            upsertAssociationCandidates: async () => {},
+            listAssociationCandidatesForSource: async () => [],
+            markAssociationCandidatePromoted: async () => {},
+            updateAssociationCandidateStatus: async () => {},
             appendAfterTopicClusterEventIds: async () => {},
             mirrorCommitArtifactsToShadowV2: async () => ({ commits: 0, nodes: 0, edges: 0, outbox: 0 }),
           } as any,
@@ -2360,6 +2369,10 @@ async function run() {
       upsertEdge: async () => {},
       readyEmbeddingNodeIds: async () => new Set<string>(),
       insertOutboxEvent: async () => {},
+      upsertAssociationCandidates: async () => {},
+      listAssociationCandidatesForSource: async () => [],
+      markAssociationCandidatePromoted: async () => {},
+      updateAssociationCandidateStatus: async () => {},
       appendAfterTopicClusterEventIds: async () => {},
       mirrorCommitArtifactsToShadowV2: async () => ({ commits: 0, nodes: 0, edges: 0, outbox: 0 }),
     } as any,
@@ -2388,6 +2401,10 @@ async function run() {
           upsertEdge: async () => {},
           readyEmbeddingNodeIds: async () => new Set<string>(),
           insertOutboxEvent: async () => {},
+          upsertAssociationCandidates: async () => {},
+          listAssociationCandidatesForSource: async () => [],
+          markAssociationCandidatePromoted: async () => {},
+          updateAssociationCandidateStatus: async () => {},
           appendAfterTopicClusterEventIds: async () => {},
           mirrorCommitArtifactsToShadowV2: async () => ({ commits: 0, nodes: 0, edges: 0, outbox: 0 }),
         } as any,
@@ -2418,6 +2435,10 @@ async function run() {
       upsertEdge: async () => {},
       readyEmbeddingNodeIds: async () => new Set<string>(),
       insertOutboxEvent: async () => {},
+      upsertAssociationCandidates: async () => {},
+      listAssociationCandidatesForSource: async () => [],
+      markAssociationCandidatePromoted: async () => {},
+      updateAssociationCandidateStatus: async () => {},
       appendAfterTopicClusterEventIds: async () => {},
       mirrorCommitArtifactsToShadowV2: async () => {
         throw new Error("mirror unavailable");
@@ -2448,6 +2469,10 @@ async function run() {
           upsertEdge: async () => {},
           readyEmbeddingNodeIds: async () => new Set<string>(),
           insertOutboxEvent: async () => {},
+          upsertAssociationCandidates: async () => {},
+          listAssociationCandidatesForSource: async () => [],
+          markAssociationCandidatePromoted: async () => {},
+          updateAssociationCandidateStatus: async () => {},
           appendAfterTopicClusterEventIds: async () => {},
           mirrorCommitArtifactsToShadowV2: async () => {
             throw new Error("mirror unavailable");

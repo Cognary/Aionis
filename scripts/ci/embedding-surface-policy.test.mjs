@@ -210,7 +210,7 @@ test("write route suppresses auto-embed when write_auto_embed surface is disable
       let commitCounter = 0;
 
       const writeAccess = {
-        capability_version: 2,
+        capability_version: 4,
         capabilities: { shadow_mirror_v2: false },
         async nodeScopesByIds() { return new Map(); },
         async parentCommitHash() { return null; },
@@ -229,6 +229,10 @@ test("write route suppresses auto-embed when write_auto_embed surface is disable
         async upsertEdge() {},
         async readyEmbeddingNodeIds() { return new Set(); },
         async insertOutboxEvent() {},
+        async upsertAssociationCandidates() {},
+        async listAssociationCandidatesForSource() { return []; },
+        async markAssociationCandidatePromoted() {},
+        async updateAssociationCandidateStatus() {},
         async appendAfterTopicClusterEventIds() {},
         async mirrorCommitArtifactsToShadowV2() {
           throw new Error("write capability unsupported: shadow_mirror_v2");
