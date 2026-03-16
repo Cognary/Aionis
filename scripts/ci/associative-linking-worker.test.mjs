@@ -133,3 +133,50 @@ test("associative worker materializes shadow candidates with relation and featur
   assert.equal(parsed.upserts.every((row) => typeof row.score === "number" && typeof row.confidence === "number"), true);
   assert.equal(parsed.upserts.every((row) => typeof row.feature_summary_json.embedding_similarity === "number"), true);
 });
+
+test("embed follow-up helper enqueues deferred associative_link after successful embedding", () => {
+  const output = runSnippet(`
+    import { enqueueDeferredAssociativeLinkFollowup } from "./src/jobs/associative-linking-lib.ts";
+
+    const inserts = [];
+
+    const main = async () => {
+      const enqueued = await enqueueDeferredAssociativeLinkFollowup({
+        scope: "default",
+        commitId: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        embedPayload: {
+          nodes: [
+            { id: "11111111-1111-1111-1111-111111111111", text: "repair token drift" },
+          ],
+          after_associative_link: {
+            origin: "memory_write",
+            source_node_ids: ["11111111-1111-1111-1111-111111111111"],
+            source_commit_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+          },
+        },
+        writeAccess: {
+          async insertOutboxEvent(args) {
+            inserts.push(args);
+          },
+        },
+      });
+
+      process.stdout.write(JSON.stringify({ enqueued, inserts }));
+    };
+
+    main().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  `);
+
+  const parsed = JSON.parse(output);
+  assert.equal(parsed.enqueued, true);
+  assert.equal(parsed.inserts.length, 1);
+  assert.equal(parsed.inserts[0].eventType, "associative_link");
+  const payload = JSON.parse(parsed.inserts[0].payloadJson);
+  assert.equal(payload.origin, "memory_write");
+  assert.equal(payload.scope, "default");
+  assert.equal(payload.source_commit_id, "dddddddd-dddd-dddd-dddd-dddddddddddd");
+  assert.deepEqual(payload.source_node_ids, ["11111111-1111-1111-1111-111111111111"]);
+});

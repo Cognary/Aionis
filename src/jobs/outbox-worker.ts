@@ -19,7 +19,11 @@ import {
   classifyReplayLearningProjectionError,
 } from "../memory/replay-learning.js";
 import { AssociativeLinkTriggerPayloadSchema } from "../memory/associative-linking-types.js";
-import { promoteAssociativeCandidates, runAssociativeLinkingJob } from "./associative-linking-lib.js";
+import {
+  enqueueDeferredAssociativeLinkFollowup,
+  promoteAssociativeCandidates,
+  runAssociativeLinkingJob,
+} from "./associative-linking-lib.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
@@ -186,6 +190,16 @@ async function processBatch(): Promise<{
             ? (r.payload.after_topic_cluster_event_ids as string[])
             : [];
           const canEnqueueTopicCluster = out.status === "ok" && afterEventIds.length > 0;
+          const writeAccess = createPostgresWriteStoreAccess(client);
+          const enqueuedAssociativeLink =
+            out.status === "ok"
+              ? await enqueueDeferredAssociativeLinkFollowup({
+                  scope: r.scope,
+                  commitId: r.commit_id,
+                  embedPayload: r.payload,
+                  writeAccess,
+                })
+              : false;
           if (canEnqueueTopicCluster) {
             // Idempotent enqueue: job_key prevents duplicate topic_cluster rows for the same commit+payload.
             const payload = { event_ids: afterEventIds };
@@ -229,15 +243,16 @@ async function processBatch(): Promise<{
                last_error = NULL,
                published_at = now()
              WHERE id = $1 AND claimed_at::text = $2`,
-            [
-              r.id,
-              r.claimed_at,
-              JSON.stringify({
-                embed_backfill: out,
-                ...(canEnqueueTopicCluster ? { enqueued_topic_cluster: true, topic_cluster_event_ids: afterEventIds } : {}),
-              }),
-            ],
-          );
+              [
+                r.id,
+                r.claimed_at,
+                JSON.stringify({
+                  embed_backfill: out,
+                  ...(enqueuedAssociativeLink ? { enqueued_associative_link: true } : {}),
+                  ...(canEnqueueTopicCluster ? { enqueued_topic_cluster: true, topic_cluster_event_ids: afterEventIds } : {}),
+                }),
+              ],
+            );
 
           embedded += 1;
           return;

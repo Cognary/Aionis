@@ -45,20 +45,21 @@ test("postgres write access persists associative candidates with upsert semantic
         if (normalized.includes("INSERT INTO memory_association_candidates")) {
           const key = [params[0], params[1], params[2], params[3]].join(":");
           const current = this.#rows.get(key);
+          const preservePromoted = current?.status === "promoted" && String(params[4]) === "shadow";
           this.#rows.set(key, {
             id: current?.id ?? \`assoc-\${this.#rows.size + 1}\`,
             scope: String(params[0]),
             src_id: String(params[1]),
             dst_id: String(params[2]),
             relation_kind: String(params[3]),
-            status: String(params[4]),
+            status: preservePromoted ? current.status : String(params[4]),
             score: Number(params[5]),
             confidence: Number(params[6]),
             feature_summary_json: params[7] ?? {},
             evidence_json: params[8] ?? {},
             source_commit_id: params[9] == null ? null : String(params[9]),
             worker_run_id: params[10] == null ? null : String(params[10]),
-            promoted_edge_id: params[11] == null ? null : String(params[11]),
+            promoted_edge_id: preservePromoted ? current.promoted_edge_id : (params[11] == null ? null : String(params[11])),
             created_at: current?.created_at ?? "2026-03-16T00:00:00.000Z",
             updated_at: "2026-03-16T00:00:01.000Z",
           });
@@ -136,6 +137,23 @@ test("postgres write access persists associative candidates with upsert semantic
         promoted_edge_id: "44444444-4444-4444-4444-444444444444",
       });
 
+      await store.upsertAssociationCandidates([
+        {
+          scope: "default",
+          src_id: "11111111-1111-1111-1111-111111111111",
+          dst_id: "22222222-2222-2222-2222-222222222222",
+          relation_kind: "same_task",
+          status: "shadow",
+          score: 0.99,
+          confidence: 0.97,
+          feature_summary_json: { repo_root: "/repo", file_path: "src/a.ts", symbol: "repairTokenLater" },
+          evidence_json: { validation_targets: ["npm run build", "npm test"] },
+          source_commit_id: "55555555-5555-5555-5555-555555555555",
+          worker_run_id: "worker-3",
+          promoted_edge_id: null,
+        },
+      ]);
+
       const rows = await store.listAssociationCandidatesForSource({
         scope: "default",
         src_id: "11111111-1111-1111-1111-111111111111",
@@ -152,13 +170,13 @@ test("postgres write access persists associative candidates with upsert semantic
 
   const rows = JSON.parse(output);
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].score, 0.93);
+  assert.equal(rows[0].score, 0.99);
   assert.equal(rows[0].status, "promoted");
   assert.equal(rows[0].promoted_edge_id, "44444444-4444-4444-4444-444444444444");
   assert.deepEqual(rows[0].feature_summary_json, {
     repo_root: "/repo",
     file_path: "src/a.ts",
-    symbol: "repairToken",
+    symbol: "repairTokenLater",
   });
 });
 
@@ -216,6 +234,23 @@ test("lite write store persists associative candidates with upsert semantics", {
           promoted_edge_id: "44444444-4444-4444-4444-444444444444",
         });
 
+        await store.upsertAssociationCandidates([
+          {
+            scope: "default",
+            src_id: "11111111-1111-1111-1111-111111111111",
+            dst_id: "22222222-2222-2222-2222-222222222222",
+            relation_kind: "same_task",
+            status: "shadow",
+            score: 0.99,
+            confidence: 0.97,
+            feature_summary_json: { repo_root: "/repo", file_path: "src/a.ts", symbol: "repairTokenLater" },
+            evidence_json: { validation_targets: ["npm run build", "npm test"] },
+            source_commit_id: "55555555-5555-5555-5555-555555555555",
+            worker_run_id: "worker-3",
+            promoted_edge_id: null,
+          },
+        ]);
+
         const rows = await store.listAssociationCandidatesForSource({
           scope: "default",
           src_id: "11111111-1111-1111-1111-111111111111",
@@ -236,12 +271,12 @@ test("lite write store persists associative candidates with upsert semantics", {
 
   const rows = JSON.parse(output);
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].score, 0.93);
+  assert.equal(rows[0].score, 0.99);
   assert.equal(rows[0].status, "promoted");
   assert.equal(rows[0].promoted_edge_id, "44444444-4444-4444-4444-444444444444");
   assert.deepEqual(rows[0].feature_summary_json, {
     repo_root: "/repo",
     file_path: "src/a.ts",
-    symbol: "repairToken",
+    symbol: "repairTokenLater",
   });
 });

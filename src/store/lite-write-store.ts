@@ -1893,14 +1893,22 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
            feature_summary_json, evidence_json, source_commit_id, worker_run_id, promoted_edge_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(scope, src_id, dst_id, relation_kind) DO UPDATE SET
-           status = excluded.status,
+           status = CASE
+             WHEN lite_memory_association_candidates.status = 'promoted' AND excluded.status = 'shadow'
+               THEN lite_memory_association_candidates.status
+             ELSE excluded.status
+           END,
            score = excluded.score,
            confidence = excluded.confidence,
            feature_summary_json = excluded.feature_summary_json,
            evidence_json = excluded.evidence_json,
            source_commit_id = excluded.source_commit_id,
            worker_run_id = excluded.worker_run_id,
-           promoted_edge_id = excluded.promoted_edge_id,
+           promoted_edge_id = CASE
+             WHEN lite_memory_association_candidates.status = 'promoted' AND excluded.status = 'shadow'
+               THEN lite_memory_association_candidates.promoted_edge_id
+             ELSE excluded.promoted_edge_id
+           END,
            updated_at = excluded.updated_at`,
       );
       for (const candidate of args) {

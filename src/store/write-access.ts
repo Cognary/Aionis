@@ -281,14 +281,22 @@ export function createPostgresWriteStoreAccess(
            VALUES
             ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12)
            ON CONFLICT (scope, src_id, dst_id, relation_kind) DO UPDATE SET
-             status = EXCLUDED.status,
+             status = CASE
+               WHEN memory_association_candidates.status = 'promoted' AND EXCLUDED.status = 'shadow'
+                 THEN memory_association_candidates.status
+               ELSE EXCLUDED.status
+             END,
              score = EXCLUDED.score,
              confidence = EXCLUDED.confidence,
              feature_summary_json = EXCLUDED.feature_summary_json,
              evidence_json = EXCLUDED.evidence_json,
              source_commit_id = EXCLUDED.source_commit_id,
              worker_run_id = EXCLUDED.worker_run_id,
-             promoted_edge_id = EXCLUDED.promoted_edge_id,
+             promoted_edge_id = CASE
+               WHEN memory_association_candidates.status = 'promoted' AND EXCLUDED.status = 'shadow'
+                 THEN memory_association_candidates.promoted_edge_id
+               ELSE EXCLUDED.promoted_edge_id
+             END,
              updated_at = now()`,
           [
             candidate.scope,

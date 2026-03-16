@@ -29,6 +29,16 @@ export const AssociativeLinkTriggerOriginSchema = z.enum([
 
 export type AssociativeLinkTriggerOrigin = z.infer<typeof AssociativeLinkTriggerOriginSchema>;
 
+export const DeferredAssociativeLinkFollowupSchema = z
+  .object({
+    origin: AssociativeLinkTriggerOriginSchema,
+    source_node_ids: z.array(UUID).min(1).max(64),
+    source_commit_id: UUID,
+  })
+  .strict();
+
+export type DeferredAssociativeLinkFollowup = z.infer<typeof DeferredAssociativeLinkFollowupSchema>;
+
 export const AssociativeLinkTriggerPayloadSchema = z
   .object({
     origin: AssociativeLinkTriggerOriginSchema,

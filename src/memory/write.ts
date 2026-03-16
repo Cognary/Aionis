@@ -11,6 +11,7 @@ import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type Wr
 import { DEFAULT_ASSOCIATIVE_LINKING_CONFIG } from "./associative-linking-config.js";
 import {
   AssociativeLinkTriggerPayloadSchema,
+  DeferredAssociativeLinkFollowupSchema,
   type AssociativeLinkTriggerOrigin,
 } from "./associative-linking-types.js";
 import { MemoryWriteRequest } from "./schemas.js";
@@ -18,6 +19,7 @@ import type { EmbeddingProvider } from "../embeddings/types.js";
 import { resolveTenantScope, toTenantScopeKey } from "./tenant.js";
 import { buildAionisUri } from "./uri.js";
 import { distillWriteArtifacts, type WriteDistillationSummary } from "./write-distillation.js";
+import { buildAssociativeLinkOutboxInsert } from "../jobs/associative-linking-lib.js";
 
 type WriteResult = {
   tenant_id?: string;
@@ -663,6 +665,8 @@ export async function applyMemoryWrite(
 
   // Derived artifact: enqueue embedding backfill for nodes that opted into auto-embed and have embed_text.
   let enqueuedEmbedNodes = false;
+  const associativeLinkSourceNodeIds = selectAssociativeLinkSourceNodeIds(nodes);
+  const deferredAssociativeLinkSourceIds = new Set<string>();
   if (prepared.auto_embed_effective) {
     const embedPlanned = nodes
       .filter((n) => !n.embedding && !!n.embed_text)
@@ -678,7 +682,23 @@ export async function applyMemoryWrite(
     }
 
     if (embedNodes.length > 0) {
-      const payload = { nodes: embedNodes, ...(prepared.force_reembed ? { force_reembed: true } : {}) };
+      const embedNodeIdSet = new Set(embedNodes.map((node) => node.id));
+      for (const sourceNodeId of associativeLinkSourceNodeIds) {
+        if (embedNodeIdSet.has(sourceNodeId)) deferredAssociativeLinkSourceIds.add(sourceNodeId);
+      }
+      const deferredAssociativeLink =
+        deferredAssociativeLinkSourceIds.size > 0
+          ? DeferredAssociativeLinkFollowupSchema.parse({
+              origin: opts.associativeLinkOrigin ?? "memory_write",
+              source_node_ids: Array.from(deferredAssociativeLinkSourceIds),
+              source_commit_id: commit_id,
+            })
+          : null;
+      const payload = {
+        nodes: embedNodes,
+        ...(prepared.force_reembed ? { force_reembed: true } : {}),
+        ...(deferredAssociativeLink ? { after_associative_link: deferredAssociativeLink } : {}),
+      };
       const payloadSha = sha256Hex(stableStringify(payload));
       const jobKey = sha256Hex(stableStringify({ v: 1, scope, commit_id, event_type: "embed_nodes", payloadSha }));
       await writeAccess.insertOutboxEvent({
@@ -694,25 +714,16 @@ export async function applyMemoryWrite(
     }
   }
 
-  const associativeLinkSourceNodeIds = selectAssociativeLinkSourceNodeIds(nodes);
-  if (associativeLinkSourceNodeIds.length > 0) {
+  const immediateAssociativeLinkSourceNodeIds = associativeLinkSourceNodeIds.filter((id) => !deferredAssociativeLinkSourceIds.has(id));
+  if (immediateAssociativeLinkSourceNodeIds.length > 0) {
     const payload = AssociativeLinkTriggerPayloadSchema.parse({
       origin: opts.associativeLinkOrigin ?? "memory_write",
       scope,
-      source_node_ids: associativeLinkSourceNodeIds,
+      source_node_ids: immediateAssociativeLinkSourceNodeIds,
       source_commit_id: commit_id,
     });
-    const payloadSha = sha256Hex(stableStringify(payload));
-    const jobKey = sha256Hex(stableStringify({ v: 1, scope, commit_id, event_type: "associative_link", payloadSha }));
     try {
-      await writeAccess.insertOutboxEvent({
-        scope,
-        commitId: commit_id,
-        eventType: "associative_link",
-        jobKey,
-        payloadSha256: payloadSha,
-        payloadJson: JSON.stringify(payload),
-      });
+      await writeAccess.insertOutboxEvent(buildAssociativeLinkOutboxInsert({ scope, commitId: commit_id, payload }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const warnings = result.warnings ?? [];

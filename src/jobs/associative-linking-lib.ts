@@ -1,3 +1,4 @@
+import stableStringify from "fast-json-stable-stringify";
 import {
   DEFAULT_ASSOCIATIVE_LINKING_CONFIG,
   type AssociativeLinkingResolvedConfig,
@@ -7,8 +8,13 @@ import type {
   AssociativeCandidateStoreAccess,
   UpsertAssociationCandidateArgs,
 } from "../memory/associative-candidate-store.js";
-import type { AssociativeLinkTriggerPayload } from "../memory/associative-linking-types.js";
+import {
+  AssociativeLinkTriggerPayloadSchema,
+  DeferredAssociativeLinkFollowupSchema,
+  type AssociativeLinkTriggerPayload,
+} from "../memory/associative-linking-types.js";
 import type { RecallAssociativeNodeRow } from "../store/recall-access.js";
+import { sha256Hex } from "../util/crypto.js";
 import { stableUuid } from "../util/uuid.js";
 
 export type AssociativeLinkingRecallAccess = {
@@ -53,6 +59,15 @@ export type AssociativePromotionResult = {
   rejected: number;
 };
 
+export type AssociativeLinkOutboxInsertArgs = {
+  scope: string;
+  commitId: string;
+  eventType: "associative_link";
+  jobKey: string;
+  payloadSha256: string;
+  payloadJson: string;
+};
+
 type AnchorShape = {
   anchor: string | null;
   repo_root: string | null;
@@ -92,6 +107,50 @@ export function isValidAssociativeCandidateStatusTransition(
 function asObject(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+export function buildAssociativeLinkOutboxInsert(args: {
+  scope: string;
+  commitId: string;
+  payload: Omit<AssociativeLinkTriggerPayload, "scope"> & { scope?: string };
+}): AssociativeLinkOutboxInsertArgs {
+  const payload = AssociativeLinkTriggerPayloadSchema.parse({
+    ...args.payload,
+    scope: args.scope,
+  });
+  const payloadSha = sha256Hex(stableStringify(payload));
+  return {
+    scope: args.scope,
+    commitId: args.commitId,
+    eventType: "associative_link",
+    jobKey: sha256Hex(stableStringify({ v: 1, scope: args.scope, commit_id: args.commitId, event_type: "associative_link", payloadSha })),
+    payloadSha256: payloadSha,
+    payloadJson: JSON.stringify(payload),
+  };
+}
+
+export async function enqueueDeferredAssociativeLinkFollowup(args: {
+  scope: string;
+  commitId: string;
+  embedPayload: unknown;
+  writeAccess: {
+    insertOutboxEvent(params: AssociativeLinkOutboxInsertArgs): Promise<void>;
+  };
+}): Promise<boolean> {
+  const payloadObj = asObject(args.embedPayload);
+  const parsed = DeferredAssociativeLinkFollowupSchema.safeParse(payloadObj?.after_associative_link);
+  if (!parsed.success) return false;
+  await args.writeAccess.insertOutboxEvent(
+    buildAssociativeLinkOutboxInsert({
+      scope: args.scope,
+      commitId: args.commitId,
+      payload: {
+        ...parsed.data,
+        scope: args.scope,
+      },
+    }),
+  );
+  return true;
 }
 
 function toNonEmptyString(value: unknown): string | null {

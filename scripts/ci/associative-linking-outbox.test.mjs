@@ -18,7 +18,7 @@ function runSnippet(source) {
   return extractLastJsonLine(out);
 }
 
-test("memory write keeps embed_nodes and enqueues associative_link for relevant nodes", () => {
+test("memory write defers associative_link into embed follow-up when relevant nodes are still pending embeddings", () => {
   const output = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";
     import { DatabaseSync } from "node:sqlite";
@@ -93,6 +93,89 @@ test("memory write keeps embed_nodes and enqueues associative_link for relevant 
   const parsed = JSON.parse(output);
   const eventTypes = parsed.rows.map((row) => row.event_type);
   assert.equal(eventTypes.includes("embed_nodes"), true);
+  assert.equal(eventTypes.includes("associative_link"), false);
+  const payload = JSON.parse(parsed.rows.find((row) => row.event_type === "embed_nodes").payload_json);
+  assert.equal(payload.after_associative_link.origin, "memory_write");
+  assert.equal(payload.after_associative_link.source_commit_id, parsed.commit_id);
+  assert.ok(payload.after_associative_link.source_node_ids.length >= 1);
+});
+
+test("memory write enqueues immediate associative_link when source nodes already have embeddings", () => {
+  const output = runSnippet(`
+    import { mkdtempSync, rmSync } from "node:fs";
+    import { DatabaseSync } from "node:sqlite";
+    import { tmpdir } from "node:os";
+    import path from "node:path";
+    import { applyMemoryWrite, prepareMemoryWrite } from "./src/memory/write.ts";
+    import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
+
+    const main = async () => {
+      const dir = mkdtempSync(path.join(tmpdir(), "aionis-associative-outbox-ready-"));
+      const sqlitePath = path.join(dir, "memory.sqlite");
+      const store = createLiteWriteStore(sqlitePath);
+      try {
+        const prepared = await prepareMemoryWrite(
+          {
+            input_text: "Repair gateway session token drift",
+            distill: { enabled: false },
+            nodes: [
+              {
+                type: "event",
+                title: "repair gateway token drift",
+                text_summary: "Trace and repair the gateway session token drift",
+                embedding: Array.from({ length: 1536 }, (_, index) => (index === 0 ? 1 : 0)),
+                slots: {
+                  resume_anchor: {
+                    anchor: "repair-token-drift",
+                    file_path: "src/gateway/service-token.ts",
+                    repo_root: "/repo",
+                    symbol: "repairServiceTokenDrift",
+                  },
+                },
+              },
+            ],
+          },
+          "default",
+          "default",
+          {
+            maxTextLen: 4096,
+            piiRedaction: false,
+            allowCrossScopeEdges: false,
+          },
+          {},
+        );
+
+        const out = await store.withTx(() =>
+          applyMemoryWrite({} as any, prepared, {
+            maxTextLen: 4096,
+            piiRedaction: false,
+            allowCrossScopeEdges: false,
+            shadowDualWriteEnabled: false,
+            shadowDualWriteStrict: false,
+            write_access: store as any,
+          }),
+        );
+
+        const db = new DatabaseSync(sqlitePath);
+        const rows = db.prepare("SELECT event_type, payload_json FROM lite_memory_outbox ORDER BY row_id ASC").all();
+        db.close();
+
+        process.stdout.write(JSON.stringify({ commit_id: out.commit_id, rows }));
+      } finally {
+        await store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    };
+
+    main().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  `);
+
+  const parsed = JSON.parse(output);
+  const eventTypes = parsed.rows.map((row) => row.event_type);
+  assert.equal(eventTypes.includes("embed_nodes"), false);
   assert.equal(eventTypes.includes("associative_link"), true);
   const payload = JSON.parse(parsed.rows.find((row) => row.event_type === "associative_link").payload_json);
   assert.equal(payload.origin, "memory_write");
