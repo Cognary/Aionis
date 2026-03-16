@@ -159,7 +159,7 @@ What landed:
 
 What changed on the real route path:
 
-1. `handoff/store` now persists `execution_state_v1` into the new internal state store after a successful handoff write
+1. `handoff/store` now persists `execution_state_v1` into the new internal state store after a successful handoff write and emits explicit `execution_transitions_v1` metadata for deterministic state updates
 2. `handoff/recover` now prefers the internal state store when a matching state record exists
 3. `planning_context` and `context/assemble` now report and use explicit state-first packet assembly when `execution_state_v1` is provided
 4. `memory/write` now persists explicit `execution_state_v1` payloads and applies explicit `execution_transition_v1` payloads into the same internal state store

@@ -2,6 +2,7 @@ import type { Env } from "../config.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { InMemoryExecutionStateStore } from "../execution/state-store.js";
 import { ExecutionStateV1Schema } from "../execution/types.js";
+import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
 import { buildHandoffWriteBody, recoverHandoff } from "../memory/handoff.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
 import { HandoffRecoverRequest, HandoffStoreRequest } from "../memory/schemas.js";
@@ -117,6 +118,13 @@ export function registerHandoffRoutes(args: {
       if (executionStateStore && writeSlots && "execution_state_v1" in writeSlots) {
         const executionState = ExecutionStateV1Schema.parse((writeSlots as any).execution_state_v1);
         executionStateStore.put(executionState);
+        const rawTransitions = "execution_transitions_v1" in writeSlots ? (writeSlots as any).execution_transitions_v1 : null;
+        if (Array.isArray(rawTransitions)) {
+          for (const rawTransition of rawTransitions) {
+            const transition = ExecutionStateTransitionV1Schema.parse(rawTransition);
+            executionStateStore.applyTransition(transition);
+          }
+        }
       }
       return reply.code(200).send({
         tenant_id: out.tenant_id,
@@ -153,6 +161,8 @@ export function registerHandoffRoutes(args: {
           continuitySlots && "execution_packet_v1" in continuitySlots ? (continuitySlots as any).execution_packet_v1 : undefined,
         control_profile_v1:
           continuitySlots && "control_profile_v1" in continuitySlots ? (continuitySlots as any).control_profile_v1 : undefined,
+        execution_transitions_v1:
+          continuitySlots && "execution_transitions_v1" in continuitySlots ? (continuitySlots as any).execution_transitions_v1 : undefined,
       });
     } finally {
       gate.release();

@@ -16,11 +16,13 @@ import {
   ControlProfileV1Schema,
   ExecutionPacketV1Schema,
   ExecutionStateV1Schema,
+  ExecutionStateTransitionV1Schema,
   type InMemoryExecutionStateStore,
   type ControlProfileName,
   type ControlProfileV1,
   type ExecutionPacketV1,
   type ExecutionStateV1,
+  type ExecutionStateTransitionV1,
   type ReviewerContract,
   type ResumeAnchor,
 } from "../execution/index.js";
@@ -69,6 +71,8 @@ type RecoveredExecutionProjection = {
   execution_packet_v1: ExecutionPacketV1;
   control_profile_v1: ControlProfileV1;
 };
+
+type HandoffStoreExecutionTransitions = ExecutionStateTransitionV1[];
 
 export function buildHandoffExecutionStateIdentity(anchor: string): { state_id: string; scope: string } {
   const normalizedAnchor = String(anchor ?? "").trim();
@@ -213,6 +217,7 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
     promptSafe,
     executionReady,
   );
+  const executionTransitions = buildHandoffStoreExecutionTransitions(executionProjection.execution_state_v1);
   const handoffText = [
     `anchor=${parsed.anchor}`,
     parsed.file_path ? `file=${parsed.file_path}` : null,
@@ -266,10 +271,44 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
           execution_state_v1: executionProjection.execution_state_v1,
           execution_packet_v1: executionProjection.execution_packet_v1,
           control_profile_v1: executionProjection.control_profile_v1,
+          execution_transitions_v1: executionTransitions,
         },
       },
     ],
   };
+}
+
+function buildHandoffStoreExecutionTransitions(state: ExecutionStateV1): HandoffStoreExecutionTransitions {
+  const transitions: HandoffStoreExecutionTransitions = [];
+  if (state.reviewer_contract) {
+    transitions.push(
+      ExecutionStateTransitionV1Schema.parse({
+        transition_id: `${state.state_id}:handoff-store:reviewer-contract`,
+        state_id: state.state_id,
+        scope: state.scope,
+        actor_role: "resume",
+        at: state.updated_at,
+        expected_revision: 1,
+        type: "reviewer_contract_updated",
+        reviewer_contract: state.reviewer_contract,
+      }),
+    );
+  }
+  if (state.resume_anchor) {
+    transitions.push(
+      ExecutionStateTransitionV1Schema.parse({
+        transition_id: `${state.state_id}:handoff-store:resume-anchor`,
+        state_id: state.state_id,
+        scope: state.scope,
+        actor_role: "resume",
+        at: state.updated_at,
+        expected_revision: state.reviewer_contract ? 2 : 1,
+        type: "resume_anchor_updated",
+        resume_anchor: state.resume_anchor,
+      }),
+    );
+  }
+  return transitions;
 }
 
 function buildPromptSafeHandoff(node: HandoffNode, input: HandoffRecoverInput): PromptSafeHandoff {

@@ -739,6 +739,30 @@ export type HandoffStoreResponse = {
     reviewer_ready_required: boolean;
     [k: string]: unknown;
   };
+  execution_transitions_v1?: Array<{
+    transition_id: string;
+    state_id: string;
+    scope: string;
+    actor_role: "orchestrator" | "triage" | "patch" | "review" | "resume";
+    at: string;
+    expected_revision?: number;
+    type:
+      | "stage_started"
+      | "stage_completed"
+      | "validation_added"
+      | "validation_completed"
+      | "hypothesis_accepted"
+      | "path_rejected"
+      | "blocker_recorded"
+      | "blocker_cleared"
+      | "reviewer_contract_updated"
+      | "resume_anchor_updated";
+    reviewer_contract?: Record<string, unknown> | null;
+    resume_anchor?: Record<string, unknown> | null;
+    validations?: string[];
+    blockers?: string[];
+    [k: string]: unknown;
+  }>;
   [k: string]: unknown;
 };
 

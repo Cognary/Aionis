@@ -161,7 +161,10 @@ test("handoff/store persists execution state into the phase2 state store overlay
   assert.equal(parsed.status, 200);
   assert.equal(parsed.body.handoff.anchor, "phase2-overlay-anchor");
   assert.equal(parsed.body.execution_state_v1.resume_anchor.anchor, "phase2-overlay-anchor");
-  assert.equal(parsed.stored.revision, 1);
+  assert.equal(Array.isArray(parsed.body.execution_transitions_v1), true);
+  assert.equal(parsed.body.execution_transitions_v1.length, 2);
+  assert.equal(parsed.stored.revision, 3);
+  assert.equal(parsed.stored.last_transition_type, "resume_anchor_updated");
   assert.equal(parsed.stored.state.resume_anchor.anchor, "phase2-overlay-anchor");
   assert.equal(parsed.stored.state.current_stage, "resume");
   assert.deepEqual(parsed.stored.state.pending_validations, ["Run the focused CLI smoke"]);

@@ -290,7 +290,7 @@ Exit criteria:
 Current checkpoint:
 
 1. the scaffold has landed
-2. `handoff/store` now persists `execution_state_v1` into the internal state store after successful writes
+2. `handoff/store` now persists `execution_state_v1` into the internal state store after successful writes and emits explicit `execution_transitions_v1` metadata on the same route
 3. `handoff/recover` now prefers the internal state store when a matching record exists
 4. `planning_context` and `context/assemble` now report explicit `packet_source_mode` metadata and prefer state-first packet assembly when `execution_state_v1` is provided
 5. `memory/write` now persists explicit `execution_state_v1` payloads and applies explicit `execution_transition_v1` payloads into the internal state store

@@ -153,7 +153,7 @@ Current reading:
    - `memory/write`
 4. public route semantics remain unchanged while state durability starts moving beyond slot-only persistence
 5. state-first packet assembly is now explicitly observable on the context path
-6. explicit transition emission is now live on a second write-oriented route instead of remaining handoff-only
+6. explicit transition emission is now live on both `handoff/store` and `memory/write`, instead of remaining implied by projection
 
 ## What Is Not Finished
 
