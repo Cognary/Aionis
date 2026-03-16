@@ -156,7 +156,6 @@ Current reading:
 6. explicit transition emission is now live on both `handoff/store` and `memory/write`, instead of remaining implied by projection
 7. the first real regression from handoff-transition rollout has been fixed: repeated handoffs for the same anchor now rebase transition expectations onto the stored revision instead of failing on revision mismatch
 8. `tools/select` can now read `execution_state_v1` directly, derive a control profile from `current_stage` when needed, and report profile origin metadata in its response
-9. `tools/select` can now also resolve `execution_state_ref_v1` through the shared `ExecutionStateStore`, letting runtime callers keep explicit control intent while reducing duplicated state payloads
 
 ## What Is Not Finished
 
@@ -215,7 +214,6 @@ This makes the current Phase 2 story:
 4. resilient enough to absorb a real route-level regression, fix it, and confirm the repaired path on both single-run and `3`-repeat real-Lite workflow validation
 5. now positive on a third runtime-surface checkpoint where `tools/select` can consume durable execution state directly rather than only continuity-delivered profile payloads
 6. that third surface is currently a completion-first story across the strongest three-slice family: two strong completion wins and one supporting completion signal, not an efficiency win
-7. the first cost-tightened follow-up on that third surface is also now positive on the strongest slice: dashboard auth drift moved `0 -> 0.6667` while lowering average token spend and wall-clock after switching from full state payloads to `execution_state_ref_v1`
 
 ## Recommended Next Focus
 
@@ -225,7 +223,7 @@ The next highest-value work remains:
 2. prefer runtime-surface proofs over new abstract kernel work
 3. keep Phase 2 Step 1 additive until the state store and transition contract are strong enough to back state-first packet assembly
 4. only after that, continue pushing `ExecutionState` toward a more independent source-of-truth role
-5. the immediate next work should keep shaping this `tools/select` surface toward lower cost on the remaining strongest slices, rather than adding more surface area
+5. the immediate next work should be either shaping this `tools/select` surface toward lower cost or moving to another high-value surface; the third strongest-slice proof now exists
 
 In short:
 
