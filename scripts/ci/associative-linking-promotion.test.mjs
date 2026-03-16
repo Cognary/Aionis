@@ -84,6 +84,17 @@ test("promotion only upgrades high-confidence candidates into canonical related_
             row.status = "promoted";
             row.promoted_edge_id = promoted_edge_id;
           },
+          async updateAssociationCandidateStatus({ scope, src_id, dst_id, relation_kind, status }) {
+            const row = candidateRows.find(
+              (candidate) =>
+                candidate.scope === scope
+                && candidate.src_id === src_id
+                && candidate.dst_id === dst_id
+                && candidate.relation_kind === relation_kind,
+            );
+            if (!row) return;
+            row.status = status;
+          },
         },
       });
 
@@ -106,6 +117,6 @@ test("promotion only upgrades high-confidence candidates into canonical related_
   const lowConfidence = parsed.candidateRows.find((row) => row.id === "assoc-2");
   assert.equal(promoted.status, "promoted");
   assert.equal(typeof promoted.promoted_edge_id, "string");
-  assert.equal(lowConfidence.status, "shadow");
+  assert.equal(lowConfidence.status, "rejected");
   assert.equal(lowConfidence.promoted_edge_id, null);
 });

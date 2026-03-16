@@ -4,10 +4,11 @@ import type {
   AssociativeCandidateStoreAccess,
   ListAssociationCandidatesForSourceArgs,
   MarkAssociationCandidatePromotedArgs,
+  UpdateAssociationCandidateStatusArgs,
   UpsertAssociationCandidateArgs,
 } from "../memory/associative-candidate-store.js";
 
-export const WRITE_STORE_ACCESS_CAPABILITY_VERSION = 3 as const;
+export const WRITE_STORE_ACCESS_CAPABILITY_VERSION = 4 as const;
 
 export type WriteCommitInsertArgs = {
   scope: string;
@@ -387,6 +388,23 @@ export function createPostgresWriteStoreAccess(
       );
     },
 
+    async updateAssociationCandidateStatus(args: UpdateAssociationCandidateStatusArgs): Promise<void> {
+      await client.query(
+        `UPDATE memory_association_candidates
+         SET status = $5,
+             promoted_edge_id = CASE
+               WHEN $6::text IS NULL THEN promoted_edge_id
+               ELSE $6::uuid
+             END,
+             updated_at = now()
+         WHERE scope = $1
+           AND src_id = $2
+           AND dst_id = $3
+           AND relation_kind = $4`,
+        [args.scope, args.src_id, args.dst_id, args.relation_kind, args.status, args.promoted_edge_id ?? null],
+      );
+    },
+
     async appendAfterTopicClusterEventIds(scope: string, commitId: string, eventIdsJson: string): Promise<void> {
       await client.query(
         `UPDATE memory_outbox
@@ -485,6 +503,7 @@ export function assertWriteStoreAccessContract(access: WriteStoreAccess): void {
     "upsertAssociationCandidates",
     "listAssociationCandidatesForSource",
     "markAssociationCandidatePromoted",
+    "updateAssociationCandidateStatus",
     "appendAfterTopicClusterEventIds",
     "mirrorCommitArtifactsToShadowV2",
   ] as const;

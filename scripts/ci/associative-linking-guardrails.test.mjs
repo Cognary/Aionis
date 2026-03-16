@@ -118,6 +118,10 @@ test("associative guardrails reject cross-scope rows, prevent self-loops, and ex
           async upsertAssociationCandidates(rows) {
             shadowRows.push(...rows);
           },
+          async listAssociationCandidatesForSource() {
+            return [];
+          },
+          async updateAssociationCandidateStatus() {},
         },
       });
 
@@ -132,6 +136,7 @@ test("associative guardrails reject cross-scope rows, prevent self-loops, and ex
             edges.push(edge);
           },
           async markAssociationCandidatePromoted() {},
+          async updateAssociationCandidateStatus() {},
         },
       });
 

@@ -40,8 +40,18 @@ export type MarkAssociationCandidatePromotedArgs = {
   promoted_edge_id: string;
 };
 
+export type UpdateAssociationCandidateStatusArgs = {
+  scope: string;
+  src_id: string;
+  dst_id: string;
+  relation_kind: AssociativeRelationKind;
+  status: AssociativeCandidateStatus;
+  promoted_edge_id?: string | null;
+};
+
 export interface AssociativeCandidateStoreAccess {
   upsertAssociationCandidates(args: UpsertAssociationCandidateArgs[]): Promise<void>;
   listAssociationCandidatesForSource(args: ListAssociationCandidatesForSourceArgs): Promise<AssociationCandidateRecord[]>;
   markAssociationCandidatePromoted(args: MarkAssociationCandidatePromotedArgs): Promise<void>;
+  updateAssociationCandidateStatus(args: UpdateAssociationCandidateStatusArgs): Promise<void>;
 }

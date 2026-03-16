@@ -4,6 +4,7 @@ import type {
   AssociationCandidateRecord,
   ListAssociationCandidatesForSourceArgs,
   MarkAssociationCandidatePromotedArgs,
+  UpdateAssociationCandidateStatusArgs,
   UpsertAssociationCandidateArgs,
 } from "../memory/associative-candidate-store.js";
 import { stableUuid } from "../util/uuid.js";
@@ -2003,6 +2004,27 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
            AND relation_kind = ?`,
       ).run(
         args.promoted_edge_id,
+        nowIso(),
+        args.scope,
+        args.src_id,
+        args.dst_id,
+        args.relation_kind,
+      );
+    },
+
+    async updateAssociationCandidateStatus(args: UpdateAssociationCandidateStatusArgs): Promise<void> {
+      db.prepare(
+        `UPDATE lite_memory_association_candidates
+         SET status = ?,
+             promoted_edge_id = COALESCE(?, promoted_edge_id),
+             updated_at = ?
+         WHERE scope = ?
+           AND src_id = ?
+           AND dst_id = ?
+           AND relation_kind = ?`,
+      ).run(
+        args.status,
+        args.promoted_edge_id ?? null,
         nowIso(),
         args.scope,
         args.src_id,

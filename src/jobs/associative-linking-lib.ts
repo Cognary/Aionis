@@ -109,6 +109,56 @@ function asObject(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function candidateIdentityKey(args: {
+  scope: string;
+  src_id: string;
+  dst_id: string;
+  relation_kind: AssociationCandidateRecord["relation_kind"];
+}): string {
+  return `${args.scope}:${args.src_id}:${args.dst_id}:${args.relation_kind}`;
+}
+
+function buildCandidateUpsert(args: {
+  scope: string;
+  source: RecallAssociativeNodeRow;
+  candidate: RecallAssociativeNodeRow;
+  scored: AssociativeScoredCandidate;
+  features: AssociativeFeatureSet;
+  sourceCommitId: string;
+  status: AssociationCandidateRecord["status"];
+}): UpsertAssociationCandidateArgs {
+  return {
+    scope: args.scope,
+    src_id: args.source.id,
+    dst_id: args.candidate.id,
+    relation_kind: args.scored.relation_kind,
+    status: args.status,
+    score: args.scored.score,
+    confidence: args.scored.confidence,
+    feature_summary_json: {
+      embedding_similarity: args.features.embedding_similarity,
+      file_overlap: args.features.file_overlap,
+      symbol_overlap: args.features.symbol_overlap,
+      validation_overlap: args.features.validation_overlap,
+      rollback_overlap: args.features.rollback_overlap,
+      handoff_anchor_match: args.features.handoff_anchor_match,
+      recency_boost: args.features.recency_boost,
+      repo_root: args.features.repo_root,
+      file_path: args.features.file_path,
+      symbol: args.features.symbol,
+    },
+    evidence_json: {
+      shared_validation_targets: args.features.shared_validation_targets,
+      shared_rollback_notes: args.features.shared_rollback_notes,
+      source_commit_id: args.sourceCommitId,
+      candidate_commit_id: args.candidate.commit_id,
+    },
+    source_commit_id: args.sourceCommitId,
+    worker_run_id: null,
+    promoted_edge_id: null,
+  };
+}
+
 export function buildAssociativeLinkOutboxInsert(args: {
   scope: string;
   commitId: string;
@@ -374,7 +424,10 @@ export async function materializeShadowAssociationCandidates(args: {
   payload: AssociativeLinkTriggerPayload;
   sourceNodes: RecallAssociativeNodeRow[];
   candidatePool: RecallAssociativeNodeRow[];
-  writeAccess: Pick<AssociativeCandidateStoreAccess, "upsertAssociationCandidates">;
+  writeAccess: Pick<
+    AssociativeCandidateStoreAccess,
+    "upsertAssociationCandidates" | "listAssociationCandidatesForSource" | "updateAssociationCandidateStatus"
+  >;
   config?: AssociativeLinkingResolvedConfig;
 }): Promise<AssociativeLinkingJobResult> {
   const config = args.config ?? DEFAULT_ASSOCIATIVE_LINKING_CONFIG;
@@ -382,7 +435,13 @@ export async function materializeShadowAssociationCandidates(args: {
   let evaluatedPairs = 0;
   let rejected = 0;
   for (const source of args.sourceNodes) {
-    const scoredForSource = args.candidatePool
+    const existingShadowCandidates = await args.writeAccess.listAssociationCandidatesForSource({
+      scope: args.payload.scope,
+      src_id: source.id,
+      statuses: ["shadow"],
+      limit: 200,
+    });
+    const scoredRows = args.candidatePool
       .filter((candidate) => {
         if (candidate.id === source.id) {
           rejected += 1;
@@ -400,43 +459,54 @@ export async function materializeShadowAssociationCandidates(args: {
         const scored = scoreAssociativeCandidate(features);
         return { candidate, features, scored };
       })
-      .filter((row) => {
-        if (row.scored.score >= 0.5) return true;
-        rejected += 1;
-        return false;
-      })
+      .sort((left, right) => right.scored.score - left.scored.score || right.scored.confidence - left.scored.confidence);
+    const scoredForSource = scoredRows
+      .filter((row) => row.scored.score >= 0.5)
       .sort((left, right) => right.scored.score - left.scored.score || right.scored.confidence - left.scored.confidence)
       .slice(0, config.max_candidates_per_source);
+    const selectedKeys = new Set(
+      scoredForSource.map((row) =>
+        candidateIdentityKey({
+          scope: args.payload.scope,
+          src_id: source.id,
+          dst_id: row.candidate.id,
+          relation_kind: row.scored.relation_kind,
+        })),
+    );
     for (const row of scoredForSource) {
-      upserts.push({
+      upserts.push(buildCandidateUpsert({
         scope: args.payload.scope,
-        src_id: source.id,
-        dst_id: row.candidate.id,
-        relation_kind: row.scored.relation_kind,
+        source,
+        candidate: row.candidate,
+        scored: row.scored,
+        features: row.features,
+        sourceCommitId: args.payload.source_commit_id,
         status: "shadow",
-        score: row.scored.score,
-        confidence: row.scored.confidence,
-        feature_summary_json: {
-          embedding_similarity: row.features.embedding_similarity,
-          file_overlap: row.features.file_overlap,
-          symbol_overlap: row.features.symbol_overlap,
-          validation_overlap: row.features.validation_overlap,
-          rollback_overlap: row.features.rollback_overlap,
-          handoff_anchor_match: row.features.handoff_anchor_match,
-          recency_boost: row.features.recency_boost,
-          repo_root: row.features.repo_root,
-          file_path: row.features.file_path,
-          symbol: row.features.symbol,
-        },
-        evidence_json: {
-          shared_validation_targets: row.features.shared_validation_targets,
-          shared_rollback_notes: row.features.shared_rollback_notes,
-          source_commit_id: args.payload.source_commit_id,
-          candidate_commit_id: row.candidate.commit_id,
-        },
-        source_commit_id: args.payload.source_commit_id,
-        worker_run_id: null,
-        promoted_edge_id: null,
+      }));
+    }
+    for (const row of scoredRows) {
+      if (row.scored.score >= 0.5) continue;
+      rejected += 1;
+      upserts.push(buildCandidateUpsert({
+        scope: args.payload.scope,
+        source,
+        candidate: row.candidate,
+        scored: row.scored,
+        features: row.features,
+        sourceCommitId: args.payload.source_commit_id,
+        status: "rejected",
+      }));
+    }
+    for (const existing of existingShadowCandidates) {
+      const key = candidateIdentityKey(existing);
+      if (selectedKeys.has(key)) continue;
+      if (!isValidAssociativeCandidateStatusTransition(existing.status, "expired")) continue;
+      await args.writeAccess.updateAssociationCandidateStatus({
+        scope: existing.scope,
+        src_id: existing.src_id,
+        dst_id: existing.dst_id,
+        relation_kind: existing.relation_kind,
+        status: "expired",
       });
     }
   }
@@ -447,7 +517,7 @@ export async function materializeShadowAssociationCandidates(args: {
     source_count: args.sourceNodes.length,
     candidate_pool_size: args.candidatePool.length,
     evaluated_pairs: evaluatedPairs,
-    shadow_created: upserts.length,
+    shadow_created: upserts.filter((row) => row.status === "shadow").length,
     promoted: 0,
     rejected,
   };
@@ -456,7 +526,10 @@ export async function materializeShadowAssociationCandidates(args: {
 export async function runAssociativeLinkingJob(args: {
   payload: AssociativeLinkTriggerPayload;
   recallAccess: AssociativeLinkingRecallAccess;
-  writeAccess: Pick<AssociativeCandidateStoreAccess, "upsertAssociationCandidates">;
+  writeAccess: Pick<
+    AssociativeCandidateStoreAccess,
+    "upsertAssociationCandidates" | "listAssociationCandidatesForSource" | "updateAssociationCandidateStatus"
+  >;
   config?: AssociativeLinkingResolvedConfig;
 }): Promise<AssociativeLinkingJobResult> {
   const fetched = await fetchAssociativeCandidatesForSources(args);
@@ -474,7 +547,7 @@ export async function promoteAssociativeCandidates(args: {
   sourceNodeIds: string[];
   writeAccess: Pick<
     AssociativeCandidateStoreAccess,
-    "listAssociationCandidatesForSource" | "markAssociationCandidatePromoted"
+    "listAssociationCandidatesForSource" | "markAssociationCandidatePromoted" | "updateAssociationCandidateStatus"
   > & {
     upsertEdge(params: {
       id: string;
@@ -496,6 +569,17 @@ export async function promoteAssociativeCandidates(args: {
   let evaluated = 0;
   let promoted = 0;
   let rejected = 0;
+  const rejectCandidate = async (candidate: AssociationCandidateRecord) => {
+    rejected += 1;
+    if (!isValidAssociativeCandidateStatusTransition(candidate.status, "rejected")) return;
+    await args.writeAccess.updateAssociationCandidateStatus({
+      scope: candidate.scope,
+      src_id: candidate.src_id,
+      dst_id: candidate.dst_id,
+      relation_kind: candidate.relation_kind,
+      status: "rejected",
+    });
+  };
 
   for (const sourceNodeId of uniqueSourceIds) {
     const candidates = await args.writeAccess.listAssociationCandidatesForSource({
@@ -507,27 +591,27 @@ export async function promoteAssociativeCandidates(args: {
     for (const candidate of candidates) {
       evaluated += 1;
       if (candidate.status !== "shadow") {
-        rejected += 1;
+        await rejectCandidate(candidate);
         continue;
       }
       if (!isValidAssociativeCandidateStatusTransition(candidate.status, "promoted")) {
-        rejected += 1;
+        await rejectCandidate(candidate);
         continue;
       }
       if (candidate.src_id === candidate.dst_id) {
-        rejected += 1;
+        await rejectCandidate(candidate);
         continue;
       }
       if (candidate.source_commit_id == null) {
-        rejected += 1;
+        await rejectCandidate(candidate);
         continue;
       }
       if (candidate.confidence < config.promotion_confidence_threshold) {
-        rejected += 1;
+        await rejectCandidate(candidate);
         continue;
       }
       if (candidate.score < config.promotion_score_threshold) {
-        rejected += 1;
+        await rejectCandidate(candidate);
         continue;
       }
 
