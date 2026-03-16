@@ -150,8 +150,10 @@ Current reading:
    - `handoff/recover`
    - `planning_context`
    - `context/assemble`
+   - `memory/write`
 4. public route semantics remain unchanged while state durability starts moving beyond slot-only persistence
 5. state-first packet assembly is now explicitly observable on the context path
+6. explicit transition emission is now live on a second write-oriented route instead of remaining handoff-only
 
 ## What Is Not Finished
 
@@ -192,8 +194,21 @@ The project is not yet strong enough to say:
 1. every runtime surface is adopted
 2. every realistic workflow is now an efficiency win
 3. the generic platform story is fully proven outside the current OpenClaw wedge
-4. Phase 2 state-first assembly is active on the real route path
-5. `ExecutionState` is already the universal source of truth
+4. `ExecutionState` is already the universal source of truth
+
+## Phase 2 Refreshed Real-Workflow Readout
+
+The current strongest three-slice readout after the Phase 2 state-first context path landed is:
+
+1. dashboard auth drift: completion win, token win, wall-clock win
+2. pairing / approval recovery: completion win, token win, wall-clock win
+3. service token drift repair: completion win, but not an efficiency win
+
+This makes the current Phase 2 story:
+
+1. positive on reviewer-ready completion across all three strongest slices
+2. positive on efficiency for two of the three strongest slices
+3. not yet a universal efficiency story
 
 ## Recommended Next Focus
 

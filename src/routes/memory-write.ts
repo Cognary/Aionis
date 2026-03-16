@@ -1,4 +1,7 @@
 import type { Env } from "../config.js";
+import type { InMemoryExecutionStateStore } from "../execution/state-store.js";
+import { ExecutionStateV1Schema } from "../execution/types.js";
+import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "../memory/write.js";
 import type { WriteStoreAccess } from "../store/write-access.js";
@@ -29,6 +32,27 @@ type GateLike = {
   release: () => void;
   wait_ms: number;
 };
+
+function collectExecutionWriteOverlays(
+  nodes: Array<{ slots?: Record<string, unknown> }>,
+): {
+  states: Array<ReturnType<typeof ExecutionStateV1Schema.parse>>;
+  transitions: Array<ReturnType<typeof ExecutionStateTransitionV1Schema.parse>>;
+} {
+  const states: Array<ReturnType<typeof ExecutionStateV1Schema.parse>> = [];
+  const transitions: Array<ReturnType<typeof ExecutionStateTransitionV1Schema.parse>> = [];
+  for (const node of nodes) {
+    const slots = node.slots;
+    if (!slots || typeof slots !== "object") continue;
+    if ("execution_state_v1" in slots) {
+      states.push(ExecutionStateV1Schema.parse((slots as any).execution_state_v1));
+    }
+    if ("execution_transition_v1" in slots) {
+      transitions.push(ExecutionStateTransitionV1Schema.parse((slots as any).execution_transition_v1));
+    }
+  }
+  return { states, transitions };
+}
 
 async function completeLiteInlineEmbeddings(args: {
   prepared: any;
@@ -139,6 +163,7 @@ export function registerMemoryWriteRoutes(args: {
   tenantFromBody: (body: unknown) => string;
   acquireInflightSlot: (kind: "write") => Promise<GateLike>;
   runTopicClusterForEventIds: (client: any, args: any) => Promise<any>;
+  executionStateStore?: InMemoryExecutionStateStore | null;
 }) {
   const {
     app,
@@ -156,6 +181,7 @@ export function registerMemoryWriteRoutes(args: {
     tenantFromBody,
     acquireInflightSlot,
     runTopicClusterForEventIds,
+    executionStateStore,
   } = args;
   const embeddingSurfacePolicy =
     embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
@@ -181,6 +207,7 @@ export function registerMemoryWriteRoutes(args: {
         },
         writeEmbedder,
       );
+      const executionOverlays = executionStateStore ? collectExecutionWriteOverlays(prepared.nodes) : null;
       if (env.MEMORY_WRITE_REQUIRE_NODES && prepared.nodes.length === 0) {
         throw new HttpError(
           400,
@@ -325,6 +352,14 @@ export function registerMemoryWriteRoutes(args: {
       }
 
       const response = warnings.length > 0 ? { ...out, warnings } : out;
+      if (executionStateStore && executionOverlays) {
+        for (const state of executionOverlays.states) {
+          executionStateStore.put(state);
+        }
+        for (const transition of executionOverlays.transitions) {
+          executionStateStore.applyTransition(transition);
+        }
+      }
       if (embeddedRuntime) {
         await embeddedRuntime.applyWrite(prepared as any, out as any);
       }

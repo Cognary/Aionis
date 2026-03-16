@@ -293,7 +293,16 @@ Current checkpoint:
 2. `handoff/store` now persists `execution_state_v1` into the internal state store after successful writes
 3. `handoff/recover` now prefers the internal state store when a matching record exists
 4. `planning_context` and `context/assemble` now report explicit `packet_source_mode` metadata and prefer state-first packet assembly when `execution_state_v1` is provided
-5. public route semantics remain unchanged
+5. `memory/write` now persists explicit `execution_state_v1` payloads and applies explicit `execution_transition_v1` payloads into the internal state store
+6. public route semantics remain unchanged
+
+Current strongest-slice revalidation reading:
+
+1. dashboard auth drift is positive on completion, token, and wall-clock
+2. pairing / approval recovery is positive on completion, token, and wall-clock
+3. service token drift repair is positive on completion, but not on efficiency
+
+This means the current Phase 2 rollout is already positive on reviewer-ready completion across the strongest three workflow slices.
 
 ### Step 2. Transition Contract
 

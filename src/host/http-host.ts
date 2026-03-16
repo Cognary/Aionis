@@ -456,6 +456,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     tenantFromBody,
     acquireInflightSlot,
     runTopicClusterForEventIds,
+    executionStateStore: getSharedExecutionStateStore(),
   });
 
   registerHandoffRoutes({

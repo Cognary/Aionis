@@ -155,21 +155,41 @@ What landed:
 4. `scripts/ci/execution-continuity-phase2-handoff-store.test.mjs`
 5. `scripts/ci/execution-continuity-phase2-handoff-recover.test.mjs`
 6. `scripts/ci/execution-continuity-phase2-context-assembly.test.mjs`
+7. `scripts/ci/execution-continuity-phase2-memory-write.test.mjs`
 
 What changed on the real route path:
 
 1. `handoff/store` now persists `execution_state_v1` into the new internal state store after a successful handoff write
 2. `handoff/recover` now prefers the internal state store when a matching state record exists
 3. `planning_context` and `context/assemble` now report and use explicit state-first packet assembly when `execution_state_v1` is provided
-4. the routes still return the same primary handoff/context artifact contracts
-5. the continuity path now falls back to slot projection only when state-first recovery or assembly is unavailable
+4. `memory/write` now persists explicit `execution_state_v1` payloads and applies explicit `execution_transition_v1` payloads into the same internal state store
+5. the routes still return the same primary handoff/context artifact contracts
+6. the continuity path now falls back to slot projection only when state-first recovery or assembly is unavailable
 
 What this means:
 
 1. Phase 2 is no longer only about defining state persistence and transitions in isolation
-2. the first three route overlays are now in place
-3. the current public route family remains intact while kernel state starts becoming independently durable
-4. state-first assembly is now observable instead of being inferred indirectly
+2. the first four route overlays are now in place
+3. `memory/write` is now the first non-handoff route that can mutate kernel state directly through explicit transition payloads
+4. the current public route family remains intact while kernel state starts becoming independently durable
+5. state-first assembly is now observable instead of being inferred indirectly
+
+## Phase 2 Real Workflow Revalidation
+
+The first refreshed real-workflow set against the Phase 2 state-first context path is now in hand.
+
+Current strongest-slice reading:
+
+1. dashboard auth drift: `0 -> 0.6667`, with lower token and lower wall-clock
+2. pairing / approval recovery: `0 -> 1`, with lower token and lower wall-clock
+3. service token drift repair: `0 -> 1`, but with higher token and higher wall-clock
+
+This means:
+
+1. the Phase 2 path is already positive on reviewer-ready completion across the strongest three workflow slices
+2. the efficiency story is positive on the first two strongest slices
+3. the third strongest slice remains a completion win, not an efficiency win
+4. Phase 2 is no longer just an implementation checkpoint; it already has a refreshed product-facing evidence set
 
 ## What This Means Architecturally
 
@@ -218,6 +238,7 @@ Passed at this checkpoint:
 4. adapter-side runtime threshold adoption tests on the OpenClaw path
 5. first controlled nightly real-workflow validation on `glm_dashboard_auth_drift_reviewer_ready_workflow`
 6. focused `tools/select` control-profile filtering test on the Aionis path
+7. focused `memory/write` state-persist and transition-emission test on the Aionis path
 
 Nightly validation artifact:
 
