@@ -8,6 +8,11 @@ import { stableUuid } from "../util/uuid.js";
 import { badRequest, HttpError } from "../util/http.js";
 import { capabilityContract, type CapabilityFailureMode } from "../capability-contract.js";
 import { assertWriteStoreAccessContract, createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
+import { DEFAULT_ASSOCIATIVE_LINKING_CONFIG } from "./associative-linking-config.js";
+import {
+  AssociativeLinkTriggerPayloadSchema,
+  type AssociativeLinkTriggerOrigin,
+} from "./associative-linking-types.js";
 import { MemoryWriteRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { resolveTenantScope, toTenantScopeKey } from "./tenant.js";
@@ -83,6 +88,7 @@ type ApplyWriteOptions = PrepareWriteOptions & {
   shadowDualWriteEnabled: boolean;
   shadowDualWriteStrict: boolean;
   write_access?: WriteStoreAccess;
+  associativeLinkOrigin?: AssociativeLinkTriggerOrigin;
 };
 
 type PreparedNode = {
@@ -152,6 +158,17 @@ export type EffectiveWritePolicy = {
   trigger_topic_cluster: boolean;
   topic_cluster_async: boolean;
 };
+
+function selectAssociativeLinkSourceNodeIds(nodes: PreparedNode[]): string[] {
+  const allowed = new Set<string>(DEFAULT_ASSOCIATIVE_LINKING_CONFIG.source_node_types);
+  const ids: string[] = [];
+  for (const node of nodes) {
+    if (!allowed.has(node.type)) continue;
+    ids.push(node.id);
+    if (ids.length >= DEFAULT_ASSOCIATIVE_LINKING_CONFIG.max_source_node_ids) break;
+  }
+  return ids;
+}
 
 export function computeEffectiveWritePolicy(
   prepared: PreparedWrite,
@@ -674,6 +691,41 @@ export async function applyMemoryWrite(
       });
       enqueuedEmbedNodes = true;
       result.embedding_backfill = { enqueued: true, pending_nodes: embedNodes.length };
+    }
+  }
+
+  const associativeLinkSourceNodeIds = selectAssociativeLinkSourceNodeIds(nodes);
+  if (associativeLinkSourceNodeIds.length > 0) {
+    const payload = AssociativeLinkTriggerPayloadSchema.parse({
+      origin: opts.associativeLinkOrigin ?? "memory_write",
+      scope,
+      source_node_ids: associativeLinkSourceNodeIds,
+      source_commit_id: commit_id,
+    });
+    const payloadSha = sha256Hex(stableStringify(payload));
+    const jobKey = sha256Hex(stableStringify({ v: 1, scope, commit_id, event_type: "associative_link", payloadSha }));
+    try {
+      await writeAccess.insertOutboxEvent({
+        scope,
+        commitId: commit_id,
+        eventType: "associative_link",
+        jobKey,
+        payloadSha256: payloadSha,
+        payloadJson: JSON.stringify(payload),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const warnings = result.warnings ?? [];
+      warnings.push({
+        code: "associative_link_enqueue_failed",
+        message: "associative linking enqueue degraded; write succeeded without shadow candidate generation",
+        details: {
+          origin: payload.origin,
+          source_node_count: payload.source_node_ids.length,
+          error: message,
+        },
+      });
+      result.warnings = warnings;
     }
   }
 

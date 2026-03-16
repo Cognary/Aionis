@@ -142,6 +142,7 @@ export async function applyReplayMemoryWrite(
     allowCrossScopeEdges: opts.allowCrossScopeEdges,
     shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
     shadowDualWriteStrict: opts.shadowDualWriteStrict,
+    associativeLinkOrigin: "replay_write",
     write_access: opts.writeAccess ?? createPostgresWriteStoreAccess(client, {
       capabilities: { shadow_mirror_v2: opts.writeAccessShadowMirrorV2 },
     }),

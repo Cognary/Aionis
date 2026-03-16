@@ -93,6 +93,7 @@ export function registerHandoffRoutes(args: {
               shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
               shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
               write_access: liteWriteStore as any,
+              associativeLinkOrigin: "handoff_store",
             }),
           )
         : await store.withTx((client) =>
@@ -103,6 +104,7 @@ export function registerHandoffRoutes(args: {
               shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
               shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
               write_access: writeAccessForClient(client),
+              associativeLinkOrigin: "handoff_store",
             }),
           );
 
