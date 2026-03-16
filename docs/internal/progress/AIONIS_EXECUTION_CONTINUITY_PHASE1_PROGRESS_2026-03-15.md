@@ -198,6 +198,14 @@ Subsequent repair checkpoint:
 3. a follow-up single-run real-Lite check on dashboard auth drift stayed healthy at `1 -> 1`, while reducing total tokens and wall-clock
 4. the repaired handoff-transition path now also holds on a `3`-repeat strongest-slice real-workflow set: dashboard auth drift moved `0 -> 1`, while lowering average token spend and wall-clock
 
+Additional `tools/select` checkpoint:
+
+1. `tools/select` now accepts optional `execution_state_v1` directly
+2. when explicit `control_profile_v1` is absent, `tools/select` now derives the active profile from `ExecutionState.current_stage`
+3. `tools/select` responses now report `execution_kernel.control_profile_origin` together with visible stage/role metadata
+4. the OpenClaw adapter now threads recovered continuity state into `tools/select`
+5. the first strongest-slice real-Lite smoke after this change stayed positive on reviewer-ready completion (`0 -> 1`), with faster wall-clock and slightly higher token spend
+
 ## What This Means Architecturally
 
 At this checkpoint, the minimum continuity loop is now present:
@@ -312,8 +320,8 @@ It is not strong enough yet to say:
 
 The next highest-value step after the current Phase 1 refresh work is:
 
-1. promote the new Phase 2 `handoff/store + handoff/recover + context assembly` overlays toward a broader state-first execution path without changing public route semantics
-2. continue verifying whether `tools/select`-level control-profile adoption improves the strongest real workflow slices, not just the threshold layer
+1. turn the new `tools/select` state-aware path from focused CI + single-run smoke into repeated strongest-slice validation
+2. continue promoting the Phase 2 `handoff/store + handoff/recover + context assembly` overlays toward a broader state-first execution path without changing public route semantics
 
 The immediate proof targets are:
 
@@ -321,8 +329,8 @@ The immediate proof targets are:
 2. profile projection is not merely type-level
 3. the first route overlays can persist, recover, and assemble execution state without breaking the current route contracts
 4. adapter thresholds are actually being tightened by continuity-delivered profile data
-5. Aionis-side tool selection is also respecting continuity-delivered profile data
+5. Aionis-side tool selection is also respecting continuity-delivered or state-derived profile data
 6. the current positive real workflow story does not regress when profile adoption is enabled
-6. the first positive nightly result is not a one-off artifact of a single strongest slice
+7. the first positive nightly result is not a one-off artifact of a single strongest slice
 
 Only after that should the branch broaden `ControlProfile` adoption to additional runtime surfaces.

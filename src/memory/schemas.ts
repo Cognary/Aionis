@@ -657,6 +657,7 @@ export const ToolsSelectRequest = z.object({
   // Optional execution run correlation id for provenance.
   run_id: z.string().min(1).optional(),
   context: z.any(),
+  execution_state_v1: ExecutionStateV1Schema.optional(),
   // Tool names provided by the caller's execution environment.
   candidates: z.array(z.string().min(1)).min(1).max(200),
   // Include SHADOW rules as a non-enforcing preview channel.

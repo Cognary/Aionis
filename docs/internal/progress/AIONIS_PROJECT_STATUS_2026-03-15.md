@@ -155,6 +155,7 @@ Current reading:
 5. state-first packet assembly is now explicitly observable on the context path
 6. explicit transition emission is now live on both `handoff/store` and `memory/write`, instead of remaining implied by projection
 7. the first real regression from handoff-transition rollout has been fixed: repeated handoffs for the same anchor now rebase transition expectations onto the stored revision instead of failing on revision mismatch
+8. `tools/select` can now read `execution_state_v1` directly, derive a control profile from `current_stage` when needed, and report profile origin metadata in its response
 
 ## What Is Not Finished
 
@@ -211,6 +212,7 @@ This makes the current Phase 2 story:
 2. positive on efficiency for two of the three strongest slices
 3. not yet a universal efficiency story
 4. resilient enough to absorb a real route-level regression, fix it, and confirm the repaired path on both single-run and `3`-repeat real-Lite workflow validation
+5. now entering a third runtime-surface checkpoint where `tools/select` can consume durable execution state directly rather than only continuity-delivered profile payloads
 
 ## Recommended Next Focus
 
@@ -220,6 +222,7 @@ The next highest-value work remains:
 2. prefer runtime-surface proofs over new abstract kernel work
 3. keep Phase 2 Step 1 additive until the state store and transition contract are strong enough to back state-first packet assembly
 4. only after that, continue pushing `ExecutionState` toward a more independent source-of-truth role
+5. the immediate next proof should be repeated strongest-slice validation for the new state-aware `tools/select` path
 
 In short:
 

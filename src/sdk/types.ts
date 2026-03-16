@@ -1477,6 +1477,13 @@ export type ToolsSelectResponse = {
   tenant_id?: string;
   scope: string;
   candidates: string[];
+  execution_kernel?: {
+    control_profile_origin?: "continuity_delivered" | "state_derived" | "none";
+    execution_state_v1_present?: boolean;
+    current_stage?: "triage" | "patch" | "review" | "resume" | null;
+    active_role?: "orchestrator" | "triage" | "patch" | "review" | "resume" | null;
+    [k: string]: unknown;
+  };
   selection_summary?: {
     summary_version: "tools_selection_summary_v1";
     selected_tool: string | null;

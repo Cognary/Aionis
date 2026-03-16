@@ -453,13 +453,13 @@ Phase 2 should be considered complete only when all of the following are true:
 
 ## Recommended Next Move
 
-The first implementation move for Phase 2 should be:
+The next implementation move after the current state-store, transition, and state-first context overlays is:
 
-1. add the `ExecutionState` store scaffold and transition contract
+1. turn the new state-aware `tools/select` path into repeated strongest-slice validation
 
-That is the highest-value move because it unlocks everything else:
+That is the highest-value move now because it tests whether:
 
-1. packet-first assembly
-2. better observability
-3. more reliable runtime-surface adoption
-4. less dependence on handoff-only continuity projection
+1. durable execution state can shape runtime control beyond packet assembly
+2. `ControlProfile` adoption keeps moving through measured runtime surfaces instead of ad hoc host logic
+3. phase-2 state data is useful on the real OpenClaw path, not just inside route overlays
+4. the product story stays positive as the kernel starts reading state directly during tool choice

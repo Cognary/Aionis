@@ -492,6 +492,26 @@ export type ToolsSelectInput = {
   scope?: string;
   run_id?: string;
   context: unknown;
+  execution_state_v1?: {
+    state_id: string;
+    scope: string;
+    task_brief: string;
+    current_stage: "triage" | "patch" | "review" | "resume";
+    active_role: "orchestrator" | "triage" | "patch" | "review" | "resume";
+    owned_files: string[];
+    modified_files: string[];
+    pending_validations: string[];
+    completed_validations: string[];
+    last_accepted_hypothesis?: string | null;
+    rejected_paths: string[];
+    unresolved_blockers: string[];
+    rollback_notes: string[];
+    reviewer_contract?: Record<string, unknown> | null;
+    resume_anchor?: Record<string, unknown> | null;
+    updated_at: string;
+    version: 1;
+    [k: string]: unknown;
+  };
   candidates: string[];
   include_shadow?: boolean;
   rules_limit?: number;
@@ -1875,6 +1895,13 @@ export type ToolsSelectResponse = {
   tenant_id?: string;
   scope: string;
   candidates: string[];
+  execution_kernel?: {
+    control_profile_origin?: "continuity_delivered" | "state_derived" | "none";
+    execution_state_v1_present?: boolean;
+    current_stage?: "triage" | "patch" | "review" | "resume" | null;
+    active_role?: "orchestrator" | "triage" | "patch" | "review" | "resume" | null;
+    [k: string]: unknown;
+  };
   selection: {
     candidates: string[];
     selected: string | null;

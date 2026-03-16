@@ -14,7 +14,13 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { buildToolsSelectionSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri } from "./uri.js";
-import { ControlProfileV1Schema } from "../execution/types.js";
+import {
+  ControlProfileV1Schema,
+  ExecutionStateV1Schema,
+  type ControlProfileV1,
+  type ExecutionStateV1,
+} from "../execution/types.js";
+import { controlProfileDefaults } from "../execution/profiles.js";
 
 function inferBroadToolKind(name: string): "scan" | "test" | null {
   const lowered = name.toLowerCase();
@@ -24,32 +30,67 @@ function inferBroadToolKind(name: string): "scan" | "test" | null {
   return null;
 }
 
-export function applyControlProfileCandidateFilter(
-  candidates: string[],
+function deriveControlProfileFromExecutionState(state: ExecutionStateV1): ControlProfileV1 {
+  return controlProfileDefaults(state.current_stage);
+}
+
+export function resolveExecutionKernelInputs(
   rawContext: unknown,
+  rawExecutionState: unknown,
 ): {
-  filteredCandidates: string[];
-  deniedByProfile: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" | "control_profile" }>;
+  controlProfile: ControlProfileV1 | null;
+  controlProfileOrigin: "continuity_delivered" | "state_derived" | "none";
+  executionState: ExecutionStateV1 | null;
 } {
   const context =
     rawContext && typeof rawContext === "object" ? (rawContext as Record<string, unknown>) : null;
   const parsedProfile = ControlProfileV1Schema.safeParse(context?.control_profile_v1);
+  if (parsedProfile.success) {
+    const parsedState = ExecutionStateV1Schema.safeParse(rawExecutionState);
+    return {
+      controlProfile: parsedProfile.data,
+      controlProfileOrigin: "continuity_delivered",
+      executionState: parsedState.success ? parsedState.data : null,
+    };
+  }
 
-  if (!parsedProfile.success) {
+  const parsedState = ExecutionStateV1Schema.safeParse(rawExecutionState);
+  if (parsedState.success) {
+    return {
+      controlProfile: deriveControlProfileFromExecutionState(parsedState.data),
+      controlProfileOrigin: "state_derived",
+      executionState: parsedState.data,
+    };
+  }
+
+  return {
+    controlProfile: null,
+    controlProfileOrigin: "none",
+    executionState: null,
+  };
+}
+
+export function applyControlProfileCandidateFilter(
+  candidates: string[],
+  controlProfile: ControlProfileV1 | null,
+): {
+  filteredCandidates: string[];
+  deniedByProfile: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" | "control_profile" }>;
+} {
+  if (!controlProfile) {
     return { filteredCandidates: candidates, deniedByProfile: [] };
   }
 
-  const profile = parsedProfile.data;
   const filteredCandidates: string[] = [];
   const deniedByProfile: Array<{ name: string; reason: "deny_list" | "not_in_allow_list" | "control_profile" }> = [];
 
   for (const candidate of candidates) {
     const broadKind = inferBroadToolKind(candidate);
-    if (broadKind === "scan" && profile.allow_broad_scan === false) {
+    if (broadKind === "scan" && controlProfile.allow_broad_scan === false) {
       deniedByProfile.push({ name: candidate, reason: "control_profile" });
       continue;
     }
-    if (broadKind === "test" && profile.allow_broad_test === false) {
+    if (broadKind === "test" && controlProfile.allow_broad_test === false) {
       deniedByProfile.push({ name: candidate, reason: "control_profile" });
       continue;
     }
@@ -92,9 +133,10 @@ export async function selectTools(
     { defaultScope, defaultTenantId },
   );
   const normalizedCandidates = normalizeToolCandidates(parsed.candidates);
+  const kernelInputs = resolveExecutionKernelInputs(parsed.context, parsed.execution_state_v1);
   const { filteredCandidates, deniedByProfile } = applyControlProfileCandidateFilter(
     normalizedCandidates,
-    parsed.context,
+    kernelInputs.controlProfile,
   );
 
   const rules = await evaluateRulesAppliedOnly((client ?? ({} as pg.PoolClient)), {
@@ -137,6 +179,9 @@ export async function selectTools(
     matched_rules: rules.matched,
     tool_conflicts_summary,
     denied_by_control_profile: deniedByProfile.map((entry) => entry.name),
+    control_profile_origin: kernelInputs.controlProfileOrigin,
+    execution_stage: kernelInputs.executionState?.current_stage ?? null,
+    execution_role: kernelInputs.executionState?.active_role ?? null,
     ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
   };
   const decisionRes: { id: string; created_at: string } = opts.liteWriteStore
@@ -206,6 +251,12 @@ export async function selectTools(
     tenant_id: rules.tenant_id,
     candidates: selection.candidates,
     selection,
+    execution_kernel: {
+      control_profile_origin: kernelInputs.controlProfileOrigin,
+      execution_state_v1_present: !!kernelInputs.executionState,
+      current_stage: kernelInputs.executionState?.current_stage ?? null,
+      active_role: kernelInputs.executionState?.active_role ?? null,
+    },
     rules: {
       considered: rules.considered,
       matched: rules.matched,
