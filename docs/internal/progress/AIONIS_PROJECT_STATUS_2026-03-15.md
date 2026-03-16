@@ -14,6 +14,7 @@ Related:
 3. `clawbot-aionis-adapter/docs/2026-03-14-openclaw-aionis-benchmark-summary.md`
 4. `clawbot-aionis-adapter/docs/2026-03-15-openclaw-real-workflow-scenario-benchmark.md`
 5. [Phase 2 Plan](../plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md)
+6. [Stage Closeout and GTM Plan](../strategy/AIONIS_STAGE_CLOSEOUT_AND_GTM_PLAN_2026-03-16.md)
 
 ## Executive Summary
 
