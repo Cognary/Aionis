@@ -27,6 +27,7 @@ import { registerMemoryReplayCoreRoutes } from "../routes/memory-replay-core.js"
 import { registerMemoryReplayGovernedRoutes } from "../routes/memory-replay-governed.js";
 import { registerMemorySandboxRoutes } from "../routes/memory-sandbox.js";
 import { registerMemoryWriteRoutes } from "../routes/memory-write.js";
+import { getSharedExecutionStateStore } from "../execution/state-store.js";
 import { buildLiteRouteMatrix, registerLiteServerOnlyRoutes } from "./lite-edition.js";
 import { HttpError } from "../util/http.js";
 
@@ -472,6 +473,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     enforceTenantQuota,
     tenantFromBody,
     acquireInflightSlot,
+    executionStateStore: getSharedExecutionStateStore(),
   });
 
   registerMemoryLifecycleRoutes({

@@ -84,6 +84,12 @@ export class InMemoryExecutionStateStore {
   }
 }
 
+const sharedExecutionStateStore = new InMemoryExecutionStateStore();
+
+export function getSharedExecutionStateStore(): InMemoryExecutionStateStore {
+  return sharedExecutionStateStore;
+}
+
 export function buildStoredExecutionState(
   stateInput: ExecutionStateV1,
   options: {

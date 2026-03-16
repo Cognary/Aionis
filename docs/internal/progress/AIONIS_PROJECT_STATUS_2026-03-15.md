@@ -145,7 +145,8 @@ Current reading:
 
 1. `ExecutionState` now has an internal persistence scaffold independent of handoff slots
 2. state transitions are now an explicit internal contract instead of remaining purely implied by projection
-3. this is still internal-only and does not yet change public route behavior
+3. the first route overlay is now present on `handoff/store`
+4. public handoff semantics remain unchanged while state durability starts moving beyond slot-only persistence
 
 ## What Is Not Finished
 
@@ -187,6 +188,7 @@ The project is not yet strong enough to say:
 2. every realistic workflow is now an efficiency win
 3. the generic platform story is fully proven outside the current OpenClaw wedge
 4. Phase 2 state-first assembly is active on the real route path
+5. `ExecutionState` is already the universal source of truth
 
 ## Recommended Next Focus
 

@@ -1,7 +1,7 @@
 # Aionis Execution Continuity Kernel Phase 2 Plan
 
 Date: `2026-03-16`
-Status: `proposed design and rollout plan`
+Status: `active design and rollout plan`
 Depends on:
 - [AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE1_PLAN_2026-03-15.md](/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE1_PLAN_2026-03-15.md)
 - [AIONIS_EXECUTION_CONTINUITY_PHASE1_PROGRESS_2026-03-15.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_EXECUTION_CONTINUITY_PHASE1_PROGRESS_2026-03-15.md)
@@ -286,6 +286,12 @@ Exit criteria:
 1. build passes
 2. state store is internal-only
 3. no public route breakage
+
+Current checkpoint:
+
+1. the scaffold has landed
+2. `handoff/store` now persists `execution_state_v1` into the internal state store after successful writes
+3. public handoff route semantics remain unchanged
 
 ### Step 2. Transition Contract
 

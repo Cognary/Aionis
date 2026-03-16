@@ -1,5 +1,7 @@
 import type { Env } from "../config.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
+import type { InMemoryExecutionStateStore } from "../execution/state-store.js";
+import { ExecutionStateV1Schema } from "../execution/types.js";
 import { buildHandoffWriteBody, recoverHandoff } from "../memory/handoff.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
 import { HandoffRecoverRequest, HandoffStoreRequest } from "../memory/schemas.js";
@@ -34,6 +36,7 @@ export function registerHandoffRoutes(args: {
   enforceTenantQuota: (req: any, reply: any, kind: "write" | "recall", tenantId: string) => Promise<void>;
   tenantFromBody: (body: unknown) => string;
   acquireInflightSlot: (kind: "write" | "recall") => Promise<GateLike>;
+  executionStateStore?: InMemoryExecutionStateStore | null;
 }) {
   const {
     app,
@@ -50,6 +53,7 @@ export function registerHandoffRoutes(args: {
     enforceTenantQuota,
     tenantFromBody,
     acquireInflightSlot,
+    executionStateStore,
   } = args;
   const embeddingSurfacePolicy =
     embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
@@ -107,6 +111,13 @@ export function registerHandoffRoutes(args: {
 
       const handoffNode = Array.isArray(out.nodes) ? (out.nodes[0] as any) : null;
       const handoffSlots = handoffNode && handoffNode.slots && typeof handoffNode.slots === "object" ? handoffNode.slots : null;
+      const writeNode = Array.isArray(writeBody.nodes) ? (writeBody.nodes[0] as any) : null;
+      const writeSlots = writeNode && writeNode.slots && typeof writeNode.slots === "object" ? writeNode.slots : null;
+      const continuitySlots = handoffSlots ?? writeSlots;
+      if (executionStateStore && writeSlots && "execution_state_v1" in writeSlots) {
+        const executionState = ExecutionStateV1Schema.parse((writeSlots as any).execution_state_v1);
+        executionStateStore.put(executionState);
+      }
       return reply.code(200).send({
         tenant_id: out.tenant_id,
         scope: out.scope,
@@ -136,9 +147,12 @@ export function registerHandoffRoutes(args: {
               memory_lane: body.memory_lane,
             }
           : null,
-        execution_state_v1: handoffSlots && "execution_state_v1" in handoffSlots ? (handoffSlots as any).execution_state_v1 : undefined,
-        execution_packet_v1: handoffSlots && "execution_packet_v1" in handoffSlots ? (handoffSlots as any).execution_packet_v1 : undefined,
-        control_profile_v1: handoffSlots && "control_profile_v1" in handoffSlots ? (handoffSlots as any).control_profile_v1 : undefined,
+        execution_state_v1:
+          continuitySlots && "execution_state_v1" in continuitySlots ? (continuitySlots as any).execution_state_v1 : undefined,
+        execution_packet_v1:
+          continuitySlots && "execution_packet_v1" in continuitySlots ? (continuitySlots as any).execution_packet_v1 : undefined,
+        control_profile_v1:
+          continuitySlots && "control_profile_v1" in continuitySlots ? (continuitySlots as any).control_profile_v1 : undefined,
       });
     } finally {
       gate.release();
