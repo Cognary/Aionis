@@ -196,6 +196,7 @@ Subsequent repair checkpoint:
 1. the first `handoff/store -> execution_transitions_v1` rollout exposed a real revision-rebase bug on repeated handoffs for the same anchor
 2. that bug is now fixed by rebasing emitted transition expectations onto the stored state revision at route time
 3. a follow-up single-run real-Lite check on dashboard auth drift stayed healthy at `1 -> 1`, while reducing total tokens and wall-clock
+4. the repaired handoff-transition path now also holds on a `3`-repeat strongest-slice real-workflow set: dashboard auth drift moved `0 -> 1`, while lowering average token spend and wall-clock
 
 ## What This Means Architecturally
 

@@ -305,6 +305,12 @@ Current strongest-slice revalidation reading:
 
 This means the current Phase 2 rollout is already positive on reviewer-ready completion across the strongest three workflow slices.
 
+The later `handoff/store -> execution_transitions_v1` repair also now has a repeated strongest-slice confirmation:
+
+1. dashboard auth drift moved `0 -> 1`
+2. average total tokens dropped from `24717.67` to `21235.67`
+3. average wall-clock dropped from `101635.33ms` to `68210ms`
+
 ### Step 2. Transition Contract
 
 Deliver:

@@ -210,7 +210,7 @@ This makes the current Phase 2 story:
 1. positive on reviewer-ready completion across all three strongest slices
 2. positive on efficiency for two of the three strongest slices
 3. not yet a universal efficiency story
-4. resilient enough to absorb a real route-level regression, fix it, and confirm the repaired path on the real Lite workflow
+4. resilient enough to absorb a real route-level regression, fix it, and confirm the repaired path on both single-run and `3`-repeat real-Lite workflow validation
 
 ## Recommended Next Focus
 
