@@ -206,6 +206,7 @@ Additional `tools/select` checkpoint:
 5. the first strongest-slice real-Lite smoke after this change stayed positive on reviewer-ready completion (`0 -> 1`), with faster wall-clock and slightly higher token spend
 6. the first `3`-repeat strongest-slice revalidation for this path is also positive on reviewer-ready completion: dashboard auth drift moved `0.6667 -> 1`, but with higher token spend and higher wall-clock
 7. the second strongest-slice `3`-repeat revalidation is also positive on reviewer-ready completion: pairing / approval recovery moved `0 -> 1`, but with higher token spend and slightly higher wall-clock
+8. the third strongest-slice `3`-repeat revalidation is also positive on reviewer-ready completion: service token drift repair moved `0 -> 0.3333`, but this third result is only a supporting completion signal and comes with higher token spend and higher wall-clock
 
 ## What This Means Architecturally
 
@@ -321,7 +322,8 @@ It is not strong enough yet to say:
 
 The next highest-value step after the current Phase 1 refresh work is:
 
-1. extend the new `tools/select` state-aware path to the third strongest slice and check whether the completion-first story survives beyond the first two strongest slices
+1. treat the new `tools/select` state-aware path as validated across the strongest three-slice family, with two strong completion wins and one supporting completion signal
+2. do not promote it to an efficiency story without additional shaping work
 2. continue promoting the Phase 2 `handoff/store + handoff/recover + context assembly` overlays toward a broader state-first execution path without changing public route semantics
 
 The immediate proof targets are:
