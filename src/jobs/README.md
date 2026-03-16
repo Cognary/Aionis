@@ -118,6 +118,17 @@ If you write memory with `trigger_topic_cluster=true` and `topic_cluster_async=t
 
 If you write memory with `auto_embed=true` and the server has an embedding provider configured, the API enqueues an `event_type=embed_nodes` item to backfill embeddings asynchronously.
 
+Associative linking also enqueues `event_type=associative_link` for relevant execution-memory writes (`event`, `evidence`, `concept`, `procedure`).
+
+Shadow-first rollout:
+
+- candidate generation is same-scope only
+- low-confidence candidates remain internal rows in `memory_association_candidates`
+- only high-confidence candidates promote into ordinary `related_to` edges
+- directional relation kinds stay internal metadata, not public edge types
+
+Worker loop output includes `associative_link_metrics.shadow_created`, `associative_link_metrics.promoted`, and `associative_link_metrics.rejected`.
+
 Process it with:
 
 ```bash
@@ -218,6 +229,14 @@ Each semantic abstraction sample also includes a lightweight eval artifact:
 - `eval.negation_mismatch`
 - `eval.contradiction_detected`
 - `eval.sparse_source_summary`
+
+When associative linking data exists, the report also includes:
+
+- `metrics.associative_linking.shadow_candidates`
+- `metrics.associative_linking.promoted_candidates`
+- `metrics.associative_linking.rejected_candidates`
+- `metrics.associative_linking.expired_candidates`
+- `metrics.associative_linking.precision_sample_hooks[]`
 
 The shadow compare artifact summarizes `L3 only` versus `L3 + L4 shadow` at the source-summary level:
 

@@ -50,6 +50,11 @@ async function processBatch(): Promise<{
   embed_backfill_runs: number;
   failed_marked: number;
   topic_commit_hashes: string[];
+  associative_link_metrics: {
+    shadow_created: number;
+    promoted: number;
+    rejected: number;
+  };
 }> {
   // 0) Mark outbox items as FAILED once they exceed max attempts (dead-letter).
   // This prevents silent limbo when attempts reach OUTBOX_MAX_ATTEMPTS and the claim query excludes them.
@@ -132,6 +137,11 @@ async function processBatch(): Promise<{
   let clustered = 0;
   let embedded = 0;
   const clusterHashes: string[] = [];
+  const associativeMetrics = {
+    shadow_created: 0,
+    promoted: 0,
+    rejected: 0,
+  };
 
   // Process embed backfill first to avoid consuming topic_cluster items before embeddings exist.
   claimed.sort((a, b) => {
@@ -427,6 +437,9 @@ async function processBatch(): Promise<{
             },
             writeAccess: createPostgresWriteStoreAccess(client),
           });
+          associativeMetrics.shadow_created += associativeOut.shadow_created;
+          associativeMetrics.promoted += associativeOut.promoted;
+          associativeMetrics.rejected += associativeOut.rejected;
           await client.query(
             `UPDATE memory_outbox
              SET
@@ -479,6 +492,7 @@ async function processBatch(): Promise<{
     embed_backfill_runs: embedded,
     failed_marked: failedMarked,
     topic_commit_hashes: clusterHashes,
+    associative_link_metrics: associativeMetrics,
   };
 }
 

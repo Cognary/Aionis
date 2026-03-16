@@ -43,11 +43,14 @@ export type AssociativeLinkingJobResult = {
   candidate_pool_size: number;
   evaluated_pairs: number;
   shadow_created: number;
+  promoted: number;
+  rejected: number;
 };
 
 export type AssociativePromotionResult = {
   evaluated: number;
   promoted: number;
+  rejected: number;
 };
 
 type AnchorShape = {
@@ -66,6 +69,24 @@ function clamp01(value: number): number {
 
 function round4(value: number): number {
   return Math.round(value * 10000) / 10000;
+}
+
+export function isValidAssociativeCandidateStatusTransition(
+  from: AssociationCandidateRecord["status"],
+  to: AssociationCandidateRecord["status"],
+): boolean {
+  if (from === to) return true;
+  switch (from) {
+    case "shadow":
+      return to === "promoted" || to === "rejected" || to === "expired";
+    case "rejected":
+      return to === "expired";
+    case "promoted":
+    case "expired":
+      return false;
+    default:
+      return false;
+  }
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -300,16 +321,31 @@ export async function materializeShadowAssociationCandidates(args: {
   const config = args.config ?? DEFAULT_ASSOCIATIVE_LINKING_CONFIG;
   const upserts: UpsertAssociationCandidateArgs[] = [];
   let evaluatedPairs = 0;
+  let rejected = 0;
   for (const source of args.sourceNodes) {
     const scoredForSource = args.candidatePool
-      .filter((candidate) => candidate.id !== source.id && candidate.scope === source.scope)
+      .filter((candidate) => {
+        if (candidate.id === source.id) {
+          rejected += 1;
+          return false;
+        }
+        if (candidate.scope !== source.scope || candidate.scope !== args.payload.scope) {
+          rejected += 1;
+          return false;
+        }
+        return true;
+      })
       .map((candidate) => {
         evaluatedPairs += 1;
         const features = extractAssociativeFeatures(source, candidate);
         const scored = scoreAssociativeCandidate(features);
         return { candidate, features, scored };
       })
-      .filter((row) => row.scored.score >= 0.5)
+      .filter((row) => {
+        if (row.scored.score >= 0.5) return true;
+        rejected += 1;
+        return false;
+      })
       .sort((left, right) => right.scored.score - left.scored.score || right.scored.confidence - left.scored.confidence)
       .slice(0, config.max_candidates_per_source);
     for (const row of scoredForSource) {
@@ -353,6 +389,8 @@ export async function materializeShadowAssociationCandidates(args: {
     candidate_pool_size: args.candidatePool.length,
     evaluated_pairs: evaluatedPairs,
     shadow_created: upserts.length,
+    promoted: 0,
+    rejected,
   };
 }
 
@@ -398,6 +436,7 @@ export async function promoteAssociativeCandidates(args: {
   const seenEdges = new Set<string>();
   let evaluated = 0;
   let promoted = 0;
+  let rejected = 0;
 
   for (const sourceNodeId of uniqueSourceIds) {
     const candidates = await args.writeAccess.listAssociationCandidatesForSource({
@@ -408,11 +447,30 @@ export async function promoteAssociativeCandidates(args: {
     });
     for (const candidate of candidates) {
       evaluated += 1;
-      if (candidate.status !== "shadow") continue;
-      if (candidate.src_id === candidate.dst_id) continue;
-      if (candidate.source_commit_id == null) continue;
-      if (candidate.confidence < config.promotion_confidence_threshold) continue;
-      if (candidate.score < config.promotion_score_threshold) continue;
+      if (candidate.status !== "shadow") {
+        rejected += 1;
+        continue;
+      }
+      if (!isValidAssociativeCandidateStatusTransition(candidate.status, "promoted")) {
+        rejected += 1;
+        continue;
+      }
+      if (candidate.src_id === candidate.dst_id) {
+        rejected += 1;
+        continue;
+      }
+      if (candidate.source_commit_id == null) {
+        rejected += 1;
+        continue;
+      }
+      if (candidate.confidence < config.promotion_confidence_threshold) {
+        rejected += 1;
+        continue;
+      }
+      if (candidate.score < config.promotion_score_threshold) {
+        rejected += 1;
+        continue;
+      }
 
       const [edgeSrcId, edgeDstId] =
         candidate.src_id.localeCompare(candidate.dst_id) <= 0
@@ -447,5 +505,5 @@ export async function promoteAssociativeCandidates(args: {
     }
   }
 
-  return { evaluated, promoted };
+  return { evaluated, promoted, rejected };
 }

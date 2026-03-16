@@ -510,6 +510,81 @@ async function main() {
     const edgesPerNode = total > 0 ? edges / total : 0;
     const orphanRate = eligibleEvents > 0 ? orphanEvents / eligibleEvents : 0;
     const mergeRate30d = dedupeTotal30d > 0 ? merged30d / dedupeTotal30d : 0;
+    let associativeLinking = {
+      shadow_candidates: 0,
+      promoted_candidates: 0,
+      rejected_candidates: 0,
+      expired_candidates: 0,
+      precision_sample_hooks: [] as Array<{
+        src_id: string;
+        dst_id: string;
+        relation_kind: string;
+        score: number;
+        confidence: number;
+        status: string;
+      }>,
+    };
+    try {
+      const associativeCountsRes = await client.query<{
+        shadow_candidates: string;
+        promoted_candidates: string;
+        rejected_candidates: string;
+        expired_candidates: string;
+      }>(
+        `
+        SELECT
+          count(*) FILTER (WHERE status = 'shadow')::text AS shadow_candidates,
+          count(*) FILTER (WHERE status = 'promoted')::text AS promoted_candidates,
+          count(*) FILTER (WHERE status = 'rejected')::text AS rejected_candidates,
+          count(*) FILTER (WHERE status = 'expired')::text AS expired_candidates
+        FROM memory_association_candidates
+        WHERE scope = $1
+        `,
+        [scope],
+      );
+      const associativeSamplesRes = await client.query<{
+        src_id: string;
+        dst_id: string;
+        relation_kind: string;
+        score: number;
+        confidence: number;
+        status: string;
+      }>(
+        `
+        SELECT
+          src_id::text AS src_id,
+          dst_id::text AS dst_id,
+          relation_kind,
+          score,
+          confidence,
+          status
+        FROM memory_association_candidates
+        WHERE scope = $1
+        ORDER BY confidence DESC, score DESC, updated_at DESC
+        LIMIT 3
+        `,
+        [scope],
+      );
+      associativeLinking = {
+        shadow_candidates: Number(associativeCountsRes.rows[0]?.shadow_candidates ?? "0"),
+        promoted_candidates: Number(associativeCountsRes.rows[0]?.promoted_candidates ?? "0"),
+        rejected_candidates: Number(associativeCountsRes.rows[0]?.rejected_candidates ?? "0"),
+        expired_candidates: Number(associativeCountsRes.rows[0]?.expired_candidates ?? "0"),
+        precision_sample_hooks: associativeSamplesRes.rows.map((row) => ({
+          ...row,
+          score: round(Number(row.score ?? 0)),
+          confidence: round(Number(row.confidence ?? 0)),
+        })),
+      };
+    } catch {
+      associativeLinking = {
+        shadow_candidates: 0,
+        promoted_candidates: 0,
+        rejected_candidates: 0,
+        expired_candidates: 0,
+        precision_sample_hooks: [],
+      };
+    }
 
     const checks = [
       {
@@ -613,6 +688,7 @@ async function main() {
           orphan_event_nodes: orphanEvents,
           merged_30d_nodes: merged30d,
         },
+        associative_linking: associativeLinking,
       },
       checks,
       summary: {
