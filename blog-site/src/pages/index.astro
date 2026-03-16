@@ -1,29 +1,337 @@
 ---
-import { getCollection } from 'astro:content'
-import BaseLayout from '../layouts/BaseLayout.astro'
-import PostCard from '../components/PostCard.astro'
+import MarketingLayout from '../layouts/MarketingLayout.astro'
 
-const posts = (await getCollection('blog'))
-  .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime())
+const layers = [
+  {
+    number: '01',
+    name: 'Execution Memory',
+    summary:
+      'Persist the execution assets that normal agent runs throw away so the next session can recover actual state instead of reconstructing it from chat history.',
+    bullets: [
+      'write, recall, recall_text, find, and resolve',
+      'context assembly with bounded budgets and traceable references',
+      'session events, commit lineage, exact handoff store and recover'
+    ]
+  },
+  {
+    number: '02',
+    name: 'Execution Control',
+    summary:
+      'Control what the runtime is allowed to do through policy, sandboxing, budgets, quotas, diagnostics, alerts, and admin surfaces.',
+    bullets: [
+      'rules evaluate, tools select, decisions, runs, and feedback',
+      'sandbox sessions, execution, logs, artifacts, and tenant budgets',
+      'admin control, alerts, incidents, diagnostics, and auditability'
+    ]
+  },
+  {
+    number: '03',
+    name: 'Execution Continuity',
+    summary:
+      'Recover work exactly where it stopped through replay, playbooks, handoff packets, automation governance, and reviewer-ready delivery.',
+    bullets: [
+      'replay runs, playbook compilation, promote, repair, and review',
+      'continuity across SDK, CLI, MCP, Ops, Playground, and agent adapters',
+      'reviewer-ready output instead of opaque prompt transcripts'
+    ]
+  }
+]
+
+const architectureBands = [
+  'Entry surfaces: REST API, TypeScript SDK, Python SDK, CLI, MCP, Playground, Ops Console',
+  'Execution Continuity: replay, playbooks, handoff recover, review and automation runs',
+  'Execution Control: policy loop, sandbox budgets, governance, alerts, diagnostics, admin control',
+  'Execution Memory: write, recall, context assembly, resolve, graph lineage, handoff state',
+  'Foundation: Lite and Server stores, workers, telemetry, release gates, runtime services'
+]
+
+const surfaces = [
+  {
+    label: 'Memory',
+    title: 'Write, recall, find, resolve',
+    copy:
+      'Graph objects, commit lineage, recall flows, bounded context packets, session history, and exact handoff artifacts.'
+  },
+  {
+    label: 'Policy',
+    title: 'Rules, tools, decisions, feedback',
+    copy:
+      'A full control loop for selecting tools, recording decisions, tracking runs, and learning from runtime outcomes.'
+  },
+  {
+    label: 'Replay',
+    title: 'Replay runs and reusable playbooks',
+    copy:
+      'Successful execution can be compiled, replayed, repaired, promoted, and reused instead of disappearing into chat history.'
+  },
+  {
+    label: 'Sandbox',
+    title: 'Sessions, artifacts, logs, budgets',
+    copy:
+      'Govern tool execution with sandbox sessions, execution traces, artifact retrieval, cancellation, and tenant budget enforcement.'
+  },
+  {
+    label: 'Automation',
+    title: 'Automation graphs and governed runs',
+    copy:
+      'Validate flows, run them in shadow or promoted modes, and track repair, compensation, and approval surfaces.'
+  },
+  {
+    label: 'Control Plane',
+    title: 'Alerts, incidents, quotas, diagnostics',
+    copy:
+      'Operator-facing control entities, dashboards, alert routes, incident publishing, and inspection surfaces.'
+  },
+  {
+    label: 'Interfaces',
+    title: 'TypeScript, Python, CLI, MCP',
+    copy:
+      'Integrate the runtime into real agent systems without inventing one-off glue for every surface.'
+  },
+  {
+    label: 'Products',
+    title: 'Lite path, Server path, Ops path',
+    copy:
+      'Start local with Lite, move to server for operator discipline, and expose governed UI surfaces where needed.'
+  },
+  {
+    label: 'Jobs',
+    title: 'Workers, telemetry, release gates',
+    copy:
+      'Derived jobs, consistency checks, hosted-style control jobs, telemetry, and release-time operational gates.'
+  }
+]
+
+const proof = [
+  {
+    label: 'Continuation benchmark',
+    title: '30.03% lower input, 77% lower output, 33.24% lower total tokens',
+    copy:
+      'Published continuation data on a real pallets/click task shows measurable token reduction when work resumes from execution state.',
+    meta: 'Public evidence'
+  },
+  {
+    label: 'Cross-runtime handoff',
+    title: '33.33% -> 100% recovery success',
+    copy:
+      'The handoff benchmark moved from partial baseline success to full recovery once Aionis handoff artifacts were used.',
+    meta: 'Public evidence'
+  },
+  {
+    label: 'Strict replay',
+    title: 'replay1 = 0 tokens, replay2 = 0 tokens',
+    copy:
+      'The published strict replay path on a real repository ran both replay stages without spending model tokens.',
+    meta: 'Public evidence'
+  },
+  {
+    label: 'Guided repair',
+    title: '1063 total model tokens only when repair was invoked',
+    copy:
+      'Repair paths spend model budget only when the system actually needs repair instead of on every replay.',
+    meta: 'Public evidence'
+  },
+  {
+    label: 'Policy A/B',
+    title: '0% -> 100% success on pallets/click',
+    copy:
+      'Public policy evidence shows routing converging from grep and pytest-all to rg and pytest-focused.',
+    meta: 'Public evidence'
+  },
+  {
+    label: 'SDK audit',
+    title: 'March 14, 2026: 65-route audit found no missing SDK surface',
+    copy:
+      'Aionis audited 65 non-admin, non-control-plane routes and found no missing surface in either the TypeScript or Python SDK.',
+    meta: 'Latest published audit'
+  }
+]
 ---
 
-<BaseLayout
-  title="Aionis Blog"
-  description="Technical writing about execution memory, replay, and production agent systems."
+<MarketingLayout
+  title="Aionis"
+  description="A standalone one-page view of Aionis as execution memory, execution control, and execution continuity for coding agents."
 >
-  <section class="home-hero">
-    <div class="eyebrow">Blog</div>
-    <h1>Notes on execution memory, replay, and agent systems.</h1>
-    <p>
-      Technical writing about how Aionis is built, how replayable workflows behave in practice,
-      and what production agent systems need beyond prompt history and retrieval.
-    </p>
-  </section>
-
-  <section class="post-grid-section">
-    <div class="section-label">Posts</div>
-    <div class="post-list">
-      {posts.map((post) => <PostCard post={post} />)}
+  <section class="marketing-hero">
+    <div class="marketing-shell marketing-hero-grid">
+      <div class="marketing-hero-copy">
+        <div class="marketing-eyebrow">Execution memory was layer one</div>
+        <h1>Aionis is the runtime for coding-agent work that has to continue.</h1>
+        <p class="marketing-lead">
+          Aionis turns agent runs into execution memory, execution control, and execution continuity so the next
+          session, next agent, or next reviewer does not restart from zero.
+        </p>
+        <p class="marketing-subcopy">
+          It is not just storage. It is the operating layer for write and recall, policy and sandbox control,
+          replayable execution, exact handoff recovery, automation governance, and reviewer-ready delivery.
+        </p>
+        <div class="marketing-hero-actions">
+          <a class="marketing-button marketing-button-primary" href="https://doc.aionisos.com/guide/lite-public-beta" target="_blank" rel="noreferrer">Try Lite in 5 minutes</a>
+          <a class="marketing-button" href="https://doc.aionisos.com/guide/codex-local-profile" target="_blank" rel="noreferrer">Use with Codex</a>
+        </div>
+        <div class="marketing-chip-row">
+          <span>Execution Memory</span>
+          <span>Execution Control</span>
+          <span>Execution Continuity</span>
+          <span>Replayable evidence</span>
+          <span>Ops-ready runtime</span>
+        </div>
+      </div>
+      <div class="marketing-proof-panel">
+        <div class="hero-proof-feature">
+          <div class="hero-proof-topline">
+            <span>Published continuation proof</span>
+            <span class="hero-proof-tag">Repository benchmark</span>
+          </div>
+          <h2><code>pallets/click</code> continuation benchmark</h2>
+          <p>
+            Public Aionis evidence already shows that continuation-sensitive coding work can resume from stored
+            execution state instead of paying to rediscover the same task.
+          </p>
+          <div class="hero-metric-grid">
+            <div>
+              <strong>30.03%</strong>
+              <span>lower input tokens</span>
+            </div>
+            <div>
+              <strong>77%</strong>
+              <span>lower output tokens</span>
+            </div>
+            <div>
+              <strong>33.24%</strong>
+              <span>lower total tokens</span>
+            </div>
+          </div>
+          <a href="#proof">Open the published proof set</a>
+        </div>
+        <div class="hero-proof-mini-grid">
+          <article class="hero-proof-mini">
+            <span class="hero-proof-label">Handoff recovery</span>
+            <strong>33.33% -> 100%</strong>
+            <p>Cross-runtime recovery moved from partial baseline success to full success with Aionis handoff artifacts.</p>
+          </article>
+          <article class="hero-proof-mini">
+            <span class="hero-proof-label">Strict replay</span>
+            <strong>0 model tokens</strong>
+            <p><code>replay1</code> and <code>replay2</code> both ran at zero model tokens in the published strict replay flow.</p>
+          </article>
+          <article class="hero-proof-mini">
+            <span class="hero-proof-label">SDK audit</span>
+            <strong>65 routes</strong>
+            <p>March 14, 2026: no missing surface found in either published SDK.</p>
+          </article>
+        </div>
+      </div>
     </div>
   </section>
-</BaseLayout>
+
+  <section id="layers" class="marketing-section">
+    <div class="marketing-shell">
+      <div class="marketing-section-head">
+        <span class="marketing-section-kicker">Three-layer kernel</span>
+        <h2>The best high-level frame for Aionis is execution memory, execution control, and execution continuity.</h2>
+      </div>
+      <div class="layer-grid">
+        {layers.map((layer) => (
+          <article class="layer-card">
+            <div class="layer-card-top">
+              <span class="layer-number">{layer.number}</span>
+              <h3>{layer.name}</h3>
+            </div>
+            <p>{layer.summary}</p>
+            <ul>
+              {layer.bullets.map((bullet) => <li>{bullet}</li>)}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section id="architecture" class="marketing-section marketing-section-architecture">
+    <div class="marketing-shell architecture-grid">
+      <div class="architecture-copy">
+        <span class="marketing-section-kicker">Complete architecture</span>
+        <h2>The three layers sit inside a full operating shell.</h2>
+        <p>
+          Aionis is not only an API that stores memory. The runtime wraps the three kernel layers with a host shell,
+          runtime services, store adapters, sandbox executors, asynchronous jobs, operator workflows, and delivery
+          surfaces for real integrations.
+        </p>
+        <div class="architecture-token-row">
+          <span>REST API host</span>
+          <span>Runtime services</span>
+          <span>Store adapters</span>
+          <span>Sandbox executors</span>
+          <span>Derived workers</span>
+          <span>Telemetry</span>
+          <span>Control plane</span>
+          <span>SDK + CLI + MCP</span>
+          <span>Ops + Playground</span>
+        </div>
+      </div>
+      <div class="architecture-stack">
+        {architectureBands.map((band, index) => (
+          <div class:list={['architecture-band', `architecture-band-${index + 1}`]}>{band}</div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="marketing-section">
+    <div class="marketing-shell">
+      <div class="marketing-section-head">
+        <span class="marketing-section-kicker">Full product surface</span>
+        <h2>The runtime already spans far more than memory recall.</h2>
+      </div>
+      <div class="surface-grid">
+        {surfaces.map((surface) => (
+          <article class="surface-card">
+            <span>{surface.label}</span>
+            <h3>{surface.title}</h3>
+            <p>{surface.copy}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section id="proof" class="marketing-section marketing-section-proof">
+    <div class="marketing-shell">
+      <div class="marketing-section-head">
+        <span class="marketing-section-kicker">Latest public proof</span>
+        <h2>Public evidence already exists for continuity, replay, policy, and SDK surface coverage.</h2>
+      </div>
+      <div class="proof-grid">
+        {proof.map((item) => (
+          <article class="proof-card-marketing">
+            <div class="proof-card-meta">
+              <span>{item.label}</span>
+              <span>{item.meta}</span>
+            </div>
+            <h3>{item.title}</h3>
+            <p>{item.copy}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="marketing-section marketing-section-cta">
+    <div class="marketing-shell marketing-cta-panel">
+      <div>
+        <span class="marketing-section-kicker">Start path</span>
+        <h2>Use Lite to validate locally. Use Server when operator control starts to matter.</h2>
+        <p>
+          The public tree already includes the local Lite path, the self-hosted server path, the API references,
+          and the integration guides for Codex and SDK-driven agents.
+        </p>
+      </div>
+      <div class="marketing-cta-actions">
+        <a class="marketing-button marketing-button-primary" href="https://doc.aionisos.com/guide/lite-public-beta" target="_blank" rel="noreferrer">Start with Lite</a>
+        <a class="marketing-button" href="https://doc.aionisos.com/guide/choose-lite-or-server" target="_blank" rel="noreferrer">Choose Lite or Server</a>
+        <a class="marketing-button" href="https://doc.aionisos.com/guide/evidence" target="_blank" rel="noreferrer">See the Evidence</a>
+      </div>
+    </div>
+  </section>
+</MarketingLayout>

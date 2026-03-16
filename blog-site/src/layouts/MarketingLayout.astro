@@ -1,0 +1,69 @@
+---
+import '../styles/global.css'
+
+interface Props {
+  title?: string
+  description?: string
+}
+
+const {
+  title = 'Aionis',
+  description = 'Execution memory, execution control, and execution continuity for coding agents.'
+} = Astro.props
+
+const canonical = new URL(Astro.url.pathname, Astro.site)
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Aionis" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body class="marketing-body">
+    <div class="marketing-site">
+      <header class="marketing-header">
+        <div class="marketing-shell marketing-header-shell">
+          <a class="marketing-brand" href="/">Aionis</a>
+          <nav class="marketing-nav" aria-label="Primary">
+            <a href="#layers">Layers</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#proof">Proof</a>
+            <a href="/posts/aionis-in-the-era-of-million-token-models/">Blog</a>
+            <a href="https://doc.aionisos.com" target="_blank" rel="noreferrer">Docs</a>
+            <a href="https://github.com/Cognary/Aionis" target="_blank" rel="noreferrer">GitHub</a>
+          </nav>
+          <a class="marketing-header-cta" href="https://doc.aionisos.com/guide/lite-public-beta" target="_blank" rel="noreferrer">
+            Try Lite
+          </a>
+        </div>
+      </header>
+      <main>
+        <slot />
+      </main>
+      <footer class="marketing-footer">
+        <div class="marketing-shell marketing-footer-shell">
+          <div>
+            <div class="marketing-footer-brand">Aionis</div>
+            <p>Execution memory, execution control, and execution continuity for coding agents.</p>
+          </div>
+          <div class="marketing-footer-links">
+            <a href="https://doc.aionisos.com" target="_blank" rel="noreferrer">Docs</a>
+            <a href="https://github.com/Cognary/Aionis" target="_blank" rel="noreferrer">GitHub</a>
+            <a href="/posts/aionis-in-the-era-of-million-token-models/">Blog</a>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
