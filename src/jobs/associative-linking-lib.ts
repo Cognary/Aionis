@@ -9,6 +9,7 @@ import type {
 } from "../memory/associative-candidate-store.js";
 import type { AssociativeLinkTriggerPayload } from "../memory/associative-linking-types.js";
 import type { RecallAssociativeNodeRow } from "../store/recall-access.js";
+import { stableUuid } from "../util/uuid.js";
 
 export type AssociativeLinkingRecallAccess = {
   listAssociativeNodesByIds(scope: string, nodeIds: string[]): Promise<RecallAssociativeNodeRow[]>;
@@ -42,6 +43,11 @@ export type AssociativeLinkingJobResult = {
   candidate_pool_size: number;
   evaluated_pairs: number;
   shadow_created: number;
+};
+
+export type AssociativePromotionResult = {
+  evaluated: number;
+  promoted: number;
 };
 
 type AnchorShape = {
@@ -364,4 +370,82 @@ export async function runAssociativeLinkingJob(args: {
     writeAccess: args.writeAccess,
     config: args.config,
   });
+}
+
+export async function promoteAssociativeCandidates(args: {
+  scope: string;
+  sourceNodeIds: string[];
+  writeAccess: Pick<
+    AssociativeCandidateStoreAccess,
+    "listAssociationCandidatesForSource" | "markAssociationCandidatePromoted"
+  > & {
+    upsertEdge(params: {
+      id: string;
+      scope: string;
+      type: "related_to";
+      srcId: string;
+      dstId: string;
+      weight: number;
+      confidence: number;
+      decayRate: number;
+      commitId: string;
+    }): Promise<void>;
+  };
+  config?: AssociativeLinkingResolvedConfig;
+}): Promise<AssociativePromotionResult> {
+  const config = args.config ?? DEFAULT_ASSOCIATIVE_LINKING_CONFIG;
+  const uniqueSourceIds = Array.from(new Set(args.sourceNodeIds));
+  const seenEdges = new Set<string>();
+  let evaluated = 0;
+  let promoted = 0;
+
+  for (const sourceNodeId of uniqueSourceIds) {
+    const candidates = await args.writeAccess.listAssociationCandidatesForSource({
+      scope: args.scope,
+      src_id: sourceNodeId,
+      statuses: ["shadow"],
+      limit: config.max_candidates_per_source,
+    });
+    for (const candidate of candidates) {
+      evaluated += 1;
+      if (candidate.status !== "shadow") continue;
+      if (candidate.src_id === candidate.dst_id) continue;
+      if (candidate.source_commit_id == null) continue;
+      if (candidate.confidence < config.promotion_confidence_threshold) continue;
+      if (candidate.score < config.promotion_score_threshold) continue;
+
+      const [edgeSrcId, edgeDstId] =
+        candidate.src_id.localeCompare(candidate.dst_id) <= 0
+          ? [candidate.src_id, candidate.dst_id]
+          : [candidate.dst_id, candidate.src_id];
+      const edgeKey = `${args.scope}:${edgeSrcId}:${edgeDstId}`;
+      const edgeId = stableUuid(`${args.scope}:edge:associative:related_to:${edgeSrcId}:${edgeDstId}`);
+
+      if (!seenEdges.has(edgeKey)) {
+        await args.writeAccess.upsertEdge({
+          id: edgeId,
+          scope: args.scope,
+          type: "related_to",
+          srcId: edgeSrcId,
+          dstId: edgeDstId,
+          weight: candidate.score,
+          confidence: candidate.confidence,
+          decayRate: 0,
+          commitId: candidate.source_commit_id,
+        });
+        seenEdges.add(edgeKey);
+      }
+
+      await args.writeAccess.markAssociationCandidatePromoted({
+        scope: candidate.scope,
+        src_id: candidate.src_id,
+        dst_id: candidate.dst_id,
+        relation_kind: candidate.relation_kind,
+        promoted_edge_id: edgeId,
+      });
+      promoted += 1;
+    }
+  }
+
+  return { evaluated, promoted };
 }
