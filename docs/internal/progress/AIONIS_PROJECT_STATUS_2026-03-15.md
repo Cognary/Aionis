@@ -212,7 +212,8 @@ This makes the current Phase 2 story:
 2. positive on efficiency for two of the three strongest slices
 3. not yet a universal efficiency story
 4. resilient enough to absorb a real route-level regression, fix it, and confirm the repaired path on both single-run and `3`-repeat real-Lite workflow validation
-5. now entering a third runtime-surface checkpoint where `tools/select` can consume durable execution state directly rather than only continuity-delivered profile payloads
+5. now positive on a third runtime-surface checkpoint where `tools/select` can consume durable execution state directly rather than only continuity-delivered profile payloads
+6. that third surface is currently a completion-only win on the first strongest slice, not an efficiency win
 
 ## Recommended Next Focus
 
@@ -222,7 +223,7 @@ The next highest-value work remains:
 2. prefer runtime-surface proofs over new abstract kernel work
 3. keep Phase 2 Step 1 additive until the state store and transition contract are strong enough to back state-first packet assembly
 4. only after that, continue pushing `ExecutionState` toward a more independent source-of-truth role
-5. the immediate next proof should be repeated strongest-slice validation for the new state-aware `tools/select` path
+5. the immediate next proof should be a second strongest-slice validation for the new state-aware `tools/select` path
 
 In short:
 

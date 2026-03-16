@@ -455,11 +455,11 @@ Phase 2 should be considered complete only when all of the following are true:
 
 The next implementation move after the current state-store, transition, and state-first context overlays is:
 
-1. turn the new state-aware `tools/select` path into repeated strongest-slice validation
+1. extend the new state-aware `tools/select` path to a second strongest slice
 
 That is the highest-value move now because it tests whether:
 
 1. durable execution state can shape runtime control beyond packet assembly
 2. `ControlProfile` adoption keeps moving through measured runtime surfaces instead of ad hoc host logic
 3. phase-2 state data is useful on the real OpenClaw path, not just inside route overlays
-4. the product story stays positive as the kernel starts reading state directly during tool choice
+4. the product story stays positive beyond a single strongest slice as the kernel starts reading state directly during tool choice
