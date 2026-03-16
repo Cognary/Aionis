@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { applyControlProfileCandidateFilter, resolveExecutionKernelInputs } from "../../src/memory/tools-select.ts";
-import { getSharedExecutionStateStore } from "../../src/execution/state-store.ts";
 
 test("control profile filters broad scan candidates before tool selection", () => {
   const kernel = resolveExecutionKernelInputs(
@@ -20,8 +19,6 @@ test("control profile filters broad scan candidates before tool selection", () =
         reviewer_ready_required: false,
       },
     },
-    null,
-    null,
     null,
   );
   const out = applyControlProfileCandidateFilter(
@@ -58,14 +55,11 @@ test("tools/select derives control profile from execution state when explicit pr
       updated_at: new Date().toISOString(),
       version: 1,
     },
-    null,
-    null,
   );
 
   assert.equal(kernel.controlProfileOrigin, "state_derived");
   assert.equal(kernel.controlProfile?.profile, "review");
   assert.equal(kernel.executionState?.current_stage, "review");
-  assert.equal(kernel.executionStateSource, "payload");
 
   const out = applyControlProfileCandidateFilter(
     ["broad-auth-scan", "read-review-notes"],
@@ -75,40 +69,4 @@ test("tools/select derives control profile from execution state when explicit pr
   assert.deepEqual(out.deniedByProfile, [
     { name: "broad-auth-scan", reason: "control_profile" },
   ]);
-});
-
-test("tools/select resolves execution state from state ref when payload state is absent", () => {
-  const store = getSharedExecutionStateStore();
-  store.clear();
-  store.put({
-    state_id: "state-ref-1",
-    scope: "openclaw:test",
-    task_brief: "Repair dashboard auth drift",
-    current_stage: "triage",
-    active_role: "triage",
-    owned_files: [],
-    modified_files: [],
-    pending_validations: [],
-    completed_validations: [],
-    last_accepted_hypothesis: null,
-    rejected_paths: [],
-    unresolved_blockers: [],
-    rollback_notes: [],
-    reviewer_contract: null,
-    resume_anchor: null,
-    updated_at: new Date().toISOString(),
-    version: 1,
-  });
-
-  const kernel = resolveExecutionKernelInputs(
-    { source: "test-tools-select" },
-    null,
-    { state_id: "state-ref-1", scope: "openclaw:test" },
-    store,
-  );
-
-  assert.equal(kernel.controlProfileOrigin, "state_derived");
-  assert.equal(kernel.controlProfile?.profile, "triage");
-  assert.equal(kernel.executionState?.current_stage, "triage");
-  assert.equal(kernel.executionStateSource, "state_ref");
 });

@@ -1480,7 +1480,6 @@ export type ToolsSelectResponse = {
   execution_kernel?: {
     control_profile_origin?: "continuity_delivered" | "state_derived" | "none";
     execution_state_v1_present?: boolean;
-    execution_state_source?: "payload" | "state_ref" | "none";
     current_stage?: "triage" | "patch" | "review" | "resume" | null;
     active_role?: "orchestrator" | "triage" | "patch" | "review" | "resume" | null;
     [k: string]: unknown;

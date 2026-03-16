@@ -45,12 +45,6 @@ export const ExecutionStateV1Schema = z.object({
 });
 export type ExecutionStateV1 = z.infer<typeof ExecutionStateV1Schema>;
 
-export const ExecutionStateRefV1Schema = z.object({
-  state_id: z.string().trim().min(1),
-  scope: z.string().trim().min(1),
-});
-export type ExecutionStateRefV1 = z.infer<typeof ExecutionStateRefV1Schema>;
-
 export const ExecutionPacketV1Schema = z.object({
   version: z.literal(1),
   state_id: z.string().trim().min(1),

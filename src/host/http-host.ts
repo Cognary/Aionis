@@ -84,8 +84,6 @@ export function logMemoryApiConfig(args: {
     recallTextEmbedBatcher,
   } = args;
 
-  const executionStateStore = getSharedExecutionStateStore();
-
   app.log.info(
     {
       aionis_mode: env.AIONIS_MODE,
@@ -397,8 +395,6 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     deleteSandboxProjectBudgetProfile,
   } = args;
 
-  const executionStateStore = getSharedExecutionStateStore();
-
   if (env.AIONIS_EDITION === "lite") {
     registerLiteServerOnlyRoutes(app);
   } else {
@@ -460,7 +456,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     tenantFromBody,
     acquireInflightSlot,
     runTopicClusterForEventIds,
-    executionStateStore,
+    executionStateStore: getSharedExecutionStateStore(),
   });
 
   registerHandoffRoutes({
@@ -478,7 +474,7 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     enforceTenantQuota,
     tenantFromBody,
     acquireInflightSlot,
-    executionStateStore,
+    executionStateStore: getSharedExecutionStateStore(),
   });
 
   registerMemoryLifecycleRoutes({
@@ -580,7 +576,6 @@ export function registerApplicationRoutes(args: Record<string, any>) {
     enforceTenantQuota,
     tenantFromBody,
     acquireInflightSlot,
-    executionStateStore,
   });
 
   registerMemoryReplayCoreRoutes({

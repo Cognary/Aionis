@@ -28,7 +28,6 @@ export function registerMemoryFeedbackToolRoutes(args: {
   enforceTenantQuota: (req: any, reply: any, kind: "write" | "recall", tenantId: string) => Promise<void>;
   tenantFromBody: (body: unknown) => string;
   acquireInflightSlot: (kind: "write" | "recall") => Promise<GateLike>;
-  executionStateStore?: any;
 }) {
   const {
     app,
@@ -42,7 +41,6 @@ export function registerMemoryFeedbackToolRoutes(args: {
     enforceTenantQuota,
     tenantFromBody,
     acquireInflightSlot,
-    executionStateStore,
   } = args;
 
   app.post("/v1/memory/feedback", async (req: any, reply: any) => {
@@ -114,10 +112,9 @@ export function registerMemoryFeedbackToolRoutes(args: {
         ? await selectTools(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
             embeddedRuntime,
             liteWriteStore,
-            executionStateStore,
           })
         : await store.withClient((client) =>
-            selectTools(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, { embeddedRuntime, executionStateStore }),
+            selectTools(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, { embeddedRuntime }),
           );
     } finally {
       gate.release();
