@@ -1,5 +1,11 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import type {
+  AssociationCandidateRecord,
+  ListAssociationCandidatesForSourceArgs,
+  MarkAssociationCandidatePromotedArgs,
+  UpsertAssociationCandidateArgs,
+} from "../memory/associative-candidate-store.js";
 import { stableUuid } from "../util/uuid.js";
 import { assertDim } from "../util/pgvector.js";
 import type {
@@ -586,6 +592,27 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
     );
     CREATE INDEX IF NOT EXISTS idx_lite_memory_edges_scope ON lite_memory_edges(scope);
     CREATE INDEX IF NOT EXISTS idx_lite_memory_edges_scope_commit ON lite_memory_edges(scope, commit_id);
+
+    CREATE TABLE IF NOT EXISTS lite_memory_association_candidates (
+      id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL,
+      src_id TEXT NOT NULL,
+      dst_id TEXT NOT NULL,
+      relation_kind TEXT NOT NULL,
+      status TEXT NOT NULL,
+      score REAL NOT NULL,
+      confidence REAL NOT NULL,
+      feature_summary_json TEXT NOT NULL,
+      evidence_json TEXT NOT NULL,
+      source_commit_id TEXT,
+      worker_run_id TEXT,
+      promoted_edge_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(scope, src_id, dst_id, relation_kind)
+    );
+    CREATE INDEX IF NOT EXISTS idx_lite_memory_association_candidates_scope_src_score
+      ON lite_memory_association_candidates(scope, src_id, score DESC, confidence DESC);
 
     CREATE TABLE IF NOT EXISTS lite_memory_outbox (
       row_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1855,6 +1882,124 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
         args.payloadSha256,
         args.payloadJson,
         nowIso(),
+      );
+    },
+
+    async upsertAssociationCandidates(args: UpsertAssociationCandidateArgs[]): Promise<void> {
+      if (args.length === 0) return;
+      const stmt = db.prepare(
+        `INSERT INTO lite_memory_association_candidates
+          (id, scope, src_id, dst_id, relation_kind, status, score, confidence,
+           feature_summary_json, evidence_json, source_commit_id, worker_run_id, promoted_edge_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(scope, src_id, dst_id, relation_kind) DO UPDATE SET
+           status = excluded.status,
+           score = excluded.score,
+           confidence = excluded.confidence,
+           feature_summary_json = excluded.feature_summary_json,
+           evidence_json = excluded.evidence_json,
+           source_commit_id = excluded.source_commit_id,
+           worker_run_id = excluded.worker_run_id,
+           promoted_edge_id = excluded.promoted_edge_id,
+           updated_at = excluded.updated_at`,
+      );
+      for (const candidate of args) {
+        const ts = nowIso();
+        stmt.run(
+          stableUuid(`${candidate.scope}:assoc:${candidate.src_id}:${candidate.dst_id}:${candidate.relation_kind}`),
+          candidate.scope,
+          candidate.src_id,
+          candidate.dst_id,
+          candidate.relation_kind,
+          candidate.status,
+          candidate.score,
+          candidate.confidence,
+          stringifyJson(candidate.feature_summary_json),
+          stringifyJson(candidate.evidence_json),
+          candidate.source_commit_id,
+          candidate.worker_run_id,
+          candidate.promoted_edge_id,
+          ts,
+          ts,
+        );
+      }
+    },
+
+    async listAssociationCandidatesForSource(
+      args: ListAssociationCandidatesForSourceArgs,
+    ): Promise<AssociationCandidateRecord[]> {
+      const limit = Math.max(1, Math.min(200, Math.trunc(args.limit ?? 50)));
+      const statuses = Array.isArray(args.statuses) ? args.statuses : [];
+      const statusFilter = statuses.length > 0;
+      const params: unknown[] = [args.scope, args.src_id];
+      let sql = `
+        SELECT
+          id,
+          scope,
+          src_id,
+          dst_id,
+          relation_kind,
+          status,
+          score,
+          confidence,
+          feature_summary_json,
+          evidence_json,
+          source_commit_id,
+          worker_run_id,
+          promoted_edge_id,
+          created_at,
+          updated_at
+        FROM lite_memory_association_candidates
+        WHERE scope = ?
+          AND src_id = ?
+      `;
+      if (statusFilter) {
+        sql += ` AND status IN (${statuses.map(() => "?").join(",")})`;
+        params.push(...statuses);
+      }
+      params.push(limit);
+      sql += ` ORDER BY score DESC, confidence DESC, updated_at DESC LIMIT ?`;
+      const rows = db.prepare(sql).all(...params) as Array<{
+        id: string;
+        scope: string;
+        src_id: string;
+        dst_id: string;
+        relation_kind: AssociationCandidateRecord["relation_kind"];
+        status: AssociationCandidateRecord["status"];
+        score: number;
+        confidence: number;
+        feature_summary_json: string;
+        evidence_json: string;
+        source_commit_id: string | null;
+        worker_run_id: string | null;
+        promoted_edge_id: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      return rows.map((row) => ({
+        ...row,
+        feature_summary_json: parseJsonObject(row.feature_summary_json),
+        evidence_json: parseJsonObject(row.evidence_json),
+      }));
+    },
+
+    async markAssociationCandidatePromoted(args: MarkAssociationCandidatePromotedArgs): Promise<void> {
+      db.prepare(
+        `UPDATE lite_memory_association_candidates
+         SET status = 'promoted',
+             promoted_edge_id = ?,
+             updated_at = ?
+         WHERE scope = ?
+           AND src_id = ?
+           AND dst_id = ?
+           AND relation_kind = ?`,
+      ).run(
+        args.promoted_edge_id,
+        nowIso(),
+        args.scope,
+        args.src_id,
+        args.dst_id,
+        args.relation_kind,
       );
     },
 

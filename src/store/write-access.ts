@@ -1,6 +1,13 @@
 import type pg from "pg";
+import type {
+  AssociationCandidateRecord,
+  AssociativeCandidateStoreAccess,
+  ListAssociationCandidatesForSourceArgs,
+  MarkAssociationCandidatePromotedArgs,
+  UpsertAssociationCandidateArgs,
+} from "../memory/associative-candidate-store.js";
 
-export const WRITE_STORE_ACCESS_CAPABILITY_VERSION = 2 as const;
+export const WRITE_STORE_ACCESS_CAPABILITY_VERSION = 3 as const;
 
 export type WriteCommitInsertArgs = {
   scope: string;
@@ -93,7 +100,7 @@ type CreatePostgresWriteStoreAccessOptions = {
   capabilities?: Partial<WriteStoreCapabilities>;
 };
 
-export interface WriteStoreAccess {
+export interface WriteStoreAccess extends AssociativeCandidateStoreAccess {
   readonly capability_version: typeof WRITE_STORE_ACCESS_CAPABILITY_VERSION;
   readonly capabilities: WriteStoreCapabilities;
   nodeScopesByIds(ids: string[]): Promise<Map<string, string>>;
@@ -264,6 +271,114 @@ export function createPostgresWriteStoreAccess(
       );
     },
 
+    async upsertAssociationCandidates(args: UpsertAssociationCandidateArgs[]): Promise<void> {
+      if (args.length === 0) return;
+      for (const candidate of args) {
+        await client.query(
+          `INSERT INTO memory_association_candidates
+            (scope, src_id, dst_id, relation_kind, status, score, confidence,
+             feature_summary_json, evidence_json, source_commit_id, worker_run_id, promoted_edge_id)
+           VALUES
+            ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12)
+           ON CONFLICT (scope, src_id, dst_id, relation_kind) DO UPDATE SET
+             status = EXCLUDED.status,
+             score = EXCLUDED.score,
+             confidence = EXCLUDED.confidence,
+             feature_summary_json = EXCLUDED.feature_summary_json,
+             evidence_json = EXCLUDED.evidence_json,
+             source_commit_id = EXCLUDED.source_commit_id,
+             worker_run_id = EXCLUDED.worker_run_id,
+             promoted_edge_id = EXCLUDED.promoted_edge_id,
+             updated_at = now()`,
+          [
+            candidate.scope,
+            candidate.src_id,
+            candidate.dst_id,
+            candidate.relation_kind,
+            candidate.status,
+            candidate.score,
+            candidate.confidence,
+            candidate.feature_summary_json,
+            candidate.evidence_json,
+            candidate.source_commit_id,
+            candidate.worker_run_id,
+            candidate.promoted_edge_id,
+          ],
+        );
+      }
+    },
+
+    async listAssociationCandidatesForSource(
+      args: ListAssociationCandidatesForSourceArgs,
+    ): Promise<AssociationCandidateRecord[]> {
+      const limit = Math.max(1, Math.min(200, Math.trunc(args.limit ?? 50)));
+      const statusFilter = Array.isArray(args.statuses) && args.statuses.length > 0;
+      const params: unknown[] = [args.scope, args.src_id];
+      let sql = `
+        SELECT
+          id::text,
+          scope,
+          src_id::text,
+          dst_id::text,
+          relation_kind,
+          status,
+          score,
+          confidence,
+          feature_summary_json,
+          evidence_json,
+          source_commit_id::text,
+          worker_run_id,
+          promoted_edge_id::text,
+          created_at::text,
+          updated_at::text
+        FROM memory_association_candidates
+        WHERE scope = $1
+          AND src_id = $2
+      `;
+      if (statusFilter) {
+        params.push(args.statuses);
+        sql += ` AND status = ANY($${params.length}::text[])`;
+      }
+      params.push(limit);
+      sql += ` ORDER BY score DESC, confidence DESC, updated_at DESC LIMIT $${params.length}`;
+      const out = await client.query<{
+        id: string;
+        scope: string;
+        src_id: string;
+        dst_id: string;
+        relation_kind: AssociationCandidateRecord["relation_kind"];
+        status: AssociationCandidateRecord["status"];
+        score: number;
+        confidence: number;
+        feature_summary_json: Record<string, unknown> | null;
+        evidence_json: Record<string, unknown> | null;
+        source_commit_id: string | null;
+        worker_run_id: string | null;
+        promoted_edge_id: string | null;
+        created_at: string;
+        updated_at: string;
+      }>(sql, params);
+      return out.rows.map((row) => ({
+        ...row,
+        feature_summary_json: row.feature_summary_json ?? {},
+        evidence_json: row.evidence_json ?? {},
+      }));
+    },
+
+    async markAssociationCandidatePromoted(args: MarkAssociationCandidatePromotedArgs): Promise<void> {
+      await client.query(
+        `UPDATE memory_association_candidates
+         SET status = 'promoted',
+             promoted_edge_id = $5,
+             updated_at = now()
+         WHERE scope = $1
+           AND src_id = $2
+           AND dst_id = $3
+           AND relation_kind = $4`,
+        [args.scope, args.src_id, args.dst_id, args.relation_kind, args.promoted_edge_id],
+      );
+    },
+
     async appendAfterTopicClusterEventIds(scope: string, commitId: string, eventIdsJson: string): Promise<void> {
       await client.query(
         `UPDATE memory_outbox
@@ -359,6 +474,9 @@ export function assertWriteStoreAccessContract(access: WriteStoreAccess): void {
     "upsertEdge",
     "readyEmbeddingNodeIds",
     "insertOutboxEvent",
+    "upsertAssociationCandidates",
+    "listAssociationCandidatesForSource",
+    "markAssociationCandidatePromoted",
     "appendAfterTopicClusterEventIds",
     "mirrorCommitArtifactsToShadowV2",
   ] as const;
