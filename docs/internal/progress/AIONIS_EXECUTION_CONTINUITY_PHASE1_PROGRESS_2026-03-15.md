@@ -9,10 +9,9 @@ Status: `active additive implementation`
 
 Related:
 
-1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md)
-2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE1_PLAN_2026-03-15.md](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE1_PLAN_2026-03-15.md)
-3. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/2026-03-14-generic-adapter-core-architecture.md](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/2026-03-14-generic-adapter-core-architecture.md)
-4. [/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md](/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md)
+1. [../architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md](../architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md)
+2. [../plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE1_PLAN_2026-03-15.md](../plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE1_PLAN_2026-03-15.md)
+3. [../plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md](../plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md)
 
 ## Executive Summary
 
@@ -36,10 +35,10 @@ It is the first internal continuity contract landed behind the existing route fa
 
 New internal kernel scaffold:
 
-1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/types.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/types.ts)
-2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/packet.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/packet.ts)
-3. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/profiles.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/profiles.ts)
-4. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/index.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/execution/index.ts)
+1. [../../../src/execution/types.ts](../../../src/execution/types.ts)
+2. [../../../src/execution/packet.ts](../../../src/execution/packet.ts)
+3. [../../../src/execution/profiles.ts](../../../src/execution/profiles.ts)
+4. [../../../src/execution/index.ts](../../../src/execution/index.ts)
 
 Core abstractions now present:
 
@@ -53,7 +52,7 @@ Core abstractions now present:
 
 Primary file:
 
-1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/handoff.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/handoff.ts)
+1. [../../../src/memory/handoff.ts](../../../src/memory/handoff.ts)
 
 Behavior at this checkpoint:
 
@@ -70,8 +69,8 @@ Behavior at this checkpoint:
 
 Primary files:
 
-1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/handoff.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/handoff.ts)
-2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/routes/handoff.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/routes/handoff.ts)
+1. [../../../src/memory/handoff.ts](../../../src/memory/handoff.ts)
+2. [../../../src/routes/handoff.ts](../../../src/routes/handoff.ts)
 
 Behavior at this checkpoint:
 
@@ -87,8 +86,8 @@ This gives the continuity path a durable source material instead of relying on r
 
 Primary files:
 
-1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/schemas.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/memory/schemas.ts)
-2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/routes/memory-context-runtime.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/routes/memory-context-runtime.ts)
+1. [../../../src/memory/schemas.ts](../../../src/memory/schemas.ts)
+2. [../../../src/routes/memory-context-runtime.ts](../../../src/routes/memory-context-runtime.ts)
 
 Behavior at this checkpoint:
 
@@ -109,8 +108,8 @@ This was chosen to avoid rewriting the full context orchestrator in Phase 1.
 
 Updated SDK contract surfaces:
 
-1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/sdk/types.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/src/sdk/types.ts)
-2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/packages/sdk/src/types.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/packages/sdk/src/types.ts)
+1. [../../../src/sdk/types.ts](../../../src/sdk/types.ts)
+2. [../../../packages/sdk/src/types.ts](../../../packages/sdk/src/types.ts)
 
 Added optional fields for:
 
@@ -250,8 +249,8 @@ The following are still pending:
 Passed at this checkpoint:
 
 1. TypeScript compile for the execution-continuity branch
-2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1.test.mjs](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1.test.mjs)
-3. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1-integration.test.ts](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/scripts/ci/execution-continuity-phase1-integration.test.ts)
+2. [../../../scripts/ci/execution-continuity-phase1.test.mjs](../../../scripts/ci/execution-continuity-phase1.test.mjs)
+3. [../../../scripts/ci/execution-continuity-phase1-integration.test.ts](../../../scripts/ci/execution-continuity-phase1-integration.test.ts)
 4. adapter-side runtime threshold adoption tests on the OpenClaw path
 5. first controlled nightly real-workflow validation on `glm_dashboard_auth_drift_reviewer_ready_workflow`
 6. focused `tools/select` control-profile filtering test on the Aionis path

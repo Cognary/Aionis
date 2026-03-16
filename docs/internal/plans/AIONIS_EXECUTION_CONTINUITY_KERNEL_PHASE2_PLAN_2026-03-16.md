@@ -287,35 +287,7 @@ Exit criteria:
 2. state store is internal-only
 3. no public route breakage
 
-Current checkpoint:
-
-1. the scaffold has landed
-2. `handoff/store` now persists `execution_state_v1` into the internal state store after successful writes and emits explicit `execution_transitions_v1` metadata on the same route
-3. `handoff/recover` now prefers the internal state store when a matching record exists
-4. `planning_context` and `context/assemble` now report explicit `packet_source_mode` metadata and prefer state-first packet assembly when `execution_state_v1` is provided
-5. `memory/write` now persists explicit `execution_state_v1` payloads and applies explicit `execution_transition_v1` payloads into the internal state store
-6. public route semantics remain unchanged
-7. `handoff/store` transition emission now rebases `expected_revision` onto the stored revision at route time, after an observed real-workflow regression on repeated handoffs for the same anchor
-
-Current strongest-slice revalidation reading:
-
-1. dashboard auth drift is positive on completion, token, and wall-clock
-2. pairing / approval recovery is positive on completion, token, and wall-clock
-3. service token drift repair is positive on completion, but not on efficiency
-
-This means the current Phase 2 rollout is already positive on reviewer-ready completion across the strongest three workflow slices.
-
-The later `handoff/store -> execution_transitions_v1` repair also now has a repeated strongest-slice confirmation:
-
-1. dashboard auth drift moved `0 -> 1`
-2. average total tokens dropped from `24717.67` to `21235.67`
-3. average wall-clock dropped from `101635.33ms` to `68210ms`
-
-The newer state-aware `tools/select` path now has two strongest-slice repeated confirmations:
-
-1. dashboard auth drift moved `0.6667 -> 1`, but with higher token spend and higher wall-clock
-2. pairing / approval recovery moved `0 -> 1`, but with higher token spend and slightly higher wall-clock
-3. the current reading for that surface is completion-first, not efficiency-first
+Checkpoint status and live benchmark outcomes belong in the progress documents, not in this rollout plan.
 
 ### Step 2. Transition Contract
 
@@ -457,15 +429,13 @@ Phase 2 should be considered complete only when all of the following are true:
 5. strongest real workflow slices remain positive after those changes
 6. nightly reporting can distinguish state-first from fallback continuity mode
 
-## Recommended Next Move
+## Rollout Discipline
 
-The next implementation move after the current state-store, transition, and state-first context overlays is:
+When a new runtime surface lands in Phase 2:
 
-1. extend the new state-aware `tools/select` path to the third strongest slice
+1. first prove route safety with focused CI
+2. then prove real-path safety with a strongest-slice smoke
+3. then prove runtime value with repeated strongest-slice validation
+4. only after that, expand to another surface or another strongest slice
 
-That is the highest-value move now because it tests whether:
-
-1. durable execution state can shape runtime control beyond packet assembly
-2. `ControlProfile` adoption keeps moving through measured runtime surfaces instead of ad hoc host logic
-3. phase-2 state data is useful on the real OpenClaw path, not just inside route overlays
-4. the product story stays positive beyond the first two strongest slices as the kernel starts reading state directly during tool choice
+Current checkpoint status and the latest proof obligations should be tracked in the progress documents.

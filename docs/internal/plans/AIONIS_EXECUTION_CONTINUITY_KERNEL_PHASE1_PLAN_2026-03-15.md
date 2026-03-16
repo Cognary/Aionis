@@ -3,8 +3,7 @@
 Date: `2026-03-15`
 Status: `proposed execution plan`
 Depends on:
-- [AIONIS Execution Continuity Kernel ADR](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md)
-- [Generic Adapter Core Architecture](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/2026-03-14-generic-adapter-core-architecture.md)
+- [AIONIS Execution Continuity Kernel ADR](../architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md)
 
 ## Summary
 
@@ -16,6 +15,12 @@ The approved direction is to evolve Aionis from memory-centered continuity into 
 2. no public route breakage
 3. no regression to the current `@aionis/openclaw-adapter` benchmarked path
 4. no generic workflow-engine abstractions
+
+The governing ADR boundary remains:
+
+1. coding-agent execution continuity, not generic workflow orchestration
+2. additive rollout behind existing routes
+3. benchmark-gated promotion on the current OpenClaw wedge
 
 Phase 1 will introduce the minimum durable execution contract behind existing routes.
 

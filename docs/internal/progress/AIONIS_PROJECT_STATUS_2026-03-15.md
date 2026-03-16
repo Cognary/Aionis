@@ -9,11 +9,11 @@ Status: `phase 1 product + kernel line established`
 
 Related:
 
-1. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/progress/AIONIS_EXECUTION_CONTINUITY_PHASE1_PROGRESS_2026-03-15.md](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/progress/AIONIS_EXECUTION_CONTINUITY_PHASE1_PROGRESS_2026-03-15.md)
-2. [/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md](/Users/lucio/Desktop/Aionis-worktrees/execution-continuity-phase1/docs/internal/architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md)
-3. [/Users/lucio/Desktop/clawbot-aionis-adapter/docs/2026-03-14-openclaw-aionis-benchmark-summary.md](/Users/lucio/Desktop/clawbot-aionis-adapter/docs/2026-03-14-openclaw-aionis-benchmark-summary.md)
-4. [/Users/lucio/Desktop/clawbot-aionis-adapter/docs/2026-03-15-openclaw-real-workflow-scenario-benchmark.md](/Users/lucio/Desktop/clawbot-aionis-adapter/docs/2026-03-15-openclaw-real-workflow-scenario-benchmark.md)
-5. [/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md](/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md)
+1. [Phase 1 Progress](AIONIS_EXECUTION_CONTINUITY_PHASE1_PROGRESS_2026-03-15.md)
+2. [Execution Continuity Kernel ADR](../architecture/AIONIS_EXECUTION_CONTINUITY_KERNEL_ADR_2026-03-15.md)
+3. `clawbot-aionis-adapter/docs/2026-03-14-openclaw-aionis-benchmark-summary.md`
+4. `clawbot-aionis-adapter/docs/2026-03-15-openclaw-real-workflow-scenario-benchmark.md`
+5. [Phase 2 Plan](../plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md)
 
 ## Executive Summary
 
