@@ -31,6 +31,7 @@ title: "快速开始"
 3. [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
 4. [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
 5. [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)
+6. [没有本地仓库也能 3 分钟起 Lite](/public/zh/getting-started/09-no-local-repo-lite)
 
 ### 路径 B：把 Aionis 接进 Agent
 
@@ -48,6 +49,7 @@ title: "快速开始"
 4. [Python SDK + Aionis CLI](/public/zh/getting-started/08-python-sdk-with-cli)
 5. [集成总览](/public/zh/integrations/00-overview)
 6. [Codex 本地集成](/public/zh/integrations/05-codex-local)
+7. [没有本地仓库也能 3 分钟起 Lite](/public/zh/getting-started/09-no-local-repo-lite)
 
 ### 路径 C：自托管 Server
 

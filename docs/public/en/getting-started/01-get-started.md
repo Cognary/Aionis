@@ -31,6 +31,7 @@ Start here:
 3. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
 4. [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
 5. [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)
+6. [3-Minute Lite Setup Without a Local Repo](/public/en/getting-started/09-no-local-repo-lite)
 
 ### Path B: Integrate Aionis Into Agents
 
@@ -48,6 +49,7 @@ Start here:
 4. [Python SDK + Aionis CLI](/public/en/getting-started/08-python-sdk-with-cli)
 5. [Integrations Overview](/public/en/integrations/00-overview)
 6. [Codex Local](/public/en/integrations/05-codex-local)
+7. [3-Minute Lite Setup Without a Local Repo](/public/en/getting-started/09-no-local-repo-lite)
 
 ### Path C: Self-Hosted Server
 
