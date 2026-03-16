@@ -269,7 +269,8 @@ Phase 2 role:
 
 1. continue `ControlProfile` candidate shaping
 2. optionally read current stage and role from execution state rather than only continuity payload
-3. remain safe when profile filters eliminate all candidates
+3. support lightweight `execution_state_ref_v1` so the route can recover authoritative state from the shared store rather than depending on repeated full state payloads
+4. remain safe when profile filters eliminate all candidates
 
 ## Rollout Sequence
 

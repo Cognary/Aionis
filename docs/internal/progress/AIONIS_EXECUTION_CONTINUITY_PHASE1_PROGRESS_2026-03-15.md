@@ -207,6 +207,8 @@ Additional `tools/select` checkpoint:
 6. the first `3`-repeat strongest-slice revalidation for this path is also positive on reviewer-ready completion: dashboard auth drift moved `0.6667 -> 1`, but with higher token spend and higher wall-clock
 7. the second strongest-slice `3`-repeat revalidation is also positive on reviewer-ready completion: pairing / approval recovery moved `0 -> 1`, but with higher token spend and slightly higher wall-clock
 8. the third strongest-slice `3`-repeat revalidation is also positive on reviewer-ready completion: service token drift repair moved `0 -> 0.3333`, but this third result is only a supporting completion signal and comes with higher token spend and higher wall-clock
+9. `tools/select` now also accepts optional `execution_state_ref_v1`, resolves authoritative state from the shared `ExecutionStateStore`, and lets runtime callers keep explicit `control_profile_v1` while dropping the larger `execution_state_v1` payload on that route
+10. the first `3`-repeat strongest-slice cost revalidation for this tighter path is positive on both completion and cost: dashboard auth drift moved `0 -> 0.6667`, while lowering average token spend from `23370.33` to `21824.67` and wall-clock from `95874.33ms` to `69418.33ms`
 
 ## What This Means Architecturally
 
