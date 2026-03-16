@@ -8,11 +8,18 @@ import { createEmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { runEmbedBackfill } from "./embedBackfillLib.js";
 import { sha256Hex } from "../util/crypto.js";
+import { createPostgresWriteStoreAccess } from "../store/write-access.js";
+import {
+  listAssociativeCandidatePool,
+  listAssociativeNodesByIds,
+} from "../store/recall-access.js";
 import {
   applyReplayLearningProjectionFromPayload,
   buildReplayLearningProjectionDefaults,
   classifyReplayLearningProjectionError,
 } from "../memory/replay-learning.js";
+import { AssociativeLinkTriggerPayloadSchema } from "../memory/associative-linking-types.js";
+import { runAssociativeLinkingJob } from "./associative-linking-lib.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
@@ -94,7 +101,8 @@ async function processBatch(): Promise<{
             CASE
               WHEN event_type = 'embed_nodes' THEN 0
               WHEN event_type = 'topic_cluster' THEN 1
-              WHEN event_type = 'replay_learning_projection' THEN 2
+              WHEN event_type = 'associative_link' THEN 2
+              WHEN event_type = 'replay_learning_projection' THEN 3
               ELSE 3
             END,
             id ASC
@@ -127,7 +135,8 @@ async function processBatch(): Promise<{
 
   // Process embed backfill first to avoid consuming topic_cluster items before embeddings exist.
   claimed.sort((a, b) => {
-    const pri = (t: string) => (t === "embed_nodes" ? 0 : t === "topic_cluster" ? 1 : t === "replay_learning_projection" ? 2 : 3);
+    const pri = (t: string) =>
+      (t === "embed_nodes" ? 0 : t === "topic_cluster" ? 1 : t === "associative_link" ? 2 : t === "replay_learning_projection" ? 3 : 4);
     const d = pri(a.event_type) - pri(b.event_type);
     return d !== 0 ? d : a.id - b.id;
   });
@@ -404,6 +413,35 @@ async function processBatch(): Promise<{
               );
             }
           }
+          return;
+        }
+
+        if (r.event_type === "associative_link") {
+          const payload = AssociativeLinkTriggerPayloadSchema.parse(r.payload ?? {});
+          const associativeOut = await runAssociativeLinkingJob({
+            payload,
+            recallAccess: {
+              listAssociativeNodesByIds: (scope, nodeIds) => listAssociativeNodesByIds(client, scope, nodeIds),
+              listAssociativeCandidatePool: (scope, excludeNodeIds, limit) =>
+                listAssociativeCandidatePool(client, scope, excludeNodeIds, limit),
+            },
+            writeAccess: createPostgresWriteStoreAccess(client),
+          });
+          await client.query(
+            `UPDATE memory_outbox
+             SET
+               payload = payload || $3::jsonb,
+               last_error = NULL,
+               published_at = now()
+             WHERE id = $1 AND claimed_at::text = $2`,
+            [
+              r.id,
+              r.claimed_at,
+              JSON.stringify({
+                associative_link: associativeOut,
+              }),
+            ],
+          );
           return;
         } else {
           // Unknown event type: mark as processed to avoid poison-looping forever.

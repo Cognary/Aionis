@@ -112,6 +112,19 @@ export type RecallAuditInsertParams = {
   edgeCount: number;
 };
 
+export type RecallAssociativeNodeRow = {
+  id: string;
+  scope: string;
+  type: string;
+  title: string | null;
+  text_summary: string | null;
+  slots: Record<string, unknown>;
+  embedding_text: string | null;
+  created_at: string;
+  updated_at: string;
+  commit_id: string | null;
+};
+
 export type RecallStoreCapabilities = {
   debug_embeddings: boolean;
   audit_insert: boolean;
@@ -545,6 +558,73 @@ export function createPostgresRecallStoreAccess(
       );
     },
   };
+}
+
+export async function listAssociativeNodesByIds(
+  client: pg.PoolClient,
+  scope: string,
+  nodeIds: string[],
+): Promise<RecallAssociativeNodeRow[]> {
+  if (nodeIds.length === 0) return [];
+  const out = await client.query<RecallAssociativeNodeRow>(
+    `
+    SELECT
+      n.id::text AS id,
+      n.scope,
+      n.type::text AS type,
+      n.title,
+      n.text_summary,
+      n.slots,
+      CASE WHEN n.embedding IS NULL THEN NULL ELSE n.embedding::text END AS embedding_text,
+      n.created_at::text AS created_at,
+      n.updated_at::text AS updated_at,
+      n.commit_id::text AS commit_id
+    FROM memory_nodes n
+    WHERE n.scope = $1
+      AND n.id = ANY($2::uuid[])
+    ORDER BY n.created_at DESC
+    `,
+    [scope, nodeIds],
+  );
+  return out.rows.map((row) => ({
+    ...row,
+    slots: row.slots && typeof row.slots === "object" && !Array.isArray(row.slots) ? row.slots : {},
+  }));
+}
+
+export async function listAssociativeCandidatePool(
+  client: pg.PoolClient,
+  scope: string,
+  excludeNodeIds: string[],
+  limit: number,
+): Promise<RecallAssociativeNodeRow[]> {
+  const boundedLimit = Math.max(1, Math.min(500, Math.trunc(limit)));
+  const out = await client.query<RecallAssociativeNodeRow>(
+    `
+    SELECT
+      n.id::text AS id,
+      n.scope,
+      n.type::text AS type,
+      n.title,
+      n.text_summary,
+      n.slots,
+      CASE WHEN n.embedding IS NULL THEN NULL ELSE n.embedding::text END AS embedding_text,
+      n.created_at::text AS created_at,
+      n.updated_at::text AS updated_at,
+      n.commit_id::text AS commit_id
+    FROM memory_nodes n
+    WHERE n.scope = $1
+      AND n.type IN ('event', 'evidence', 'concept', 'procedure')
+      AND NOT (n.id = ANY($2::uuid[]))
+    ORDER BY n.created_at DESC
+    LIMIT $3
+    `,
+    [scope, excludeNodeIds, boundedLimit],
+  );
+  return out.rows.map((row) => ({
+    ...row,
+    slots: row.slots && typeof row.slots === "object" && !Array.isArray(row.slots) ? row.slots : {},
+  }));
 }
 
 export function assertRecallStoreAccessContract(access: RecallStoreAccess): void {
