@@ -115,14 +115,21 @@ export function registerHandoffRoutes(args: {
       const writeNode = Array.isArray(writeBody.nodes) ? (writeBody.nodes[0] as any) : null;
       const writeSlots = writeNode && writeNode.slots && typeof writeNode.slots === "object" ? writeNode.slots : null;
       const continuitySlots = handoffSlots ?? writeSlots;
+      let appliedExecutionTransitions: Array<Record<string, unknown>> | undefined;
       if (executionStateStore && writeSlots && "execution_state_v1" in writeSlots) {
         const executionState = ExecutionStateV1Schema.parse((writeSlots as any).execution_state_v1);
-        executionStateStore.put(executionState);
+        let storedState = executionStateStore.put(executionState);
         const rawTransitions = "execution_transitions_v1" in writeSlots ? (writeSlots as any).execution_transitions_v1 : null;
         if (Array.isArray(rawTransitions)) {
+          appliedExecutionTransitions = [];
           for (const rawTransition of rawTransitions) {
-            const transition = ExecutionStateTransitionV1Schema.parse(rawTransition);
-            executionStateStore.applyTransition(transition);
+            const parsed = ExecutionStateTransitionV1Schema.parse(rawTransition);
+            const transition = {
+              ...parsed,
+              expected_revision: storedState.revision,
+            };
+            storedState = executionStateStore.applyTransition(transition);
+            appliedExecutionTransitions.push(transition as Record<string, unknown>);
           }
         }
       }
@@ -162,7 +169,10 @@ export function registerHandoffRoutes(args: {
         control_profile_v1:
           continuitySlots && "control_profile_v1" in continuitySlots ? (continuitySlots as any).control_profile_v1 : undefined,
         execution_transitions_v1:
-          continuitySlots && "execution_transitions_v1" in continuitySlots ? (continuitySlots as any).execution_transitions_v1 : undefined,
+          appliedExecutionTransitions
+            ?? (continuitySlots && "execution_transitions_v1" in continuitySlots
+              ? (continuitySlots as any).execution_transitions_v1
+              : undefined),
       });
     } finally {
       gate.release();

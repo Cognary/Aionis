@@ -139,10 +139,32 @@ test("handoff/store persists execution state into the phase2 state store overlay
         const body = JSON.parse(storeRes.body);
         const storedState = executionStateStore.get(body.execution_state_v1.scope, body.execution_state_v1.state_id);
 
+        const secondStoreRes = await app.inject({
+          method: "POST",
+          url: "/v1/handoff/store",
+          payload: {
+            anchor: "phase2-overlay-anchor",
+            file_path: "/repo/cli.ts",
+            repo_root: "/repo",
+            symbol: "recover_cli",
+            summary: "Resume CLI fix validation",
+            handoff_text: "Refresh the same anchor with the same continuity payload.",
+            acceptance_checks: ["Run the focused CLI smoke"],
+            must_keep: ["Preserve current auth fallback semantics"],
+            target_files: ["/repo/cli.ts", "/repo/cli.test.ts"],
+            next_action: "Re-run the narrow smoke and record the refreshed verdict",
+          },
+        });
+        const secondBody = JSON.parse(secondStoreRes.body);
+        const storedStateAfterSecondWrite = executionStateStore.get(secondBody.execution_state_v1.scope, secondBody.execution_state_v1.state_id);
+
         process.stdout.write("__RESULT__" + JSON.stringify({
           status: storeRes.statusCode,
           body,
           stored: storedState,
+          second_status: secondStoreRes.statusCode,
+          second_body: secondBody,
+          stored_after_second_write: storedStateAfterSecondWrite,
         }));
       } finally {
         await app.close();
@@ -169,4 +191,10 @@ test("handoff/store persists execution state into the phase2 state store overlay
   assert.equal(parsed.stored.state.current_stage, "resume");
   assert.deepEqual(parsed.stored.state.pending_validations, ["Run the focused CLI smoke"]);
   assert.deepEqual(parsed.stored.state.rollback_notes, ["Preserve current auth fallback semantics"]);
+  assert.equal(parsed.second_status, 200);
+  assert.equal(Array.isArray(parsed.second_body.execution_transitions_v1), true);
+  assert.equal(parsed.second_body.execution_transitions_v1[0].expected_revision, 3);
+  assert.equal(parsed.second_body.execution_transitions_v1[1].expected_revision, 4);
+  assert.equal(parsed.stored_after_second_write.revision, 5);
+  assert.equal(parsed.stored_after_second_write.last_transition_type, "resume_anchor_updated");
 });
