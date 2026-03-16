@@ -16,11 +16,13 @@ import { buildToolsSelectionSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri } from "./uri.js";
 import {
   ControlProfileV1Schema,
+  ExecutionStateRefV1Schema,
   ExecutionStateV1Schema,
   type ControlProfileV1,
   type ExecutionStateV1,
 } from "../execution/types.js";
 import { controlProfileDefaults } from "../execution/profiles.js";
+import type { InMemoryExecutionStateStore } from "../execution/state-store.js";
 
 function inferBroadToolKind(name: string): "scan" | "test" | null {
   const lowered = name.toLowerCase();
@@ -37,29 +39,48 @@ function deriveControlProfileFromExecutionState(state: ExecutionStateV1): Contro
 export function resolveExecutionKernelInputs(
   rawContext: unknown,
   rawExecutionState: unknown,
+  rawExecutionStateRef: unknown,
+  executionStateStore?: InMemoryExecutionStateStore | null,
 ): {
   controlProfile: ControlProfileV1 | null;
   controlProfileOrigin: "continuity_delivered" | "state_derived" | "none";
   executionState: ExecutionStateV1 | null;
+  executionStateSource: "payload" | "state_ref" | "none";
 } {
   const context =
     rawContext && typeof rawContext === "object" ? (rawContext as Record<string, unknown>) : null;
+  const parsedState = ExecutionStateV1Schema.safeParse(rawExecutionState);
+  const parsedStateRef = ExecutionStateRefV1Schema.safeParse(rawExecutionStateRef);
+  let executionState: ExecutionStateV1 | null = null;
+  let executionStateSource: "payload" | "state_ref" | "none" = "none";
+
+  if (parsedState.success) {
+    executionState = parsedState.data;
+    executionStateSource = "payload";
+  } else if (parsedStateRef.success && executionStateStore) {
+    const stored = executionStateStore.get(parsedStateRef.data.scope, parsedStateRef.data.state_id);
+    if (stored) {
+      executionState = stored.state;
+      executionStateSource = "state_ref";
+    }
+  }
+
   const parsedProfile = ControlProfileV1Schema.safeParse(context?.control_profile_v1);
   if (parsedProfile.success) {
-    const parsedState = ExecutionStateV1Schema.safeParse(rawExecutionState);
     return {
       controlProfile: parsedProfile.data,
       controlProfileOrigin: "continuity_delivered",
-      executionState: parsedState.success ? parsedState.data : null,
+      executionState,
+      executionStateSource,
     };
   }
 
-  const parsedState = ExecutionStateV1Schema.safeParse(rawExecutionState);
-  if (parsedState.success) {
+  if (executionState) {
     return {
-      controlProfile: deriveControlProfileFromExecutionState(parsedState.data),
+      controlProfile: deriveControlProfileFromExecutionState(executionState),
       controlProfileOrigin: "state_derived",
-      executionState: parsedState.data,
+      executionState,
+      executionStateSource,
     };
   }
 
@@ -67,6 +88,7 @@ export function resolveExecutionKernelInputs(
     controlProfile: null,
     controlProfileOrigin: "none",
     executionState: null,
+    executionStateSource: "none",
   };
 }
 
@@ -125,6 +147,7 @@ export async function selectTools(
   opts: {
     embeddedRuntime?: EmbeddedMemoryRuntime | null;
     liteWriteStore?: Pick<LiteWriteStore, "insertExecutionDecision" | "listRuleCandidates"> | null;
+    executionStateStore?: InMemoryExecutionStateStore | null;
   } = {},
 ) {
   const parsed = ToolsSelectRequest.parse(body);
@@ -133,7 +156,12 @@ export async function selectTools(
     { defaultScope, defaultTenantId },
   );
   const normalizedCandidates = normalizeToolCandidates(parsed.candidates);
-  const kernelInputs = resolveExecutionKernelInputs(parsed.context, parsed.execution_state_v1);
+  const kernelInputs = resolveExecutionKernelInputs(
+    parsed.context,
+    parsed.execution_state_v1,
+    parsed.execution_state_ref_v1,
+    opts.executionStateStore ?? null,
+  );
   const { filteredCandidates, deniedByProfile } = applyControlProfileCandidateFilter(
     normalizedCandidates,
     kernelInputs.controlProfile,
@@ -254,6 +282,7 @@ export async function selectTools(
     execution_kernel: {
       control_profile_origin: kernelInputs.controlProfileOrigin,
       execution_state_v1_present: !!kernelInputs.executionState,
+      execution_state_source: kernelInputs.executionStateSource,
       current_stage: kernelInputs.executionState?.current_stage ?? null,
       active_role: kernelInputs.executionState?.active_role ?? null,
     },
