@@ -311,6 +311,12 @@ The later `handoff/store -> execution_transitions_v1` repair also now has a repe
 2. average total tokens dropped from `24717.67` to `21235.67`
 3. average wall-clock dropped from `101635.33ms` to `68210ms`
 
+The newer state-aware `tools/select` path now has two strongest-slice repeated confirmations:
+
+1. dashboard auth drift moved `0.6667 -> 1`, but with higher token spend and higher wall-clock
+2. pairing / approval recovery moved `0 -> 1`, but with higher token spend and slightly higher wall-clock
+3. the current reading for that surface is completion-first, not efficiency-first
+
 ### Step 2. Transition Contract
 
 Deliver:
@@ -455,11 +461,11 @@ Phase 2 should be considered complete only when all of the following are true:
 
 The next implementation move after the current state-store, transition, and state-first context overlays is:
 
-1. extend the new state-aware `tools/select` path to a second strongest slice
+1. extend the new state-aware `tools/select` path to the third strongest slice
 
 That is the highest-value move now because it tests whether:
 
 1. durable execution state can shape runtime control beyond packet assembly
 2. `ControlProfile` adoption keeps moving through measured runtime surfaces instead of ad hoc host logic
 3. phase-2 state data is useful on the real OpenClaw path, not just inside route overlays
-4. the product story stays positive beyond a single strongest slice as the kernel starts reading state directly during tool choice
+4. the product story stays positive beyond the first two strongest slices as the kernel starts reading state directly during tool choice
