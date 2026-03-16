@@ -154,6 +154,7 @@ Current reading:
 4. public route semantics remain unchanged while state durability starts moving beyond slot-only persistence
 5. state-first packet assembly is now explicitly observable on the context path
 6. explicit transition emission is now live on both `handoff/store` and `memory/write`, instead of remaining implied by projection
+7. the first real regression from handoff-transition rollout has been fixed: repeated handoffs for the same anchor now rebase transition expectations onto the stored revision instead of failing on revision mismatch
 
 ## What Is Not Finished
 
@@ -209,6 +210,7 @@ This makes the current Phase 2 story:
 1. positive on reviewer-ready completion across all three strongest slices
 2. positive on efficiency for two of the three strongest slices
 3. not yet a universal efficiency story
+4. resilient enough to absorb a real route-level regression, fix it, and confirm the repaired path on the real Lite workflow
 
 ## Recommended Next Focus
 

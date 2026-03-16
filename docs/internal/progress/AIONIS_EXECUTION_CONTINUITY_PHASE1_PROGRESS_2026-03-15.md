@@ -191,6 +191,12 @@ This means:
 3. the third strongest slice remains a completion win, not an efficiency win
 4. Phase 2 is no longer just an implementation checkpoint; it already has a refreshed product-facing evidence set
 
+Subsequent repair checkpoint:
+
+1. the first `handoff/store -> execution_transitions_v1` rollout exposed a real revision-rebase bug on repeated handoffs for the same anchor
+2. that bug is now fixed by rebasing emitted transition expectations onto the stored state revision at route time
+3. a follow-up single-run real-Lite check on dashboard auth drift stayed healthy at `1 -> 1`, while reducing total tokens and wall-clock
+
 ## What This Means Architecturally
 
 At this checkpoint, the minimum continuity loop is now present:

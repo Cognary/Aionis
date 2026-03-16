@@ -295,6 +295,7 @@ Current checkpoint:
 4. `planning_context` and `context/assemble` now report explicit `packet_source_mode` metadata and prefer state-first packet assembly when `execution_state_v1` is provided
 5. `memory/write` now persists explicit `execution_state_v1` payloads and applies explicit `execution_transition_v1` payloads into the internal state store
 6. public route semantics remain unchanged
+7. `handoff/store` transition emission now rebases `expected_revision` onto the stored revision at route time, after an observed real-workflow regression on repeated handoffs for the same anchor
 
 Current strongest-slice revalidation reading:
 
