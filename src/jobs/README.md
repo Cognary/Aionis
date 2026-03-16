@@ -118,14 +118,19 @@ If you write memory with `trigger_topic_cluster=true` and `topic_cluster_async=t
 
 If you write memory with `auto_embed=true` and the server has an embedding provider configured, the API enqueues an `event_type=embed_nodes` item to backfill embeddings asynchronously.
 
-Associative linking also enqueues `event_type=associative_link` for relevant execution-memory writes (`event`, `evidence`, `concept`, `procedure`).
+Associative linking also uses the outbox for relevant execution-memory writes (`event`, `evidence`, `concept`, `procedure`).
+
+- if the relevant source nodes already have embeddings, the write path enqueues `event_type=associative_link` immediately
+- if those source nodes are still pending async embedding, the write path defers associative linking by attaching an internal follow-up payload to `event_type=embed_nodes`; the worker enqueues `associative_link` only after embedding succeeds
 
 Shadow-first rollout:
 
 - candidate generation is same-scope only
+- candidate generation and promotion both stay inside the same visibility domain (`shared/shared`, same private `owner_agent_id`, or same private `owner_team_id`)
 - low-confidence candidates remain internal rows in `memory_association_candidates`
 - only high-confidence candidates promote into ordinary `related_to` edges
 - directional relation kinds stay internal metadata, not public edge types
+- candidate status is persisted as `shadow`, `promoted`, `rejected`, or `expired`
 
 Worker loop output includes `associative_link_metrics.shadow_created`, `associative_link_metrics.promoted`, and `associative_link_metrics.rejected`.
 

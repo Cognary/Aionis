@@ -4,7 +4,7 @@
 
 **Goal:** Add a shadow-first associative linking engine inside Aionis `Execution Memory` so coding-task-relevant memory points can gain automatic links without changing public route contracts or turning Aionis into a generic knowledge graph product.
 
-**Architecture:** The implementation stays additive. `/v1/memory/write` and other existing routes keep their current public shapes, but selected writes enqueue an internal `associative_link` outbox event. A new worker path retrieves bounded same-scope candidates, extracts coding-task-specific features, scores relation candidates, stores them in an internal candidate table, and later promotes only high-confidence candidates into ordinary `related_to` edges. Recall benefits only from promoted edges, so the current graph contract remains stable.
+**Architecture:** The implementation stays additive. `/v1/memory/write` and other existing routes keep their current public shapes, but selected writes enqueue associative-linking work through the internal outbox. When source nodes already have embeddings, the write path emits `associative_link` directly; when they are still pending embedding, the write path defers linking behind `embed_nodes` and the worker emits the associative follow-up only after embedding succeeds. The worker retrieves bounded same-scope candidates, extracts coding-task-specific features, scores relation candidates, stores them in an internal candidate table, and later promotes only high-confidence candidates into ordinary `related_to` edges. Recall benefits only from promoted edges, so the current graph contract remains stable.
 
 **Tech Stack:** TypeScript, Fastify runtime, Postgres + SQLite Lite store adapters, Zod schemas, `node:test` CI scripts, existing outbox worker pipeline.
 
@@ -18,6 +18,21 @@ This plan assumes implementation happens in a dedicated worktree and follows the
 2. no `EdgeType` expansion in phase 1
 3. no write-path latency regression from synchronous linking
 4. no drift beyond coding-agent continuity
+
+### As-Built Delta
+
+The implementation is complete, but the final behavior differs from the original draft in a few important places:
+
+1. migration numbering used `/Users/lucio/Desktop/Aionis/migrations/0038_associative_linking_candidates.sql`, not `0021`, because the repository sequence had already advanced
+2. associative linking is embed-aware: pending source embeddings defer linking behind `embed_nodes`, and the worker emits the internal associative follow-up only after embedding succeeds
+3. candidate status is fully persisted as `shadow`, `promoted`, `rejected`, and `expired`
+4. visibility boundaries are enforced for both shadow materialization and promotion: only `shared/shared`, same private `owner_agent_id`, or same private `owner_team_id` pairs may survive
+
+Verification after implementation:
+
+1. associative targeted tests pass
+2. `npm run build` passes
+3. `npm run docs:check` passes
 
 The governing architecture docs are:
 
@@ -137,7 +152,7 @@ git commit -m "feat(memory): add associative linking internal contract"
 ### Task 2: Add Candidate Persistence for Postgres and Lite
 
 **Files:**
-- Create: `/Users/lucio/Desktop/Aionis/migrations/0021_associative_linking_candidates.sql`
+- Create: `/Users/lucio/Desktop/Aionis/migrations/0038_associative_linking_candidates.sql`
 - Modify: `/Users/lucio/Desktop/Aionis/src/store/write-access.ts`
 - Modify: `/Users/lucio/Desktop/Aionis/src/store/lite-write-store.ts`
 - Create: `/Users/lucio/Desktop/Aionis/src/memory/associative-candidate-store.ts`
@@ -225,7 +240,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add /Users/lucio/Desktop/Aionis/migrations/0021_associative_linking_candidates.sql \
+git add /Users/lucio/Desktop/Aionis/migrations/0038_associative_linking_candidates.sql \
   /Users/lucio/Desktop/Aionis/src/store/write-access.ts \
   /Users/lucio/Desktop/Aionis/src/store/lite-write-store.ts \
   /Users/lucio/Desktop/Aionis/src/memory/associative-candidate-store.ts \
@@ -248,8 +263,9 @@ git commit -m "feat(memory): add associative candidate persistence"
 Create a test that writes a small memory batch and asserts:
 
 1. `embed_nodes` behavior remains intact
-2. a second outbox row with `event_type = "associative_link"` is enqueued when the batch contains distillable or recall-relevant nodes
-3. empty or irrelevant writes do not enqueue the event
+2. when the batch contains relevant nodes that already have embeddings, an outbox row with `event_type = "associative_link"` is enqueued immediately
+3. when the relevant source nodes are still pending embedding, the write path stores an internal associative follow-up on `embed_nodes` instead of enqueueing `associative_link` early
+4. empty or irrelevant writes do not enqueue associative work
 
 Use assertions like:
 
@@ -257,6 +273,7 @@ Use assertions like:
 assert.equal(outboxRows.some((row) => row.event_type === "associative_link"), true);
 assert.deepEqual(payload.origin, "memory_write");
 assert.ok(payload.source_node_ids.length >= 1);
+assert.deepEqual(embedPayload.after_associative_link.origin, "memory_write");
 ```
 
 **Step 2: Run test to verify it fails**
@@ -568,7 +585,7 @@ Expected: PASS
 
 Use an existing replay/handoff/context smoke path or add a one-off manual script to confirm:
 
-1. a write can enqueue `associative_link`
+1. a write can enqueue `associative_link` immediately, or defer it behind `embed_nodes` until embedding succeeds
 2. the worker can produce a promoted `related_to` edge
 3. a subsequent recall returns a denser subgraph without route breakage
 
@@ -601,10 +618,11 @@ Before merging, confirm:
 1. no public route request/response shape changed
 2. `EdgeType` remains `part_of | related_to | derived_from`
 3. cross-tenant and cross-scope linking is impossible
-4. `/write` latency did not gain a synchronous quadratic path
-5. low-confidence associations remain internal and non-disruptive
-6. recall quality improves on at least one continuity-sensitive benchmark slice
-7. the feature still reads as `Execution Memory enhancement`, not a new generic graph product
+4. visibility boundaries are preserved for private lanes (`shared/shared`, same private agent owner, or same private team owner only)
+5. `/write` latency did not gain a synchronous quadratic path
+6. low-confidence associations remain internal and non-disruptive
+7. recall quality improves on at least one continuity-sensitive benchmark slice
+8. the feature still reads as `Execution Memory enhancement`, not a new generic graph product
 
 ## Deferred Work
 
