@@ -291,7 +291,8 @@ Current checkpoint:
 
 1. the scaffold has landed
 2. `handoff/store` now persists `execution_state_v1` into the internal state store after successful writes
-3. public handoff route semantics remain unchanged
+3. `handoff/recover` now prefers the internal state store when a matching record exists
+4. public handoff route semantics remain unchanged
 
 ### Step 2. Transition Contract
 

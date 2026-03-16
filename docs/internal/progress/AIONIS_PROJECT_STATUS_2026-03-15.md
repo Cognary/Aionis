@@ -145,7 +145,9 @@ Current reading:
 
 1. `ExecutionState` now has an internal persistence scaffold independent of handoff slots
 2. state transitions are now an explicit internal contract instead of remaining purely implied by projection
-3. the first route overlay is now present on `handoff/store`
+3. the first route overlays are now present on:
+   - `handoff/store`
+   - `handoff/recover`
 4. public handoff semantics remain unchanged while state durability starts moving beyond slot-only persistence
 
 ## What Is Not Finished

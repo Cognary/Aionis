@@ -16,6 +16,7 @@ import {
   ControlProfileV1Schema,
   ExecutionPacketV1Schema,
   ExecutionStateV1Schema,
+  type InMemoryExecutionStateStore,
   type ControlProfileName,
   type ControlProfileV1,
   type ExecutionPacketV1,
@@ -68,6 +69,14 @@ type RecoveredExecutionProjection = {
   execution_packet_v1: ExecutionPacketV1;
   control_profile_v1: ControlProfileV1;
 };
+
+export function buildHandoffExecutionStateIdentity(anchor: string): { state_id: string; scope: string } {
+  const normalizedAnchor = String(anchor ?? "").trim();
+  return {
+    state_id: `handoff-anchor:${normalizedAnchor}`,
+    scope: `aionis://handoff/${normalizedAnchor}`,
+  };
+}
 
 type ExecutionReadyHandoff = {
   anchor: string;
@@ -195,8 +204,8 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
   });
   const executionProjection = buildExecutionProjectionFromRecoveredHandoff(
     {
-      id: `handoff-anchor:${parsed.anchor}`,
-      uri: `aionis://handoff/${parsed.anchor}`,
+      id: buildHandoffExecutionStateIdentity(parsed.anchor).state_id,
+      uri: buildHandoffExecutionStateIdentity(parsed.anchor).scope,
       title: parsed.title ?? `Handoff ${parsed.anchor}`,
       text_summary: parsed.summary,
       memory_lane: parsed.memory_lane,
@@ -402,15 +411,46 @@ function readStoredExecutionProjection(node: HandoffNode): RecoveredExecutionPro
   }
 }
 
+function readExecutionProjectionFromStateStore(
+  executionStateStore: InMemoryExecutionStateStore | null | undefined,
+  anchor: string,
+  executionReady: ExecutionReadyHandoff,
+  node: HandoffNode,
+): RecoveredExecutionProjection | null {
+  if (!executionStateStore) return null;
+  const identity = buildHandoffExecutionStateIdentity(anchor);
+  const stored = executionStateStore.get(identity.scope, identity.state_id);
+  if (!stored) return null;
+  const state = ExecutionStateV1Schema.parse(stored.state);
+  const packet = buildExecutionPacketV1({
+    state,
+    hard_constraints: executionReady.must_change,
+    evidence_refs: [node.uri].filter((value): value is string => typeof value === "string" && value.length > 0),
+  });
+  return {
+    execution_state_v1: state,
+    execution_packet_v1: packet,
+    control_profile_v1: deriveControlProfile(state.current_stage),
+  };
+}
+
 function deriveControlProfile(stage: ExecutionStateV1["current_stage"]): ControlProfileV1 {
   const profileName = (stage === "resume" ? "resume" : stage) satisfies ControlProfileName;
   return controlProfileDefaults(profileName);
 }
 
-function normalizeRecoveredHandoff(node: HandoffNode, matchedNodes: number, input: HandoffRecoverInput) {
+function normalizeRecoveredHandoff(
+  node: HandoffNode,
+  matchedNodes: number,
+  input: HandoffRecoverInput,
+  executionStateStore?: InMemoryExecutionStateStore | null,
+) {
   const promptSafe = buildPromptSafeHandoff(node, input);
   const executionReady = buildExecutionReadyHandoff(node, input, promptSafe);
-  const executionProjection = readStoredExecutionProjection(node) ?? buildExecutionProjectionFromRecoveredHandoff(node, promptSafe, executionReady);
+  const executionProjection =
+    readExecutionProjectionFromStateStore(executionStateStore, promptSafe.anchor, executionReady, node) ??
+    readStoredExecutionProjection(node) ??
+    buildExecutionProjectionFromRecoveredHandoff(node, promptSafe, executionReady);
   return {
     handoff_kind: promptSafe.handoff_kind,
     anchor: promptSafe.anchor,
@@ -470,6 +510,7 @@ function pickLatestHandoffCandidate(nodes: unknown[]): HandoffFindCandidate | nu
 export async function recoverHandoff(args: {
   client?: pg.PoolClient;
   liteWriteStore?: LiteWriteStoreLike | null;
+  executionStateStore?: InMemoryExecutionStateStore | null;
   input: unknown;
   defaultScope: string;
   defaultTenantId: string;
@@ -553,6 +594,6 @@ export async function recoverHandoff(args: {
   return {
     tenant_id: findResult.tenant_id,
     scope: findResult.scope,
-    ...normalizeRecoveredHandoff(resolved.node as HandoffNode, matchedNodes, parsed),
+    ...normalizeRecoveredHandoff(resolved.node as HandoffNode, matchedNodes, parsed, args.executionStateStore),
   };
 }

@@ -169,6 +169,7 @@ export function registerHandoffRoutes(args: {
       const out = liteWriteStore
         ? await recoverHandoff({
             liteWriteStore: liteWriteStore as any,
+            executionStateStore,
             input: body,
             defaultScope: env.MEMORY_SCOPE,
             defaultTenantId: env.MEMORY_TENANT_ID,
@@ -178,6 +179,7 @@ export function registerHandoffRoutes(args: {
         : await store.withClient((client) =>
             recoverHandoff({
               client,
+              executionStateStore,
               input: body,
               defaultScope: env.MEMORY_SCOPE,
               defaultTenantId: env.MEMORY_TENANT_ID,

@@ -157,13 +157,14 @@ What landed:
 What changed on the real route path:
 
 1. `handoff/store` now persists `execution_state_v1` into the new internal state store after a successful handoff write
-2. the route still returns the same handoff artifact contract
-3. the route now falls back to write-body continuity slots when lite write output does not echo those slots back
+2. `handoff/recover` now prefers the internal state store when a matching state record exists
+3. the route still returns the same handoff artifact contract
+4. the route now falls back to slot projection only when state-first recovery is unavailable
 
 What this means:
 
 1. Phase 2 is no longer only about defining state persistence and transitions in isolation
-2. the first route overlay is now in place
+2. the first two route overlays are now in place
 3. the current public route family remains intact while kernel state starts becoming independently durable
 
 ## What This Means Architecturally
@@ -263,7 +264,10 @@ This checkpoint is strong enough to say:
 6. the strongest real workflow story remains positive across the refreshed three-slice set after `ControlProfile` adoption
 7. `ControlProfile` now spans two concrete runtime surfaces instead of one
 8. Phase 2 has now started with an internal `ExecutionState` store scaffold and explicit transition contract
-9. the first Phase 2 route overlay now persists `execution_state_v1` on the `handoff/store` path without changing public route semantics
+9. the first Phase 2 route overlays now:
+   - persist `execution_state_v1` on `handoff/store`
+   - prefer state-first recovery on `handoff/recover`
+   without changing public route semantics
 
 It is not strong enough yet to say:
 
@@ -275,17 +279,17 @@ It is not strong enough yet to say:
 
 The next highest-value step after the current Phase 1 refresh work is:
 
-1. promote the new Phase 2 `handoff/store` overlay toward a state-first assembly path without changing public route semantics
+1. promote the new Phase 2 `handoff/store + handoff/recover` overlays toward a state-first assembly path without changing public route semantics
 2. continue verifying whether `tools/select`-level control-profile adoption improves the strongest real workflow slices, not just the threshold layer
 
 The immediate proof targets are:
 
 1. state transitions can become the durable source material for packet assembly
 2. profile projection is not merely type-level
-3. the first route overlay can persist execution state without breaking the current handoff contract
-3. adapter thresholds are actually being tightened by continuity-delivered profile data
-4. Aionis-side tool selection is also respecting continuity-delivered profile data
-5. the current positive real workflow story does not regress when profile adoption is enabled
+3. the first route overlays can persist and recover execution state without breaking the current handoff contract
+4. adapter thresholds are actually being tightened by continuity-delivered profile data
+5. Aionis-side tool selection is also respecting continuity-delivered profile data
+6. the current positive real workflow story does not regress when profile adoption is enabled
 6. the first positive nightly result is not a one-off artifact of a single strongest slice
 
 Only after that should the branch broaden `ControlProfile` adoption to additional runtime surfaces.
