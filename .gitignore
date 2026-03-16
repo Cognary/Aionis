@@ -18,6 +18,7 @@ pgdata
 .vitepress/cache
 **/.vitepress/cache
 packages/sdk/*.tgz
+docs-v4-mintlify/.home-check*.png
 
 # Python build artifacts
 *.egg-info

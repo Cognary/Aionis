@@ -103,11 +103,13 @@ Optional tenant budget gates for `sandbox/execute`:
    - `GET /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
    - `GET /v1/admin/control/sandbox-budgets`
    - `DELETE /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
+   - list endpoints return `400 invalid_request` when `limit` or `offset` is not a finite number
 4. Project-level overrides (higher priority than tenant-level profile):
    - `PUT /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id`
    - `GET /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id?scope=*`
    - `GET /v1/admin/control/sandbox-project-budgets`
    - `DELETE /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id?scope=*`
+   - list endpoints return `400 invalid_request` when `limit` or `offset` is not a finite number
 
 Retention cleanup job:
 

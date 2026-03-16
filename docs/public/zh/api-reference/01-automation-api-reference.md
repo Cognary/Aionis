@@ -44,8 +44,9 @@ Automation 路由与 memory 面共用认证方式：
 
 1. `POST /v1/automations/promote`
 2. `POST /v1/automations/shadow/report`
-3. `POST /v1/automations/shadow/validate`
-4. `POST /v1/automations/shadow/validate/dispatch`
+3. `POST /v1/automations/shadow/review`
+4. `POST /v1/automations/shadow/validate`
+5. `POST /v1/automations/shadow/validate/dispatch`
 
 ## Compensation
 

@@ -34,11 +34,15 @@ const canonical = new URL(Astro.url.pathname, Astro.site)
   <body>
     <div class="shell">
       <header class="site-header">
-        <a class="site-brand" href="/">Aionis Blog</a>
+        <a class="site-brand" href="/blog/">Aionis Blog</a>
         <nav class="site-nav" aria-label="Primary">
+          <a href="/blog/">
+            <Iconoir name="posts" class="nav-icon" />
+            <span>Blog</span>
+          </a>
           <a href="/">
             <Iconoir name="posts" class="nav-icon" />
-            <span>Posts</span>
+            <span>Home</span>
           </a>
           <a href="https://doc.aionisos.com" target="_blank" rel="noreferrer">
             <Iconoir name="docs" class="nav-icon" />

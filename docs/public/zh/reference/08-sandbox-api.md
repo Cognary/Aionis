@@ -103,11 +103,13 @@ Artifact 契约：
    - `GET /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
    - `GET /v1/admin/control/sandbox-budgets`
    - `DELETE /v1/admin/control/sandbox-budgets/:tenant_id?scope=*`
+   - 列表接口在 `limit` 或 `offset` 不是有限数字时返回 `400 invalid_request`
 4. 项目级覆盖（优先级高于租户级预算）：
    - `PUT /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id`
    - `GET /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id?scope=*`
    - `GET /v1/admin/control/sandbox-project-budgets`
    - `DELETE /v1/admin/control/sandbox-project-budgets/:tenant_id/:project_id?scope=*`
+   - 列表接口在 `limit` 或 `offset` 不是有限数字时返回 `400 invalid_request`
 
 清理保留作业：
 

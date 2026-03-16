@@ -38,6 +38,20 @@ function nullableBudgetCap(v: number | null | undefined): number | null {
   return Math.trunc(n);
 }
 
+function normalizePaginationInt(
+  value: unknown,
+  field: "limit" | "offset",
+  fallback: number,
+  bounds: { min: number; max: number },
+): number {
+  if (value === undefined || value === null || value === "") return fallback;
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    throw new HttpError(400, "invalid_request", `${field} must be a finite number`);
+  }
+  return Math.max(bounds.min, Math.min(bounds.max, Math.trunc(n)));
+}
+
 export function createSandboxBudgetService(args: {
   env: Env;
   db: Db;
@@ -51,8 +65,8 @@ export function createSandboxBudgetService(args: {
     offset?: number;
   }): Promise<Array<Record<string, unknown>>> => {
     const tenantId = typeof input.tenant_id === "string" && input.tenant_id.trim().length > 0 ? input.tenant_id.trim() : null;
-    const limit = Math.max(1, Math.min(500, Math.trunc(Number(input.limit ?? 100))));
-    const offset = Math.max(0, Math.trunc(Number(input.offset ?? 0)));
+    const limit = normalizePaginationInt(input.limit, "limit", 100, { min: 1, max: 500 });
+    const offset = normalizePaginationInt(input.offset, "offset", 0, { min: 0, max: Number.MAX_SAFE_INTEGER });
     try {
       const out = await db.pool.query(
         `
@@ -188,8 +202,8 @@ export function createSandboxBudgetService(args: {
   }): Promise<Array<Record<string, unknown>>> => {
     const tenantId = typeof input.tenant_id === "string" && input.tenant_id.trim().length > 0 ? input.tenant_id.trim() : null;
     const projectId = typeof input.project_id === "string" && input.project_id.trim().length > 0 ? input.project_id.trim() : null;
-    const limit = Math.max(1, Math.min(500, Math.trunc(Number(input.limit ?? 100))));
-    const offset = Math.max(0, Math.trunc(Number(input.offset ?? 0)));
+    const limit = normalizePaginationInt(input.limit, "limit", 100, { min: 1, max: 500 });
+    const offset = normalizePaginationInt(input.offset, "offset", 0, { min: 0, max: Number.MAX_SAFE_INTEGER });
     try {
       const out = await db.pool.query(
         `

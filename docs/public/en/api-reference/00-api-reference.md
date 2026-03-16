@@ -125,19 +125,25 @@ Notes:
 3. `POST /v1/automations/list`
 4. `POST /v1/automations/validate`
 5. `POST /v1/automations/graph/validate`
-6. `POST /v1/automations/run`
-7. `POST /v1/automations/runs/get`
-8. `POST /v1/automations/runs/list`
-9. `POST /v1/automations/runs/cancel`
-10. `POST /v1/automations/runs/resume`
-11. `POST /v1/automations/runs/approve_repair`
-12. `POST /v1/automations/runs/reject_repair`
-13. `POST /v1/automations/runs/compensation/retry`
-14. `POST /v1/automations/promote`
-15. `POST /v1/automations/shadow/report`
-16. `POST /v1/automations/shadow/validate`
-17. `POST /v1/automations/shadow/validate/dispatch`
-18. `POST /v1/automations/telemetry`
+6. `POST /v1/automations/assign_reviewer`
+7. `POST /v1/automations/promote`
+8. `POST /v1/automations/shadow/report`
+9. `POST /v1/automations/shadow/review`
+10. `POST /v1/automations/shadow/validate`
+11. `POST /v1/automations/shadow/validate/dispatch`
+12. `POST /v1/automations/compensation/policy_matrix`
+13. `POST /v1/automations/run`
+14. `POST /v1/automations/runs/get`
+15. `POST /v1/automations/runs/list`
+16. `POST /v1/automations/runs/assign_reviewer`
+17. `POST /v1/automations/runs/cancel`
+18. `POST /v1/automations/runs/resume`
+19. `POST /v1/automations/runs/approve_repair`
+20. `POST /v1/automations/runs/reject_repair`
+21. `POST /v1/automations/runs/compensation/retry`
+22. `POST /v1/automations/runs/compensation/record_action`
+23. `POST /v1/automations/runs/compensation/assign`
+24. `POST /v1/automations/telemetry`
 
 ### Graph and Replay Utilities
 
