@@ -75,6 +75,12 @@ type AnchorShape = {
   symbol: string | null;
 };
 
+type AssociativeVisibility = {
+  memory_lane: "private" | "shared";
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
+};
+
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
   if (value < 0) return 0;
@@ -107,6 +113,39 @@ export function isValidAssociativeCandidateStatusTransition(
 function asObject(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+function asAssociativeVisibility(value: unknown): AssociativeVisibility | null {
+  const obj = asObject(value);
+  if (!obj) return null;
+  if (obj.memory_lane !== "private" && obj.memory_lane !== "shared") return null;
+  return {
+    memory_lane: obj.memory_lane,
+    owner_agent_id: toNonEmptyString(obj.owner_agent_id),
+    owner_team_id: toNonEmptyString(obj.owner_team_id),
+  };
+}
+
+function associativeVisibilityFromNode(node: RecallAssociativeNodeRow): AssociativeVisibility {
+  return {
+    memory_lane: node.memory_lane,
+    owner_agent_id: node.owner_agent_id,
+    owner_team_id: node.owner_team_id,
+  };
+}
+
+function isAssociativeVisibilityCompatible(
+  left: AssociativeVisibility | null,
+  right: AssociativeVisibility | null,
+): boolean {
+  if (!left || !right) return false;
+  if (left.memory_lane === "shared" || right.memory_lane === "shared") {
+    return left.memory_lane === "shared" && right.memory_lane === "shared";
+  }
+  return (
+    (!!left.owner_agent_id && left.owner_agent_id === right.owner_agent_id)
+    || (!!left.owner_team_id && left.owner_team_id === right.owner_team_id)
+  );
 }
 
 function candidateIdentityKey(args: {
@@ -152,6 +191,8 @@ function buildCandidateUpsert(args: {
       shared_rollback_notes: args.features.shared_rollback_notes,
       source_commit_id: args.sourceCommitId,
       candidate_commit_id: args.candidate.commit_id,
+      source_visibility: associativeVisibilityFromNode(args.source),
+      candidate_visibility: associativeVisibilityFromNode(args.candidate),
     },
     source_commit_id: args.sourceCommitId,
     worker_run_id: null,
@@ -457,11 +498,25 @@ export async function materializeShadowAssociationCandidates(args: {
         evaluatedPairs += 1;
         const features = extractAssociativeFeatures(source, candidate);
         const scored = scoreAssociativeCandidate(features);
-        return { candidate, features, scored };
+        return {
+          candidate,
+          features,
+          scored,
+          visibilityCompatible: isAssociativeVisibilityCompatible(
+            associativeVisibilityFromNode(source),
+            associativeVisibilityFromNode(candidate),
+          ),
+        };
       })
       .sort((left, right) => right.scored.score - left.scored.score || right.scored.confidence - left.scored.confidence);
     const scoredForSource = scoredRows
-      .filter((row) => row.scored.score >= 0.5)
+      .filter((row) => {
+        if (!row.visibilityCompatible) {
+          rejected += 1;
+          return false;
+        }
+        return row.scored.score >= 0.5;
+      })
       .sort((left, right) => right.scored.score - left.scored.score || right.scored.confidence - left.scored.confidence)
       .slice(0, config.max_candidates_per_source);
     const selectedKeys = new Set(
@@ -485,6 +540,7 @@ export async function materializeShadowAssociationCandidates(args: {
       }));
     }
     for (const row of scoredRows) {
+      if (!row.visibilityCompatible) continue;
       if (row.scored.score >= 0.5) continue;
       rejected += 1;
       upserts.push(buildCandidateUpsert({
@@ -591,6 +647,12 @@ export async function promoteAssociativeCandidates(args: {
     for (const candidate of candidates) {
       evaluated += 1;
       if (candidate.status !== "shadow") {
+        await rejectCandidate(candidate);
+        continue;
+      }
+      const sourceVisibility = asAssociativeVisibility(candidate.evidence_json?.source_visibility);
+      const candidateVisibility = asAssociativeVisibility(candidate.evidence_json?.candidate_visibility);
+      if (!isAssociativeVisibilityCompatible(sourceVisibility, candidateVisibility)) {
         await rejectCandidate(candidate);
         continue;
       }

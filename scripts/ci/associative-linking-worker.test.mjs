@@ -27,6 +27,9 @@ test("associative worker materializes shadow candidates with relation and featur
         id: "11111111-1111-1111-1111-111111111111",
         scope: "default",
         type: "event",
+        memory_lane: "shared",
+        owner_agent_id: null,
+        owner_team_id: null,
         title: "repair gateway token drift",
         text_summary: "Trace and repair gateway token drift",
         slots: {
@@ -53,6 +56,9 @@ test("associative worker materializes shadow candidates with relation and featur
         id: "22222222-2222-2222-2222-222222222222",
         scope: "default",
         type: "evidence",
+        memory_lane: "shared",
+        owner_agent_id: null,
+        owner_team_id: null,
         title: "gateway token smoke result",
         text_summary: "Service token drift validation on same file",
         slots: {
@@ -75,6 +81,9 @@ test("associative worker materializes shadow candidates with relation and featur
         id: "33333333-3333-3333-3333-333333333333",
         scope: "default",
         type: "procedure",
+        memory_lane: "shared",
+        owner_agent_id: null,
+        owner_team_id: null,
         title: "gateway rollback notes",
         text_summary: "Follow-on validation and rollback checklist",
         slots: {
@@ -138,18 +147,20 @@ test("associative worker materializes shadow candidates with relation and featur
   assert.equal(parsed.upserts.every((row) => typeof row.feature_summary_json.embedding_similarity === "number"), true);
 });
 
-test("associative worker persists rejected candidates and expires stale shadow candidates", () => {
+test("associative worker keeps visibility boundaries within a shared scope", () => {
   const output = runSnippet(`
     import { runAssociativeLinkingJob } from "./src/jobs/associative-linking-lib.ts";
 
     const writes = [];
-    const updates = [];
 
     const sourceNodes = [
       {
         id: "11111111-1111-1111-1111-111111111111",
         scope: "default",
         type: "event",
+        memory_lane: "private",
+        owner_agent_id: "agent-a",
+        owner_team_id: null,
         title: "repair gateway token drift",
         text_summary: "Trace and repair gateway token drift",
         slots: {
@@ -172,6 +183,153 @@ test("associative worker persists rejected candidates and expires stale shadow c
         id: "22222222-2222-2222-2222-222222222222",
         scope: "default",
         type: "evidence",
+        memory_lane: "private",
+        owner_agent_id: "agent-a",
+        owner_team_id: null,
+        title: "same owner evidence",
+        text_summary: "Validation notes on same file",
+        slots: {
+          resume_anchor: {
+            anchor: "repair-token-drift",
+            repo_root: "/repo",
+            file_path: "src/gateway/service-token.ts",
+            symbol: "repairServiceTokenDrift",
+          },
+        },
+        embedding_text: "[0.99,0.01,0]",
+        created_at: "2026-03-16T07:58:00.000Z",
+        updated_at: "2026-03-16T07:58:00.000Z",
+        commit_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      },
+      {
+        id: "33333333-3333-3333-3333-333333333333",
+        scope: "default",
+        type: "evidence",
+        memory_lane: "private",
+        owner_agent_id: "agent-b",
+        owner_team_id: null,
+        title: "other owner evidence",
+        text_summary: "Looks similar but should not link across owners",
+        slots: {
+          resume_anchor: {
+            anchor: "repair-token-drift",
+            repo_root: "/repo",
+            file_path: "src/gateway/service-token.ts",
+            symbol: "repairServiceTokenDrift",
+          },
+        },
+        embedding_text: "[0.99,0.01,0]",
+        created_at: "2026-03-16T07:59:00.000Z",
+        updated_at: "2026-03-16T07:59:00.000Z",
+        commit_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      },
+      {
+        id: "44444444-4444-4444-4444-444444444444",
+        scope: "default",
+        type: "evidence",
+        memory_lane: "shared",
+        owner_agent_id: null,
+        owner_team_id: null,
+        title: "shared evidence",
+        text_summary: "Also similar but crosses lane boundary",
+        slots: {
+          resume_anchor: {
+            anchor: "repair-token-drift",
+            repo_root: "/repo",
+            file_path: "src/gateway/service-token.ts",
+            symbol: "repairServiceTokenDrift",
+          },
+        },
+        embedding_text: "[0.99,0.01,0]",
+        created_at: "2026-03-16T07:57:00.000Z",
+        updated_at: "2026-03-16T07:57:00.000Z",
+        commit_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+      },
+    ];
+
+    const main = async () => {
+      const out = await runAssociativeLinkingJob({
+        payload: {
+          origin: "memory_write",
+          scope: "default",
+          source_node_ids: ["11111111-1111-1111-1111-111111111111"],
+          source_commit_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+        },
+        recallAccess: {
+          async listAssociativeNodesByIds(scope, ids) {
+            return sourceNodes.filter((row) => row.scope === scope && ids.includes(row.id));
+          },
+          async listAssociativeCandidatePool(scope, excludeIds) {
+            return candidatePool.filter((row) => row.scope === scope && !excludeIds.includes(row.id));
+          },
+        },
+        writeAccess: {
+          async upsertAssociationCandidates(rows) {
+            writes.push(...rows);
+          },
+          async listAssociationCandidatesForSource() {
+            return [];
+          },
+          async updateAssociationCandidateStatus() {},
+        },
+      });
+
+      process.stdout.write(JSON.stringify({ out, writes }));
+    };
+
+    main().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  `);
+
+  const parsed = JSON.parse(output);
+  assert.equal(parsed.out.shadow_created, 1);
+  assert.equal(parsed.writes.some((row) => row.status === "shadow" && row.dst_id === "22222222-2222-2222-2222-222222222222"), true);
+  assert.equal(parsed.writes.some((row) => row.dst_id === "33333333-3333-3333-3333-333333333333"), false);
+  assert.equal(parsed.writes.some((row) => row.dst_id === "44444444-4444-4444-4444-444444444444"), false);
+});
+
+test("associative worker persists rejected candidates and expires stale shadow candidates", () => {
+  const output = runSnippet(`
+    import { runAssociativeLinkingJob } from "./src/jobs/associative-linking-lib.ts";
+
+    const writes = [];
+    const updates = [];
+
+    const sourceNodes = [
+      {
+        id: "11111111-1111-1111-1111-111111111111",
+        scope: "default",
+        type: "event",
+        memory_lane: "shared",
+        owner_agent_id: null,
+        owner_team_id: null,
+        title: "repair gateway token drift",
+        text_summary: "Trace and repair gateway token drift",
+        slots: {
+          resume_anchor: {
+            anchor: "repair-token-drift",
+            repo_root: "/repo",
+            file_path: "src/gateway/service-token.ts",
+            symbol: "repairServiceTokenDrift",
+          },
+        },
+        embedding_text: "[1,0,0]",
+        created_at: "2026-03-16T08:00:00.000Z",
+        updated_at: "2026-03-16T08:00:00.000Z",
+        commit_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      },
+    ];
+
+    const candidatePool = [
+      {
+        id: "22222222-2222-2222-2222-222222222222",
+        scope: "default",
+        type: "evidence",
+        memory_lane: "shared",
+        owner_agent_id: null,
+        owner_team_id: null,
         title: "gateway token smoke result",
         text_summary: "Service token drift validation on same file",
         slots: {
@@ -191,6 +349,9 @@ test("associative worker persists rejected candidates and expires stale shadow c
         id: "33333333-3333-3333-3333-333333333333",
         scope: "default",
         type: "procedure",
+        memory_lane: "shared",
+        owner_agent_id: null,
+        owner_team_id: null,
         title: "unrelated checklist",
         text_summary: "Document cafeteria badge pickup",
         slots: {},

@@ -33,7 +33,10 @@ test("promotion only upgrades high-confidence candidates into canonical related_
         score: 0.95,
         confidence: 0.93,
         feature_summary_json: { embedding_similarity: 0.99 },
-        evidence_json: {},
+        evidence_json: {
+          source_visibility: { memory_lane: "private", owner_agent_id: "agent-a", owner_team_id: null },
+          candidate_visibility: { memory_lane: "private", owner_agent_id: "agent-a", owner_team_id: null },
+        },
         source_commit_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
         worker_run_id: null,
         promoted_edge_id: null,
@@ -50,7 +53,10 @@ test("promotion only upgrades high-confidence candidates into canonical related_
         score: 0.61,
         confidence: 0.7,
         feature_summary_json: { embedding_similarity: 0.78 },
-        evidence_json: {},
+        evidence_json: {
+          source_visibility: { memory_lane: "private", owner_agent_id: "agent-a", owner_team_id: null },
+          candidate_visibility: { memory_lane: "private", owner_agent_id: "agent-a", owner_team_id: null },
+        },
         source_commit_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
         worker_run_id: null,
         promoted_edge_id: null,
@@ -119,4 +125,75 @@ test("promotion only upgrades high-confidence candidates into canonical related_
   assert.equal(typeof promoted.promoted_edge_id, "string");
   assert.equal(lowConfidence.status, "rejected");
   assert.equal(lowConfidence.promoted_edge_id, null);
+});
+
+test("promotion rejects high-confidence candidates that cross visibility boundaries", () => {
+  const output = runSnippet(`
+    import { promoteAssociativeCandidates } from "./src/jobs/associative-linking-lib.ts";
+
+    const candidateRows = [
+      {
+        id: "assoc-cross-visibility",
+        scope: "default",
+        src_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        dst_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        relation_kind: "same_task",
+        status: "shadow",
+        score: 0.96,
+        confidence: 0.94,
+        feature_summary_json: { embedding_similarity: 0.99 },
+        evidence_json: {
+          source_visibility: { memory_lane: "private", owner_agent_id: "agent-a", owner_team_id: null },
+          candidate_visibility: { memory_lane: "private", owner_agent_id: "agent-b", owner_team_id: null },
+        },
+        source_commit_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        worker_run_id: null,
+        promoted_edge_id: null,
+        created_at: "2026-03-16T09:00:00.000Z",
+        updated_at: "2026-03-16T09:00:00.000Z",
+      },
+    ];
+
+    const edges = [];
+
+    const main = async () => {
+      const out = await promoteAssociativeCandidates({
+        scope: "default",
+        sourceNodeIds: ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"],
+        writeAccess: {
+          async listAssociationCandidatesForSource({ scope, src_id }) {
+            return candidateRows.filter((row) => row.scope === scope && row.src_id === src_id);
+          },
+          async upsertEdge(edge) {
+            edges.push(edge);
+          },
+          async markAssociationCandidatePromoted() {},
+          async updateAssociationCandidateStatus({ scope, src_id, dst_id, relation_kind, status }) {
+            const row = candidateRows.find(
+              (candidate) =>
+                candidate.scope === scope
+                && candidate.src_id === src_id
+                && candidate.dst_id === dst_id
+                && candidate.relation_kind === relation_kind,
+            );
+            if (!row) return;
+            row.status = status;
+          },
+        },
+      });
+
+      process.stdout.write(JSON.stringify({ out, edges, candidateRows }));
+    };
+
+    main().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  `);
+
+  const parsed = JSON.parse(output);
+  assert.equal(parsed.out.promoted, 0);
+  assert.equal(parsed.out.rejected, 1);
+  assert.equal(parsed.edges.length, 0);
+  assert.equal(parsed.candidateRows[0].status, "rejected");
 });

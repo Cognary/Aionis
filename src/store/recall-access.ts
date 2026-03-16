@@ -116,6 +116,9 @@ export type RecallAssociativeNodeRow = {
   id: string;
   scope: string;
   type: string;
+  memory_lane: "private" | "shared";
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
   title: string | null;
   text_summary: string | null;
   slots: Record<string, unknown>;
@@ -572,6 +575,9 @@ export async function listAssociativeNodesByIds(
       n.id::text AS id,
       n.scope,
       n.type::text AS type,
+      n.memory_lane::text AS memory_lane,
+      n.owner_agent_id,
+      n.owner_team_id,
       n.title,
       n.text_summary,
       n.slots,
@@ -605,6 +611,9 @@ export async function listAssociativeCandidatePool(
       n.id::text AS id,
       n.scope,
       n.type::text AS type,
+      n.memory_lane::text AS memory_lane,
+      n.owner_agent_id,
+      n.owner_team_id,
       n.title,
       n.text_summary,
       n.slots,
