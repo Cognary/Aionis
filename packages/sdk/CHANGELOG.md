@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.20] - 2026-03-16
+
+### Changed
+
+1. Promoted the SDK npm release line to `0.2.20` so `aionis dev` users can bootstrap the current execution-continuity runtime baseline.
+2. Updated SDK install and CLI quickstart docs to the current published version.
+
 ## [0.2.19] - 2026-03-14
 
 ### Changed

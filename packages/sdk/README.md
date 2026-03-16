@@ -5,13 +5,13 @@ TypeScript SDK for Aionis Memory Graph API.
 ## Install
 
 ```bash
-npm i @aionis/sdk@0.2.18
+npm i @aionis/sdk@0.2.20
 ```
 
 The package also exposes the local developer CLI:
 
 ```bash
-npx @aionis/sdk@0.2.18 --help
+npx @aionis/sdk@0.2.20 --help
 ```
 
 If you do not have a local Aionis repository, `aionis dev` can now bootstrap Lite by:
@@ -136,7 +136,7 @@ The bundled Phase 1 developer CLI supports:
 Useful `aionis dev` flags:
 
 1. `--runtime-root /path/to/Aionis`
-2. `--runtime-version 0.2.18`
+2. `--runtime-version 0.2.20`
 3. `--runtime-cache-dir ~/.aionis/runtime`
 4. `--force-download`
 5. `--offline`

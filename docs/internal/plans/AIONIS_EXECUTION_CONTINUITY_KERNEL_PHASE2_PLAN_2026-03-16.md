@@ -358,6 +358,7 @@ What must remain true to merge Phase 2 increments:
 2. no forced reversion to legacy handoff text as primary continuity path
 3. no regression from completion win to completion loss on strongest slices without explicit acceptance
 4. parity or better on reviewer-ready completion for any adopted runtime surface
+5. no `tools/select` optimization may be promoted on cost gains alone if it lowers the current strongest-slice completion baseline
 
 Preferred but not mandatory:
 

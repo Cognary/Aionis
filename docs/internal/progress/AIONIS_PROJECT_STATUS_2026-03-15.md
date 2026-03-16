@@ -214,6 +214,7 @@ This makes the current Phase 2 story:
 4. resilient enough to absorb a real route-level regression, fix it, and confirm the repaired path on both single-run and `3`-repeat real-Lite workflow validation
 5. now positive on a third runtime-surface checkpoint where `tools/select` can consume durable execution state directly rather than only continuity-delivered profile payloads
 6. that third surface is currently a completion-first story across the strongest three-slice family: two strong completion wins and one supporting completion signal, not an efficiency win
+7. current promotion discipline for that surface is strict: cost improvements do not justify a move if the strongest-slice completion baseline drops
 
 ## Recommended Next Focus
 
