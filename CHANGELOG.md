@@ -4,6 +4,14 @@ All notable changes to Aionis core are documented in this file.
 
 The format is based on Keep a Changelog and this project follows SemVer for tagged core releases.
 
+## [0.2.20] - 2026-03-16
+
+### Changed
+
+1. Promoted replay/private-lane visibility hardening to the coordinated core release baseline, including replay owner propagation, resolve-side private object enforcement, and trusted-proxy CIDR fail-closed behavior.
+2. Cleared the production dependency audit by upgrading the Fastify release line and adding regression coverage for replay visibility, Lite resolve visibility, and trusted proxy configuration.
+3. Realigned core, Docker, and GitHub Release metadata to `0.2.20` so public installation channels match the current published SDK baselines.
+
 ## [0.2.17] - 2026-03-08
 
 ### Changed
