@@ -20,13 +20,13 @@ After this flow, you should be able to:
 ## Step 1: Install the Python SDK
 
 ```bash
-pip install aionis-sdk==0.2.18
+pip install aionis-sdk==0.2.20
 ```
 
 ## Step 2: Start Lite with the official CLI
 
 ```bash
-npx @aionis/sdk@0.2.19 dev
+npx @aionis/sdk@0.2.20 dev
 ```
 
 What this does:
@@ -45,14 +45,14 @@ Expected ready state:
 ## Step 3: Verify health
 
 ```bash
-npx @aionis/sdk@0.2.19 health --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 health --base-url http://127.0.0.1:3321
 ```
 
 Optional deeper checks:
 
 ```bash
-npx @aionis/sdk@0.2.19 doctor --base-url http://127.0.0.1:3321
-npx @aionis/sdk@0.2.19 selfcheck --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 doctor --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 selfcheck --base-url http://127.0.0.1:3321
 ```
 
 ## Step 4: Connect from Python

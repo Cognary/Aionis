@@ -6,6 +6,13 @@ The format is based on Keep a Changelog and this package follows SemVer.
 
 ## [Unreleased]
 
+## [0.2.20] - 2026-03-16
+
+### Changed
+
+1. Aligned the Python SDK release baseline from `0.2.18` to `0.2.20` for the coordinated SDK release surface.
+2. Updated package-facing install guidance to use `aionis-sdk==0.2.20` and Lite startup via `@aionis/sdk@0.2.20`.
+
 ## [0.2.18] - 2026-03-14
 
 ### Changed

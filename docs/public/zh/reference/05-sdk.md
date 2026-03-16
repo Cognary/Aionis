@@ -18,25 +18,25 @@ Aionis 提供官方 TypeScript 和 Python SDK。
 ### TypeScript
 
 ```bash
-npm install @aionis/sdk@0.2.18
+npm install @aionis/sdk@0.2.20
 ```
 
 TypeScript 包还直接提供：
 
 ```bash
-npx @aionis/sdk@0.2.18 --help
+npx @aionis/sdk@0.2.20 --help
 ```
 
 ### Python
 
 ```bash
-pip install aionis-sdk==0.2.18
+pip install aionis-sdk==0.2.20
 ```
 
 如果你要在本地启动 Lite，推荐直接用：
 
 ```bash
-npx @aionis/sdk@0.2.19 dev
+npx @aionis/sdk@0.2.20 dev
 ```
 
 ## 客户端初始化
@@ -127,8 +127,8 @@ print(write_res.get("commit_uri"), recall_res.get("request_id"))
 
 推荐的本地开发顺序：
 
-1. `pip install aionis-sdk==0.2.18`
-2. `npx @aionis/sdk@0.2.19 dev`
+1. `pip install aionis-sdk==0.2.20`
+2. `npx @aionis/sdk@0.2.20 dev`
 3. `AionisClient(base_url=\"http://127.0.0.1:3321\")`
 
 完整上手见：[Python SDK + Aionis CLI](/public/zh/getting-started/08-python-sdk-with-cli)

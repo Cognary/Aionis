@@ -9,13 +9,13 @@ TypeScript SDK 现在内置了一套 Phase 1 本地开发 CLI。
 安装：
 
 ```bash
-npm install @aionis/sdk@0.2.18
+npm install @aionis/sdk@0.2.20
 ```
 
 不用全局安装也能直接跑：
 
 ```bash
-npx @aionis/sdk@0.2.18 --help
+npx @aionis/sdk@0.2.20 --help
 ```
 
 ## 它是什么
@@ -48,7 +48,7 @@ Phase 1 边界：
 启动 Lite：
 
 ```bash
-npx @aionis/sdk@0.2.18 dev
+npx @aionis/sdk@0.2.20 dev
 ```
 
 检查健康：
@@ -60,19 +60,19 @@ npx aionis health --base-url http://127.0.0.1:3321
 运行 doctor：
 
 ```bash
-npx @aionis/sdk@0.2.18 doctor --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 doctor --base-url http://127.0.0.1:3321
 ```
 
 运行 selfcheck：
 
 ```bash
-npx @aionis/sdk@0.2.18 selfcheck --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 selfcheck --base-url http://127.0.0.1:3321
 ```
 
 停止当前端口上由 CLI 追踪的 Lite：
 
 ```bash
-npx @aionis/sdk@0.2.18 stop --port 3321
+npx @aionis/sdk@0.2.20 stop --port 3321
 ```
 
 ## 命令说明
@@ -86,7 +86,7 @@ npx @aionis/sdk@0.2.18 stop --port 3321
 1. `--runtime-root /path/to/Aionis`
 2. `--host 127.0.0.1`
 3. `--port 3321`
-4. `--runtime-version 0.2.18`
+4. `--runtime-version 0.2.20`
 5. `--runtime-cache-dir ~/.aionis/runtime`
 6. `--force-download`
 7. `--offline`

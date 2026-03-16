@@ -20,13 +20,13 @@ Python 包负责 client surface。
 ## 第一步：安装 Python SDK
 
 ```bash
-pip install aionis-sdk==0.2.18
+pip install aionis-sdk==0.2.20
 ```
 
 ## 第二步：用官方 CLI 启动 Lite
 
 ```bash
-npx @aionis/sdk@0.2.19 dev
+npx @aionis/sdk@0.2.20 dev
 ```
 
 这条命令会：
@@ -45,14 +45,14 @@ npx @aionis/sdk@0.2.19 dev
 ## 第三步：验证健康状态
 
 ```bash
-npx @aionis/sdk@0.2.19 health --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 health --base-url http://127.0.0.1:3321
 ```
 
 如果你要做更完整的本地检查：
 
 ```bash
-npx @aionis/sdk@0.2.19 doctor --base-url http://127.0.0.1:3321
-npx @aionis/sdk@0.2.19 selfcheck --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 doctor --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 selfcheck --base-url http://127.0.0.1:3321
 ```
 
 ## 第四步：从 Python 连接

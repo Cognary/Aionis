@@ -9,13 +9,13 @@ The TypeScript package now ships a Phase 1 local developer CLI.
 Install:
 
 ```bash
-npm install @aionis/sdk@0.2.18
+npm install @aionis/sdk@0.2.20
 ```
 
 Run without a global install:
 
 ```bash
-npx @aionis/sdk@0.2.18 --help
+npx @aionis/sdk@0.2.20 --help
 ```
 
 ## What It Is
@@ -48,7 +48,7 @@ Bootstrap path when no local repo is available:
 Start Lite:
 
 ```bash
-npx @aionis/sdk@0.2.18 dev
+npx @aionis/sdk@0.2.20 dev
 ```
 
 Check health:
@@ -60,19 +60,19 @@ npx aionis health --base-url http://127.0.0.1:3321
 Run doctor:
 
 ```bash
-npx @aionis/sdk@0.2.18 doctor --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 doctor --base-url http://127.0.0.1:3321
 ```
 
 Run selfcheck:
 
 ```bash
-npx @aionis/sdk@0.2.18 selfcheck --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 selfcheck --base-url http://127.0.0.1:3321
 ```
 
 Stop the tracked Lite process:
 
 ```bash
-npx @aionis/sdk@0.2.18 stop --port 3321
+npx @aionis/sdk@0.2.20 stop --port 3321
 ```
 
 ## Command Notes
@@ -86,7 +86,7 @@ Useful flags:
 1. `--runtime-root /path/to/Aionis`
 2. `--host 127.0.0.1`
 3. `--port 3321`
-4. `--runtime-version 0.2.18`
+4. `--runtime-version 0.2.20`
 5. `--runtime-cache-dir ~/.aionis/runtime`
 6. `--force-download`
 7. `--offline`

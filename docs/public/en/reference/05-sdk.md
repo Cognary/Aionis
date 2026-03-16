@@ -23,25 +23,25 @@ Current state:
 ### TypeScript
 
 ```bash
-npm install @aionis/sdk@0.2.18
+npm install @aionis/sdk@0.2.20
 ```
 
 The TypeScript package also exposes:
 
 ```bash
-npx @aionis/sdk@0.2.18 --help
+npx @aionis/sdk@0.2.20 --help
 ```
 
 ### Python
 
 ```bash
-pip install aionis-sdk==0.2.18
+pip install aionis-sdk==0.2.20
 ```
 
 For local Lite startup, use:
 
 ```bash
-npx @aionis/sdk@0.2.19 dev
+npx @aionis/sdk@0.2.20 dev
 ```
 
 ## Client Setup
@@ -100,8 +100,8 @@ print(write_res.get("commit_uri"), recall_res.get("request_id"))
 
 Recommended local developer sequence:
 
-1. `pip install aionis-sdk==0.2.18`
-2. `npx @aionis/sdk@0.2.19 dev`
+1. `pip install aionis-sdk==0.2.20`
+2. `npx @aionis/sdk@0.2.20 dev`
 3. `AionisClient(base_url=\"http://127.0.0.1:3321\")`
 
 See [Python SDK + Aionis CLI](/public/en/getting-started/08-python-sdk-with-cli) for the full onboarding flow.

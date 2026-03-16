@@ -5,7 +5,7 @@ Python SDK for Aionis Memory Graph API.
 ## Install
 
 ```bash
-pip install aionis-sdk==0.2.18
+pip install aionis-sdk==0.2.20
 ```
 
 ## Local Lite Runtime
@@ -15,7 +15,7 @@ The Python SDK is a client package.
 For local development, use the official Aionis CLI from the TypeScript package to start Lite:
 
 ```bash
-npx @aionis/sdk@0.2.19 dev
+npx @aionis/sdk@0.2.20 dev
 ```
 
 Then point the Python client at the local base URL:
