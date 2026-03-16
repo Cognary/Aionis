@@ -239,6 +239,7 @@ This checkpoint is strong enough to say:
 5. the first controlled nightly revalidation is positive on the strongest real workflow slice
 6. the strongest real workflow story remains positive across the refreshed three-slice set after `ControlProfile` adoption
 7. `ControlProfile` now spans two concrete runtime surfaces instead of one
+8. Phase 2 has now started with an internal `ExecutionState` store scaffold and explicit transition contract
 
 It is not strong enough yet to say:
 
@@ -248,16 +249,18 @@ It is not strong enough yet to say:
 
 ## Recommended Next Move
 
-The next highest-value step is:
+The next highest-value step after the current Phase 1 refresh work is:
 
-1. verify whether `tools/select`-level control-profile adoption improves the strongest real workflow slices, not just the threshold layer
+1. promote the new Phase 2 state-store scaffold toward a state-first assembly path without changing public route semantics
+2. continue verifying whether `tools/select`-level control-profile adoption improves the strongest real workflow slices, not just the threshold layer
 
-That verification should prove that:
+The immediate proof targets are:
 
-1. profile projection is not merely type-level
-2. adapter thresholds are actually being tightened by continuity-delivered profile data
-3. Aionis-side tool selection is also respecting continuity-delivered profile data
-4. the current positive real workflow story does not regress when profile adoption is enabled
-5. the first positive nightly result is not a one-off artifact of a single strongest slice
+1. state transitions can become the durable source material for packet assembly
+2. profile projection is not merely type-level
+3. adapter thresholds are actually being tightened by continuity-delivered profile data
+4. Aionis-side tool selection is also respecting continuity-delivered profile data
+5. the current positive real workflow story does not regress when profile adoption is enabled
+6. the first positive nightly result is not a one-off artifact of a single strongest slice
 
 Only after that should the branch broaden `ControlProfile` adoption to additional runtime surfaces.

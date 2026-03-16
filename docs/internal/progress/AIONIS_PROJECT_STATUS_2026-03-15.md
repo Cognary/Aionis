@@ -131,6 +131,22 @@ It is:
 
 **which additional runtime surfaces are worth adopting next, and do they create real workflow gains rather than just architectural neatness?**
 
+### 3. Phase 2 Step 1 scaffold
+
+Phase 2 is no longer design-only.
+
+The first internal scaffold has now landed:
+
+1. `src/execution/state-store.ts`
+2. `src/execution/transitions.ts`
+3. `scripts/ci/execution-continuity-phase2-state.test.mjs`
+
+Current reading:
+
+1. `ExecutionState` now has an internal persistence scaffold independent of handoff slots
+2. state transitions are now an explicit internal contract instead of remaining purely implied by projection
+3. this is still internal-only and does not yet change public route behavior
+
 ## What Is Not Finished
 
 ### 1. ExecutionState as universal source of truth
@@ -170,6 +186,7 @@ The project is not yet strong enough to say:
 1. every runtime surface is adopted
 2. every realistic workflow is now an efficiency win
 3. the generic platform story is fully proven outside the current OpenClaw wedge
+4. Phase 2 state-first assembly is active on the real route path
 
 ## Recommended Next Focus
 
@@ -177,7 +194,8 @@ The next highest-value work remains:
 
 1. continue validating `ControlProfile` and continuity-kernel adoption on additional high-value runtime surfaces
 2. prefer runtime-surface proofs over new abstract kernel work
-3. only after that, continue pushing `ExecutionState` toward a more independent source-of-truth role
+3. keep Phase 2 Step 1 additive until the state store and transition contract are strong enough to back state-first packet assembly
+4. only after that, continue pushing `ExecutionState` toward a more independent source-of-truth role
 
 In short:
 
