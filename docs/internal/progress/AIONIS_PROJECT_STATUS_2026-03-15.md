@@ -148,7 +148,10 @@ Current reading:
 3. the first route overlays are now present on:
    - `handoff/store`
    - `handoff/recover`
-4. public handoff semantics remain unchanged while state durability starts moving beyond slot-only persistence
+   - `planning_context`
+   - `context/assemble`
+4. public route semantics remain unchanged while state durability starts moving beyond slot-only persistence
+5. state-first packet assembly is now explicitly observable on the context path
 
 ## What Is Not Finished
 

@@ -5,7 +5,12 @@ import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../em
 import { buildLayeredContextCostSignals } from "../memory/cost-signals.js";
 import { memoryRecallParsed } from "../memory/recall.js";
 import { ContextAssembleRequest, MemoryRecallRequest, MemoryRecallTextRequest, PlanningContextRequest } from "../memory/schemas.js";
-import { ExecutionPacketV1Schema, ExecutionStateV1Schema, type ExecutionPacketV1, type ExecutionStateV1 } from "../execution/index.js";
+import {
+  resolveExecutionPacketAssembly,
+  type ExecutionPacketAssemblyMode,
+  type ExecutionPacketV1,
+  type ExecutionStateV1,
+} from "../execution/index.js";
 import { evaluateRules } from "../memory/rules-evaluate.js";
 import { selectTools } from "../memory/tools-select.js";
 import { estimateTokenCountFromText } from "../memory/context.js";
@@ -105,45 +110,42 @@ function executionPacketToStaticBlocks(packet: ExecutionPacketV1): Array<{
   return blocks;
 }
 
-function buildPacketFromExecutionState(stateInput: ExecutionStateV1): ExecutionPacketV1 {
-  const state = ExecutionStateV1Schema.parse(stateInput);
-  return ExecutionPacketV1Schema.parse({
-    version: 1,
-    state_id: state.state_id,
-    current_stage: state.current_stage,
-    active_role: state.active_role,
-    task_brief: state.task_brief,
-    target_files: state.owned_files.length > 0 ? state.owned_files : state.modified_files,
-    next_action: state.pending_validations.length > 0
-      ? `Complete pending validations: ${state.pending_validations.join(" | ")}`
-      : state.unresolved_blockers.length > 0
-        ? `Resolve blockers: ${state.unresolved_blockers.join(" | ")}`
-        : null,
-    hard_constraints: [],
-    accepted_facts: state.last_accepted_hypothesis ? [`accepted_hypothesis:${state.last_accepted_hypothesis}`] : [],
-    rejected_paths: state.rejected_paths,
-    pending_validations: state.pending_validations,
-    unresolved_blockers: state.unresolved_blockers,
-    rollback_notes: state.rollback_notes,
-    review_contract: state.reviewer_contract,
-    resume_anchor: state.resume_anchor,
-    evidence_refs: [],
-  });
-}
-
 export function mergeExecutionPacketStaticBlocks(parsed: {
   static_context_blocks?: any[];
   execution_packet_v1?: ExecutionPacketV1;
   execution_state_v1?: ExecutionStateV1;
 }) {
   const base = Array.isArray(parsed.static_context_blocks) ? parsed.static_context_blocks : [];
-  const packet = parsed.execution_packet_v1
-    ? ExecutionPacketV1Schema.parse(parsed.execution_packet_v1)
-    : parsed.execution_state_v1
-      ? buildPacketFromExecutionState(parsed.execution_state_v1)
-      : null;
+  const { packet } = resolveExecutionPacketAssembly(parsed);
   if (!packet) return base;
   return [...executionPacketToStaticBlocks(packet), ...base];
+}
+
+function resolveExecutionKernelContext(parsed: {
+  execution_packet_v1?: ExecutionPacketV1;
+  execution_state_v1?: ExecutionStateV1;
+}) {
+  const { packet, source_mode } = resolveExecutionPacketAssembly(parsed);
+  return {
+    packet,
+    source_mode,
+    state_first_assembly: source_mode === "state_first",
+  };
+}
+
+function buildExecutionKernelResponse(
+  sourceMode: ExecutionPacketAssemblyMode,
+  parsed: {
+    execution_packet_v1?: ExecutionPacketV1;
+    execution_state_v1?: ExecutionStateV1;
+  },
+) {
+  return {
+    packet_source_mode: sourceMode,
+    state_first_assembly: sourceMode === "state_first",
+    execution_packet_v1_present: !!parsed.execution_packet_v1,
+    execution_state_v1_present: !!parsed.execution_state_v1,
+  };
 }
 
 export function registerMemoryContextRuntimeRoutes(args: {
@@ -975,6 +977,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
       neighborhood_counts: recallOut?.debug?.neighborhood_counts ?? null,
     });
 
+    const executionKernel = resolveExecutionKernelContext(parsed);
+
     req.log.info(
       {
         planning_context: {
@@ -1015,6 +1019,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           rules_matched: out.rules?.matched ?? 0,
           tools_selected: out.tools?.selection?.selected ?? null,
           return_layered_context: parsed.return_layered_context,
+          execution_kernel_packet_source_mode: executionKernel.source_mode,
           execution_packet_v1_present: !!parsed.execution_packet_v1,
           execution_state_v1_present: !!parsed.execution_state_v1,
           ms,
@@ -1024,7 +1029,9 @@ export function registerMemoryContextRuntimeRoutes(args: {
       "memory planning_context",
     );
 
-    const effectiveStaticBlocks = mergeExecutionPacketStaticBlocks(parsed);
+    const effectiveStaticBlocks = executionKernel.packet
+      ? [...executionPacketToStaticBlocks(executionKernel.packet), ...(Array.isArray(parsed.static_context_blocks) ? parsed.static_context_blocks : [])]
+      : mergeExecutionPacketStaticBlocks(parsed);
     const layeredContext = parsed.return_layered_context
       ? assembleLayeredContext({
           recall: recallOut,
@@ -1084,6 +1091,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     return reply.code(200).send({
       tenant_id: tenantIdOut,
       scope: recallOut.scope,
+      execution_kernel: buildExecutionKernelResponse(executionKernel.source_mode, parsed),
       query: { text: q, embedding_provider: surfaceEmbedder.name },
       recall: {
         ...recallOut,
@@ -1441,7 +1449,10 @@ export function registerMemoryContextRuntimeRoutes(args: {
       neighborhood_counts: recallOut?.debug?.neighborhood_counts ?? null,
     });
 
-    const effectiveStaticBlocks = mergeExecutionPacketStaticBlocks(parsed);
+    const executionKernel = resolveExecutionKernelContext(parsed);
+    const effectiveStaticBlocks = executionKernel.packet
+      ? [...executionPacketToStaticBlocks(executionKernel.packet), ...(Array.isArray(parsed.static_context_blocks) ? parsed.static_context_blocks : [])]
+      : mergeExecutionPacketStaticBlocks(parsed);
     const layeredContext = parsed.return_layered_context
       ? assembleLayeredContext({
           recall: recallOut,
@@ -1510,6 +1521,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           has_tool_candidates: Array.isArray(parsed.tool_candidates) && parsed.tool_candidates.length > 0,
           tool_candidates: parsed.tool_candidates?.length ?? 0,
           return_layered_context: parsed.return_layered_context,
+          execution_kernel_packet_source_mode: executionKernel.source_mode,
           execution_packet_v1_present: !!parsed.execution_packet_v1,
           execution_state_v1_present: !!parsed.execution_state_v1,
           embed_ms: embedMs,
@@ -1552,6 +1564,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     return reply.code(200).send({
       tenant_id: tenantIdOut,
       scope: recallOut.scope,
+      execution_kernel: buildExecutionKernelResponse(executionKernel.source_mode, parsed),
       query: { text: q, embedding_provider: surfaceEmbedder.name },
       recall: {
         ...recallOut,

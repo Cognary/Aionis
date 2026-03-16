@@ -292,7 +292,8 @@ Current checkpoint:
 1. the scaffold has landed
 2. `handoff/store` now persists `execution_state_v1` into the internal state store after successful writes
 3. `handoff/recover` now prefers the internal state store when a matching record exists
-4. public handoff route semantics remain unchanged
+4. `planning_context` and `context/assemble` now report explicit `packet_source_mode` metadata and prefer state-first packet assembly when `execution_state_v1` is provided
+5. public route semantics remain unchanged
 
 ### Step 2. Transition Contract
 

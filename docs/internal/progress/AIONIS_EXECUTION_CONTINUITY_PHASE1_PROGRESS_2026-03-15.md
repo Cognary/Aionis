@@ -153,19 +153,23 @@ What landed:
 2. `src/execution/transitions.ts`
 3. `scripts/ci/execution-continuity-phase2-state.test.mjs`
 4. `scripts/ci/execution-continuity-phase2-handoff-store.test.mjs`
+5. `scripts/ci/execution-continuity-phase2-handoff-recover.test.mjs`
+6. `scripts/ci/execution-continuity-phase2-context-assembly.test.mjs`
 
 What changed on the real route path:
 
 1. `handoff/store` now persists `execution_state_v1` into the new internal state store after a successful handoff write
 2. `handoff/recover` now prefers the internal state store when a matching state record exists
-3. the route still returns the same handoff artifact contract
-4. the route now falls back to slot projection only when state-first recovery is unavailable
+3. `planning_context` and `context/assemble` now report and use explicit state-first packet assembly when `execution_state_v1` is provided
+4. the routes still return the same primary handoff/context artifact contracts
+5. the continuity path now falls back to slot projection only when state-first recovery or assembly is unavailable
 
 What this means:
 
 1. Phase 2 is no longer only about defining state persistence and transitions in isolation
-2. the first two route overlays are now in place
+2. the first three route overlays are now in place
 3. the current public route family remains intact while kernel state starts becoming independently durable
+4. state-first assembly is now observable instead of being inferred indirectly
 
 ## What This Means Architecturally
 
@@ -267,6 +271,7 @@ This checkpoint is strong enough to say:
 9. the first Phase 2 route overlays now:
    - persist `execution_state_v1` on `handoff/store`
    - prefer state-first recovery on `handoff/recover`
+   - prefer state-first packet assembly on `planning_context` and `context/assemble`
    without changing public route semantics
 
 It is not strong enough yet to say:
@@ -279,14 +284,14 @@ It is not strong enough yet to say:
 
 The next highest-value step after the current Phase 1 refresh work is:
 
-1. promote the new Phase 2 `handoff/store + handoff/recover` overlays toward a state-first assembly path without changing public route semantics
+1. promote the new Phase 2 `handoff/store + handoff/recover + context assembly` overlays toward a broader state-first execution path without changing public route semantics
 2. continue verifying whether `tools/select`-level control-profile adoption improves the strongest real workflow slices, not just the threshold layer
 
 The immediate proof targets are:
 
 1. state transitions can become the durable source material for packet assembly
 2. profile projection is not merely type-level
-3. the first route overlays can persist and recover execution state without breaking the current handoff contract
+3. the first route overlays can persist, recover, and assemble execution state without breaking the current route contracts
 4. adapter thresholds are actually being tightened by continuity-delivered profile data
 5. Aionis-side tool selection is also respecting continuity-delivered profile data
 6. the current positive real workflow story does not regress when profile adoption is enabled
