@@ -1,9 +1,23 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const require = createRequire(import.meta.url);
+
+const LITE_SQLITE_UNAVAILABLE =
+  (() => {
+    try {
+      const mod = require("node:sqlite");
+      return typeof mod?.DatabaseSync !== "function";
+    } catch {
+      return true;
+    }
+  })()
+    ? "requires Node.js with node:sqlite support"
+    : false;
 
 function extractLastJsonLine(text) {
   const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -18,10 +32,10 @@ function runSnippet(source) {
   return extractLastJsonLine(out);
 }
 
-test("memory write defers associative_link into embed follow-up when relevant nodes are still pending embeddings", () => {
+test("memory write defers associative_link into embed follow-up when relevant nodes are still pending embeddings", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const output = runSnippet(`
+    import { execFileSync } from "node:child_process";
     import { mkdtempSync, rmSync } from "node:fs";
-    import { DatabaseSync } from "node:sqlite";
     import { tmpdir } from "node:os";
     import path from "node:path";
     import { applyMemoryWrite, prepareMemoryWrite } from "./src/memory/write.ts";
@@ -73,9 +87,16 @@ test("memory write defers associative_link into embed follow-up when relevant no
           }),
         );
 
-        const db = new DatabaseSync(sqlitePath);
-        const rows = db.prepare("SELECT event_type, payload_json FROM lite_memory_outbox ORDER BY row_id ASC").all();
-        db.close();
+        const rows = JSON.parse(execFileSync(
+          "python3",
+          [
+            "-c",
+            "import json, sqlite3, sys; conn = sqlite3.connect(sys.argv[1]); conn.row_factory = sqlite3.Row; rows = [dict(row) for row in conn.execute(sys.argv[2]).fetchall()]; conn.close(); print(json.dumps(rows))",
+            sqlitePath,
+            "SELECT event_type, payload_json FROM lite_memory_outbox ORDER BY row_id ASC",
+          ],
+          { encoding: "utf8" },
+        ));
 
         process.stdout.write(JSON.stringify({ commit_id: out.commit_id, rows }));
       } finally {
@@ -100,10 +121,10 @@ test("memory write defers associative_link into embed follow-up when relevant no
   assert.ok(payload.after_associative_link.source_node_ids.length >= 1);
 });
 
-test("memory write enqueues immediate associative_link when source nodes already have embeddings", () => {
+test("memory write enqueues immediate associative_link when source nodes already have embeddings", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const output = runSnippet(`
+    import { execFileSync } from "node:child_process";
     import { mkdtempSync, rmSync } from "node:fs";
-    import { DatabaseSync } from "node:sqlite";
     import { tmpdir } from "node:os";
     import path from "node:path";
     import { applyMemoryWrite, prepareMemoryWrite } from "./src/memory/write.ts";
@@ -156,9 +177,16 @@ test("memory write enqueues immediate associative_link when source nodes already
           }),
         );
 
-        const db = new DatabaseSync(sqlitePath);
-        const rows = db.prepare("SELECT event_type, payload_json FROM lite_memory_outbox ORDER BY row_id ASC").all();
-        db.close();
+        const rows = JSON.parse(execFileSync(
+          "python3",
+          [
+            "-c",
+            "import json, sqlite3, sys; conn = sqlite3.connect(sys.argv[1]); conn.row_factory = sqlite3.Row; rows = [dict(row) for row in conn.execute(sys.argv[2]).fetchall()]; conn.close(); print(json.dumps(rows))",
+            sqlitePath,
+            "SELECT event_type, payload_json FROM lite_memory_outbox ORDER BY row_id ASC",
+          ],
+          { encoding: "utf8" },
+        ));
 
         process.stdout.write(JSON.stringify({ commit_id: out.commit_id, rows }));
       } finally {
@@ -183,10 +211,10 @@ test("memory write enqueues immediate associative_link when source nodes already
   assert.ok(payload.source_node_ids.length >= 1);
 });
 
-test("handoff store and replay write enqueue origin-specific associative_link events", () => {
+test("handoff store and replay write enqueue origin-specific associative_link events", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const output = runSnippet(`
+    import { execFileSync } from "node:child_process";
     import { mkdtempSync, rmSync } from "node:fs";
-    import { DatabaseSync } from "node:sqlite";
     import { tmpdir } from "node:os";
     import path from "node:path";
     import { buildHandoffWriteBody } from "./src/memory/handoff.ts";
@@ -195,9 +223,16 @@ test("handoff store and replay write enqueue origin-specific associative_link ev
     import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
 
     const collectOrigins = (sqlitePath) => {
-      const db = new DatabaseSync(sqlitePath);
-      const rows = db.prepare("SELECT event_type, payload_json FROM lite_memory_outbox ORDER BY row_id ASC").all();
-      db.close();
+      const rows = JSON.parse(execFileSync(
+        "python3",
+        [
+          "-c",
+          "import json, sqlite3, sys; conn = sqlite3.connect(sys.argv[1]); conn.row_factory = sqlite3.Row; rows = [dict(row) for row in conn.execute(sys.argv[2]).fetchall()]; conn.close(); print(json.dumps(rows))",
+          sqlitePath,
+          "SELECT event_type, payload_json FROM lite_memory_outbox ORDER BY row_id ASC",
+        ],
+        { encoding: "utf8" },
+      ));
       return rows
         .filter((row) => row.event_type === "associative_link")
         .map((row) => JSON.parse(row.payload_json).origin);
@@ -306,10 +341,10 @@ test("handoff store and replay write enqueue origin-specific associative_link ev
   assert.deepEqual(parsed.replay_origins, ["replay_write"]);
 });
 
-test("irrelevant writes do not enqueue associative_link", () => {
+test("irrelevant writes do not enqueue associative_link", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const output = runSnippet(`
+    import { execFileSync } from "node:child_process";
     import { mkdtempSync, rmSync } from "node:fs";
-    import { DatabaseSync } from "node:sqlite";
     import { tmpdir } from "node:os";
     import path from "node:path";
     import { applyMemoryWrite, prepareMemoryWrite } from "./src/memory/write.ts";
@@ -354,11 +389,16 @@ test("irrelevant writes do not enqueue associative_link", () => {
           }),
         );
 
-        const db = new DatabaseSync(sqlitePath);
-        const countRow = db.prepare(
-          "SELECT COUNT(*) AS count FROM lite_memory_outbox WHERE event_type = 'associative_link'",
-        ).get();
-        db.close();
+        const countRow = JSON.parse(execFileSync(
+          "python3",
+          [
+            "-c",
+            "import json, sqlite3, sys; conn = sqlite3.connect(sys.argv[1]); row = conn.execute(sys.argv[2]).fetchone(); conn.close(); print(json.dumps({'count': row[0] if row else 0}))",
+            sqlitePath,
+            "SELECT COUNT(*) AS count FROM lite_memory_outbox WHERE event_type = 'associative_link'",
+          ],
+          { encoding: "utf8" },
+        ));
 
         process.stdout.write(JSON.stringify(countRow));
       } finally {
