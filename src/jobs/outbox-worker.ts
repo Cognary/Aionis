@@ -19,7 +19,7 @@ import {
   classifyReplayLearningProjectionError,
 } from "../memory/replay-learning.js";
 import { AssociativeLinkTriggerPayloadSchema } from "../memory/associative-linking-types.js";
-import { runAssociativeLinkingJob } from "./associative-linking-lib.js";
+import { promoteAssociativeCandidates, runAssociativeLinkingJob } from "./associative-linking-lib.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
@@ -428,6 +428,7 @@ async function processBatch(): Promise<{
 
         if (r.event_type === "associative_link") {
           const payload = AssociativeLinkTriggerPayloadSchema.parse(r.payload ?? {});
+          const writeAccess = createPostgresWriteStoreAccess(client);
           const associativeOut = await runAssociativeLinkingJob({
             payload,
             recallAccess: {
@@ -435,11 +436,16 @@ async function processBatch(): Promise<{
               listAssociativeCandidatePool: (scope, excludeNodeIds, limit) =>
                 listAssociativeCandidatePool(client, scope, excludeNodeIds, limit),
             },
-            writeAccess: createPostgresWriteStoreAccess(client),
+            writeAccess,
+          });
+          const promotionOut = await promoteAssociativeCandidates({
+            scope: payload.scope,
+            sourceNodeIds: payload.source_node_ids,
+            writeAccess,
           });
           associativeMetrics.shadow_created += associativeOut.shadow_created;
-          associativeMetrics.promoted += associativeOut.promoted;
-          associativeMetrics.rejected += associativeOut.rejected;
+          associativeMetrics.promoted += promotionOut.promoted;
+          associativeMetrics.rejected += associativeOut.rejected + promotionOut.rejected;
           await client.query(
             `UPDATE memory_outbox
              SET
@@ -451,7 +457,12 @@ async function processBatch(): Promise<{
               r.id,
               r.claimed_at,
               JSON.stringify({
-                associative_link: associativeOut,
+                associative_link: {
+                  ...associativeOut,
+                  promoted: promotionOut.promoted,
+                  rejected: associativeOut.rejected + promotionOut.rejected,
+                  promotion: promotionOut,
+                },
               }),
             ],
           );
