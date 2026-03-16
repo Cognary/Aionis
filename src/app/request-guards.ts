@@ -6,6 +6,7 @@ import { requireAdminTokenHeader, secretTokensEqual } from "../util/admin_auth.j
 import type { AuthPrincipal, AuthResolver } from "../util/auth.js";
 import { sha256Hex } from "../util/crypto.js";
 import { HttpError } from "../util/http.js";
+import { parseTrustedProxyCidrs, resolveTrustedClientIp } from "../util/ip-guard.js";
 import { InflightGate, InflightGateError, type InflightGateToken } from "../util/inflight_gate.js";
 
 type RateLimitResult =
@@ -143,13 +144,27 @@ export function createRequestGuards({
   recallInflightGate,
   writeInflightGate,
 }: CreateRequestGuardsArgs) {
+  const trustedProxyCidrs = parseTrustedProxyCidrs(env.TRUSTED_PROXY_CIDRS);
+  const requestClientIp = (req: any): string => {
+    const cached = typeof req?.aionis_client_ip === "string" ? req.aionis_client_ip : "";
+    if (cached) return cached;
+    const ip = env.TRUST_PROXY
+      ? resolveTrustedClientIp({
+          remoteAddress: String(req?.raw?.socket?.remoteAddress ?? req?.socket?.remoteAddress ?? ""),
+          headers: req?.headers ?? {},
+          trustedProxyCidrs,
+        })
+      : String(req?.raw?.socket?.remoteAddress ?? req?.socket?.remoteAddress ?? req?.ip ?? "");
+    (req as any).aionis_client_ip = ip;
+    return ip;
+  };
   const buildRecallAuth = (req: any, wantDebugEmbeddings: boolean): RecallAuth => {
     if (!wantDebugEmbeddings) return { allow_debug_embeddings: false };
 
     const headerToken = String(req.headers?.["x-admin-token"] ?? "");
     if (secretTokensEqual(headerToken, env.ADMIN_TOKEN)) return { allow_debug_embeddings: true };
 
-    const ip = String(req.ip ?? req.socket?.remoteAddress ?? "");
+    const ip = requestClientIp(req);
     if (!env.ADMIN_TOKEN && env.APP_ENV !== "prod" && isLoopbackIp(ip)) return { allow_debug_embeddings: true };
 
     return { allow_debug_embeddings: false };
@@ -160,7 +175,7 @@ export function createRequestGuards({
     if (secretTokensEqual(headerToken, env.ADMIN_TOKEN)) {
       return `${category}:admin:${sha256Hex(headerToken).slice(0, 16)}`;
     }
-    const ip = String(req.ip ?? req.socket?.remoteAddress ?? "unknown");
+    const ip = requestClientIp(req) || "unknown";
     return `${category}:ip:${ip}`;
   };
 
@@ -191,7 +206,7 @@ export function createRequestGuards({
               : recallLimiter;
     if (!limiter) return;
 
-    const ip = String(req.ip ?? req.socket?.remoteAddress ?? "");
+    const ip = requestClientIp(req);
     if (env.RATE_LIMIT_BYPASS_LOOPBACK && env.APP_ENV !== "prod" && isLoopbackIp(ip)) return;
 
     const key = rateLimitKey(req, kind);
@@ -368,6 +383,19 @@ export function createRequestGuards({
         || kind === "recall_text"
         || kind === "planning_context"
         || kind === "context_assemble"
+        || kind === "replay_run_start"
+        || kind === "replay_step_before"
+        || kind === "replay_step_after"
+        || kind === "replay_run_end"
+        || kind === "replay_run_get"
+        || kind === "replay_playbook_compile"
+        || kind === "replay_playbook_get"
+        || kind === "replay_playbook_candidate"
+        || kind === "replay_playbook_promote"
+        || kind === "replay_playbook_repair"
+        || kind === "replay_playbook_repair_review"
+        || kind === "replay_playbook_run"
+        || kind === "replay_playbook_dispatch"
       )
     ) {
       const reqAgent = typeof obj.consumer_agent_id === "string" ? obj.consumer_agent_id.trim() : null;
@@ -378,7 +406,22 @@ export function createRequestGuards({
       if (!reqTeam && principal.team_id) obj.consumer_team_id = principal.team_id;
     }
 
-    if (principal && kind === "write") {
+    if (
+      principal &&
+      (
+        kind === "write"
+        || kind === "replay_run_start"
+        || kind === "replay_step_before"
+        || kind === "replay_step_after"
+        || kind === "replay_run_end"
+        || kind === "replay_playbook_compile"
+        || kind === "replay_playbook_promote"
+        || kind === "replay_playbook_repair"
+        || kind === "replay_playbook_repair_review"
+        || kind === "replay_playbook_run"
+        || kind === "replay_playbook_dispatch"
+      )
+    ) {
       const reqProducer = typeof obj.producer_agent_id === "string" ? obj.producer_agent_id.trim() : null;
       const reqOwnerAgent = typeof obj.owner_agent_id === "string" ? obj.owner_agent_id.trim() : null;
       const reqOwnerTeam = typeof obj.owner_team_id === "string" ? obj.owner_team_id.trim() : null;

@@ -9,6 +9,7 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import {
   createPostgresReplayStoreAccess,
   type ReplayNodeRow,
+  type ReplayVisibilityArgs,
   type ReplayStoreAccess,
 } from "../store/replay-access.js";
 import type { WriteStoreAccess } from "../store/write-access.js";
@@ -258,6 +259,53 @@ function parsePlaybookRepairInput(body: unknown): ReplayPlaybookRepairInput {
 
 function parsePlaybookRepairReviewInput(body: unknown): ReplayPlaybookRepairReviewInput {
   return ReplayPlaybookRepairReviewRequest.parse(body);
+}
+
+type ReplayWriteIdentity = {
+  memory_lane?: "private" | "shared";
+  producer_agent_id?: string;
+  owner_agent_id?: string;
+  owner_team_id?: string;
+};
+
+function replayVisibilityFromInput(input: {
+  consumer_agent_id?: string | null;
+  consumer_team_id?: string | null;
+}): ReplayVisibilityArgs {
+  return {
+    consumerAgentId: toStringOrNull(input.consumer_agent_id) ?? null,
+    consumerTeamId: toStringOrNull(input.consumer_team_id) ?? null,
+  };
+}
+
+function replayWriteIdentityFromInput(
+  input: {
+    memory_lane?: string | null;
+    producer_agent_id?: string | null;
+    owner_agent_id?: string | null;
+    owner_team_id?: string | null;
+  },
+  fallback?: ReplayWriteIdentity,
+): ReplayWriteIdentity {
+  const memoryLane = toStringOrNull(input.memory_lane);
+  const producerAgentId = toStringOrNull(input.producer_agent_id);
+  const ownerAgentId = toStringOrNull(input.owner_agent_id);
+  const ownerTeamId = toStringOrNull(input.owner_team_id);
+  return {
+    memory_lane: memoryLane === "shared" || memoryLane === "private" ? memoryLane : fallback?.memory_lane,
+    producer_agent_id: producerAgentId ?? fallback?.producer_agent_id,
+    owner_agent_id: ownerAgentId ?? fallback?.owner_agent_id,
+    owner_team_id: ownerTeamId ?? fallback?.owner_team_id,
+  };
+}
+
+function replayWriteIdentityFromRow(row: ReplayNodeRow): ReplayWriteIdentity {
+  return {
+    memory_lane: row.memory_lane,
+    producer_agent_id: row.producer_agent_id ?? undefined,
+    owner_agent_id: row.owner_agent_id ?? undefined,
+    owner_team_id: row.owner_team_id ?? undefined,
+  };
 }
 
 function asObject(v: unknown): Record<string, unknown> | null {
@@ -2230,6 +2278,7 @@ export async function replayRunStart(client: pg.PoolClient, body: unknown, opts:
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const writeIdentity = replayWriteIdentityFromInput(parsed);
   const runId = parsed.run_id ?? randomUUID();
   const cid = runClientId(runId);
   const nowIso = new Date().toISOString();
@@ -2239,6 +2288,7 @@ export async function replayRunStart(client: pg.PoolClient, body: unknown, opts:
     actor: parsed.actor ?? "replay_api",
     input_text: parsed.goal,
     auto_embed: false,
+    ...writeIdentity,
     nodes: [
       {
         client_id: cid,
@@ -2288,8 +2338,10 @@ export async function replayStepBefore(client: pg.PoolClient, body: unknown, opt
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
+  const writeIdentity = replayWriteIdentityFromInput(parsed);
   const replayAccess = replayAccessForClient(client, opts);
-  const runNode = await replayAccess.findRunNodeByRunId(tenancy.scope_key, parsed.run_id);
+  const runNode = await replayAccess.findRunNodeByRunId(tenancy.scope_key, parsed.run_id, visibility);
   if (!runNode) {
     throw new HttpError(404, "replay_run_not_found", "run_id was not found in this scope", {
       run_id: parsed.run_id,
@@ -2305,6 +2357,7 @@ export async function replayStepBefore(client: pg.PoolClient, body: unknown, opt
     actor: parsed.actor ?? "replay_api",
     input_text: `step before ${parsed.tool_name}`,
     auto_embed: false,
+    ...writeIdentity,
     nodes: [
       {
         client_id: stepCid,
@@ -2368,8 +2421,10 @@ export async function replayStepAfter(client: pg.PoolClient, body: unknown, opts
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
+  const writeIdentity = replayWriteIdentityFromInput(parsed);
   const replayAccess = replayAccessForClient(client, opts);
-  const runNode = await replayAccess.findRunNodeByRunId(tenancy.scope_key, parsed.run_id);
+  const runNode = await replayAccess.findRunNodeByRunId(tenancy.scope_key, parsed.run_id, visibility);
   if (!runNode) {
     throw new HttpError(404, "replay_run_not_found", "run_id was not found in this scope", {
       run_id: parsed.run_id,
@@ -2380,9 +2435,9 @@ export async function replayStepAfter(client: pg.PoolClient, body: unknown, opts
   let stepNode: ReplayNodeRow | null = null;
   let resolvedStepId = parsed.step_id ?? null;
   if (resolvedStepId) {
-    stepNode = await replayAccess.findStepNodeById(tenancy.scope_key, resolvedStepId);
+    stepNode = await replayAccess.findStepNodeById(tenancy.scope_key, resolvedStepId, visibility);
   } else if (parsed.step_index != null) {
-    stepNode = await replayAccess.findLatestStepNodeByIndex(tenancy.scope_key, parsed.run_id, parsed.step_index);
+    stepNode = await replayAccess.findLatestStepNodeByIndex(tenancy.scope_key, parsed.run_id, parsed.step_index, visibility);
     resolvedStepId =
       toStringOrNull(asObject(stepNode?.slots)?.step_id)
       ?? (stepNode?.id ?? null);
@@ -2402,6 +2457,7 @@ export async function replayStepAfter(client: pg.PoolClient, body: unknown, opts
     actor: parsed.actor ?? "replay_api",
     input_text: `step after ${parsed.status}`,
     auto_embed: false,
+    ...writeIdentity,
     nodes: [
       {
         client_id: resultCid,
@@ -2473,8 +2529,10 @@ export async function replayRunEnd(client: pg.PoolClient, body: unknown, opts: R
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
+  const writeIdentity = replayWriteIdentityFromInput(parsed);
   const replayAccess = replayAccessForClient(client, opts);
-  const runNode = await replayAccess.findRunNodeByRunId(tenancy.scope_key, parsed.run_id);
+  const runNode = await replayAccess.findRunNodeByRunId(tenancy.scope_key, parsed.run_id, visibility);
   if (!runNode) {
     throw new HttpError(404, "replay_run_not_found", "run_id was not found in this scope", {
       run_id: parsed.run_id,
@@ -2489,6 +2547,7 @@ export async function replayRunEnd(client: pg.PoolClient, body: unknown, opts: R
     actor: parsed.actor ?? "replay_api",
     input_text: parsed.summary ?? `run ${parsed.status}`,
     auto_embed: false,
+    ...writeIdentity,
     nodes: [
       {
         client_id: endCid,
@@ -2545,8 +2604,9 @@ export async function replayRunGet(client: pg.PoolClient, body: unknown, opts: R
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
   const replayAccess = replayAccessForClient(client, opts);
-  const rows = await replayAccess.listReplayNodesByRunId(tenancy.scope_key, parsed.run_id);
+  const rows = await replayAccess.listReplayNodesByRunId(tenancy.scope_key, parsed.run_id, visibility);
   if (rows.length === 0) {
     throw new HttpError(404, "replay_run_not_found", "run_id was not found in this scope", {
       run_id: parsed.run_id,
@@ -2671,9 +2731,10 @@ export async function replayPlaybookCompileFromRun(client: pg.PoolClient, body: 
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
   requireReplayReadAccess(opts);
   const replayAccess = replayAccessForClient(client, opts);
-  const rows = await replayAccess.listReplayNodesByRunId(tenancy.scope_key, parsed.run_id);
+  const rows = await replayAccess.listReplayNodesByRunId(tenancy.scope_key, parsed.run_id, visibility);
   if (rows.length === 0) {
     throw new HttpError(404, "replay_run_not_found", "run_id was not found in this scope", {
       run_id: parsed.run_id,
@@ -2801,6 +2862,7 @@ export async function replayPlaybookCompileFromRun(client: pg.PoolClient, body: 
     usage_estimate: usageOut,
   };
   const playbookCid = playbookClientId(playbookId, version);
+  const writeIdentity = replayWriteIdentityFromInput(parsed, runNode ? replayWriteIdentityFromRow(runNode) : undefined);
 
   const writeReq = {
     tenant_id: tenancy.tenant_id,
@@ -2808,6 +2870,7 @@ export async function replayPlaybookCompileFromRun(client: pg.PoolClient, body: 
     actor: parsed.actor ?? "replay_compiler",
     input_text: `compile playbook ${playbookName}`,
     auto_embed: false,
+    ...writeIdentity,
     nodes: [
       {
         client_id: playbookCid,
@@ -2883,8 +2946,9 @@ export async function replayPlaybookGet(client: pg.PoolClient, body: unknown, op
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
   const replayAccess = replayAccessForClient(client, opts);
-  const versions = await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id);
+  const versions = await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id, visibility);
   const row = versions[0] ?? null;
   if (!row) {
     throw new HttpError(404, "replay_playbook_not_found", "playbook_id was not found in this scope", {
@@ -2934,11 +2998,12 @@ export async function replayPlaybookCandidate(client: pg.PoolClient, body: unkno
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
   const replayAccess = replayAccessForClient(client, opts);
   const row =
     parsed.version != null
-      ? await replayAccess.getReplayPlaybookVersion(tenancy.scope_key, parsed.playbook_id, parsed.version)
-      : (await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id))[0] ?? null;
+      ? await replayAccess.getReplayPlaybookVersion(tenancy.scope_key, parsed.playbook_id, parsed.version, visibility)
+      : (await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id, visibility))[0] ?? null;
   if (!row) {
     throw new HttpError(404, "replay_playbook_not_found", "playbook was not found in this scope", {
       playbook_id: parsed.playbook_id,
@@ -2990,6 +3055,8 @@ export async function replayPlaybookDispatch(client: pg.PoolClient, body: unknow
     {
       tenant_id: parsed.tenant_id,
       scope: parsed.scope,
+      consumer_agent_id: parsed.consumer_agent_id,
+      consumer_team_id: parsed.consumer_team_id,
       playbook_id: parsed.playbook_id,
       version: parsed.version,
       deterministic_gate: parsed.deterministic_gate,
@@ -3005,6 +3072,12 @@ export async function replayPlaybookDispatch(client: pg.PoolClient, body: unknow
         scope: parsed.scope,
         project_id: parsed.project_id,
         actor: parsed.actor,
+        consumer_agent_id: parsed.consumer_agent_id,
+        consumer_team_id: parsed.consumer_team_id,
+        memory_lane: parsed.memory_lane,
+        producer_agent_id: parsed.producer_agent_id,
+        owner_agent_id: parsed.owner_agent_id,
+        owner_team_id: parsed.owner_team_id,
         playbook_id: parsed.playbook_id,
         version: parsed.version,
         mode: "simulate",
@@ -3054,6 +3127,12 @@ export async function replayPlaybookDispatch(client: pg.PoolClient, body: unknow
       scope: parsed.scope,
       project_id: parsed.project_id,
       actor: parsed.actor,
+      consumer_agent_id: parsed.consumer_agent_id,
+      consumer_team_id: parsed.consumer_team_id,
+      memory_lane: parsed.memory_lane,
+      producer_agent_id: parsed.producer_agent_id,
+      owner_agent_id: parsed.owner_agent_id,
+      owner_team_id: parsed.owner_team_id,
       playbook_id: parsed.playbook_id,
       version: parsed.version,
       mode: parsed.fallback_mode,
@@ -3086,8 +3165,9 @@ export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
   const replayAccess = replayAccessForClient(client, opts);
-  const versions = await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id);
+  const versions = await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id, visibility);
   const latest = versions[0] ?? null;
   if (!latest) {
     throw new HttpError(404, "replay_playbook_not_found", "playbook_id was not found in this scope", {
@@ -3098,7 +3178,12 @@ export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown
   }
   let source = latest;
   if (parsed.from_version != null) {
-    const byVersion = await replayAccess.getReplayPlaybookVersion(tenancy.scope_key, parsed.playbook_id, parsed.from_version);
+    const byVersion = await replayAccess.getReplayPlaybookVersion(
+      tenancy.scope_key,
+      parsed.playbook_id,
+      parsed.from_version,
+      visibility,
+    );
     if (!byVersion) {
       throw new HttpError(404, "replay_playbook_version_not_found", "from_version was not found for this playbook", {
         playbook_id: parsed.playbook_id,
@@ -3131,12 +3216,14 @@ export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown
 
   const nextVersion = latest.version_num + 1;
   const promoteCid = playbookClientId(parsed.playbook_id, nextVersion);
+  const writeIdentity = replayWriteIdentityFromInput(parsed, replayWriteIdentityFromRow(source));
   const writeReq = {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
     actor: parsed.actor ?? "replay_promoter",
     input_text: `promote playbook ${parsed.playbook_id} to ${targetStatus}`,
     auto_embed: false,
+    ...writeIdentity,
     nodes: [
       {
         client_id: promoteCid,
@@ -3196,8 +3283,9 @@ export async function replayPlaybookRepair(client: pg.PoolClient, body: unknown,
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
   const replayAccess = replayAccessForClient(client, opts);
-  const versions = await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id);
+  const versions = await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id, visibility);
   const latest = versions[0] ?? null;
   if (!latest) {
     throw new HttpError(404, "replay_playbook_not_found", "playbook_id was not found in this scope", {
@@ -3209,7 +3297,12 @@ export async function replayPlaybookRepair(client: pg.PoolClient, body: unknown,
 
   let source = latest;
   if (parsed.from_version != null) {
-    const byVersion = await replayAccess.getReplayPlaybookVersion(tenancy.scope_key, parsed.playbook_id, parsed.from_version);
+    const byVersion = await replayAccess.getReplayPlaybookVersion(
+      tenancy.scope_key,
+      parsed.playbook_id,
+      parsed.from_version,
+      visibility,
+    );
     if (!byVersion) {
       throw new HttpError(404, "replay_playbook_version_not_found", "from_version was not found for this playbook", {
         playbook_id: parsed.playbook_id,
@@ -3226,6 +3319,7 @@ export async function replayPlaybookRepair(client: pg.PoolClient, body: unknown,
   const emittedStatus = reviewRequired ? "draft" : parsed.target_status;
   const nextVersion = latest.version_num + 1;
   const repairCid = playbookClientId(parsed.playbook_id, nextVersion);
+  const writeIdentity = replayWriteIdentityFromInput(parsed, replayWriteIdentityFromRow(source));
 
   const writeReq = {
     tenant_id: tenancy.tenant_id,
@@ -3233,6 +3327,7 @@ export async function replayPlaybookRepair(client: pg.PoolClient, body: unknown,
     actor: parsed.actor ?? "replay_repair",
     input_text: `repair playbook ${parsed.playbook_id} v${source.version_num}->v${nextVersion}`,
     auto_embed: false,
+    ...writeIdentity,
     nodes: [
       {
         client_id: repairCid,
@@ -3305,8 +3400,9 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
   const replayAccess = replayAccessForClient(client, opts);
-  const versions = await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id);
+  const versions = await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id, visibility);
   const latest = versions[0] ?? null;
   if (!latest) {
     throw new HttpError(404, "replay_playbook_not_found", "playbook_id was not found in this scope", {
@@ -3318,7 +3414,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
 
   const source =
     parsed.version != null
-      ? await replayAccess.getReplayPlaybookVersion(tenancy.scope_key, parsed.playbook_id, parsed.version)
+      ? await replayAccess.getReplayPlaybookVersion(tenancy.scope_key, parsed.playbook_id, parsed.version, visibility)
       : latest;
   if (!source) {
     throw new HttpError(404, "replay_playbook_version_not_found", "version was not found for this playbook", {
@@ -3658,6 +3754,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
   const nextVersion = latest.version_num + 1;
   const reviewCid = playbookClientId(parsed.playbook_id, nextVersion);
   const reviewedAt = new Date().toISOString();
+  const writeIdentity = replayWriteIdentityFromInput(parsed, replayWriteIdentityFromRow(source));
   const reviewedSlots = {
     ...sourceSlots,
     replay_kind: "playbook",
@@ -3690,6 +3787,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
     actor: parsed.actor ?? "replay_review",
     input_text: `review playbook ${parsed.playbook_id} v${source.version_num} action=${parsed.action}`,
     auto_embed: false,
+    ...writeIdentity,
     nodes: [
       {
         client_id: reviewCid,
@@ -3783,6 +3881,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
         actor: parsed.actor ?? "replay_review",
         input_text: `auto promote playbook ${parsed.playbook_id} v${nextVersion}->v${promoteVersion}`,
         auto_embed: false,
+        ...writeIdentity,
         nodes: [
           {
             client_id: promoteCid,
@@ -3953,11 +4052,12 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
     { tenant_id: parsed.tenant_id, scope: parsed.scope },
     { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
   );
+  const visibility = replayVisibilityFromInput(parsed);
   const replayAccess = replayAccessForClient(client, opts);
   const row =
     parsed.version != null
-      ? await replayAccess.getReplayPlaybookVersion(tenancy.scope_key, parsed.playbook_id, parsed.version)
-      : (await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id))[0] ?? null;
+      ? await replayAccess.getReplayPlaybookVersion(tenancy.scope_key, parsed.playbook_id, parsed.version, visibility)
+      : (await replayAccess.listReplayPlaybookVersions(tenancy.scope_key, parsed.playbook_id, visibility))[0] ?? null;
   if (!row) {
     throw new HttpError(404, "replay_playbook_not_found", "playbook was not found in this scope", {
       playbook_id: parsed.playbook_id,
@@ -3967,6 +4067,14 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
     });
   }
 
+  const replayCallIdentity = {
+    consumer_agent_id: parsed.consumer_agent_id ?? undefined,
+    consumer_team_id: parsed.consumer_team_id ?? undefined,
+    memory_lane: parsed.memory_lane ?? row.memory_lane,
+    producer_agent_id: parsed.producer_agent_id ?? row.producer_agent_id ?? undefined,
+    owner_agent_id: parsed.owner_agent_id ?? row.owner_agent_id ?? undefined,
+    owner_team_id: parsed.owner_team_id ?? row.owner_team_id ?? undefined,
+  };
   const slotsObj = asObject(row.slots) ?? {};
   const stepsRaw = Array.isArray(slotsObj.steps_template) ? slotsObj.steps_template.slice(0, parsed.max_steps) : [];
   const paramsObj = asObject(parsed.params) ?? {};
@@ -4015,6 +4123,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           tenant_id: tenancy.tenant_id,
           scope: tenancy.scope,
           actor: parsed.actor ?? undefined,
+          ...replayCallIdentity,
           run_id: replayRunId,
           goal: `Replay playbook ${parsed.playbook_id} v${row.version_num} (simulate)`,
           context_snapshot_ref: buildAionisUri({
@@ -4065,6 +4174,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
             actor: parsed.actor ?? undefined,
+            ...replayCallIdentity,
             run_id: replayRunId,
             step_index: stepIndex,
             tool_name: toolName,
@@ -4088,6 +4198,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
             actor: parsed.actor ?? undefined,
+            ...replayCallIdentity,
             run_id: replayRunId,
             step_id: persistedStepId ?? undefined,
             step_index: stepIndex,
@@ -4148,6 +4259,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           tenant_id: tenancy.tenant_id,
           scope: tenancy.scope,
           actor: parsed.actor ?? undefined,
+          ...replayCallIdentity,
           run_id: replayRunId,
           status: runStatus,
           summary:
@@ -4336,6 +4448,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       {
         tenant_id: tenancy.tenant_id,
         scope: tenancy.scope,
+        ...replayCallIdentity,
         run_id: replayRunId,
         goal: `Replay playbook ${parsed.playbook_id} v${row.version_num}`,
         context_snapshot_ref: buildAionisUri({
@@ -4389,6 +4502,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         {
           tenant_id: tenancy.tenant_id,
           scope: tenancy.scope,
+          ...replayCallIdentity,
           run_id: replayRunId,
           step_index: stepIndex,
           tool_name: toolName,
@@ -4433,6 +4547,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             {
               tenant_id: tenancy.tenant_id,
               scope: tenancy.scope,
+              ...replayCallIdentity,
               run_id: replayRunId,
               step_id: persistedStepId ?? undefined,
               step_index: stepIndex ?? undefined,
@@ -4491,6 +4606,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           {
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
+            ...replayCallIdentity,
             run_id: replayRunId,
             step_id: persistedStepId ?? undefined,
             step_index: stepIndex ?? undefined,
@@ -4528,6 +4644,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             {
               tenant_id: tenancy.tenant_id,
               scope: tenancy.scope,
+              ...replayCallIdentity,
               run_id: replayRunId,
               step_id: persistedStepId ?? undefined,
               step_index: stepIndex ?? undefined,
@@ -4582,6 +4699,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           {
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
+            ...replayCallIdentity,
             run_id: replayRunId,
             step_id: persistedStepId ?? undefined,
             step_index: stepIndex ?? undefined,
@@ -4615,6 +4733,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             {
               tenant_id: tenancy.tenant_id,
               scope: tenancy.scope,
+              ...replayCallIdentity,
               run_id: replayRunId,
               step_id: persistedStepId ?? undefined,
               step_index: stepIndex ?? undefined,
@@ -4669,6 +4788,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           {
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
+            ...replayCallIdentity,
             run_id: replayRunId,
             step_id: persistedStepId ?? undefined,
             step_index: stepIndex ?? undefined,
@@ -4706,6 +4826,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             {
               tenant_id: tenancy.tenant_id,
               scope: tenancy.scope,
+              ...replayCallIdentity,
               run_id: replayRunId,
               step_id: persistedStepId ?? undefined,
               step_index: stepIndex ?? undefined,
@@ -4763,6 +4884,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           {
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
+            ...replayCallIdentity,
             run_id: replayRunId,
             step_id: persistedStepId ?? undefined,
             step_index: stepIndex ?? undefined,
@@ -4816,6 +4938,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
             {
               tenant_id: tenancy.tenant_id,
               scope: tenancy.scope,
+              ...replayCallIdentity,
               run_id: replayRunId,
               step_id: persistedStepId ?? undefined,
               step_index: stepIndex ?? undefined,
@@ -4875,6 +4998,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           {
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
+            ...replayCallIdentity,
             run_id: replayRunId,
             step_id: persistedStepId ?? undefined,
             step_index: stepIndex ?? undefined,
@@ -4924,6 +5048,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           {
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
+            ...replayCallIdentity,
             run_id: replayRunId,
             step_id: persistedStepId ?? undefined,
             step_index: stepIndex ?? undefined,
@@ -4985,6 +5110,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           {
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
+            ...replayCallIdentity,
             run_id: replayRunId,
             step_id: persistedStepId ?? undefined,
             step_index: stepIndex ?? undefined,
@@ -5035,6 +5161,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
           {
             tenant_id: tenancy.tenant_id,
             scope: tenancy.scope,
+            ...replayCallIdentity,
             run_id: replayRunId,
             step_id: persistedStepId ?? undefined,
             step_index: stepIndex ?? undefined,
@@ -5112,6 +5239,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
         {
           tenant_id: tenancy.tenant_id,
           scope: tenancy.scope,
+          ...replayCallIdentity,
           run_id: replayRunId,
           step_id: persistedStepId ?? undefined,
           step_index: stepIndex ?? undefined,
@@ -5152,6 +5280,7 @@ export async function replayPlaybookRun(client: pg.PoolClient, body: unknown, op
       {
         tenant_id: tenancy.tenant_id,
         scope: tenancy.scope,
+        ...replayCallIdentity,
         run_id: replayRunId,
         status: runStatus,
         summary: `Replay ${mode} run completed: success=${succeededSteps}, failed=${failedSteps}, repaired=${repairedSteps}, pending=${pendingSteps}`,

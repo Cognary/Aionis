@@ -1,6 +1,7 @@
 import { isIP } from "node:net";
 import { z } from "zod";
 import { parseEmbeddingEnabledSurfacesJson } from "./embeddings/surface-policy.js";
+import { parseTrustedProxyCidrs } from "./util/ip-guard.js";
 
 const RuntimeModeSchema = z.enum(["local", "service", "cloud"]);
 const EditionSchema = z.enum(["server", "lite"]);
@@ -122,6 +123,7 @@ const EnvSchema = z.object({
     .transform((v) => (v ?? "false").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  TRUSTED_PROXY_CIDRS: z.string().default(""),
   DATABASE_URL: z.string().default(""),
   MEMORY_STORE_BACKEND: z.enum(["postgres", "embedded"]).default("postgres"),
   MEMORY_STORE_EMBEDDED_EXPERIMENTAL_ENABLED: z
@@ -690,6 +692,8 @@ export function loadEnv(): Env {
     const msg = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`Invalid environment:\n${msg}`);
   }
+  const trustedProxyCidrs = parseTrustedProxyCidrs(parsed.data.TRUSTED_PROXY_CIDRS);
+  parsed.data.TRUSTED_PROXY_CIDRS = trustedProxyCidrs.join(",");
   if (parsed.data.AIONIS_EDITION !== "lite" && parsed.data.DATABASE_URL.trim().length === 0) {
     throw new Error("DATABASE_URL is required unless AIONIS_EDITION=lite");
   }
@@ -891,6 +895,9 @@ export function loadEnv(): Env {
     }
   }
   if (parsed.data.APP_ENV === "prod") {
+    if (parsed.data.TRUST_PROXY && trustedProxyCidrs.length === 0) {
+      throw new Error("TRUST_PROXY=true requires TRUSTED_PROXY_CIDRS in APP_ENV=prod");
+    }
     if (parsed.data.MEMORY_AUTH_MODE === "off") {
       throw new Error("MEMORY_AUTH_MODE=off is not allowed when APP_ENV=prod");
     }

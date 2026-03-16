@@ -736,11 +736,23 @@ export const ReplayRunMode = z.enum(["strict", "guided", "simulate"]);
 export type ReplayRunModeInput = z.infer<typeof ReplayRunMode>;
 
 const ReplayCondition = z.record(z.any());
+const ReplayConsumerIdentityFields = {
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+} as const;
+const ReplayWriteIdentityFields = {
+  memory_lane: z.enum(["private", "shared"]).optional(),
+  producer_agent_id: z.string().min(1).optional(),
+  owner_agent_id: z.string().min(1).optional(),
+  owner_team_id: z.string().min(1).optional(),
+} as const;
 
 export const ReplayRunStartRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   actor: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
+  ...ReplayWriteIdentityFields,
   run_id: UUID.optional(),
   goal: z.string().min(1),
   context_snapshot_ref: z.string().min(1).optional(),
@@ -754,6 +766,8 @@ export const ReplayStepBeforeRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   actor: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
+  ...ReplayWriteIdentityFields,
   run_id: UUID,
   step_id: UUID.optional(),
   decision_id: UUID.optional(),
@@ -773,6 +787,8 @@ export const ReplayStepAfterRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   actor: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
+  ...ReplayWriteIdentityFields,
   run_id: UUID,
   step_id: UUID.optional(),
   step_index: z.number().int().positive().optional(),
@@ -792,6 +808,8 @@ export const ReplayRunEndRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   actor: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
+  ...ReplayWriteIdentityFields,
   run_id: UUID,
   status: ReplayRunStatus,
   summary: z.string().min(1).optional(),
@@ -805,6 +823,7 @@ export type ReplayRunEndInput = z.infer<typeof ReplayRunEndRequest>;
 export const ReplayRunGetRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
   run_id: UUID,
   include_steps: z.boolean().default(true),
   include_artifacts: z.boolean().default(true),
@@ -816,6 +835,8 @@ export const ReplayPlaybookCompileRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   actor: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
+  ...ReplayWriteIdentityFields,
   run_id: UUID,
   playbook_id: UUID.optional(),
   name: z.string().min(1).optional(),
@@ -832,6 +853,7 @@ export type ReplayPlaybookCompileInput = z.infer<typeof ReplayPlaybookCompileReq
 export const ReplayPlaybookGetRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
   playbook_id: UUID,
 });
 
@@ -840,6 +862,7 @@ export type ReplayPlaybookGetInput = z.infer<typeof ReplayPlaybookGetRequest>;
 export const ReplayPlaybookCandidateRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
   playbook_id: UUID,
   version: z.number().int().positive().optional(),
   deterministic_gate: z.object({
@@ -858,6 +881,8 @@ export const ReplayPlaybookPromoteRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   actor: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
+  ...ReplayWriteIdentityFields,
   playbook_id: UUID,
   from_version: z.number().int().positive().optional(),
   target_status: ReplayPlaybookStatus,
@@ -872,6 +897,8 @@ export const ReplayPlaybookRunRequest = z.object({
   scope: z.string().min(1).optional(),
   project_id: z.string().min(1).max(128).optional(),
   actor: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
+  ...ReplayWriteIdentityFields,
   playbook_id: UUID,
   mode: ReplayRunMode.default("simulate"),
   version: z.number().int().positive().optional(),
@@ -894,6 +921,8 @@ export const ReplayPlaybookDispatchRequest = z.object({
   scope: z.string().min(1).optional(),
   project_id: z.string().min(1).max(128).optional(),
   actor: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
+  ...ReplayWriteIdentityFields,
   playbook_id: UUID,
   version: z.number().int().positive().optional(),
   deterministic_gate: z.object({
@@ -916,6 +945,8 @@ export const ReplayPlaybookRepairRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   actor: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
+  ...ReplayWriteIdentityFields,
   playbook_id: UUID,
   from_version: z.number().int().positive().optional(),
   patch: z.record(z.any()),
@@ -942,6 +973,8 @@ export const ReplayPlaybookRepairReviewRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   actor: z.string().min(1).optional(),
+  ...ReplayConsumerIdentityFields,
+  ...ReplayWriteIdentityFields,
   playbook_id: UUID,
   version: z.number().int().positive().optional(),
   action: z.enum(["approve", "reject"]),

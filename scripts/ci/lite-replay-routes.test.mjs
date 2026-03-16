@@ -94,6 +94,48 @@ test("lite replay routes round-trip through sqlite mirror", () => {
       };
 
       const noOpGate = async () => ({ release() {} });
+      const principal = { sub: "tester", team_id: "team-alpha" };
+      const withReplayIdentity = (_req, body, authPrincipal, kind) => {
+        const out = { ...(body ?? {}) };
+        const readKinds = new Set([
+          "replay_run_start",
+          "replay_step_before",
+          "replay_step_after",
+          "replay_run_end",
+          "replay_run_get",
+          "replay_playbook_compile",
+          "replay_playbook_get",
+          "replay_playbook_candidate",
+          "replay_playbook_promote",
+          "replay_playbook_repair",
+          "replay_playbook_repair_review",
+          "replay_playbook_run",
+          "replay_playbook_dispatch",
+        ]);
+        const writeKinds = new Set([
+          "replay_run_start",
+          "replay_step_before",
+          "replay_step_after",
+          "replay_run_end",
+          "replay_playbook_compile",
+          "replay_playbook_promote",
+          "replay_playbook_repair",
+          "replay_playbook_repair_review",
+          "replay_playbook_run",
+          "replay_playbook_dispatch",
+        ]);
+        if (readKinds.has(kind)) {
+          out.consumer_agent_id ??= authPrincipal.sub;
+          out.consumer_team_id ??= authPrincipal.team_id;
+        }
+        if (writeKinds.has(kind)) {
+          out.memory_lane ??= "private";
+          out.producer_agent_id ??= authPrincipal.sub;
+          out.owner_agent_id ??= authPrincipal.sub;
+          out.owner_team_id ??= authPrincipal.team_id;
+        }
+        return out;
+      };
       const app = createHttpApp({ TRUST_PROXY: false });
       registerHostErrorHandler(app);
       try {
@@ -107,8 +149,8 @@ test("lite replay routes round-trip through sqlite mirror", () => {
           liteReplayStore,
           liteWriteStore,
           writeAccessShadowMirrorV2: true,
-          requireMemoryPrincipal: async () => ({ sub: "tester" }),
-          withIdentityFromRequest: (_req, body) => body,
+          requireMemoryPrincipal: async () => principal,
+          withIdentityFromRequest: withReplayIdentity,
           enforceRateLimit: async () => {},
           enforceTenantQuota: async () => {},
           tenantFromBody: () => "default",
@@ -120,8 +162,8 @@ test("lite replay routes round-trip through sqlite mirror", () => {
           env,
           store,
           liteWriteStore,
-          requireMemoryPrincipal: async () => ({ sub: "tester" }),
-          withIdentityFromRequest: (_req, body) => body,
+          requireMemoryPrincipal: async () => principal,
+          withIdentityFromRequest: withReplayIdentity,
           enforceRateLimit: async () => {},
           enforceTenantQuota: async () => {},
           tenantFromBody: () => "default",
@@ -261,8 +303,10 @@ test("lite replay routes round-trip through sqlite mirror", () => {
           candidate,
           run,
           dispatch,
-          liteRunTitle: (await liteReplayAccess.findRunNodeByRunId("default", runId))?.title ?? null,
-          litePlaybookVersion: (await liteReplayAccess.listReplayPlaybookVersions("default", "00000000-0000-0000-0000-000000000777"))[0]?.version_num ?? null,
+          liteRunTitle: (await liteReplayAccess.findRunNodeByRunId("default", runId, { consumerAgentId: "tester", consumerTeamId: "team-alpha" }))?.title ?? null,
+          litePlaybookVersion: (await liteReplayAccess.listReplayPlaybookVersions("default", "00000000-0000-0000-0000-000000000777", { consumerAgentId: "tester", consumerTeamId: "team-alpha" }))[0]?.version_num ?? null,
+          foreignRunTitle: (await liteReplayAccess.findRunNodeByRunId("default", runId, { consumerAgentId: "intruder", consumerTeamId: null }))?.title ?? null,
+          foreignPlaybookVersion: (await liteReplayAccess.listReplayPlaybookVersions("default", "00000000-0000-0000-0000-000000000777", { consumerAgentId: "intruder", consumerTeamId: null }))[0]?.version_num ?? null,
         }));
       } finally {
         await app.close();
@@ -301,4 +345,6 @@ test("lite replay routes round-trip through sqlite mirror", () => {
   assert.equal(parsed.dispatch.body.dispatch.decision, "candidate_only");
   assert.equal(parsed.liteRunTitle, "Replay Run " + parsed.runStart.body.run_id.slice(0, 8));
   assert.equal(parsed.litePlaybookVersion, 4);
+  assert.equal(parsed.foreignRunTitle, null);
+  assert.equal(parsed.foreignPlaybookVersion, null);
 });
