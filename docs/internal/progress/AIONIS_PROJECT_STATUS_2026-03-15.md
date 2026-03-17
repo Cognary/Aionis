@@ -17,6 +17,7 @@ Related:
 6. [Stage Closeout and GTM Plan](../strategy/AIONIS_STAGE_CLOSEOUT_AND_GTM_PLAN_2026-03-16.md)
 7. [Tool Evolution Plan](../plans/AIONIS_TOOL_EVOLUTION_PLAN_2026-03-17.md)
 8. [Tool Evolution Runtime Rollout Decision](../strategy/AIONIS_TOOL_EVOLUTION_RUNTIME_ROLLOUT_DECISION_2026-03-17.md)
+9. [Execution Eval Plan](../plans/AIONIS_EXECUTION_EVAL_PLAN_2026-03-17.md)
 
 ## Executive Summary
 
@@ -111,6 +112,22 @@ The strongest real workflow slice now has:
 4. fixed-format nightly review output
 
 This is the first point where Aionis has a repeatable operational regression loop, not only one-off benchmark runs.
+
+### 5. Execution Eval foundation
+
+Aionis now has enough kernel and evidence structure to justify a narrow internal `Execution Eval` layer.
+
+Why now:
+
+1. the current strongest value is execution continuity and control, not generic tool routing
+2. state, packet, profile, replay, handoff, and benchmark artifacts already exist
+3. the team needs a stable regression truth source stronger than ad hoc benchmark reading
+
+Current rule:
+
+1. keep `Execution Eval` internal first
+2. use it to score completion, reviewer-readiness, continuity, recovery, and control quality
+3. do not turn it into a generic agent-eval platform
 
 ## What Is In Progress
 
