@@ -191,8 +191,8 @@ function buildSelectionPrompt(args: {
     "You are evaluating tool choice quality.",
     governanceNote,
     "Return JSON only with this exact shape:",
-    '{"selected_tool":"tool-name-or-null","reason":"one sentence"}',
-    "Do not invent tool names. selected_tool must be null if none fit.",
+    '{"selected_tool":"tool-name-or-null"}',
+    "Do not invent tool names. selected_tool must be null if none fit. Do not add a reason field or code fences.",
     "Task:",
     args.task,
     "Candidates:",
@@ -284,14 +284,22 @@ export function parseModelSelection(rawText: string): { selectedTool: string | n
   if (!rawText.trim()) {
     return { selectedTool: null, reason: null };
   }
+  const sanitized = rawText
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
   try {
-    const parsed = JSON.parse(extractFirstJsonObject(rawText));
+    const parsed = JSON.parse(extractFirstJsonObject(sanitized));
     const selectedTool = typeof parsed?.selected_tool === "string" && parsed.selected_tool.trim()
       ? parsed.selected_tool.trim()
       : null;
-    const reason = typeof parsed?.reason === "string" && parsed.reason.trim() ? parsed.reason.trim() : null;
-    return { selectedTool, reason };
+    return { selectedTool, reason: null };
   } catch {
+    const matched = sanitized.match(/"selected_tool"\s*:\s*"([^"]+)"/i);
+    if (matched?.[1]) {
+      return { selectedTool: matched[1].trim(), reason: null };
+    }
     return { selectedTool: null, reason: rawText.trim() || null };
   }
 }

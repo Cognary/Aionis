@@ -4,9 +4,9 @@ import test from "node:test";
 import { parseModelSelection, summarizeBenchmarkRecords } from "../bench/many-tools-benchmark.ts";
 
 test("parseModelSelection extracts selected tool from JSON response", () => {
-  const parsed = parseModelSelection('{"selected_tool":"read-source-focused-v2","reason":"best match"}');
+  const parsed = parseModelSelection('{"selected_tool":"read-source-focused-v2"}');
   assert.equal(parsed.selectedTool, "read-source-focused-v2");
-  assert.equal(parsed.reason, "best match");
+  assert.equal(parsed.reason, null);
 });
 
 test("summarizeBenchmarkRecords computes per-variant rates", () => {
