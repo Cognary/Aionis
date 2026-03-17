@@ -82,10 +82,12 @@ Memory 与 handoff 路由使用以下任一方式：
 
 说明：
 
-1. `rules/evaluate` 响应现在会带紧凑的 `evaluation_summary`，方便先做 summary-first 判断，再决定是否读取完整命中规则载荷。
-2. `tools/select` 响应现在会带紧凑的 `selection_summary`，方便先做 summary-first 判断，再决定是否读取完整 rule/policy 载荷。
-3. `tools/select` 现在默认保持候选顺序不变。只有显式传 `reorder_candidates=true` 时，才会启用实验性的 capability-family 候选重排。
-4. `tools/decision` 和 `tools/run` 响应现在都会带紧凑的 `lifecycle_summary`，方便先做 summary-first 判断，再决定是否读取完整 decision / feedback 载荷。
+1. Aionis 里的闭环学习，指的是带显式护栏的 feedback-driven policy adaptation，不是无约束的模型训练。
+2. `tools/select` 当前应被理解为治理面，而不是通用的自主 tool routing 保证。
+3. `rules/evaluate` 响应现在会带紧凑的 `evaluation_summary`，方便先做 summary-first 判断，再决定是否读取完整命中规则载荷。
+4. `tools/select` 响应现在会带紧凑的 `selection_summary`，方便先做 summary-first 判断，再决定是否读取完整 rule/policy 载荷。
+5. `tools/select` 现在默认保持候选顺序不变。只有显式传 `reorder_candidates=true` 时，才会启用实验性的 capability-family 候选重排。
+6. `tools/decision` 和 `tools/run` 响应现在都会带紧凑的 `lifecycle_summary`，方便先做 summary-first 判断，再决定是否读取完整 decision / feedback 载荷。
 
 ### 会话与事件
 
@@ -279,6 +281,12 @@ Memory 与 handoff 路由使用以下任一方式：
 21. 学习 episode 带有生命周期元数据并可被保留策略归档：
    - stage-1 recall 默认排除 archived 学习 episode
    - `find/resolve` 仍可查询 archived 对象用于审计/回放
+
+解释说明：
+
+1. `learning_projection` 是运行时闭环学习面。
+2. 它把已批准的 replay/playbook 经验投影成受治理的 runtime assets。
+3. 它不是模型权重训练。
 
 ## 错误结构
 

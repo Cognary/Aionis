@@ -82,10 +82,12 @@ Notes:
 
 Notes:
 
-1. `rules/evaluate` responses now include compact `evaluation_summary` objects for summary-first inspection before reading the full matched-rule payload.
-2. `tools/select` responses now include compact `selection_summary` objects for summary-first inspection before reading the full rule/policy payload.
-3. `tools/select` now keeps candidate ordering unchanged by default. Callers must explicitly pass `reorder_candidates=true` to enable experimental family-aware candidate reordering.
-4. `tools/decision` and `tools/run` responses now include compact `lifecycle_summary` objects for summary-first inspection before reading the full decision or feedback payloads.
+1. In Aionis, closed-loop learning means feedback-driven policy adaptation with explicit guardrails. It does not mean unconstrained autonomous model training.
+2. `tools/select` should currently be read as a governance surface, not a general-purpose autonomous tool-routing guarantee.
+3. `rules/evaluate` responses now include compact `evaluation_summary` objects for summary-first inspection before reading the full matched-rule payload.
+4. `tools/select` responses now include compact `selection_summary` objects for summary-first inspection before reading the full rule/policy payload.
+5. `tools/select` now keeps candidate ordering unchanged by default. Callers must explicitly pass `reorder_candidates=true` to enable experimental family-aware candidate reordering.
+6. `tools/decision` and `tools/run` responses now include compact `lifecycle_summary` objects for summary-first inspection before reading the full decision or feedback payloads.
 
 ### Sessions and Events
 
@@ -294,6 +296,12 @@ Notes:
 22. Learning episodes include lifecycle metadata and are archived by retention policy:
    - archived episodes are excluded from stage-1 recall candidates by default
    - `find/resolve` still returns archived objects for audit/replay workflows
+
+Interpretation note:
+
+1. `learning_projection` is the runtime closed-loop learning surface.
+2. It projects approved replay/playbook experience into guarded runtime assets.
+3. It is not model-weight training.
 
 Example (trimmed):
 

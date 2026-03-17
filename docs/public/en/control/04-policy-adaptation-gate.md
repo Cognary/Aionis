@@ -6,6 +6,12 @@ title: "Policy Adaptation Gate"
 
 Policy Adaptation Gate evaluates whether rule lifecycle changes are safe to apply.
 
+Interpretation note:
+
+1. This is one of the governance layers behind Aionis closed-loop learning.
+2. In Aionis, “self-learning” means feedback-driven policy adaptation under governance gates.
+3. It does not mean unconstrained autonomous model training.
+
 ## Scope
 
 1. Promotion candidates (`draft -> shadow`)

@@ -6,6 +6,11 @@ title: "Playground"
 
 Aionis Playground is a visual API workbench for memory, context orchestration, and policy-loop testing.
 
+Closed-loop learning note:
+
+1. In Aionis, “self-learning” means feedback-driven policy adaptation and replay-learning projection under governance gates.
+2. It does not mean unconstrained autonomous model training.
+
 ## What You Can Validate
 
 1. Write and recall behavior (`write`, `recall`, `recall_text`).
@@ -56,6 +61,7 @@ LLM panel fields (for chat generation):
 3. Execute `write` and then `recall_text` to confirm memory visibility.
 4. Run one policy path: `rules/evaluate -> tools/select -> tools/decision -> tools/run -> tools/feedback`.
 5. Use inspector IDs (`request_id`, `decision_id`, `run_id`) for replay checks.
+6. Treat `tools/select` as a narrow governance surface while validating control and learning behavior.
 
 ## Common Errors
 

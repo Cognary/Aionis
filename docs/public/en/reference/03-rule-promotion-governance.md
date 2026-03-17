@@ -6,6 +6,12 @@ title: "Rule Promotion Governance"
 
 Use this report before moving a rule to a stronger lifecycle state.
 
+Interpretation note:
+
+1. Rule promotion governance is part of the Aionis self-learning control loop.
+2. It governs whether learned runtime assets are strong enough to move from `draft` to `shadow` or from `shadow` to `active`.
+3. This is runtime-asset governance, not model training.
+
 ## Promotion Targets
 
 1. `draft -> shadow`
