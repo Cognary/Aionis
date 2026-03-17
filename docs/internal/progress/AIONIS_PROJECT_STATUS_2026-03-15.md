@@ -16,6 +16,7 @@ Related:
 5. [Phase 2 Plan](../plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md)
 6. [Stage Closeout and GTM Plan](../strategy/AIONIS_STAGE_CLOSEOUT_AND_GTM_PLAN_2026-03-16.md)
 7. [Tool Evolution Plan](../plans/AIONIS_TOOL_EVOLUTION_PLAN_2026-03-17.md)
+8. [Tool Evolution Runtime Rollout Decision](../strategy/AIONIS_TOOL_EVOLUTION_RUNTIME_ROLLOUT_DECISION_2026-03-17.md)
 
 ## Executive Summary
 
@@ -179,6 +180,13 @@ The system still should not yet:
 1. change replay behavior
 2. expand host-side candidate sets automatically
 3. promote new tools on efficiency gains alone
+
+Current runtime reading:
+
+1. kernel-side Tool Evolution continues
+2. adapter-side runtime rollout is paused
+3. the current OpenClaw hook contract cannot yet execute a true selected-tool reroute
+4. host reroute capability is now the next gating prerequisite for further runtime promotion
 
 ## What Is Not Finished
 

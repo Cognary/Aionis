@@ -6,10 +6,17 @@ Depends on:
 - [AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md](/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md)
 - [AIONIS_PROJECT_STATUS_2026-03-15.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_PROJECT_STATUS_2026-03-15.md)
 - [AIONIS_STAGE_CLOSEOUT_AND_GTM_PLAN_2026-03-16.md](/Users/lucio/Desktop/Aionis/docs/internal/strategy/AIONIS_STAGE_CLOSEOUT_AND_GTM_PLAN_2026-03-16.md)
+- [AIONIS_TOOL_EVOLUTION_RUNTIME_ROLLOUT_DECISION_2026-03-17.md](/Users/lucio/Desktop/Aionis/docs/internal/strategy/AIONIS_TOOL_EVOLUTION_RUNTIME_ROLLOUT_DECISION_2026-03-17.md)
 
 ## Summary
 
 Aionis is already good at continuity and execution control, but it is not yet good at controlled tool migration.
+
+Current reading:
+
+1. kernel work is continuing
+2. adapter-side runtime rollout is paused until the host can support real tool reroute
+3. this plan remains valid, but runtime promotion is now explicitly gated by host capability
 
 Today, the strongest runtime surfaces do this well:
 

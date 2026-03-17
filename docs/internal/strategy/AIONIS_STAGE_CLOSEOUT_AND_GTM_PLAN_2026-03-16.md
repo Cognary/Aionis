@@ -13,6 +13,7 @@ Related:
 2. [Phase 1 Progress](../progress/AIONIS_EXECUTION_CONTINUITY_PHASE1_PROGRESS_2026-03-15.md)
 3. [Project Status](../progress/AIONIS_PROJECT_STATUS_2026-03-15.md)
 4. [Phase 2 Plan](../plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md)
+5. [Tool Evolution Runtime Rollout Decision](AIONIS_TOOL_EVOLUTION_RUNTIME_ROLLOUT_DECISION_2026-03-17.md)
 
 ## Executive Summary
 
