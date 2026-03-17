@@ -21,6 +21,10 @@ import {
   type ExecutionStateV1,
 } from "../execution/types.js";
 import { controlProfileDefaults } from "../execution/profiles.js";
+import {
+  DEFAULT_TOOL_REGISTRY_INDEX,
+  mapCandidatesToFamilies,
+} from "./tool-registry.js";
 
 function inferBroadToolKind(name: string): "scan" | "test" | null {
   const lowered = name.toLowerCase();
@@ -133,6 +137,7 @@ export async function selectTools(
     { defaultScope, defaultTenantId },
   );
   const normalizedCandidates = normalizeToolCandidates(parsed.candidates);
+  const candidateFamilies = mapCandidatesToFamilies(DEFAULT_TOOL_REGISTRY_INDEX, normalizedCandidates);
   const kernelInputs = resolveExecutionKernelInputs(parsed.context, parsed.execution_state_v1);
   const { filteredCandidates, deniedByProfile } = applyControlProfileCandidateFilter(
     normalizedCandidates,
@@ -182,6 +187,7 @@ export async function selectTools(
     control_profile_origin: kernelInputs.controlProfileOrigin,
     execution_stage: kernelInputs.executionState?.current_stage ?? null,
     execution_role: kernelInputs.executionState?.active_role ?? null,
+    candidate_families: candidateFamilies,
     ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
   };
   const decisionRes: { id: string; created_at: string } = opts.liteWriteStore
@@ -256,6 +262,8 @@ export async function selectTools(
       execution_state_v1_present: !!kernelInputs.executionState,
       current_stage: kernelInputs.executionState?.current_stage ?? null,
       active_role: kernelInputs.executionState?.active_role ?? null,
+      tool_registry_present: true,
+      candidate_families: candidateFamilies,
     },
     rules: {
       considered: rules.considered,

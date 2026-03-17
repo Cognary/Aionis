@@ -22,6 +22,29 @@ export type ToolRegistryCandidateMetadata = {
 
 export type ToolRegistryIndex = Map<string, ToolRegistryRecord>;
 
+export const DEFAULT_TOOL_REGISTRY_RECORDS: ToolRegistryRecord[] = [
+  {
+    tool_name: "read-source-focused-v2",
+    capability_family: "focused_repo_read",
+    capability_tags: ["repo_read", "file_targeted", "source"],
+    quality_tier: "preferred",
+    status: "active",
+    replacement_for: ["read-markdown-impl"],
+    replaced_by: [],
+  },
+  {
+    tool_name: "read-markdown-impl",
+    capability_family: "focused_repo_read",
+    capability_tags: ["repo_read", "file_targeted", "markdown"],
+    quality_tier: "supported",
+    status: "active",
+    replacement_for: [],
+    replaced_by: ["read-source-focused-v2"],
+  },
+];
+
+export const DEFAULT_TOOL_REGISTRY_INDEX = buildToolRegistryIndex(DEFAULT_TOOL_REGISTRY_RECORDS);
+
 export function buildToolRegistryIndex(records: ToolRegistryRecord[]): ToolRegistryIndex {
   const out: ToolRegistryIndex = new Map();
   for (const record of records) out.set(record.tool_name, record);

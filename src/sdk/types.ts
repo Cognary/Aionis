@@ -1482,6 +1482,16 @@ export type ToolsSelectResponse = {
     execution_state_v1_present?: boolean;
     current_stage?: "triage" | "patch" | "review" | "resume" | null;
     active_role?: "orchestrator" | "triage" | "patch" | "review" | "resume" | null;
+    tool_registry_present?: boolean;
+    candidate_families?: Array<{
+      tool_name: string;
+      capability_family: string | null;
+      quality_tier?: "experimental" | "supported" | "preferred" | "deprecated" | null;
+      status?: "active" | "disabled" | "shadow_only" | null;
+      replacement_for: string[];
+      replaced_by: string[];
+      [k: string]: unknown;
+    }>;
     [k: string]: unknown;
   };
   selection_summary?: {
