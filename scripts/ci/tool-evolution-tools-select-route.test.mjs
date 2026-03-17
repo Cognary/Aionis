@@ -57,7 +57,7 @@ function runSnippet(source) {
   return lines[lines.length - 1] ?? "";
 }
 
-test("POST /v1/memory/tools/select returns tool registry metadata", () => {
+test("POST /v1/memory/tools/select returns family-aware ordering metadata", () => {
   const out = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";
     import os from "node:os";
@@ -101,13 +101,13 @@ test("POST /v1/memory/tools/select returns tool registry metadata", () => {
           const res = await app.inject({
             method: "POST",
             url: "/v1/memory/tools/select",
-            payload: {
-              scope: "openclaw:test",
-              context: { source: "route-test" },
-              candidates: ["read-source-focused-v2", "read-markdown-impl"],
-              strict: false,
-            },
-          });
+              payload: {
+                scope: "openclaw:test",
+                context: { source: "route-test" },
+                candidates: ["read-markdown-impl", "read-source-focused-v2"],
+                strict: false,
+              },
+            });
           process.stdout.write("__RESULT__" + JSON.stringify({
             statusCode: res.statusCode,
             body: JSON.parse(res.body),
@@ -130,7 +130,10 @@ test("POST /v1/memory/tools/select returns tool registry metadata", () => {
   const parsed = JSON.parse(out);
   assert.equal(parsed.statusCode, 200);
   assert.equal(parsed.body.execution_kernel.tool_registry_present, true);
+  assert.equal(parsed.body.execution_kernel.family_aware_ordering_applied, true);
+  assert.equal(parsed.body.selection.selected, "read-source-focused-v2");
+  assert.deepEqual(parsed.body.selection.ordered, ["read-source-focused-v2", "read-markdown-impl"]);
   assert.equal(parsed.body.execution_kernel.candidate_families[0].capability_family, "focused_repo_read");
-  assert.equal(parsed.body.execution_kernel.candidate_families[0].quality_tier, "preferred");
-  assert.equal(parsed.body.execution_kernel.candidate_families[1].quality_tier, "supported");
+  assert.equal(parsed.body.execution_kernel.candidate_families[0].quality_tier, "supported");
+  assert.equal(parsed.body.execution_kernel.candidate_families[1].quality_tier, "preferred");
 });

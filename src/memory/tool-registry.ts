@@ -82,3 +82,55 @@ export function mapCandidatesToFamilies(
     };
   });
 }
+
+function tierRank(tier: ToolQualityTier | null): number {
+  switch (tier) {
+    case "preferred":
+      return 0;
+    case "supported":
+      return 1;
+    case "experimental":
+      return 2;
+    case "deprecated":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+export function applyFamilyAwareOrdering(
+  candidates: string[],
+  metadata: ToolRegistryCandidateMetadata[],
+  explicitPreferred: string[] = [],
+): string[] {
+  const out = [...candidates];
+  const explicitPreferredSet = new Set(explicitPreferred);
+  const families = new Map<string, Array<{ index: number; meta: ToolRegistryCandidateMetadata }>>();
+
+  metadata.forEach((meta, index) => {
+    if (!meta.capability_family) return;
+    const list = families.get(meta.capability_family) ?? [];
+    list.push({ index, meta });
+    families.set(meta.capability_family, list);
+  });
+
+  for (const members of families.values()) {
+    if (members.length < 2) continue;
+    if (members.some((entry) => explicitPreferredSet.has(entry.meta.tool_name))) continue;
+
+    const reordered = [...members].sort((a, b) => {
+      const rankDelta = tierRank(a.meta.quality_tier) - tierRank(b.meta.quality_tier);
+      if (rankDelta !== 0) return rankDelta;
+      return a.index - b.index;
+    });
+
+    members
+      .map((entry) => entry.index)
+      .sort((a, b) => a - b)
+      .forEach((slotIndex, idx) => {
+        out[slotIndex] = reordered[idx]!.meta.tool_name;
+      });
+  }
+
+  return out;
+}

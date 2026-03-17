@@ -159,21 +159,26 @@ Current reading:
 7. the first real regression from handoff-transition rollout has been fixed: repeated handoffs for the same anchor now rebase transition expectations onto the stored revision instead of failing on revision mismatch
 8. `tools/select` can now read `execution_state_v1` directly, derive a control profile from `current_stage` when needed, and report profile origin metadata in its response
 
-### 4. Tool evolution metadata-first rollout
+### 4. Tool evolution narrow rollout
 
-The next tool-evolution slice should remain intentionally narrow.
+Tool evolution is now past metadata-only setup, but it is still intentionally narrow.
 
-The first move is not automatic migration. The first move is:
+Current state:
 
-1. registry metadata
-2. family labeling
-3. response visibility in `tools/select`
+1. Phase A landed:
+   - registry metadata
+   - family labeling
+   - response visibility in `tools/select`
+2. the first Phase B slice is now active:
+   - family-aware ordering inside a known capability family
+   - explicit policy preference still wins
+   - unrelated candidate families keep their relative order
 
-The system should not yet:
+The system still should not yet:
 
-1. change final selection ordering
-2. change replay behavior
-3. expand host-side candidate sets automatically
+1. change replay behavior
+2. expand host-side candidate sets automatically
+3. promote new tools on efficiency gains alone
 
 ## What Is Not Finished
 

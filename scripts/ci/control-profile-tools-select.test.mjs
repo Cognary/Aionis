@@ -75,13 +75,13 @@ test("tools/select derives control profile from execution state when explicit pr
   ]);
 });
 
-test("tools/select includes capability-family metadata for known candidates without changing filtered order", async () => {
+test("tools/select prefers the preferred tool within a known family when no explicit policy prefer is present", async () => {
   const result = await selectTools(
     null,
     {
       scope: "openclaw:test",
       context: { source: "test-tools-select" },
-      candidates: ["read-source-focused-v2", "read-markdown-impl"],
+      candidates: ["read-markdown-impl", "read-source-focused-v2"],
       strict: false,
     },
     "memory",
@@ -95,8 +95,10 @@ test("tools/select includes capability-family metadata for known candidates with
   );
 
   assert.deepEqual(result.selection.ordered, ["read-source-focused-v2", "read-markdown-impl"]);
+  assert.equal(result.selection.selected, "read-source-focused-v2");
   assert.equal(result.execution_kernel?.tool_registry_present, true);
+  assert.equal(result.execution_kernel?.family_aware_ordering_applied, true);
   assert.equal(result.execution_kernel?.candidate_families?.[0]?.capability_family, "focused_repo_read");
-  assert.equal(result.execution_kernel?.candidate_families?.[0]?.quality_tier, "preferred");
-  assert.equal(result.execution_kernel?.candidate_families?.[1]?.quality_tier, "supported");
+  assert.equal(result.execution_kernel?.candidate_families?.[0]?.quality_tier, "supported");
+  assert.equal(result.execution_kernel?.candidate_families?.[1]?.quality_tier, "preferred");
 });
