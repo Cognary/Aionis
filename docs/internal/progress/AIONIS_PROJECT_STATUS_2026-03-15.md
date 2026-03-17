@@ -20,6 +20,7 @@ Related:
 9. [Execution Eval Plan](../plans/AIONIS_EXECUTION_EVAL_PLAN_2026-03-17.md)
 10. [Runtime Architecture](../architecture/AIONIS_RUNTIME_ARCHITECTURE_2026-03-17.md)
 11. [Four Pillars Code Map](../architecture/AIONIS_FOUR_PILLARS_CODE_MAP_2026-03-17.md)
+12. [Self-Learning Mechanism](../architecture/AIONIS_SELF_LEARNING_MECHANISM_2026-03-17.md)
 
 ## Executive Summary
 
