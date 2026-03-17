@@ -18,6 +18,7 @@ Related:
 7. [Tool Evolution Plan](../plans/AIONIS_TOOL_EVOLUTION_PLAN_2026-03-17.md)
 8. [Tool Evolution Runtime Rollout Decision](../strategy/AIONIS_TOOL_EVOLUTION_RUNTIME_ROLLOUT_DECISION_2026-03-17.md)
 9. [Execution Eval Plan](../plans/AIONIS_EXECUTION_EVAL_PLAN_2026-03-17.md)
+10. [Runtime Architecture](../architecture/AIONIS_RUNTIME_ARCHITECTURE_2026-03-17.md)
 
 ## Executive Summary
 
