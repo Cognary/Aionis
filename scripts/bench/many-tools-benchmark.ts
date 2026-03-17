@@ -493,12 +493,15 @@ export function summarizeBenchmarkRecords(records: BenchTrace[]): BenchSummary {
   };
 }
 
-function defaultCasePath() {
-  return path.resolve("scripts/bench/many-tools-cases/focused-repo-read.json");
+function defaultCasePaths() {
+  return [
+    path.resolve("scripts/bench/many-tools-cases/focused-repo-read.json"),
+    path.resolve("scripts/bench/many-tools-cases/focused-test-execution.json"),
+  ];
 }
 
 function resolveCasePaths() {
-  const raw = (process.env.MANYTOOLS_CASES || defaultCasePath()).trim();
+  const raw = (process.env.MANYTOOLS_CASES || defaultCasePaths().join(",")).trim();
   return raw.split(",").map((part) => part.trim()).filter(Boolean);
 }
 

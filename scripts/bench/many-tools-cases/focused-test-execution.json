@@ -1,0 +1,246 @@
+[
+  {
+    "id": "manytools-test-004-auth-smoke",
+    "family": "focused_test_execution",
+    "difficulty": "easy",
+    "bucket": 4,
+    "task": {
+      "instruction": "Run the smallest targeted test that validates dashboard auth drift without executing a full suite or broad scan.",
+      "expected_action": "call_tool",
+      "expected_correct_tool": "test-file-targeted"
+    },
+    "continuity": {
+      "control_profile_v1": {
+        "version": 1,
+        "profile": "validate",
+        "max_same_tool_streak": 2,
+        "max_no_progress_streak": 2,
+        "max_duplicate_observation_streak": 2,
+        "max_steps": 8,
+        "allow_broad_scan": false,
+        "allow_broad_test": false,
+        "escalate_on_blocker": true,
+        "reviewer_ready_required": false,
+        "tool": {
+          "allow": ["test-file-targeted", "test-symbol-targeted", "run-broad-test", "repo-scan-basic"],
+          "deny": ["run-broad-test"]
+        }
+      }
+    },
+    "candidates": [
+      {"tool_name": "test-file-targeted", "capability_family": "focused_test_execution", "quality_tier": "preferred", "role": "correct", "description": "Run a targeted test for one selected file or test target."},
+      {"tool_name": "test-symbol-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a targeted test for a named symbol or narrow test target."},
+      {"tool_name": "run-broad-test", "capability_family": "broad_test", "quality_tier": "deprecated", "role": "cross_family_distractor", "description": "Run a broad test sweep."},
+      {"tool_name": "repo-scan-basic", "capability_family": "broad_repo_scan", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Search broadly across the repository for related files."}
+    ],
+    "acceptance": {
+      "correct_first_tool": "test-file-targeted",
+      "wrong_first_tools": ["test-symbol-targeted", "run-broad-test", "repo-scan-basic"],
+      "allow_no_tool": false
+    }
+  },
+  {
+    "id": "manytools-test-008-review-regression",
+    "family": "focused_test_execution",
+    "difficulty": "medium",
+    "bucket": 8,
+    "task": {
+      "instruction": "Run the narrowest targeted regression test for the changed auth path. Do not run a broad suite and do not scan the repo first.",
+      "expected_action": "call_tool",
+      "expected_correct_tool": "test-file-targeted"
+    },
+    "continuity": {
+      "control_profile_v1": {
+        "version": 1,
+        "profile": "validate",
+        "max_same_tool_streak": 2,
+        "max_no_progress_streak": 2,
+        "max_duplicate_observation_streak": 2,
+        "max_steps": 8,
+        "allow_broad_scan": false,
+        "allow_broad_test": false,
+        "escalate_on_blocker": true,
+        "reviewer_ready_required": false,
+        "tool": {
+          "allow": ["test-file-targeted", "test-symbol-targeted", "pytest-targeted", "test-regression-lite", "run-broad-test", "repo-scan-basic", "read-source-focused-v2", "review-notes"],
+          "deny": ["run-broad-test"]
+        }
+      }
+    },
+    "candidates": [
+      {"tool_name": "test-file-targeted", "capability_family": "focused_test_execution", "quality_tier": "preferred", "role": "correct", "description": "Run a targeted test for one selected file or test target."},
+      {"tool_name": "test-symbol-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a targeted test for a named symbol or narrow test target."},
+      {"tool_name": "pytest-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a narrowly scoped pytest invocation for a selected target."},
+      {"tool_name": "test-regression-lite", "capability_family": "focused_test_execution", "quality_tier": "experimental", "role": "same_family_distractor", "description": "Run a lightweight targeted regression test for a selected target."},
+      {"tool_name": "run-broad-test", "capability_family": "broad_test", "quality_tier": "deprecated", "role": "cross_family_distractor", "description": "Run a broad test sweep."},
+      {"tool_name": "repo-scan-basic", "capability_family": "broad_repo_scan", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Search broadly across the repository for related files."},
+      {"tool_name": "read-source-focused-v2", "capability_family": "focused_repo_read", "quality_tier": "preferred", "role": "cross_family_distractor", "description": "Read the exact implementation source for a named function, symbol, or file path."},
+      {"tool_name": "review-notes", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read review comments or reviewer notes."}
+    ],
+    "acceptance": {
+      "correct_first_tool": "test-file-targeted",
+      "wrong_first_tools": ["test-symbol-targeted", "pytest-targeted", "test-regression-lite", "run-broad-test", "repo-scan-basic", "read-source-focused-v2", "review-notes"],
+      "allow_no_tool": false
+    }
+  },
+  {
+    "id": "manytools-test-012-approval-recovery",
+    "family": "focused_test_execution",
+    "difficulty": "medium",
+    "bucket": 12,
+    "task": {
+      "instruction": "Run a focused validation for the approval recovery change set. Choose the narrowest compatible test execution tool and avoid broad test or repo scan paths.",
+      "expected_action": "call_tool",
+      "expected_correct_tool": "test-file-targeted"
+    },
+    "continuity": {
+      "control_profile_v1": {
+        "version": 1,
+        "profile": "validate",
+        "max_same_tool_streak": 2,
+        "max_no_progress_streak": 2,
+        "max_duplicate_observation_streak": 2,
+        "max_steps": 8,
+        "allow_broad_scan": false,
+        "allow_broad_test": false,
+        "escalate_on_blocker": true,
+        "reviewer_ready_required": false,
+        "tool": {
+          "allow": ["test-file-targeted", "test-symbol-targeted", "pytest-targeted", "test-regression-lite", "test-module-targeted", "test-patch-verify", "run-broad-test", "repo-scan-basic", "read-source-focused-v2", "review-notes", "patch-file-targeted", "review-summary"],
+          "deny": ["run-broad-test"]
+        }
+      }
+    },
+    "candidates": [
+      {"tool_name": "test-file-targeted", "capability_family": "focused_test_execution", "quality_tier": "preferred", "role": "correct", "description": "Run a targeted test for one selected file or test target."},
+      {"tool_name": "test-symbol-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a targeted test for a named symbol or narrow test target."},
+      {"tool_name": "pytest-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a narrowly scoped pytest invocation for a selected target."},
+      {"tool_name": "test-regression-lite", "capability_family": "focused_test_execution", "quality_tier": "experimental", "role": "same_family_distractor", "description": "Run a lightweight targeted regression test for a selected target."},
+      {"tool_name": "test-module-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a targeted test at module granularity for a selected target."},
+      {"tool_name": "test-patch-verify", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a focused post-patch verification test for a selected target."},
+      {"tool_name": "run-broad-test", "capability_family": "broad_test", "quality_tier": "deprecated", "role": "cross_family_distractor", "description": "Run a broad test sweep."},
+      {"tool_name": "repo-scan-basic", "capability_family": "broad_repo_scan", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Search broadly across the repository for related files."},
+      {"tool_name": "read-source-focused-v2", "capability_family": "focused_repo_read", "quality_tier": "preferred", "role": "cross_family_distractor", "description": "Read the exact implementation source for a named function, symbol, or file path."},
+      {"tool_name": "review-notes", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read review comments or reviewer notes."},
+      {"tool_name": "patch-file-targeted", "capability_family": "targeted_patch_apply", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Apply a focused patch to a selected file."},
+      {"tool_name": "review-summary", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a compact review summary."}
+    ],
+    "acceptance": {
+      "correct_first_tool": "test-file-targeted",
+      "wrong_first_tools": ["test-symbol-targeted", "pytest-targeted", "test-regression-lite", "test-module-targeted", "test-patch-verify", "run-broad-test", "repo-scan-basic", "read-source-focused-v2", "review-notes", "patch-file-targeted", "review-summary"],
+      "allow_no_tool": false
+    }
+  },
+  {
+    "id": "manytools-test-016-service-token-drift",
+    "family": "focused_test_execution",
+    "difficulty": "hard",
+    "bucket": 16,
+    "task": {
+      "instruction": "Run the narrowest targeted validation for service token drift repair. Avoid broad test execution and avoid repo scans unless no test tool fits.",
+      "expected_action": "call_tool",
+      "expected_correct_tool": "test-file-targeted"
+    },
+    "continuity": {
+      "control_profile_v1": {
+        "version": 1,
+        "profile": "validate",
+        "max_same_tool_streak": 2,
+        "max_no_progress_streak": 2,
+        "max_duplicate_observation_streak": 2,
+        "max_steps": 8,
+        "allow_broad_scan": false,
+        "allow_broad_test": false,
+        "escalate_on_blocker": true,
+        "reviewer_ready_required": false,
+        "tool": {
+          "allow": ["test-file-targeted", "test-symbol-targeted", "pytest-targeted", "test-regression-lite", "test-module-targeted", "test-patch-verify", "test-suite-slice", "test-case-focused", "run-broad-test", "repo-scan-basic", "read-source-focused-v2", "review-notes", "patch-file-targeted", "review-summary", "search-commit-history", "repo-map-basic"],
+          "deny": ["run-broad-test"]
+        }
+      }
+    },
+    "candidates": [
+      {"tool_name": "test-file-targeted", "capability_family": "focused_test_execution", "quality_tier": "preferred", "role": "correct", "description": "Run a targeted test for one selected file or test target."},
+      {"tool_name": "test-symbol-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a targeted test for a named symbol or narrow test target."},
+      {"tool_name": "pytest-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a narrowly scoped pytest invocation for a selected target."},
+      {"tool_name": "test-regression-lite", "capability_family": "focused_test_execution", "quality_tier": "experimental", "role": "same_family_distractor", "description": "Run a lightweight targeted regression test for a selected target."},
+      {"tool_name": "test-module-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a targeted test at module granularity for a selected target."},
+      {"tool_name": "test-patch-verify", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a focused post-patch verification test for a selected target."},
+      {"tool_name": "test-suite-slice", "capability_family": "focused_test_execution", "quality_tier": "experimental", "role": "same_family_distractor", "description": "Run a targeted slice of a larger test suite."},
+      {"tool_name": "test-case-focused", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run one or a few focused test cases for a selected target."},
+      {"tool_name": "run-broad-test", "capability_family": "broad_test", "quality_tier": "deprecated", "role": "cross_family_distractor", "description": "Run a broad test sweep."},
+      {"tool_name": "repo-scan-basic", "capability_family": "broad_repo_scan", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Search broadly across the repository for related files."},
+      {"tool_name": "read-source-focused-v2", "capability_family": "focused_repo_read", "quality_tier": "preferred", "role": "cross_family_distractor", "description": "Read the exact implementation source for a named function, symbol, or file path."},
+      {"tool_name": "review-notes", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read review comments or reviewer notes."},
+      {"tool_name": "patch-file-targeted", "capability_family": "targeted_patch_apply", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Apply a focused patch to a selected file."},
+      {"tool_name": "review-summary", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a compact review summary."},
+      {"tool_name": "search-commit-history", "capability_family": "history_lookup", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Search commit history or diff history."},
+      {"tool_name": "repo-map-basic", "capability_family": "repo_map", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a high-level repository map."}
+    ],
+    "acceptance": {
+      "correct_first_tool": "test-file-targeted",
+      "wrong_first_tools": ["test-symbol-targeted", "pytest-targeted", "test-regression-lite", "test-module-targeted", "test-patch-verify", "test-suite-slice", "test-case-focused", "run-broad-test", "repo-scan-basic", "read-source-focused-v2", "review-notes", "patch-file-targeted", "review-summary", "search-commit-history", "repo-map-basic"],
+      "allow_no_tool": false
+    }
+  },
+  {
+    "id": "manytools-test-024-selector-pressure",
+    "family": "focused_test_execution",
+    "difficulty": "hard",
+    "bucket": 24,
+    "task": {
+      "instruction": "Run the smallest targeted validation for an auth recovery fix while avoiding any broad test run. Choose the best focused test execution tool from a crowded set of similar test tools.",
+      "expected_action": "call_tool",
+      "expected_correct_tool": "test-file-targeted"
+    },
+    "continuity": {
+      "control_profile_v1": {
+        "version": 1,
+        "profile": "validate",
+        "max_same_tool_streak": 2,
+        "max_no_progress_streak": 2,
+        "max_duplicate_observation_streak": 2,
+        "max_steps": 8,
+        "allow_broad_scan": false,
+        "allow_broad_test": false,
+        "escalate_on_blocker": true,
+        "reviewer_ready_required": false,
+        "tool": {
+          "allow": ["test-file-targeted", "test-symbol-targeted", "pytest-targeted", "test-regression-lite", "test-module-targeted", "test-patch-verify", "test-suite-slice", "test-case-focused", "test-targeted-fast", "test-targeted-diff-aware", "test-targeted-contextual", "test-selection-lite", "run-broad-test", "repo-scan-basic", "repo-scan-advanced", "read-source-focused-v2", "review-notes", "patch-file-targeted", "review-summary", "search-commit-history", "repo-map-basic", "read-route-contract", "scan-replay-store", "review-checklist"],
+          "deny": ["run-broad-test", "repo-scan-advanced"]
+        }
+      }
+    },
+    "candidates": [
+      {"tool_name": "test-file-targeted", "capability_family": "focused_test_execution", "quality_tier": "preferred", "role": "correct", "description": "Run a targeted test for one selected file or test target."},
+      {"tool_name": "test-symbol-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a targeted test for a named symbol or narrow test target."},
+      {"tool_name": "pytest-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a narrowly scoped pytest invocation for a selected target."},
+      {"tool_name": "test-regression-lite", "capability_family": "focused_test_execution", "quality_tier": "experimental", "role": "same_family_distractor", "description": "Run a lightweight targeted regression test for a selected target."},
+      {"tool_name": "test-module-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a targeted test at module granularity for a selected target."},
+      {"tool_name": "test-patch-verify", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a focused post-patch verification test for a selected target."},
+      {"tool_name": "test-suite-slice", "capability_family": "focused_test_execution", "quality_tier": "experimental", "role": "same_family_distractor", "description": "Run a targeted slice of a larger test suite."},
+      {"tool_name": "test-case-focused", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run one or a few focused test cases for a selected target."},
+      {"tool_name": "test-targeted-fast", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "same_family_distractor", "description": "Run a fast targeted test for a selected file or test target."},
+      {"tool_name": "test-targeted-diff-aware", "capability_family": "focused_test_execution", "quality_tier": "experimental", "role": "same_family_distractor", "description": "Run a targeted test biased toward changed regions and diffs."},
+      {"tool_name": "test-targeted-contextual", "capability_family": "focused_test_execution", "quality_tier": "experimental", "role": "same_family_distractor", "description": "Run a targeted test with extra surrounding target context."},
+      {"tool_name": "test-selection-lite", "capability_family": "focused_test_execution", "quality_tier": "experimental", "role": "same_family_distractor", "description": "Run a lightweight selected-target test execution mode."},
+      {"tool_name": "run-broad-test", "capability_family": "broad_test", "quality_tier": "deprecated", "role": "cross_family_distractor", "description": "Run a broad test sweep."},
+      {"tool_name": "repo-scan-basic", "capability_family": "broad_repo_scan", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Search broadly across the repository for related files."},
+      {"tool_name": "repo-scan-advanced", "capability_family": "broad_repo_scan", "quality_tier": "experimental", "role": "cross_family_distractor", "description": "High-recall broad repository scan."},
+      {"tool_name": "read-source-focused-v2", "capability_family": "focused_repo_read", "quality_tier": "preferred", "role": "cross_family_distractor", "description": "Read the exact implementation source for a named function, symbol, or file path."},
+      {"tool_name": "review-notes", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read review comments or reviewer notes."},
+      {"tool_name": "patch-file-targeted", "capability_family": "targeted_patch_apply", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Apply a focused patch to a selected file."},
+      {"tool_name": "review-summary", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a compact review summary."},
+      {"tool_name": "search-commit-history", "capability_family": "history_lookup", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Search commit history or diff history."},
+      {"tool_name": "repo-map-basic", "capability_family": "repo_map", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a high-level repository map."},
+      {"tool_name": "read-route-contract", "capability_family": "route_contract_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read route-level contract summaries."},
+      {"tool_name": "scan-replay-store", "capability_family": "replay_store_scan", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Scan the replay store broadly for relevant entries."},
+      {"tool_name": "review-checklist", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a review checklist or acceptance checklist."}
+    ],
+    "acceptance": {
+      "correct_first_tool": "test-file-targeted",
+      "wrong_first_tools": ["test-symbol-targeted", "pytest-targeted", "test-regression-lite", "test-module-targeted", "test-patch-verify", "test-suite-slice", "test-case-focused", "test-targeted-fast", "test-targeted-diff-aware", "test-targeted-contextual", "test-selection-lite", "run-broad-test", "repo-scan-basic", "repo-scan-advanced", "read-source-focused-v2", "review-notes", "patch-file-targeted", "review-summary", "search-commit-history", "repo-map-basic", "read-route-contract", "scan-replay-store", "review-checklist"],
+      "allow_no_tool": false
+    }
+  }
+]
