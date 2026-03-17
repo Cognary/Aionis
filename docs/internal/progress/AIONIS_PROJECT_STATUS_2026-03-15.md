@@ -23,6 +23,7 @@ Related:
 12. [Self-Learning Mechanism](../architecture/AIONIS_SELF_LEARNING_MECHANISM_2026-03-17.md)
 13. [Ideal Customer Profile](../strategy/AIONIS_IDEAL_CUSTOMER_PROFILE_2026-03-17.md)
 14. [Execution Runtime Console V1 Plan](../products/execution-runtime-console/AIONIS_EXECUTION_RUNTIME_CONSOLE_V1_PLAN_2026-03-17.md)
+15. [Runtime CLI Product Plan](../products/runtime-cli/AIONIS_RUNTIME_CLI_PRODUCT_PLAN_2026-03-17.md)
 
 ## Executive Summary
 
