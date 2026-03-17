@@ -83,6 +83,7 @@ test("tools/select prefers the preferred tool within a known family when no expl
       context: { source: "test-tools-select" },
       candidates: ["read-markdown-impl", "read-source-focused-v2"],
       strict: false,
+      reorder_candidates: true,
     },
     "memory",
     "default",
@@ -101,4 +102,28 @@ test("tools/select prefers the preferred tool within a known family when no expl
   assert.equal(result.execution_kernel?.candidate_families?.[0]?.capability_family, "focused_repo_read");
   assert.equal(result.execution_kernel?.candidate_families?.[0]?.quality_tier, "supported");
   assert.equal(result.execution_kernel?.candidate_families?.[1]?.quality_tier, "preferred");
+});
+
+test("tools/select does not reorder candidates by default", async () => {
+  const result = await selectTools(
+    null,
+    {
+      scope: "openclaw:test",
+      context: { source: "test-tools-select-default-order" },
+      candidates: ["read-markdown-impl", "read-source-focused-v2"],
+      strict: false,
+    },
+    "memory",
+    "default",
+    {
+      liteWriteStore: {
+        insertExecutionDecision: async () => ({ id: "decision-2", created_at: new Date().toISOString() }),
+        listRuleCandidates: async () => [],
+      },
+    },
+  );
+
+  assert.deepEqual(result.selection.ordered, ["read-markdown-impl", "read-source-focused-v2"]);
+  assert.equal(result.selection.selected, "read-markdown-impl");
+  assert.equal(result.execution_kernel?.family_aware_ordering_applied, false);
 });

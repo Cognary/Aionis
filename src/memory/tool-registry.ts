@@ -22,6 +22,48 @@ export type ToolRegistryCandidateMetadata = {
 
 export type ToolRegistryIndex = Map<string, ToolRegistryRecord>;
 
+const SYNTHETIC_FOCUSED_TEST_EXECUTION_TOOLS = [
+  "test-symbol-targeted",
+  "pytest-targeted",
+  "test-regression-lite",
+  "test-module-targeted",
+  "test-patch-verify",
+  "test-suite-slice",
+  "test-case-focused",
+  "test-targeted-fast",
+  "test-targeted-diff-aware",
+  "test-targeted-contextual",
+  "test-selection-lite",
+  "test-file-quick",
+  "test-file-contextual",
+  "test-file-sliced",
+  "test-file-merge-aware",
+  "test-file-annotated",
+  "test-file-minimal",
+  "test-file-local",
+  "test-file-focused-v2",
+  "test-file-precise",
+  "test-target-windowed",
+  "test-target-anchored",
+  "test-target-resume",
+  "test-symbol-focused-v2",
+  "test-symbol-contextual",
+  "test-module-focused",
+  "test-module-contextual",
+  "test-suite-focused",
+  "test-suite-contextual",
+  "test-case-targeted",
+  "test-case-minimal",
+  "test-diff-targeted",
+  "test-diff-windowed",
+  "test-patch-focused",
+  "test-patch-contextual",
+  "test-recovery-targeted",
+  "test-recovery-contextual",
+  "test-auth-targeted",
+  "test-auth-contextual",
+] as const;
+
 export const DEFAULT_TOOL_REGISTRY_RECORDS: ToolRegistryRecord[] = [
   {
     tool_name: "read-source-focused-v2",
@@ -41,6 +83,24 @@ export const DEFAULT_TOOL_REGISTRY_RECORDS: ToolRegistryRecord[] = [
     replacement_for: [],
     replaced_by: ["read-source-focused-v2"],
   },
+  {
+    tool_name: "test-file-targeted",
+    capability_family: "focused_test_execution",
+    capability_tags: ["test_execution", "file_targeted", "narrow_validation"],
+    quality_tier: "preferred",
+    status: "active",
+    replacement_for: [],
+    replaced_by: [],
+  },
+  ...SYNTHETIC_FOCUSED_TEST_EXECUTION_TOOLS.map((tool_name) => ({
+    tool_name,
+    capability_family: "focused_test_execution",
+    capability_tags: ["test_execution", "file_targeted", "narrow_validation"],
+    quality_tier: "supported" as const,
+    status: "active" as const,
+    replacement_for: [],
+    replaced_by: ["test-file-targeted"],
+  })),
 ];
 
 export const DEFAULT_TOOL_REGISTRY_INDEX = buildToolRegistryIndex(DEFAULT_TOOL_REGISTRY_RECORDS);

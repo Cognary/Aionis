@@ -666,9 +666,11 @@ export const ToolsSelectRequest = z.object({
   rules_limit: z.number().int().positive().max(200).default(50),
   // If true and allow/deny filters eliminate all candidates, return 400 instead of falling back.
   strict: z.boolean().default(true),
+  // Experimental: if true, Aionis may reorder candidates before final selection.
+  reorder_candidates: z.boolean().default(false),
 });
 
-export type ToolsSelectInput = z.infer<typeof ToolsSelectRequest>;
+export type ToolsSelectInput = z.input<typeof ToolsSelectRequest>;
 
 export const ToolsDecisionRequest = z.object({
   tenant_id: z.string().min(1).optional(),

@@ -1,0 +1,474 @@
+[
+  {
+    "id": "manyskills-048-auth-recovery-single-task",
+    "family": "focused_test_execution",
+    "difficulty": "hard",
+    "bucket": 48,
+    "task": {
+      "instruction": "Validate an auth recovery fix with the most appropriate narrow test skill. Do not run a full suite, do not scan the repo first, and do not choose a skill specialized for symbols, modules, suites, cases, diffs, or broad sweeps unless it is clearly the best fit.",
+      "expected_action": "call_tool",
+      "expected_correct_tool": "test-file-targeted"
+    },
+    "continuity": {
+      "control_profile_v1": {
+        "version": 1,
+        "profile": "validate",
+        "max_same_tool_streak": 2,
+        "max_no_progress_streak": 2,
+        "max_duplicate_observation_streak": 2,
+        "max_steps": 8,
+        "allow_broad_scan": false,
+        "allow_broad_test": false,
+        "escalate_on_blocker": true,
+        "reviewer_ready_required": false,
+        "tool": {
+          "allow": [
+            "test-file-targeted",
+            "test-symbol-targeted",
+            "pytest-targeted",
+            "test-regression-lite",
+            "test-module-targeted",
+            "test-patch-verify",
+            "test-suite-slice",
+            "test-case-focused",
+            "test-targeted-fast",
+            "test-targeted-diff-aware",
+            "test-targeted-contextual",
+            "test-selection-lite",
+            "test-file-quick",
+            "test-file-contextual",
+            "test-file-sliced",
+            "test-file-merge-aware",
+            "test-file-annotated",
+            "test-file-minimal",
+            "test-file-local",
+            "test-file-focused-v2",
+            "test-file-precise",
+            "test-target-windowed",
+            "test-target-anchored",
+            "test-target-resume",
+            "test-symbol-focused-v2",
+            "test-symbol-contextual",
+            "test-module-focused",
+            "test-module-contextual",
+            "test-suite-focused",
+            "test-suite-contextual",
+            "test-case-targeted",
+            "test-case-minimal",
+            "test-diff-targeted",
+            "test-diff-windowed",
+            "test-patch-focused",
+            "test-patch-contextual",
+            "test-recovery-targeted",
+            "test-recovery-contextual",
+            "test-auth-targeted",
+            "test-auth-contextual",
+            "run-broad-test",
+            "repo-scan-basic",
+            "repo-scan-advanced",
+            "read-source-focused-v2",
+            "review-notes",
+            "patch-file-targeted",
+            "review-summary",
+            "search-commit-history"
+          ],
+          "deny": [
+            "run-broad-test",
+            "repo-scan-advanced"
+          ]
+        }
+      }
+    },
+    "candidates": [
+      {
+        "tool_name": "test-symbol-targeted",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a narrow targeted test for a selected symbol or symbol-scoped target."
+      },
+      {
+        "tool_name": "pytest-targeted",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a targeted pytest invocation for a selected target."
+      },
+      {
+        "tool_name": "test-regression-lite",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a lightweight targeted regression for a selected target."
+      },
+      {
+        "tool_name": "test-module-targeted",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a targeted module-level test for a selected target."
+      },
+      {
+        "tool_name": "test-patch-verify",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a focused post-patch verification test for a selected target."
+      },
+      {
+        "tool_name": "test-suite-slice",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a targeted slice of a larger test suite."
+      },
+      {
+        "tool_name": "test-case-focused",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run one or a few focused test cases for a selected target."
+      },
+      {
+        "tool_name": "test-targeted-fast",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a fast targeted test for a selected target."
+      },
+      {
+        "tool_name": "test-targeted-diff-aware",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a targeted test biased toward changed regions and diffs."
+      },
+      {
+        "tool_name": "test-targeted-contextual",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a targeted test with extra local context around the selected target."
+      },
+      {
+        "tool_name": "test-selection-lite",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a lightweight selected-target test mode."
+      },
+      {
+        "tool_name": "test-file-quick",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a quick file-scoped targeted test."
+      },
+      {
+        "tool_name": "test-file-contextual",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a file-targeted test with surrounding context."
+      },
+      {
+        "tool_name": "test-file-sliced",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a sliced file-scoped targeted test."
+      },
+      {
+        "tool_name": "test-file-merge-aware",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a file-targeted test biased toward merged code paths."
+      },
+      {
+        "tool_name": "test-file-annotated",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a file-targeted test using annotated target hints."
+      },
+      {
+        "tool_name": "test-file-minimal",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a minimal file-targeted test."
+      },
+      {
+        "tool_name": "test-file-local",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a local file-targeted test for the selected target."
+      },
+      {
+        "tool_name": "test-file-targeted",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "preferred",
+        "role": "correct",
+        "description": "Run a narrow targeted test for one selected file or test target."
+      },
+      {
+        "tool_name": "test-file-focused-v2",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run an improved file-focused test for a selected target."
+      },
+      {
+        "tool_name": "test-file-precise",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a precise file-targeted test for a selected target."
+      },
+      {
+        "tool_name": "test-target-windowed",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a target-windowed test around a selected target."
+      },
+      {
+        "tool_name": "test-target-anchored",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run an anchored targeted test for a selected target."
+      },
+      {
+        "tool_name": "test-target-resume",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a resumed targeted test for a selected target."
+      },
+      {
+        "tool_name": "test-symbol-focused-v2",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run an updated symbol-focused targeted test."
+      },
+      {
+        "tool_name": "test-symbol-contextual",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a symbol-targeted test with surrounding context."
+      },
+      {
+        "tool_name": "test-module-focused",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a focused module-level targeted test."
+      },
+      {
+        "tool_name": "test-module-contextual",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a module-targeted test with added context."
+      },
+      {
+        "tool_name": "test-suite-focused",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a focused suite-level targeted test."
+      },
+      {
+        "tool_name": "test-suite-contextual",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a suite-targeted test with added local context."
+      },
+      {
+        "tool_name": "test-case-targeted",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a targeted case-level test."
+      },
+      {
+        "tool_name": "test-case-minimal",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a minimal case-level targeted test."
+      },
+      {
+        "tool_name": "test-diff-targeted",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a diff-targeted test focused on changed regions."
+      },
+      {
+        "tool_name": "test-diff-windowed",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a diff-windowed targeted test."
+      },
+      {
+        "tool_name": "test-patch-focused",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a focused patch verification test."
+      },
+      {
+        "tool_name": "test-patch-contextual",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a patch-focused test with added context."
+      },
+      {
+        "tool_name": "test-recovery-targeted",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run a recovery-targeted validation test."
+      },
+      {
+        "tool_name": "test-recovery-contextual",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run a recovery-targeted test with extra context."
+      },
+      {
+        "tool_name": "test-auth-targeted",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Run an auth-targeted validation test."
+      },
+      {
+        "tool_name": "test-auth-contextual",
+        "capability_family": "focused_test_execution",
+        "quality_tier": "experimental",
+        "role": "same_family_distractor",
+        "description": "Run an auth-targeted test with extra context."
+      },
+      {
+        "tool_name": "run-broad-test",
+        "capability_family": "broad_test",
+        "quality_tier": "deprecated",
+        "role": "cross_family_distractor",
+        "description": "Run a broad test sweep."
+      },
+      {
+        "tool_name": "repo-scan-basic",
+        "capability_family": "broad_repo_scan",
+        "quality_tier": "supported",
+        "role": "cross_family_distractor",
+        "description": "Search broadly across the repository for related files."
+      },
+      {
+        "tool_name": "repo-scan-advanced",
+        "capability_family": "broad_repo_scan",
+        "quality_tier": "experimental",
+        "role": "cross_family_distractor",
+        "description": "Run a high-recall repository scan."
+      },
+      {
+        "tool_name": "read-source-focused-v2",
+        "capability_family": "focused_repo_read",
+        "quality_tier": "preferred",
+        "role": "cross_family_distractor",
+        "description": "Read implementation source for a selected path or symbol."
+      },
+      {
+        "tool_name": "review-notes",
+        "capability_family": "review_context_read",
+        "quality_tier": "supported",
+        "role": "cross_family_distractor",
+        "description": "Read review comments or reviewer notes."
+      },
+      {
+        "tool_name": "patch-file-targeted",
+        "capability_family": "targeted_patch_apply",
+        "quality_tier": "supported",
+        "role": "cross_family_distractor",
+        "description": "Apply a focused patch to a selected file."
+      },
+      {
+        "tool_name": "review-summary",
+        "capability_family": "review_context_read",
+        "quality_tier": "supported",
+        "role": "cross_family_distractor",
+        "description": "Read a compact review summary."
+      },
+      {
+        "tool_name": "search-commit-history",
+        "capability_family": "history_lookup",
+        "quality_tier": "supported",
+        "role": "cross_family_distractor",
+        "description": "Search commit history or diff history."
+      }
+    ],
+    "acceptance": {
+      "correct_first_tool": "test-file-targeted",
+      "wrong_first_tools": [
+        "test-symbol-targeted",
+        "pytest-targeted",
+        "test-regression-lite",
+        "test-module-targeted",
+        "test-patch-verify",
+        "test-suite-slice",
+        "test-case-focused",
+        "test-targeted-fast",
+        "test-targeted-diff-aware",
+        "test-targeted-contextual",
+        "test-selection-lite",
+        "test-file-quick",
+        "test-file-contextual",
+        "test-file-sliced",
+        "test-file-merge-aware",
+        "test-file-annotated",
+        "test-file-minimal",
+        "test-file-local",
+        "test-file-focused-v2",
+        "test-file-precise",
+        "test-target-windowed",
+        "test-target-anchored",
+        "test-target-resume",
+        "test-symbol-focused-v2",
+        "test-symbol-contextual",
+        "test-module-focused",
+        "test-module-contextual",
+        "test-suite-focused",
+        "test-suite-contextual",
+        "test-case-targeted",
+        "test-case-minimal",
+        "test-diff-targeted",
+        "test-diff-windowed",
+        "test-patch-focused",
+        "test-patch-contextual",
+        "test-recovery-targeted",
+        "test-recovery-contextual",
+        "test-auth-targeted",
+        "test-auth-contextual",
+        "run-broad-test",
+        "repo-scan-basic",
+        "repo-scan-advanced",
+        "read-source-focused-v2",
+        "review-notes",
+        "patch-file-targeted",
+        "review-summary",
+        "search-commit-history"
+      ],
+      "allow_no_tool": false
+    }
+  }
+]

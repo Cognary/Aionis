@@ -7,6 +7,7 @@ export const ManyToolsBucketSchema = z.union([
   z.literal(12),
   z.literal(16),
   z.literal(24),
+  z.literal(48),
 ]);
 export const ManyToolsExpectedActionSchema = z.literal("call_tool");
 export const ManyToolsCandidateRoleSchema = z.enum([

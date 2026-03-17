@@ -182,14 +182,9 @@ function buildSelectionPrompt(args: {
     return `${index + 1}. ${toolName}${description}`;
   }).join("\n");
 
-  const governanceNote =
-    args.variant === "aionis_selection"
-      ? `The candidate list below has already been ordered by an execution-control layer. Start from the top unless a lower tool is clearly a better fit. Aionis selected: ${args.aionisSelectedTool ?? "none"}.`
-      : "Choose the single best tool from the raw candidate list.";
-
   return [
     "You are evaluating tool choice quality.",
-    governanceNote,
+    "Choose the single best tool from the candidate list below.",
     "Return JSON only with this exact shape:",
     '{"selected_tool":"tool-name-or-null"}',
     "Do not invent tool names. selected_tool must be null if none fit. Do not add a reason field or code fences.",
@@ -367,7 +362,7 @@ async function runVariant(args: {
 
   if (args.variant === "aionis_selection") {
     if (!args.aionis) throw new Error("aionis client is required for aionis_selection variant");
-    const res = await args.aionis.toolsSelect({
+    const toolsSelectInput: Parameters<AionisClient["toolsSelect"]>[0] = {
       scope: process.env.MANYTOOLS_SCOPE?.trim() || "manytools:benchmark",
       context: {
         source: "many-tools-benchmark",
@@ -375,12 +370,15 @@ async function runVariant(args: {
         benchmark_family: args.item.family,
         control_profile_v1: args.item.continuity?.control_profile_v1 ?? null,
       },
-      execution_state_v1: args.item.continuity?.execution_state_v1 ?? null,
       candidates: rawCandidates,
       strict: false,
       include_shadow: false,
       rules_limit: 50,
-    });
+    };
+    if (args.item.continuity?.execution_state_v1) {
+      toolsSelectInput.execution_state_v1 = args.item.continuity.execution_state_v1;
+    }
+    const res = await args.aionis.toolsSelect(toolsSelectInput);
     orderedCandidates = Array.isArray(res.data.selection?.ordered) && res.data.selection.ordered.length > 0
       ? [...res.data.selection.ordered]
       : rawCandidates;

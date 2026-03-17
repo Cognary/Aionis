@@ -516,6 +516,7 @@ export type ToolsSelectInput = {
   include_shadow?: boolean;
   rules_limit?: number;
   strict?: boolean;
+  reorder_candidates?: boolean;
 };
 
 export type ToolsDecisionInput = {

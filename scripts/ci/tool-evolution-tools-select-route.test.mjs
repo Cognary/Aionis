@@ -106,6 +106,7 @@ test("POST /v1/memory/tools/select returns family-aware ordering metadata", () =
                 context: { source: "route-test" },
                 candidates: ["read-markdown-impl", "read-source-focused-v2"],
                 strict: false,
+                reorder_candidates: true,
               },
             });
           process.stdout.write("__RESULT__" + JSON.stringify({

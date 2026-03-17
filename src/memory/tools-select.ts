@@ -160,7 +160,8 @@ export async function selectTools(
   const explicitPreferred = Array.isArray((rules.applied as any)?.policy?.tool?.prefer)
     ? ((rules.applied as any).policy.tool.prefer as string[])
     : [];
-  const orderedCandidates = applyFamilyAwareOrdering(filteredCandidates, candidateFamilies, explicitPreferred);
+  const recommendedOrderedCandidates = applyFamilyAwareOrdering(filteredCandidates, candidateFamilies, explicitPreferred);
+  const orderedCandidates = parsed.reorder_candidates ? recommendedOrderedCandidates : filteredCandidates;
 
   const selection = applyToolPolicy(orderedCandidates, rules.applied.policy, { strict: parsed.strict });
   if (deniedByProfile.length > 0) {
@@ -187,6 +188,7 @@ export async function selectTools(
     strict: parsed.strict,
     include_shadow: parsed.include_shadow,
     rules_limit: parsed.rules_limit,
+    reorder_candidates: parsed.reorder_candidates,
     matched_rules: rules.matched,
     tool_conflicts_summary,
     denied_by_control_profile: deniedByProfile.map((entry) => entry.name),
@@ -248,6 +250,7 @@ export async function selectTools(
           strict: parsed.strict,
           include_shadow: parsed.include_shadow,
           rules_limit: parsed.rules_limit,
+          reorder_candidates: parsed.reorder_candidates,
           matched_rules: rules.matched,
           tool_conflicts_summary,
           ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
@@ -269,7 +272,8 @@ export async function selectTools(
       current_stage: kernelInputs.executionState?.current_stage ?? null,
       active_role: kernelInputs.executionState?.active_role ?? null,
       tool_registry_present: true,
-      family_aware_ordering_applied: orderedCandidates.some((candidate, index) => candidate !== filteredCandidates[index]),
+      family_aware_ordering_applied: parsed.reorder_candidates
+        && orderedCandidates.some((candidate, index) => candidate !== filteredCandidates[index]),
       candidate_families: candidateFamilies,
     },
     rules: {
