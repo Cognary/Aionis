@@ -15,6 +15,7 @@ Related:
 4. `clawbot-aionis-adapter/docs/2026-03-15-openclaw-real-workflow-scenario-benchmark.md`
 5. [Phase 2 Plan](../plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE2_PLAN_2026-03-16.md)
 6. [Stage Closeout and GTM Plan](../strategy/AIONIS_STAGE_CLOSEOUT_AND_GTM_PLAN_2026-03-16.md)
+7. [Tool Evolution Plan](../plans/AIONIS_TOOL_EVOLUTION_PLAN_2026-03-17.md)
 
 ## Executive Summary
 
@@ -158,6 +159,27 @@ Current reading:
 7. the first real regression from handoff-transition rollout has been fixed: repeated handoffs for the same anchor now rebase transition expectations onto the stored revision instead of failing on revision mismatch
 8. `tools/select` can now read `execution_state_v1` directly, derive a control profile from `current_stage` when needed, and report profile origin metadata in its response
 
+### 4. Tool evolution narrow rollout
+
+Tool evolution is now past metadata-only setup, but it is still intentionally narrow.
+
+Current state:
+
+1. Phase A landed:
+   - registry metadata
+   - family labeling
+   - response visibility in `tools/select`
+2. the first Phase B slice is now active:
+   - family-aware ordering inside a known capability family
+   - explicit policy preference still wins
+   - unrelated candidate families keep their relative order
+
+The system still should not yet:
+
+1. change replay behavior
+2. expand host-side candidate sets automatically
+3. promote new tools on efficiency gains alone
+
 ## What Is Not Finished
 
 ### 1. ExecutionState as universal source of truth
@@ -216,6 +238,21 @@ This makes the current Phase 2 story:
 5. now positive on a third runtime-surface checkpoint where `tools/select` can consume durable execution state directly rather than only continuity-delivered profile payloads
 6. that third surface is currently a completion-first story across the strongest three-slice family: two strong completion wins and one supporting completion signal, not an efficiency win
 7. current promotion discipline for that surface is strict: cost improvements do not justify a move if the strongest-slice completion baseline drops
+
+
+## Tool Evolution Risk
+
+Aionis is now strong at continuity, but not yet strong at controlled migration from older tools to newer tools in the same capability family.
+
+That gap is now tracked explicitly in:
+
+1. [Tool Evolution Plan](../plans/AIONIS_TOOL_EVOLUTION_PLAN_2026-03-17.md)
+
+The core reason this matters is simple:
+
+1. continuity can preserve the wrong tool choice for too long
+2. replay can overfit to older successful paths
+3. `tools/select` still needs a capability-family layer if newer tools should safely replace older tools
 
 ## Recommended Next Focus
 

@@ -21,6 +21,11 @@ import {
   type ExecutionStateV1,
 } from "../execution/types.js";
 import { controlProfileDefaults } from "../execution/profiles.js";
+import {
+  applyFamilyAwareOrdering,
+  DEFAULT_TOOL_REGISTRY_INDEX,
+  mapCandidatesToFamilies,
+} from "./tool-registry.js";
 
 function inferBroadToolKind(name: string): "scan" | "test" | null {
   const lowered = name.toLowerCase();
@@ -138,6 +143,7 @@ export async function selectTools(
     normalizedCandidates,
     kernelInputs.controlProfile,
   );
+  const candidateFamilies = mapCandidatesToFamilies(DEFAULT_TOOL_REGISTRY_INDEX, filteredCandidates);
 
   const rules = await evaluateRulesAppliedOnly((client ?? ({} as pg.PoolClient)), {
     scope: tenancy.scope,
@@ -151,7 +157,12 @@ export async function selectTools(
     liteWriteStore: opts.liteWriteStore ?? null,
   });
 
-  const selection = applyToolPolicy(filteredCandidates, rules.applied.policy, { strict: parsed.strict });
+  const explicitPreferred = Array.isArray((rules.applied as any)?.policy?.tool?.prefer)
+    ? ((rules.applied as any).policy.tool.prefer as string[])
+    : [];
+  const orderedCandidates = applyFamilyAwareOrdering(filteredCandidates, candidateFamilies, explicitPreferred);
+
+  const selection = applyToolPolicy(orderedCandidates, rules.applied.policy, { strict: parsed.strict });
   if (deniedByProfile.length > 0) {
     selection.denied = deniedByProfile.concat(selection.denied);
   }
@@ -182,6 +193,7 @@ export async function selectTools(
     control_profile_origin: kernelInputs.controlProfileOrigin,
     execution_stage: kernelInputs.executionState?.current_stage ?? null,
     execution_role: kernelInputs.executionState?.active_role ?? null,
+    candidate_families: candidateFamilies,
     ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
   };
   const decisionRes: { id: string; created_at: string } = opts.liteWriteStore
@@ -256,6 +268,9 @@ export async function selectTools(
       execution_state_v1_present: !!kernelInputs.executionState,
       current_stage: kernelInputs.executionState?.current_stage ?? null,
       active_role: kernelInputs.executionState?.active_role ?? null,
+      tool_registry_present: true,
+      family_aware_ordering_applied: orderedCandidates.some((candidate, index) => candidate !== filteredCandidates[index]),
+      candidate_families: candidateFamilies,
     },
     rules: {
       considered: rules.considered,
