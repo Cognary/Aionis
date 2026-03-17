@@ -6,6 +6,7 @@ Depends on:
 - [AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE1_PLAN_2026-03-15.md](/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_EXECUTION_CONTINUITY_KERNEL_PHASE1_PLAN_2026-03-15.md)
 - [AIONIS_EXECUTION_CONTINUITY_PHASE1_PROGRESS_2026-03-15.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_EXECUTION_CONTINUITY_PHASE1_PROGRESS_2026-03-15.md)
 - [AIONIS_PROJECT_STATUS_2026-03-15.md](/Users/lucio/Desktop/Aionis/docs/internal/progress/AIONIS_PROJECT_STATUS_2026-03-15.md)
+- [AIONIS_TOOL_EVOLUTION_PLAN_2026-03-17.md](/Users/lucio/Desktop/Aionis/docs/internal/plans/AIONIS_TOOL_EVOLUTION_PLAN_2026-03-17.md)
 
 ## Summary
 
@@ -419,6 +420,19 @@ Mitigation:
 2. keep OpenClaw as the main proving path
 3. keep docs explicit about what is foundational vs verified
 
+### 5. Tool Migration Blindness
+
+Risk:
+
+The kernel becomes strong at continuity but weak at migrating from older tools to newer tools in the same capability family.
+
+Mitigation:
+
+1. track tool capability families explicitly instead of relying only on raw tool names
+2. let `tools/select` prefer newer validated tools when they are present in the candidate set
+3. stop replay from binding only to historical tool names
+4. keep completion as the hard promotion gate for new-tool adoption
+
 ## Exit Criteria
 
 Phase 2 should be considered complete only when all of the following are true:
@@ -440,3 +454,7 @@ When a new runtime surface lands in Phase 2:
 4. only after that, expand to another surface or another strongest slice
 
 Current checkpoint status and the latest proof obligations should be tracked in the progress documents.
+
+Tool-evolution-specific migration rules are tracked separately in:
+
+1. [Aionis Tool Evolution Plan](AIONIS_TOOL_EVOLUTION_PLAN_2026-03-17.md)
