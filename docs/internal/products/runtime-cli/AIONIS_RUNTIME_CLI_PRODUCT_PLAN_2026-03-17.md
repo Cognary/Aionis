@@ -14,6 +14,7 @@ Related:
 3. [Execution Eval Plan](../../plans/AIONIS_EXECUTION_EVAL_PLAN_2026-03-17.md)
 4. [Ideal Customer Profile](../../strategy/AIONIS_IDEAL_CUSTOMER_PROFILE_2026-03-17.md)
 5. [SDK CLI](/Users/lucio/Desktop/Aionis/docs/public/en/reference/09-sdk-cli.md)
+6. [Runtime CLI Command Contract](./AIONIS_RUNTIME_CLI_COMMAND_CONTRACT_2026-03-17.md)
 
 ## Executive Summary
 
@@ -485,3 +486,7 @@ That means defining:
 4. `--json` schemas for the first V1 command set
 
 Without that contract, the CLI will drift into ad hoc commands instead of becoming a product surface.
+
+That contract now lives in:
+
+1. [Runtime CLI Command Contract](./AIONIS_RUNTIME_CLI_COMMAND_CONTRACT_2026-03-17.md)
