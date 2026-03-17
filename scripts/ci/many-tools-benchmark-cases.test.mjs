@@ -13,7 +13,7 @@ const CASE_PATHS = [
 
 test("many-tools canonical cases validate and cover the expected buckets", () => {
   const expectedByFamily = {
-    focused_repo_read: "read-source-focused-v2",
+    focused_repo_read: "read-file-targeted",
     focused_test_execution: "test-file-targeted",
   };
 
