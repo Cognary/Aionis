@@ -1,0 +1,214 @@
+[
+  {
+    "id": "manytools-read-004-anchor-identity",
+    "family": "focused_repo_read",
+    "difficulty": "easy",
+    "bucket": 4,
+    "task": {
+      "instruction": "Read the implementation source that defines buildHandoffExecutionStateIdentity and summarize which identity fields it produces. You need the source implementation, not documentation or tests.",
+      "expected_action": "call_tool",
+      "expected_correct_tool": "read-source-focused-v2"
+    },
+    "continuity": {
+      "control_profile_v1": {
+        "version": 1,
+        "profile": "triage",
+        "max_same_tool_streak": 2,
+        "max_no_progress_streak": 2,
+        "max_duplicate_observation_streak": 2,
+        "max_steps": 8,
+        "allow_broad_scan": false,
+        "allow_broad_test": false,
+        "escalate_on_blocker": true,
+        "reviewer_ready_required": false,
+        "tool": {
+          "allow": ["read-source-focused-v2", "read-markdown-impl", "repo-scan-basic", "run-broad-test"],
+          "deny": ["run-broad-test"],
+          "prefer": ["read-source-focused-v2"]
+        }
+      }
+    },
+    "candidates": [
+      {
+        "tool_name": "read-source-focused-v2",
+        "capability_family": "focused_repo_read",
+        "quality_tier": "preferred",
+        "role": "correct",
+        "description": "Targeted source-code read for a named implementation file or symbol."
+      },
+      {
+        "tool_name": "read-markdown-impl",
+        "capability_family": "focused_repo_read",
+        "quality_tier": "supported",
+        "role": "same_family_distractor",
+        "description": "Read implementation notes from markdown or documentation-oriented material."
+      },
+      {
+        "tool_name": "repo-scan-basic",
+        "capability_family": "broad_repo_scan",
+        "quality_tier": "supported",
+        "role": "cross_family_distractor",
+        "description": "Scan the repository broadly for related files."
+      },
+      {
+        "tool_name": "run-broad-test",
+        "capability_family": "broad_test",
+        "quality_tier": "deprecated",
+        "role": "cross_family_distractor",
+        "description": "Run a broad test sweep."
+      }
+    ],
+    "acceptance": {
+      "correct_first_tool": "read-source-focused-v2",
+      "wrong_first_tools": ["read-markdown-impl", "repo-scan-basic", "run-broad-test"],
+      "allow_no_tool": false
+    }
+  },
+  {
+    "id": "manytools-read-008-context-assembly",
+    "family": "focused_repo_read",
+    "difficulty": "medium",
+    "bucket": 8,
+    "task": {
+      "instruction": "Read the implementation source for the state-first context assembly path and identify how execution_packet_v1 gets assembled. Use the source implementation, not a broad scan summary.",
+      "expected_action": "call_tool",
+      "expected_correct_tool": "read-source-focused-v2"
+    },
+    "continuity": {
+      "control_profile_v1": {
+        "version": 1,
+        "profile": "triage",
+        "max_same_tool_streak": 2,
+        "max_no_progress_streak": 2,
+        "max_duplicate_observation_streak": 2,
+        "max_steps": 8,
+        "allow_broad_scan": false,
+        "allow_broad_test": false,
+        "escalate_on_blocker": true,
+        "reviewer_ready_required": false,
+        "tool": {
+          "allow": ["read-source-focused-v2", "read-markdown-impl", "repo-scan-basic", "repo-scan-advanced", "read-source-focused-legacy", "run-broad-test", "patch-file-targeted", "review-notes"],
+          "deny": ["run-broad-test"],
+          "prefer": ["read-source-focused-v2"]
+        }
+      }
+    },
+    "candidates": [
+      {"tool_name": "read-source-focused-v2", "capability_family": "focused_repo_read", "quality_tier": "preferred", "role": "correct", "description": "Targeted source-code read for a named implementation file or symbol."},
+      {"tool_name": "read-markdown-impl", "capability_family": "focused_repo_read", "quality_tier": "supported", "role": "same_family_distractor", "description": "Read implementation notes from markdown or documentation-oriented material."},
+      {"tool_name": "repo-scan-basic", "capability_family": "broad_repo_scan", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Scan the repository broadly for related files."},
+      {"tool_name": "repo-scan-advanced", "capability_family": "broad_repo_scan", "quality_tier": "experimental", "role": "cross_family_distractor", "description": "High-recall broad repository scan."},
+      {"tool_name": "read-source-focused-legacy", "capability_family": null, "quality_tier": null, "role": "misleading_name_distractor", "description": "Legacy-sounding read tool with ambiguous contract."},
+      {"tool_name": "run-broad-test", "capability_family": "broad_test", "quality_tier": "deprecated", "role": "cross_family_distractor", "description": "Run a broad test sweep."},
+      {"tool_name": "patch-file-targeted", "capability_family": "targeted_patch_apply", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Apply a focused patch to a file."},
+      {"tool_name": "review-notes", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read review comments or reviewer notes."}
+    ],
+    "acceptance": {
+      "correct_first_tool": "read-source-focused-v2",
+      "wrong_first_tools": ["read-markdown-impl", "repo-scan-basic", "repo-scan-advanced", "read-source-focused-legacy", "run-broad-test", "patch-file-targeted", "review-notes"],
+      "allow_no_tool": false
+    }
+  },
+  {
+    "id": "manytools-read-012-tools-select-ordering",
+    "family": "focused_repo_read",
+    "difficulty": "medium",
+    "bucket": 12,
+    "task": {
+      "instruction": "Read the implementation source that applies family-aware ordering in tools/select and summarize which precedence order is used inside one capability family. Use the code path itself, not docs or repo scans.",
+      "expected_action": "call_tool",
+      "expected_correct_tool": "read-source-focused-v2"
+    },
+    "continuity": {
+      "control_profile_v1": {
+        "version": 1,
+        "profile": "triage",
+        "max_same_tool_streak": 2,
+        "max_no_progress_streak": 2,
+        "max_duplicate_observation_streak": 2,
+        "max_steps": 8,
+        "allow_broad_scan": false,
+        "allow_broad_test": false,
+        "escalate_on_blocker": true,
+        "reviewer_ready_required": false,
+        "tool": {
+          "allow": ["read-source-focused-v2", "read-markdown-impl", "repo-scan-basic", "repo-scan-advanced", "read-source-focused-legacy", "run-broad-test", "patch-file-targeted", "review-notes", "test-file-targeted", "read-symbol-lookup", "review-summary", "repo-map-basic"],
+          "deny": ["run-broad-test"],
+          "prefer": ["read-source-focused-v2"]
+        }
+      }
+    },
+    "candidates": [
+      {"tool_name": "read-source-focused-v2", "capability_family": "focused_repo_read", "quality_tier": "preferred", "role": "correct", "description": "Targeted source-code read for a named implementation file or symbol."},
+      {"tool_name": "read-markdown-impl", "capability_family": "focused_repo_read", "quality_tier": "supported", "role": "same_family_distractor", "description": "Read implementation notes from markdown or documentation-oriented material."},
+      {"tool_name": "repo-scan-basic", "capability_family": "broad_repo_scan", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Scan the repository broadly for related files."},
+      {"tool_name": "repo-scan-advanced", "capability_family": "broad_repo_scan", "quality_tier": "experimental", "role": "cross_family_distractor", "description": "High-recall broad repository scan."},
+      {"tool_name": "read-source-focused-legacy", "capability_family": null, "quality_tier": null, "role": "misleading_name_distractor", "description": "Legacy-sounding read tool with ambiguous contract."},
+      {"tool_name": "run-broad-test", "capability_family": "broad_test", "quality_tier": "deprecated", "role": "cross_family_distractor", "description": "Run a broad test sweep."},
+      {"tool_name": "patch-file-targeted", "capability_family": "targeted_patch_apply", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Apply a focused patch to a file."},
+      {"tool_name": "review-notes", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read review comments or reviewer notes."},
+      {"tool_name": "test-file-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Run a focused test for a selected file or test target."},
+      {"tool_name": "read-symbol-lookup", "capability_family": "symbol_lookup", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Look up one symbol definition or reference."},
+      {"tool_name": "review-summary", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a compact review summary."},
+      {"tool_name": "repo-map-basic", "capability_family": "repo_map", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a high-level repository map."}
+    ],
+    "acceptance": {
+      "correct_first_tool": "read-source-focused-v2",
+      "wrong_first_tools": ["read-markdown-impl", "repo-scan-basic", "repo-scan-advanced", "read-source-focused-legacy", "run-broad-test", "patch-file-targeted", "review-notes", "test-file-targeted", "read-symbol-lookup", "review-summary", "repo-map-basic"],
+      "allow_no_tool": false
+    }
+  },
+  {
+    "id": "manytools-read-016-state-identity-source",
+    "family": "focused_repo_read",
+    "difficulty": "hard",
+    "bucket": 16,
+    "task": {
+      "instruction": "Read the implementation source that computes handoff execution state identity and report how the canonical identity is built before recover uses it. You need the source implementation path, not docs, review summaries, or broad scans.",
+      "expected_action": "call_tool",
+      "expected_correct_tool": "read-source-focused-v2"
+    },
+    "continuity": {
+      "control_profile_v1": {
+        "version": 1,
+        "profile": "triage",
+        "max_same_tool_streak": 2,
+        "max_no_progress_streak": 2,
+        "max_duplicate_observation_streak": 2,
+        "max_steps": 8,
+        "allow_broad_scan": false,
+        "allow_broad_test": false,
+        "escalate_on_blocker": true,
+        "reviewer_ready_required": false,
+        "tool": {
+          "allow": ["read-source-focused-v2", "read-markdown-impl", "repo-scan-basic", "repo-scan-advanced", "read-source-focused-legacy", "run-broad-test", "patch-file-targeted", "review-notes", "test-file-targeted", "read-symbol-lookup", "review-summary", "repo-map-basic", "search-commit-history", "read-route-contract", "review-checklist", "scan-replay-store"],
+          "deny": ["run-broad-test"],
+          "prefer": ["read-source-focused-v2"]
+        }
+      }
+    },
+    "candidates": [
+      {"tool_name": "read-source-focused-v2", "capability_family": "focused_repo_read", "quality_tier": "preferred", "role": "correct", "description": "Targeted source-code read for a named implementation file or symbol."},
+      {"tool_name": "read-markdown-impl", "capability_family": "focused_repo_read", "quality_tier": "supported", "role": "same_family_distractor", "description": "Read implementation notes from markdown or documentation-oriented material."},
+      {"tool_name": "repo-scan-basic", "capability_family": "broad_repo_scan", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Scan the repository broadly for related files."},
+      {"tool_name": "repo-scan-advanced", "capability_family": "broad_repo_scan", "quality_tier": "experimental", "role": "cross_family_distractor", "description": "High-recall broad repository scan."},
+      {"tool_name": "read-source-focused-legacy", "capability_family": null, "quality_tier": null, "role": "misleading_name_distractor", "description": "Legacy-sounding read tool with ambiguous contract."},
+      {"tool_name": "run-broad-test", "capability_family": "broad_test", "quality_tier": "deprecated", "role": "cross_family_distractor", "description": "Run a broad test sweep."},
+      {"tool_name": "patch-file-targeted", "capability_family": "targeted_patch_apply", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Apply a focused patch to a file."},
+      {"tool_name": "review-notes", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read review comments or reviewer notes."},
+      {"tool_name": "test-file-targeted", "capability_family": "focused_test_execution", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Run a focused test for a selected file or test target."},
+      {"tool_name": "read-symbol-lookup", "capability_family": "symbol_lookup", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Look up one symbol definition or reference."},
+      {"tool_name": "review-summary", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a compact review summary."},
+      {"tool_name": "repo-map-basic", "capability_family": "repo_map", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a high-level repository map."},
+      {"tool_name": "search-commit-history", "capability_family": "history_lookup", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Search commit history or diff history."},
+      {"tool_name": "read-route-contract", "capability_family": "route_contract_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read route-level contract summaries."},
+      {"tool_name": "review-checklist", "capability_family": "review_context_read", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Read a review checklist or acceptance checklist."},
+      {"tool_name": "scan-replay-store", "capability_family": "replay_store_scan", "quality_tier": "supported", "role": "cross_family_distractor", "description": "Scan the replay store broadly for relevant entries."}
+    ],
+    "acceptance": {
+      "correct_first_tool": "read-source-focused-v2",
+      "wrong_first_tools": ["read-markdown-impl", "repo-scan-basic", "repo-scan-advanced", "read-source-focused-legacy", "run-broad-test", "patch-file-targeted", "review-notes", "test-file-targeted", "read-symbol-lookup", "review-summary", "repo-map-basic", "search-commit-history", "read-route-contract", "review-checklist", "scan-replay-store"],
+      "allow_no_tool": false
+    }
+  }
+]
