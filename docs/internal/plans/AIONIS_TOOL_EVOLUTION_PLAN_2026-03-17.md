@@ -80,6 +80,26 @@ It cannot reliably decide:
 
 So the missing abstraction is not more continuity. It is **tool evolution metadata**.
 
+## Core Rule
+
+Tool evolution must remain subordinate to the current product rule:
+
+**completion first, controlled migration second, efficiency claims last.**
+
+That means no tool promotion is allowed on token or wall-clock gains alone if the strongest-slice completion baseline drops.
+
+## Phase A Boundary
+
+Phase A is intentionally non-disruptive.
+
+It adds registry metadata and response visibility, but it does not yet change:
+
+1. final tool selection ordering
+2. replay migration behavior
+3. host-side candidate expansion
+
+Phase A exists to make tool-family metadata visible before it becomes policy-bearing.
+
 ## Core Design
 
 The main design move is:
@@ -258,6 +278,7 @@ Success means:
 1. Aionis can understand new and old tools as the same family when appropriate
 2. operators can mark preferred and deprecated tools explicitly
 3. current tool selection remains backward-compatible
+4. metadata is visible in `tools/select` responses before it becomes policy-bearing
 
 ### Phase B: Family-Aware Selection
 

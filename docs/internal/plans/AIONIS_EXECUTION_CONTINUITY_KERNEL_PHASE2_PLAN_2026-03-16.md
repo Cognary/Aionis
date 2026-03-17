@@ -458,3 +458,12 @@ Current checkpoint status and the latest proof obligations should be tracked in 
 Tool-evolution-specific migration rules are tracked separately in:
 
 1. [Aionis Tool Evolution Plan](AIONIS_TOOL_EVOLUTION_PLAN_2026-03-17.md)
+<<<<<<< HEAD
+=======
+
+The first implementation slice of that work must remain metadata-first:
+
+1. registry metadata before selection changes
+2. selection changes before replay migration
+3. no promotion on cost gains alone if completion regresses
+>>>>>>> 27d6d9e (docs(kernel): constrain tool evolution phase a rollout)
