@@ -3,7 +3,7 @@ import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../em
 import { memoryFind, memoryFindLite } from "../memory/find.js";
 import { exportMemoryPack, importMemoryPack } from "../memory/packs.js";
 import { memoryResolve, memoryResolveLite } from "../memory/resolve.js";
-import { createSession, listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
+import { createSession, listSessions, listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 
 type StoreLike = {
   withTx: <T>(fn: (client: any) => Promise<T>) => Promise<T>;
@@ -80,6 +80,42 @@ export function registerMemoryAccessRoutes(args: {
       out = liteWriteStore
         ? await createSession({} as any, body, writeDefaults)
         : await store.withTx((client) => createSession(client, body, writeDefaults));
+    } finally {
+      gate.release();
+    }
+    return reply.code(200).send(out);
+  });
+
+  app.get("/v1/memory/sessions", async (req: any, reply: any) => {
+    requireStoreFeatureCapability("sessions_graph");
+    const principal = await requireMemoryPrincipal(req);
+    const query = req.query as any;
+    const input = withIdentityFromRequest(
+      req,
+      query && typeof query === "object" ? query : {},
+      principal,
+      "find",
+    );
+    await enforceRateLimit(req, reply, "recall");
+    await enforceTenantQuota(req, reply, "recall", tenantFromBody(input));
+    const gate = await acquireInflightSlot("recall");
+    let out: any;
+    try {
+      out = liteWriteStore
+        ? await listSessions({} as any, input, {
+            defaultScope: env.MEMORY_SCOPE,
+            defaultTenantId: env.MEMORY_TENANT_ID,
+            embeddedRuntime,
+            liteWriteStore,
+          })
+        : await store.withClient((client) =>
+            listSessions(client, input, {
+              defaultScope: env.MEMORY_SCOPE,
+              defaultTenantId: env.MEMORY_TENANT_ID,
+              embeddedRuntime,
+              liteWriteStore,
+            }),
+          );
     } finally {
       gate.release();
     }

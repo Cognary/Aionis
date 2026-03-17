@@ -23,11 +23,19 @@ import { createSqliteDatabase, type SqliteDatabase } from "./sqlite-compat.js";
 
 type LiteSessionNodeView = {
   id: string;
+  client_id: string | null;
   title: string | null;
   text_summary: string | null;
   memory_lane: "private" | "shared";
   owner_agent_id: string | null;
   owner_team_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type LiteSessionListView = LiteSessionNodeView & {
+  last_event_at: string | null;
+  event_count: number;
 };
 
 type LiteSessionEventView = {
@@ -392,6 +400,18 @@ export type LiteWriteStore = WriteStoreAccess & {
   }): Promise<{
     session: LiteSessionNodeView | null;
     events: LiteSessionEventView[];
+    has_more: boolean;
+  }>;
+  listSessions(args: {
+    scope: string;
+    consumerAgentId: string | null;
+    consumerTeamId: string | null;
+    ownerAgentId: string | null;
+    ownerTeamId: string | null;
+    limit: number;
+    offset: number;
+  }): Promise<{
+    sessions: LiteSessionListView[];
     has_more: boolean;
   }>;
   exportPackSnapshot(args: {
@@ -800,13 +820,13 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
 
     async findLatestNodeByClientId(scope: string, type: string, clientId: string): Promise<LiteSessionNodeView | null> {
       const row = db.prepare(
-        `SELECT id, title, text_summary, memory_lane, owner_agent_id, owner_team_id
+        `SELECT id, client_id, title, text_summary, memory_lane, owner_agent_id, owner_team_id, created_at
          FROM lite_memory_nodes
          WHERE scope = ? AND type = ? AND client_id = ?
          ORDER BY created_at DESC
          LIMIT 1`,
       ).get(scope, type, clientId) as LiteSessionNodeView | undefined;
-      return row ?? null;
+      return row ? { ...row, updated_at: row.created_at } : null;
     },
 
     async resolveNode(args): Promise<LiteResolveNodeRow | null> {
@@ -1628,6 +1648,80 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
           commit_id: row.commit_id,
           edge_weight: row.edge_weight,
           edge_confidence: row.edge_confidence,
+        })),
+        has_more: hasMore,
+      };
+    },
+
+    async listSessions(args): Promise<{ sessions: LiteSessionListView[]; has_more: boolean }> {
+      const rows = db.prepare(
+        `SELECT
+           s.id,
+           s.client_id,
+           s.title,
+           s.text_summary,
+           s.memory_lane,
+           s.owner_agent_id,
+           s.owner_team_id,
+           s.created_at,
+           MAX(e.created_at) AS last_event_at,
+           COUNT(e.id) AS event_count
+         FROM lite_memory_nodes s
+         LEFT JOIN lite_memory_edges me
+           ON me.scope = s.scope
+          AND me.type = 'part_of'
+          AND me.dst_id = s.id
+         LEFT JOIN lite_memory_nodes e
+           ON e.id = me.src_id
+          AND e.scope = s.scope
+          AND e.type = 'event'
+         WHERE s.scope = ?
+           AND s.type = 'topic'
+           AND s.client_id LIKE 'session:%'
+         GROUP BY
+           s.id,
+           s.client_id,
+           s.title,
+           s.text_summary,
+           s.memory_lane,
+           s.owner_agent_id,
+           s.owner_team_id,
+           s.created_at
+         ORDER BY COALESCE(MAX(e.created_at), s.created_at) DESC, s.id DESC`,
+      ).all(args.scope) as Array<{
+        id: string;
+        client_id: string | null;
+        title: string | null;
+        text_summary: string | null;
+        memory_lane: "private" | "shared";
+        owner_agent_id: string | null;
+        owner_team_id: string | null;
+        created_at: string;
+        last_event_at: string | null;
+        event_count: number;
+      }>;
+      const visible = rows.filter((row) => {
+        if (!nodeVisible(row, args.consumerAgentId, args.consumerTeamId)) return false;
+        if (args.ownerAgentId && row.owner_agent_id !== args.ownerAgentId) return false;
+        if (args.ownerTeamId && row.owner_team_id !== args.ownerTeamId) return false;
+        return true;
+      });
+      const slice = visible.slice(args.offset, args.offset + args.limit + 1);
+      const hasMore = slice.length > args.limit;
+      const chosen = hasMore ? slice.slice(0, args.limit) : slice;
+      return {
+        sessions: chosen.map((row) => ({
+          id: row.id,
+          client_id: row.client_id,
+          title: row.title,
+          text_summary: row.text_summary,
+          memory_lane: row.memory_lane,
+          owner_agent_id: row.owner_agent_id,
+          owner_team_id: row.owner_team_id,
+          created_at: row.created_at,
+          updated_at: row.created_at,
+          last_event_at: row.last_event_at,
+          event_count: Number(row.event_count ?? 0),
         })),
         has_more: hasMore,
       };

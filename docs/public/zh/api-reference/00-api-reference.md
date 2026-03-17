@@ -91,9 +91,15 @@ Memory 与 handoff 路由使用以下任一方式：
 
 ### 会话与事件
 
-1. `POST /v1/memory/sessions`
-2. `POST /v1/memory/events`
-3. `GET /v1/memory/sessions/:session_id/events`
+1. `GET /v1/memory/sessions`
+2. `POST /v1/memory/sessions`
+3. `POST /v1/memory/events`
+4. `GET /v1/memory/sessions/:session_id/events`
+
+说明：
+
+1. `GET /v1/memory/sessions` 是原生的会话列表面，返回带分页的 session envelope，并且会先执行 private lane 可见性检查。
+2. `GET /v1/memory/sessions/:session_id/events` 仍然是单个会话的明细面，适合在调用方先选定 session 之后读取事件历史。
 
 ### Sandbox（实验）
 

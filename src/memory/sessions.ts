@@ -5,9 +5,11 @@ import { HttpError } from "../util/http.js";
 import {
   MemoryEventWriteRequest,
   MemorySessionCreateRequest,
+  MemorySessionsListRequest,
   MemorySessionEventsListRequest,
   type MemoryEventWriteInput,
   type MemorySessionCreateInput,
+  type MemorySessionsListInput,
   type MemorySessionEventsListInput,
 } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
@@ -38,6 +40,8 @@ type SessionEventListOptions = {
   liteWriteStore?: LiteWriteStore | null;
 };
 
+type SessionListOptions = SessionEventListOptions;
+
 type EventRow = {
   id: string;
   client_id: string | null;
@@ -66,11 +70,28 @@ type EventRow = {
 
 type SessionRow = {
   id: string;
+  client_id?: string | null;
   title: string | null;
   text_summary: string | null;
   memory_lane: "private" | "shared";
   owner_agent_id: string | null;
   owner_team_id: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type SessionListRow = {
+  id: string;
+  client_id: string | null;
+  title: string | null;
+  text_summary: string | null;
+  memory_lane: "private" | "shared";
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
+  created_at: string;
+  updated_at: string;
+  last_event_at: string | null;
+  event_count: number;
 };
 
 function sessionKey(v: string): string {
@@ -83,6 +104,18 @@ function sessionClientId(sessionId: string): string {
 
 function sessionEventClientId(sessionId: string, eventId: string): string {
   return `session_event:${sessionKey(sessionId)}:${sessionKey(eventId)}`;
+}
+
+function sessionIdFromClientId(clientId: string | null | undefined): string | null {
+  const raw = typeof clientId === "string" ? clientId.trim() : "";
+  if (!raw.startsWith("session:")) return null;
+  const encoded = raw.slice("session:".length);
+  if (!encoded) return null;
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return encoded;
+  }
 }
 
 function pickSlotsPreview(slots: unknown, maxKeys: number): Record<string, unknown> | null {
@@ -100,6 +133,10 @@ function normalizeSessionCreateInput(body: unknown): MemorySessionCreateInput {
 
 function normalizeEventWriteInput(body: unknown): MemoryEventWriteInput {
   return MemoryEventWriteRequest.parse(body);
+}
+
+function normalizeSessionsListInput(input: unknown): MemorySessionsListInput {
+  return MemorySessionsListRequest.parse(input);
 }
 
 function normalizeSessionEventsListInput(input: unknown): MemorySessionEventsListInput {
@@ -128,6 +165,37 @@ function assertSessionWriteAllowed(
   const teamMatch = !!session.owner_team_id && !!writer.owner_team_id && session.owner_team_id === writer.owner_team_id;
   if (agentMatch || teamMatch) return;
   throw new HttpError(403, "session_owner_mismatch", "cannot append events to a private session owned by another principal");
+}
+
+function sessionListItem(
+  tenancy: { tenant_id: string; scope: string },
+  row: SessionListRow,
+  includeMeta: boolean,
+): Record<string, unknown> {
+  const sessionId = sessionIdFromClientId(row.client_id) ?? row.id;
+  const out: Record<string, unknown> = {
+    session_id: sessionId,
+    node_id: row.id,
+    title: row.title,
+    text_summary: row.text_summary,
+    uri: buildAionisUri({
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      type: "topic",
+      id: row.id,
+    }),
+    last_event_at: row.last_event_at,
+    event_count: row.event_count,
+  };
+  if (includeMeta) {
+    out.memory_lane = row.memory_lane;
+    out.owner_agent_id = row.owner_agent_id;
+    out.owner_team_id = row.owner_team_id;
+    out.created_at = row.created_at;
+    out.updated_at = row.updated_at;
+    out.client_id = row.client_id;
+  }
+  return out;
 }
 
 export async function createSession(client: pg.PoolClient, body: unknown, opts: SessionWriteOptions) {
@@ -396,6 +464,134 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
     nodes: out.nodes,
     edges: out.edges,
     embedding_backfill: out.embedding_backfill ?? null,
+  };
+}
+
+export async function listSessions(client: pg.PoolClient, input: unknown, opts: SessionListOptions) {
+  const parsed = normalizeSessionsListInput(input);
+  const tenancy = resolveTenantScope(
+    { tenant_id: parsed.tenant_id, scope: parsed.scope },
+    { defaultScope: opts.defaultScope, defaultTenantId: opts.defaultTenantId },
+  );
+  if (opts.embeddedRuntime) {
+    const embedded = opts.embeddedRuntime.listSessions({
+      scope: tenancy.scope_key,
+      consumerAgentId: parsed.consumer_agent_id ?? null,
+      consumerTeamId: parsed.consumer_team_id ?? null,
+      ownerAgentId: parsed.owner_agent_id ?? null,
+      ownerTeamId: parsed.owner_team_id ?? null,
+      limit: parsed.limit,
+      offset: parsed.offset,
+    });
+    return {
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      sessions: embedded.sessions.map((row) => sessionListItem(tenancy, row, parsed.include_meta)),
+      page: {
+        limit: parsed.limit,
+        offset: parsed.offset,
+        returned: embedded.sessions.length,
+        has_more: embedded.has_more,
+      },
+    };
+  }
+  if (opts.liteWriteStore) {
+    const lite = await opts.liteWriteStore.listSessions({
+      scope: tenancy.scope_key,
+      consumerAgentId: parsed.consumer_agent_id ?? null,
+      consumerTeamId: parsed.consumer_team_id ?? null,
+      ownerAgentId: parsed.owner_agent_id ?? null,
+      ownerTeamId: parsed.owner_team_id ?? null,
+      limit: parsed.limit,
+      offset: parsed.offset,
+    });
+    return {
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      sessions: lite.sessions.map((row) => sessionListItem(tenancy, row, parsed.include_meta)),
+      page: {
+        limit: parsed.limit,
+        offset: parsed.offset,
+        returned: lite.sessions.length,
+        has_more: lite.has_more,
+      },
+    };
+  }
+
+  const rows = await client.query<SessionListRow>(
+    `
+    SELECT
+      s.id,
+      s.client_id,
+      s.title,
+      s.text_summary,
+      s.memory_lane::text AS memory_lane,
+      s.owner_agent_id,
+      s.owner_team_id,
+      s.created_at::text AS created_at,
+      s.updated_at::text AS updated_at,
+      MAX(e.created_at)::text AS last_event_at,
+      COUNT(e.id)::int AS event_count
+    FROM memory_nodes s
+    LEFT JOIN memory_edges me
+      ON me.scope = s.scope
+     AND me.type = 'part_of'::memory_edge_type
+     AND me.dst_id = s.id
+    LEFT JOIN memory_nodes e
+      ON e.id = me.src_id
+     AND e.scope = s.scope
+     AND e.type = 'event'::memory_node_type
+     AND (
+       e.memory_lane = 'shared'::memory_lane
+       OR (e.memory_lane = 'private'::memory_lane AND e.owner_agent_id = $3::text)
+       OR ($4::text IS NOT NULL AND e.memory_lane = 'private'::memory_lane AND e.owner_team_id = $4::text)
+     )
+    WHERE s.scope = $1
+      AND s.type = 'topic'::memory_node_type
+      AND s.client_id LIKE 'session:%'
+      AND (
+        s.memory_lane = 'shared'::memory_lane
+        OR (s.memory_lane = 'private'::memory_lane AND s.owner_agent_id = $3::text)
+        OR ($4::text IS NOT NULL AND s.memory_lane = 'private'::memory_lane AND s.owner_team_id = $4::text)
+      )
+      AND ($5::text IS NULL OR s.owner_agent_id = $5::text)
+      AND ($6::text IS NULL OR s.owner_team_id = $6::text)
+    GROUP BY
+      s.id,
+      s.client_id,
+      s.title,
+      s.text_summary,
+      s.memory_lane,
+      s.owner_agent_id,
+      s.owner_team_id,
+      s.created_at,
+      s.updated_at
+    ORDER BY COALESCE(MAX(e.created_at), s.updated_at) DESC, s.id DESC
+    LIMIT $2
+    OFFSET $7
+    `,
+    [
+      tenancy.scope_key,
+      parsed.limit + 1,
+      parsed.consumer_agent_id ?? null,
+      parsed.consumer_team_id ?? null,
+      parsed.owner_agent_id ?? null,
+      parsed.owner_team_id ?? null,
+      parsed.offset,
+    ],
+  );
+  const hasMore = rows.rows.length > parsed.limit;
+  const listed = hasMore ? rows.rows.slice(0, parsed.limit) : rows.rows;
+  return {
+    tenant_id: tenancy.tenant_id,
+    scope: tenancy.scope,
+    sessions: listed.map((row) => sessionListItem(tenancy, row, parsed.include_meta)),
+    page: {
+      limit: parsed.limit,
+      offset: parsed.offset,
+      returned: listed.length,
+      has_more: hasMore,
+    },
   };
 }
 

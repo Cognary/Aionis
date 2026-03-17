@@ -124,6 +124,8 @@ import type {
   ReplayPlaybookRunResponse,
   MemorySessionCreateInput,
   MemorySessionCreateResponse,
+  MemorySessionsListInput,
+  MemorySessionsListResponse,
   MemorySessionEventsListInput,
   MemorySessionEventsListResponse,
   MemoryWriteInput,
@@ -343,6 +345,13 @@ export class AionisClient {
 
   async createSession(input: MemorySessionCreateInput, opts?: RequestOptions): Promise<AionisResponse<MemorySessionCreateResponse>> {
     return this.requestPost<MemorySessionCreateInput, MemorySessionCreateResponse>("/v1/memory/sessions", input, opts);
+  }
+
+  async listSessions(
+    input?: MemorySessionsListInput,
+    opts?: RequestOptions,
+  ): Promise<AionisResponse<MemorySessionsListResponse>> {
+    return this.requestGet<MemorySessionsListResponse>("/v1/memory/sessions", input ?? {}, opts);
   }
 
   async writeEvent(input: MemoryEventWriteInput, opts?: RequestOptions): Promise<AionisResponse<MemoryEventWriteResponse>> {

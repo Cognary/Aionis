@@ -428,6 +428,20 @@ export const MemorySessionCreateRequest = z.object({
 
 export type MemorySessionCreateInput = z.infer<typeof MemorySessionCreateRequest>;
 
+export const MemorySessionsListRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  owner_agent_id: z.string().min(1).optional(),
+  owner_team_id: z.string().min(1).optional(),
+  include_meta: QueryBoolean.default(false),
+  limit: z.coerce.number().int().positive().max(200).default(20),
+  offset: z.coerce.number().int().min(0).max(200000).default(0),
+});
+
+export type MemorySessionsListInput = z.infer<typeof MemorySessionsListRequest>;
+
 export const MemoryEventWriteRequest = z
   .object({
     tenant_id: z.string().min(1).optional(),

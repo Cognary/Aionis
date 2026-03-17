@@ -36,9 +36,10 @@ This page defines the public API contract for integrating Aionis in production.
 
 ### Session/Event
 
-1. `POST /v1/memory/sessions`
-2. `POST /v1/memory/events`
-3. `GET /v1/memory/sessions/:session_id/events`
+1. `GET /v1/memory/sessions`
+2. `POST /v1/memory/sessions`
+3. `POST /v1/memory/events`
+4. `GET /v1/memory/sessions/:session_id/events`
 
 ### Sandbox (Experimental)
 

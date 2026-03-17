@@ -373,16 +373,17 @@ console.log(writeRes.distillation, writeRes.nodes);
 ## 核心 SDK 方法
 
 1. TypeScript memory: `write`、`recall`、`recallText`
-2. TypeScript context 与 graph: `contextAssemble`、`find`、`resolve`
-3. TypeScript policy loop: `rulesEvaluate`、`toolsSelect`、`toolsDecision`、`toolsRun`、`toolsFeedback`
-4. TypeScript replay: `replayPlaybookGet`、`replayPlaybookCandidate`、`replayPlaybookRun`、`replayPlaybookDispatch`
-5. TypeScript continuity helpers: `handoffStore`、`handoffRecover`
-6. Python SDK 对重叠核心流程使用 snake_case 命名，比如 `write`、`recall`、`recall_text`、`context_assemble`
+2. TypeScript session helpers: `listSessions`、`createSession`、`writeEvent`、`listSessionEvents`
+3. TypeScript context 与 graph: `contextAssemble`、`find`、`resolve`
+4. TypeScript policy loop: `rulesEvaluate`、`toolsSelect`、`toolsDecision`、`toolsRun`、`toolsFeedback`
+5. TypeScript replay: `replayPlaybookGet`、`replayPlaybookCandidate`、`replayPlaybookRun`、`replayPlaybookDispatch`
+6. TypeScript continuity helpers: `handoffStore`、`handoffRecover`
+7. Python SDK 对重叠核心流程使用 snake_case 命名，比如 `write`、`recall`、`recall_text`、`list_sessions`、`list_session_events`、`context_assemble`
 
 说明：
 
-1. 最新的 summary-first helpers 与 continuity helpers 目前优先体现在 TypeScript client 上。
-2. Python SDK 当前覆盖面更窄；如果某个 helper 还没有对应方法，可以直接调用同一条 HTTP 路由。
+1. 最新的 summary-first helpers、continuity helpers 和原生 session inventory surface 目前优先体现在 TypeScript client 上。
+2. Python SDK 现在也覆盖同一条主开发路径，但保持 snake_case 和 plain-dict 返回风格。
 
 ## Replay Dispatch 说明
 

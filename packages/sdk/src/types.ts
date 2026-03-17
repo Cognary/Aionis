@@ -402,6 +402,18 @@ export type MemorySessionEventsListInput = {
   offset?: number;
 };
 
+export type MemorySessionsListInput = {
+  tenant_id?: string;
+  scope?: string;
+  consumer_agent_id?: string;
+  consumer_team_id?: string;
+  owner_agent_id?: string;
+  owner_team_id?: string;
+  include_meta?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
 export type MemoryPackExportInput = {
   tenant_id?: string;
   scope?: string;
@@ -1822,6 +1834,19 @@ export type MemorySessionEventsListResponse = {
     uri: string;
   } | null;
   events: Array<Record<string, unknown>>;
+  page: {
+    limit: number;
+    offset: number;
+    returned: number;
+    has_more: boolean;
+  };
+  [k: string]: unknown;
+};
+
+export type MemorySessionsListResponse = {
+  tenant_id: string;
+  scope: string;
+  sessions: Array<Record<string, unknown>>;
   page: {
     limit: number;
     offset: number;

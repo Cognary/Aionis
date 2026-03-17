@@ -77,7 +77,7 @@ export function createHttpObservabilityHelpers(args: {
   const corsMemoryAllowOrigins = parseCorsOrigins(process.env.CORS_ALLOW_ORIGINS ?? (env.APP_ENV === "prod" ? "" : "*"));
   const corsAdminAllowOrigins = parseCorsOrigins(process.env.CORS_ADMIN_ALLOW_ORIGINS ?? "");
   const corsMemoryAllowHeaders = "content-type,x-api-key,x-tenant-id,authorization,x-request-id";
-  const corsMemoryAllowMethods = "POST,OPTIONS";
+  const corsMemoryAllowMethods = "GET,POST,OPTIONS";
   const corsAdminAllowHeaders = "content-type,authorization,x-admin-token,x-request-id";
   const corsAdminAllowMethods = "GET,POST,PUT,DELETE,OPTIONS";
   const corsAdminRouteMethods = new Set(["GET", "POST", "PUT", "DELETE"]);

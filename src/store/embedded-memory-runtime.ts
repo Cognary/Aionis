@@ -215,11 +215,19 @@ type EmbeddedSnapshotMetricsState = Omit<
 
 export type EmbeddedSessionNodeView = {
   id: string;
+  client_id: string | null;
   title: string | null;
   text_summary: string | null;
   memory_lane: "private" | "shared";
   owner_agent_id: string | null;
   owner_team_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmbeddedSessionListView = EmbeddedSessionNodeView & {
+  last_event_at: string | null;
+  event_count: number;
 };
 
 export type EmbeddedSessionEventView = {
@@ -696,11 +704,14 @@ export class EmbeddedMemoryRuntime {
     return {
       session: {
         id: session.id,
+        client_id: session.client_id,
         title: session.title,
         text_summary: session.text_summary,
         memory_lane: session.memory_lane,
         owner_agent_id: session.owner_agent_id,
         owner_team_id: session.owner_team_id,
+        created_at: session.created_at,
+        updated_at: session.updated_at,
       },
       events: chosen.map(({ node, edge }) => ({
         id: node.id,
@@ -727,6 +738,59 @@ export class EmbeddedMemoryRuntime {
         edge_weight: edge.weight,
         edge_confidence: edge.confidence,
       })),
+      has_more: hasMore,
+    };
+  }
+
+  listSessions(params: {
+    scope: string;
+    consumerAgentId: string | null;
+    consumerTeamId: string | null;
+    ownerAgentId: string | null;
+    ownerTeamId: string | null;
+    limit: number;
+    offset: number;
+  }): {
+    sessions: EmbeddedSessionListView[];
+    has_more: boolean;
+  } {
+    const rows = Array.from(this.nodes.values())
+      .filter((n) => n.scope === params.scope && n.type === "topic" && (n.client_id ?? "").startsWith("session:"))
+      .filter((n) => candidateVisible(n, params.consumerAgentId, params.consumerTeamId))
+      .filter((n) => !params.ownerAgentId || n.owner_agent_id === params.ownerAgentId)
+      .filter((n) => !params.ownerTeamId || n.owner_team_id === params.ownerTeamId)
+      .map((session) => {
+        let eventCount = 0;
+        let lastEventAt: string | null = null;
+        for (const edge of this.edgesByUnique.values()) {
+          if (edge.scope !== params.scope || edge.type !== "part_of" || edge.dst_id !== session.id) continue;
+          const src = this.nodes.get(nodeKey(params.scope, edge.src_id));
+          if (!src || src.type !== "event") continue;
+          if (!candidateVisible(src, params.consumerAgentId, params.consumerTeamId)) continue;
+          eventCount += 1;
+          if (!lastEventAt || compareCreatedAtDesc(src.created_at, lastEventAt) < 0) {
+            lastEventAt = src.created_at;
+          }
+        }
+        return {
+          id: session.id,
+          client_id: session.client_id,
+          title: session.title,
+          text_summary: session.text_summary,
+          memory_lane: session.memory_lane,
+          owner_agent_id: session.owner_agent_id,
+          owner_team_id: session.owner_team_id,
+          created_at: session.created_at,
+          updated_at: session.updated_at,
+          last_event_at: lastEventAt,
+          event_count: eventCount,
+        };
+      })
+      .sort((a, b) => compareCreatedAtDesc(a.last_event_at ?? a.updated_at, b.last_event_at ?? b.updated_at) || b.id.localeCompare(a.id));
+    const slice = rows.slice(params.offset, params.offset + params.limit + 1);
+    const hasMore = slice.length > params.limit;
+    return {
+      sessions: hasMore ? slice.slice(0, params.limit) : slice,
       has_more: hasMore,
     };
   }

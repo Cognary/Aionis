@@ -12,6 +12,7 @@ import {
   MemoryRecallTextRequest,
   MemoryWriteRequest,
   ReplayPlaybookCandidateRequest,
+  MemorySessionsListRequest,
   MemorySessionEventsListRequest,
   PlanningContextRequest,
   ReplayPlaybookCompileRequest,
@@ -78,7 +79,7 @@ import {
 } from "../memory/replay.js";
 import { memoryFind } from "../memory/find.js";
 import { memoryResolve } from "../memory/resolve.js";
-import { listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
+import { listSessions, listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "../memory/write.js";
 import {
   enqueueSandboxRun,
@@ -316,6 +317,28 @@ class SessionAccessPgClient {
 
   async query<T>(sql: string, params?: any[]): Promise<QueryResult<T>> {
     const s = sql.replace(/\s+/g, " ").trim();
+    if (s.includes("FROM memory_nodes s") && s.includes("s.client_id LIKE 'session:%'")) {
+      const consumerAgent = params?.[2] ?? null;
+      if (consumerAgent !== "agent_a") return { rows: [] as T[], rowCount: 0 };
+      return {
+        rows: [
+          {
+            id: this.sessionId,
+            client_id: "session:s1",
+            title: "Private Session",
+            text_summary: "session summary",
+            memory_lane: "private",
+            owner_agent_id: "agent_a",
+            owner_team_id: null,
+            created_at: "2026-03-17T08:00:00.000Z",
+            updated_at: "2026-03-17T08:00:00.000Z",
+            last_event_at: "2026-03-17T08:05:00.000Z",
+            event_count: 1,
+          } as any,
+        ] as T[],
+        rowCount: 1,
+      };
+    }
     if (s.includes("FROM memory_nodes") && s.includes("client_id = $2") && s.includes("type = 'topic'::memory_node_type")) {
       if (!s.includes("memory_lane")) throw new Error("session lookup must enforce lane visibility");
       const consumerAgent = params?.[2] ?? null;
@@ -4643,7 +4666,29 @@ async function run() {
   assert.equal(preferConflict?.winner_rule_node_id, "r_high");
 
   // Session events listing must apply lane visibility to the session envelope itself.
+  const sessionsParsed = MemorySessionsListRequest.parse({
+    tenant_id: "default",
+    scope: "default",
+    consumer_agent_id: "agent_a",
+    limit: "20",
+    offset: "0",
+  });
+  assert.equal(sessionsParsed.limit, 20);
+  assert.equal(sessionsParsed.offset, 0);
   const sessionReader = new SessionAccessPgClient();
+  const sessionListVisible = await listSessions(
+    sessionReader as any,
+    { tenant_id: "default", scope: "default", consumer_agent_id: "agent_a", limit: 20, offset: 0 },
+    { defaultScope: "default", defaultTenantId: "default" },
+  );
+  assert.equal(sessionListVisible.sessions.length, 1);
+  assert.equal(sessionListVisible.sessions[0]?.session_id, "s1");
+  const sessionListHidden = await listSessions(
+    sessionReader as any,
+    { tenant_id: "default", scope: "default", consumer_agent_id: "agent_b", limit: 20, offset: 0 },
+    { defaultScope: "default", defaultTenantId: "default" },
+  );
+  assert.equal(sessionListHidden.sessions.length, 0);
   const visible = await listSessionEvents(
     sessionReader as any,
     { tenant_id: "default", scope: "default", session_id: "s1", consumer_agent_id: "agent_a", limit: 20, offset: 0 },

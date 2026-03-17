@@ -324,6 +324,13 @@ class AionisClient:
     def create_session(self, payload: "MemorySessionCreateInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/sessions", payload, request_options)
 
+    def list_sessions(
+        self,
+        query: Optional["MemorySessionsListInput"] = None,
+        **request_options: Any,
+    ) -> Dict[str, Any]:
+        return self._request("/v1/memory/sessions", query or {}, request_options, method="GET")
+
     def write_event(self, payload: "MemoryEventWriteInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/events", payload, request_options)
 

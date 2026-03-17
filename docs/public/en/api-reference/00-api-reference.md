@@ -91,9 +91,15 @@ Notes:
 
 ### Sessions and Events
 
-1. `POST /v1/memory/sessions`
-2. `POST /v1/memory/events`
-3. `GET /v1/memory/sessions/:session_id/events`
+1. `GET /v1/memory/sessions`
+2. `POST /v1/memory/sessions`
+3. `POST /v1/memory/events`
+4. `GET /v1/memory/sessions/:session_id/events`
+
+Notes:
+
+1. `GET /v1/memory/sessions` is the native session inventory surface; it returns bounded session envelopes with pagination and respects private-lane visibility before listing a session.
+2. `GET /v1/memory/sessions/:session_id/events` still remains the per-session detail surface for event history once a caller has chosen a session.
 
 ### Sandbox (Experimental)
 

@@ -42,6 +42,7 @@ import type {
   ReplayPlaybookGetInput,
   ReplayPlaybookRunInput,
   MemorySessionCreateInput,
+  MemorySessionsListInput as MemorySessionsListSchemaInput,
   MemorySessionEventsListInput as MemorySessionEventsListSchemaInput,
   MemoryWriteInput,
   RulesEvaluateInput,
@@ -104,6 +105,7 @@ export type {
 };
 
 export type MemorySessionEventsListInput = Partial<Omit<MemorySessionEventsListSchemaInput, "session_id">>;
+export type MemorySessionsListInput = MemorySessionsListSchemaInput;
 export type ContextLayerName = "facts" | "episodes" | "rules" | "static" | "decisions" | "tools" | "citations";
 export type AutomationDefStatus = "draft" | "shadow" | "active" | "disabled";
 export type AutomationRunLifecycleState = "queued" | "running" | "paused" | "compensating" | "terminal";
@@ -1253,6 +1255,19 @@ export type MemorySessionEventsListResponse = {
     uri: string;
   } | null;
   events: Array<Record<string, unknown>>;
+  page: {
+    limit: number;
+    offset: number;
+    returned: number;
+    has_more: boolean;
+  };
+  [k: string]: unknown;
+};
+
+export type MemorySessionsListResponse = {
+  tenant_id: string;
+  scope: string;
+  sessions: Array<Record<string, unknown>>;
   page: {
     limit: number;
     offset: number;

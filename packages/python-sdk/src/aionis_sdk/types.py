@@ -416,6 +416,18 @@ class MemorySessionCreateInput(TypedDict, total=False):
     owner_team_id: str
 
 
+class MemorySessionsListInput(TypedDict, total=False):
+    tenant_id: str
+    scope: str
+    consumer_agent_id: str
+    consumer_team_id: str
+    owner_agent_id: str
+    owner_team_id: str
+    include_meta: bool
+    limit: int
+    offset: int
+
+
 class MemoryEventWriteInput(TypedDict, total=False):
     tenant_id: str
     scope: str
@@ -1643,6 +1655,7 @@ __all__ = [
     "MemoryRecallInput",
     "MemoryRecallTextInput",
     "MemorySessionCreateInput",
+    "MemorySessionsListInput",
     "MemorySessionEventsListInput",
     "MemoryWriteInput",
     "ReplayPlaybookCompileInput",
