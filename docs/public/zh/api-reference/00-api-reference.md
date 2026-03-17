@@ -84,7 +84,8 @@ Memory 与 handoff 路由使用以下任一方式：
 
 1. `rules/evaluate` 响应现在会带紧凑的 `evaluation_summary`，方便先做 summary-first 判断，再决定是否读取完整命中规则载荷。
 2. `tools/select` 响应现在会带紧凑的 `selection_summary`，方便先做 summary-first 判断，再决定是否读取完整 rule/policy 载荷。
-3. `tools/decision` 和 `tools/run` 响应现在都会带紧凑的 `lifecycle_summary`，方便先做 summary-first 判断，再决定是否读取完整 decision / feedback 载荷。
+3. `tools/select` 现在默认保持候选顺序不变。只有显式传 `reorder_candidates=true` 时，才会启用实验性的 capability-family 候选重排。
+4. `tools/decision` 和 `tools/run` 响应现在都会带紧凑的 `lifecycle_summary`，方便先做 summary-first 判断，再决定是否读取完整 decision / feedback 载荷。
 
 ### 会话与事件
 

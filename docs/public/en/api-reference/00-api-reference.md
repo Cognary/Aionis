@@ -84,7 +84,8 @@ Notes:
 
 1. `rules/evaluate` responses now include compact `evaluation_summary` objects for summary-first inspection before reading the full matched-rule payload.
 2. `tools/select` responses now include compact `selection_summary` objects for summary-first inspection before reading the full rule/policy payload.
-3. `tools/decision` and `tools/run` responses now include compact `lifecycle_summary` objects for summary-first inspection before reading the full decision or feedback payloads.
+3. `tools/select` now keeps candidate ordering unchanged by default. Callers must explicitly pass `reorder_candidates=true` to enable experimental family-aware candidate reordering.
+4. `tools/decision` and `tools/run` responses now include compact `lifecycle_summary` objects for summary-first inspection before reading the full decision or feedback payloads.
 
 ### Sessions and Events
 
