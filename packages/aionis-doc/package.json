@@ -1,0 +1,42 @@
+{
+  "name": "@aionis/doc",
+  "version": "0.2.20",
+  "description": "Parser and compiler primitives for Aionis Doc",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "compile-aionis-doc": "dist/cli.js",
+    "build-aionis-doc-runtime-handoff": "dist/runtime-handoff-cli.js",
+    "build-aionis-doc-handoff-store-request": "dist/handoff-store-cli.js",
+    "publish-aionis-doc-handoff": "dist/publish-cli.js",
+    "recover-aionis-doc-handoff": "dist/recover-cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "keywords": [
+    "aionis",
+    "document",
+    "compiler",
+    "typescript"
+  ],
+  "author": "Aionis Core",
+  "license": "Apache-2.0"
+}
