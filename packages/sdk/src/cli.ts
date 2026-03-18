@@ -30,6 +30,11 @@ type CommandName =
   | "runtime:health"
   | "runtime:doctor"
   | "runtime:selfcheck"
+  | "doc:compile"
+  | "doc:runtime-handoff"
+  | "doc:store-request"
+  | "doc:publish"
+  | "doc:recover"
   | "runs:list"
   | "runs:get"
   | "runs:timeline"
@@ -97,9 +102,45 @@ type ArtifactEntry = {
   kind: "file" | "directory";
 };
 
+type DocBridgeCommandName = Extract<CommandName, `doc:${string}`>;
+
+type DocBridgeSpec = {
+  binName: string;
+  sourceEntry: string;
+  distEntry: string;
+};
+
 class CliUsageError extends Error {}
 class CliNotFoundError extends Error {}
 class CliGateFailureError extends Error {}
+
+const DOC_BRIDGE_SPECS: Record<DocBridgeCommandName, DocBridgeSpec> = {
+  "doc:compile": {
+    binName: "compile-aionis-doc",
+    sourceEntry: "cli.ts",
+    distEntry: "cli.js",
+  },
+  "doc:runtime-handoff": {
+    binName: "build-aionis-doc-runtime-handoff",
+    sourceEntry: "runtime-handoff-cli.ts",
+    distEntry: "runtime-handoff-cli.js",
+  },
+  "doc:store-request": {
+    binName: "build-aionis-doc-handoff-store-request",
+    sourceEntry: "handoff-store-cli.ts",
+    distEntry: "handoff-store-cli.js",
+  },
+  "doc:publish": {
+    binName: "publish-aionis-doc-handoff",
+    sourceEntry: "publish-cli.ts",
+    distEntry: "publish-cli.js",
+  },
+  "doc:recover": {
+    binName: "recover-aionis-doc-handoff",
+    sourceEntry: "recover-cli.ts",
+    distEntry: "recover-cli.js",
+  },
+};
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -122,6 +163,21 @@ async function main() {
       return;
     case "runtime:selfcheck":
       await runSelfcheck(command.label, options);
+      return;
+    case "doc:compile":
+      runDocBridgeCommand(command.name, command.args);
+      return;
+    case "doc:runtime-handoff":
+      runDocBridgeCommand(command.name, command.args);
+      return;
+    case "doc:store-request":
+      runDocBridgeCommand(command.name, command.args);
+      return;
+    case "doc:publish":
+      runDocBridgeCommand(command.name, command.args);
+      return;
+    case "doc:recover":
+      runDocBridgeCommand(command.name, command.args);
       return;
     case "runs:get":
       await runRunGet(command.label, options, flags);
@@ -224,6 +280,42 @@ function resolveCommand(argv: string[]): ResolvedCommand {
     }
   }
 
+  if (first === "doc") {
+    switch (second) {
+      case "compile":
+        return {
+          name: "doc:compile",
+          label: "aionis doc compile",
+          args: rest,
+        };
+      case "runtime-handoff":
+        return {
+          name: "doc:runtime-handoff",
+          label: "aionis doc runtime-handoff",
+          args: rest,
+        };
+      case "store-request":
+        return {
+          name: "doc:store-request",
+          label: "aionis doc store-request",
+          args: rest,
+        };
+      case "publish":
+        return {
+          name: "doc:publish",
+          label: "aionis doc publish",
+          args: rest,
+        };
+      case "recover":
+        return {
+          name: "doc:recover",
+          label: "aionis doc recover",
+          args: rest,
+        };
+      default:
+        return { name: "help", label: "aionis help", args: argv };
+    }
+  }
   if (first === "runs") {
     switch (second) {
       case "list":
@@ -347,6 +439,11 @@ function printHelp() {
       "  aionis runtime health [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis runtime doctor [--runtime-root /path/to/Aionis] [--runtime-version 0.2.20] [--runtime-cache-dir ~/.aionis/runtime] [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis runtime selfcheck [--base-url http://127.0.0.1:3321] [--json]",
+      "  aionis doc compile <input-file> [--emit all|ast|ir|graph|diagnostics] [--out <path>] [--strict] [--compact]",
+      "  aionis doc runtime-handoff <input-file> [--input-kind source|compile-envelope] [--scope <scope>] [--out <path>] [--compact]",
+      "  aionis doc store-request <runtime-handoff.json> [--scope <scope>] [--tenant-id <tenant>] [--actor <actor>] [--out <path>] [--compact]",
+      "  aionis doc publish <input-file> [--input-kind source|runtime-handoff|handoff-store-request] [--base-url <url>] [--scope <scope>] [--compact]",
+      "  aionis doc recover <input-file> [--input-kind source|runtime-handoff|handoff-store-request|publish-result] [--base-url <url>] [--scope <scope>] [--compact]",
       "  aionis runs list [--scope <scope>] [--limit <n>] [--json]",
       "  aionis runs get --run-id <id> [--scope <scope>] [--decision-limit <n>] [--include-feedback] [--feedback-limit <n>] [--json]",
       "  aionis runs timeline --run-id <id> [--scope <scope>] [--decision-limit <n>] [--feedback-limit <n>] [--json]",
@@ -533,6 +630,69 @@ function readJson(path: string): Record<string, unknown> | null {
 function packageVersion(): string {
   const pkg = readJson(filePathFromHere("..", "package.json"));
   return typeof pkg?.version === "string" ? pkg.version : "0.0.0";
+}
+
+function repoRootFromHere() {
+  return filePathFromHere("..", "..", "..");
+}
+
+function normalizeDocBridgeArgs(argv: string[]) {
+  return argv.filter((token) => token !== "--json" && token !== "--no-color");
+}
+
+function resolveDocBridgeTarget(command: DocBridgeCommandName): { command: string; args: string[]; cwd?: string; target: string } {
+  const spec = DOC_BRIDGE_SPECS[command];
+  const repoRoot = repoRootFromHere();
+  const sourcePath = filePathFromHere("..", "..", "aionis-doc", "src", spec.sourceEntry);
+  if (existsSync(sourcePath)) {
+    return {
+      command: process.execPath,
+      args: ["--import", "tsx", sourcePath],
+      cwd: repoRoot,
+      target: sourcePath,
+    };
+  }
+
+  const distPath = filePathFromHere("..", "..", "aionis-doc", "dist", spec.distEntry);
+  if (existsSync(distPath)) {
+    return {
+      command: process.execPath,
+      args: [distPath],
+      cwd: repoRoot,
+      target: distPath,
+    };
+  }
+
+  return {
+    command: spec.binName,
+    args: [],
+    target: spec.binName,
+  };
+}
+
+function runDocBridgeCommand(command: DocBridgeCommandName, argv: string[]) {
+  const target = resolveDocBridgeTarget(command);
+  const forwardedArgs = normalizeDocBridgeArgs(argv);
+  const child = spawnSync(target.command, [...target.args, ...forwardedArgs], {
+    cwd: target.cwd,
+    stdio: "inherit",
+    shell: target.command !== process.execPath && process.platform === "win32",
+  });
+  if (child.error) {
+    const err = child.error as NodeJS.ErrnoException;
+    if (err.code === "ENOENT") {
+      throw new CliNotFoundError(
+        `Aionis Doc bridge backend unavailable for ${command}. Expected ${target.target} or an installed ${DOC_BRIDGE_SPECS[command].binName}.`,
+      );
+    }
+    throw child.error;
+  }
+  if (child.signal) {
+    throw new Error(`Aionis Doc command ${command} terminated by signal ${child.signal}`);
+  }
+  if ((child.status ?? 0) !== 0) {
+    process.exit(child.status ?? 1);
+  }
 }
 
 function isRuntimeRoot(path: string): boolean {
