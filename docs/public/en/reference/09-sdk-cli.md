@@ -35,8 +35,9 @@ Current implemented command groups:
 4. `aionis playbooks ...`
 5. `aionis replay inspect-run`
 6. `aionis replay inspect-playbook`
-7. `aionis replay explain`
-8. `aionis artifacts ...`
+7. `aionis replay recover`
+8. `aionis replay explain`
+9. `aionis artifacts ...`
 
 Compatibility aliases still work:
 
@@ -167,6 +168,12 @@ Inspect one replay playbook:
 
 ```bash
 npx @aionis/sdk@0.2.20 replay inspect-playbook --playbook-id <playbook_id> --mode strict
+```
+
+Inspect the read-only recovery plan for one replay run:
+
+```bash
+npx @aionis/sdk@0.2.20 replay recover --run-id <run_id> --allow-partial
 ```
 
 Explain replay compile readiness for one run:
@@ -390,6 +397,24 @@ Current behavior:
 1. fetches playbook metadata and state
 2. evaluates deterministic replay candidacy for the same playbook
 3. returns candidate, deterministic gate, and cost signals in one envelope
+
+### `aionis replay recover`
+
+`replay recover` returns a read-only recovery plan for one replay run.
+
+Current V1 support:
+
+1. `--run-id <id>`
+2. optional `--scope <scope>`
+3. optional `--allow-partial`
+4. `--json`
+
+Current behavior:
+
+1. fetches the replay run with steps included
+2. determines whether the run is recoverable right now
+3. returns `recovery_path`, `blockers`, and `next_action` in one envelope
+4. does not mutate replay state or auto-compile anything
 
 ### `aionis replay explain`
 

@@ -35,8 +35,9 @@ npx @aionis/sdk@0.2.20 --help
 4. `aionis playbooks ...`
 5. `aionis replay inspect-run`
 6. `aionis replay inspect-playbook`
-7. `aionis replay explain`
-8. `aionis artifacts ...`
+7. `aionis replay recover`
+8. `aionis replay explain`
+9. `aionis artifacts ...`
 
 兼容 alias 仍然可用：
 
@@ -167,6 +168,12 @@ npx @aionis/sdk@0.2.20 replay inspect-run --run-id <run_id> --include-steps --in
 
 ```bash
 npx @aionis/sdk@0.2.20 replay inspect-playbook --playbook-id <playbook_id> --mode strict
+```
+
+查看一条 replay run 的只读恢复计划：
+
+```bash
+npx @aionis/sdk@0.2.20 replay recover --run-id <run_id> --allow-partial
 ```
 
 解释一条 run 当前的 replay compile readiness：
@@ -390,6 +397,24 @@ npx @aionis/sdk@0.2.20 artifacts pack --artifact-dir /path/to/artifact --out /tm
 1. 获取 playbook 元数据和状态
 2. 评估同一份 playbook 的 deterministic replay candidacy
 3. 在一个 envelope 里返回 candidate、deterministic gate 和 cost signals
+
+### `aionis replay recover`
+
+`replay recover` 会返回一条 replay run 的只读恢复计划。
+
+当前 V1 支持：
+
+1. `--run-id <id>`
+2. 可选 `--scope <scope>`
+3. 可选 `--allow-partial`
+4. `--json`
+
+当前行为：
+
+1. 拉取带 steps 的 replay run
+2. 判断当前是否可恢复
+3. 在一个 envelope 里返回 `recovery_path`、`blockers` 和 `next_action`
+4. 不会写 replay 状态，也不会自动 compile
 
 ### `aionis replay explain`
 

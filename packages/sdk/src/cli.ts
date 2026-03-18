@@ -40,6 +40,7 @@ type CommandName =
   | "playbooks:dispatch"
   | "replay:inspect-run"
   | "replay:inspect-playbook"
+  | "replay:recover"
   | "replay:explain"
   | "eval:inspect"
   | "eval:compare"
@@ -152,6 +153,9 @@ async function main() {
     case "replay:inspect-playbook":
       await runReplayInspectPlaybook(command.label, options, flags);
       return;
+    case "replay:recover":
+      await runReplayRecover(command.label, options, flags);
+      return;
     case "replay:explain":
       await runReplayExplain(command.label, options, flags);
       return;
@@ -256,6 +260,7 @@ function resolveCommand(argv: string[]): ResolvedCommand {
     switch (second) {
       case "inspect-run":
       case "inspect-playbook":
+      case "recover":
       case "explain":
         return {
           name: `replay:${second}`,
@@ -352,6 +357,7 @@ function printHelp() {
       "  aionis playbooks dispatch --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
       "  aionis replay inspect-run --run-id <id> [--scope <scope>] [--include-steps] [--include-artifacts] [--json]",
       "  aionis replay inspect-playbook --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
+      "  aionis replay recover --run-id <id> [--scope <scope>] [--allow-partial] [--json]",
       "  aionis replay explain --run-id <id> [--scope <scope>] [--allow-partial] [--json]",
       "  aionis eval inspect --artifact-dir <dir> [--suite-id <id>] [--json]",
       "  aionis eval compare --baseline <path> --treatment <path> [--suite-id <id>] [--json]",
@@ -1361,6 +1367,79 @@ async function runReplayInspectPlaybook(command: string, options: CliOptions, fl
       `eligible: ${String(candidate?.eligible_for_deterministic_replay ?? "unknown")}`,
       `recommended_mode: ${String(candidate?.recommended_mode ?? "unknown")}`,
       `next_action: ${String(candidate?.next_action ?? "unknown")}`,
+    ].join("\n"),
+  );
+}
+
+async function runReplayRecover(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const runId = getRequiredFlag(flags, "run-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const allowPartial = Boolean(flags.get("allow-partial"));
+  const response = await client.replayRunGet({
+    run_id: runId,
+    scope,
+    include_steps: true,
+    include_artifacts: false,
+  });
+  const payload = response.data as Record<string, unknown>;
+  const run = payload.run && typeof payload.run === "object" ? (payload.run as Record<string, unknown>) : {};
+  const steps = Array.isArray(payload.steps) ? payload.steps : [];
+  const runStatus = String(run.status ?? "unknown");
+  const blockers: Array<{ code: string; message: string }> = [];
+  if (!allowPartial && runStatus !== "success") {
+    blockers.push({
+      code: "run_not_successful",
+      message: `recovery plan requires a successful run unless --allow-partial is set; current status=${runStatus}`,
+    });
+  }
+  if (steps.length === 0) {
+    blockers.push({
+      code: "no_step_nodes",
+      message: "recovery plan requires replay step nodes; none were found for this run",
+    });
+  }
+  const recoverable = blockers.length === 0;
+  const recoveryPath = recoverable
+    ? allowPartial && runStatus !== "success"
+      ? "partial_compile_then_manual_review"
+      : "compile_then_candidate_or_dispatch"
+    : "manual_or_rerun";
+  const nextAction = recoverable
+    ? recoveryPath === "compile_then_candidate_or_dispatch"
+      ? "compile a replay playbook from this run, then inspect candidate or dispatch eligibility"
+      : "use partial compile for inspection, then manually review before dispatch"
+    : blockers.some((item) => item.code === "run_not_successful")
+      ? "rerun to success or retry with --allow-partial if inspection-only recovery is acceptable"
+      : "instrument replay step nodes before attempting recovery";
+
+  emitSuccess(
+    command,
+    options.json,
+    {
+      run_id: runId,
+      scope: scope ?? null,
+      allow_partial: allowPartial,
+      run,
+      recovery: {
+        recoverable,
+        recovery_path: recoveryPath,
+        blocker_count: blockers.length,
+        blockers,
+        next_action: nextAction,
+      },
+      request_id: response.request_id ?? null,
+    },
+    [
+      "Replay Recover",
+      `run_id: ${runId}`,
+      `scope: ${scope ?? "default"}`,
+      `status: ${runStatus}`,
+      `allow_partial: ${String(allowPartial)}`,
+      `recoverable: ${String(recoverable)}`,
+      `recovery_path: ${recoveryPath}`,
+      `blockers: ${blockers.length === 0 ? "none" : blockers.map((item) => item.code).join(",")}`,
+      `next_action: ${nextAction}`,
     ].join("\n"),
   );
 }

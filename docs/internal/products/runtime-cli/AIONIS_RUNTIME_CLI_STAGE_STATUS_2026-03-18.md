@@ -149,10 +149,10 @@ It means the core CLI skeleton is now real:
 
 The most important missing pieces are:
 
-1. `aionis replay recover`
-2. richer human-readable formatting for heavy inspection commands
-3. a canonical end-to-end CLI happy-path demo
-4. broader run filtering and pagination only after stronger backend support exists
+1. richer human-readable formatting for heavy inspection commands
+2. a canonical end-to-end CLI happy-path demo
+3. broader run filtering and pagination only after stronger backend support exists
+4. true replay mutation flows only after stronger backend guardrails exist
 
 These were not skipped accidentally.
 

@@ -611,12 +611,19 @@ Current V1 implementation note:
 Usage:
 
 ```bash
-aionis replay recover <run_id> [--json]
+aionis replay recover <run_id> [--scope <scope>] [--allow-partial] [--json]
 ```
 
 V1 boundary:
 
-1. if mutation is too broad for V1, return structured inspection-only explanation instead of silent no-op
+1. `replay recover` is implemented as a read-only recovery planning surface over `replay/runs/get`
+2. it must not mutate replay state or auto-compile anything
+3. it returns a structured recovery plan:
+   - `recoverable`
+   - `recovery_path`
+   - `blockers`
+   - `next_action`
+4. `--allow-partial` permits an inspection result for partially successful runs, but does not bypass mutation safeguards
 
 ### `aionis replay explain <run_id>`
 
