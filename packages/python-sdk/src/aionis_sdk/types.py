@@ -8,6 +8,9 @@ Tier = Literal["hot", "warm", "cold", "archive"]
 FeedbackOutcome = Literal["positive", "negative", "neutral"]
 DecisionLinkMode = Literal["provided", "inferred", "created_from_feedback"]
 CapabilityFailureMode = Literal["hard_fail", "soft_degrade"]
+AionisDocRecoverInputKind = Literal["source", "runtime-handoff", "handoff-store-request", "publish-result"]
+AionisDocResumeInputKind = Literal["source", "runtime-handoff", "handoff-store-request", "publish-result", "recover-result"]
+AionisDocResumeState = Literal["inspection_only", "feedback_applied", "lifecycle_advanced"]
 
 
 class AionisResponse(TypedDict, total=False):
@@ -194,6 +197,9 @@ class ContextAssembleInput(MemoryRecallTextInput, total=False):
     tool_strict: bool
     return_layered_context: bool
     context_layers: ContextLayerConfigInput
+    execution_result_summary: Dict[str, Any]
+    execution_artifacts: List[Dict[str, Any]]
+    execution_evidence: List[Dict[str, Any]]
 
 
 class PlanningContextInput(ContextAssembleInput, total=False):
@@ -341,6 +347,9 @@ class HandoffStoreInput(TypedDict, total=False):
     must_change: List[str]
     must_remove: List[str]
     must_keep: List[str]
+    execution_result_summary: Dict[str, Any]
+    execution_artifacts: List[Dict[str, Any]]
+    execution_evidence: List[Dict[str, Any]]
     execution_state_v1: Dict[str, Any]
     execution_packet_v1: Dict[str, Any]
     control_profile_v1: Dict[str, Any]
@@ -391,6 +400,13 @@ class HandoffStoreResponse(TypedDict, total=False):
     commit_id: str
     commit_uri: str
     handoff: Optional[HandoffArtifactView]
+    execution_result_summary: Dict[str, Any]
+    execution_artifacts: List[Dict[str, Any]]
+    execution_evidence: List[Dict[str, Any]]
+    execution_state_v1: Dict[str, Any]
+    execution_packet_v1: Dict[str, Any]
+    control_profile_v1: Dict[str, Any]
+    execution_transitions_v1: List[Dict[str, Any]]
 
 
 class HandoffRecoverResponse(TypedDict, total=False):
@@ -402,6 +418,39 @@ class HandoffRecoverResponse(TypedDict, total=False):
     handoff: HandoffArtifactView
     prompt_safe_handoff: Dict[str, Any]
     execution_ready_handoff: Dict[str, Any]
+    execution_result_summary: Dict[str, Any]
+    execution_artifacts: List[Dict[str, Any]]
+    execution_evidence: List[Dict[str, Any]]
+    execution_state_v1: Dict[str, Any]
+    execution_packet_v1: Dict[str, Any]
+    control_profile_v1: Dict[str, Any]
+
+
+class AionisDocRecoverEnvelope(TypedDict, total=False):
+    status: int
+    request_id: Optional[str]
+    data: HandoffRecoverResponse
+
+
+class AionisDocRecoverResult(TypedDict, total=False):
+    recover_result_version: Literal["aionis_doc_recover_result_v1"]
+    recovered_at: str
+    base_url: str
+    input_kind: AionisDocRecoverInputKind
+    source_doc_id: Optional[str]
+    source_doc_version: Optional[str]
+    publish_result: Optional[Dict[str, Any]]
+    recover_request: HandoffRecoverInput
+    recover_response: AionisDocRecoverEnvelope
+
+
+class AionisDocRecoverInput(TypedDict, total=False):
+    recover_request: HandoffRecoverInput
+    input_kind: AionisDocRecoverInputKind
+    source_doc_id: Optional[str]
+    source_doc_version: Optional[str]
+    publish_result: Optional[Dict[str, Any]]
+    recovered_at: str
 
 
 class MemorySessionCreateInput(TypedDict, total=False):
@@ -556,6 +605,9 @@ class ToolsSelectInput(TypedDict, total=False):
     scope: str
     run_id: str
     context: Dict[str, Any]
+    execution_result_summary: Dict[str, Any]
+    execution_artifacts: List[Dict[str, Any]]
+    execution_evidence: List[Dict[str, Any]]
     candidates: List[str]
     include_shadow: bool
     rules_limit: int
@@ -813,6 +865,110 @@ class ToolsFeedbackResponse(TypedDict, total=False):
     decision_uri: str
     decision_link_mode: DecisionLinkMode
     decision_policy_sha256: str
+
+
+class AionisDocContextAssembleEnvelope(TypedDict, total=False):
+    status: int
+    request_id: Optional[str]
+    data: ContextAssembleResponse
+
+
+class AionisDocToolsSelectEnvelope(TypedDict, total=False):
+    status: int
+    request_id: Optional[str]
+    data: ToolsSelectResponse
+
+
+class AionisDocToolsDecisionEnvelope(TypedDict, total=False):
+    status: int
+    request_id: Optional[str]
+    data: ToolsDecisionResponse
+
+
+class AionisDocToolsRunEnvelope(TypedDict, total=False):
+    status: int
+    request_id: Optional[str]
+    data: ToolsRunResponse
+
+
+class AionisDocToolsFeedbackEnvelope(TypedDict, total=False):
+    status: int
+    request_id: Optional[str]
+    data: ToolsFeedbackResponse
+
+
+class AionisDocResumeSummary(TypedDict, total=False):
+    selected_tool: Optional[str]
+    decision_id: Optional[str]
+    run_id: str
+    resume_state: AionisDocResumeState
+    feedback_written: bool
+    feedback_outcome: Optional[FeedbackOutcome]
+    pre_feedback_run_status: Optional[str]
+    post_feedback_run_status: Optional[str]
+    lifecycle_transition: Optional[str]
+    lifecycle_advanced: bool
+    feedback_updated_rules: Optional[int]
+
+
+class AionisDocResumeInput(TypedDict, total=False):
+    recover_result: AionisDocRecoverResult
+    query_text: str
+    run_id: str
+    tenant_id: str
+    scope: str
+    include_rules: bool
+    candidates: List[str]
+    strict: bool
+    include_shadow: bool
+    rules_limit: int
+    feedback_outcome: FeedbackOutcome
+    feedback_target: Literal["tool", "all"]
+    feedback_note: str
+    feedback_input_text: str
+    feedback_selected_tool: str
+    feedback_actor: str
+    resumed_at: str
+
+
+class AionisDocRecoverAndResumeInput(AionisDocRecoverInput, total=False):
+    query_text: str
+    run_id: str
+    tenant_id: str
+    scope: str
+    include_rules: bool
+    candidates: List[str]
+    strict: bool
+    include_shadow: bool
+    rules_limit: int
+    feedback_outcome: FeedbackOutcome
+    feedback_target: Literal["tool", "all"]
+    feedback_note: str
+    feedback_input_text: str
+    feedback_selected_tool: str
+    feedback_actor: str
+    resumed_at: str
+
+
+class AionisDocResumeResult(TypedDict, total=False):
+    resume_result_version: Literal["aionis_doc_resume_result_v1"]
+    resumed_at: str
+    base_url: str
+    input_kind: AionisDocResumeInputKind
+    source_doc_id: Optional[str]
+    source_doc_version: Optional[str]
+    run_id: str
+    resume_summary: AionisDocResumeSummary
+    recover_result: Optional[AionisDocRecoverResult]
+    context_assemble_request: ContextAssembleInput
+    context_assemble_response: AionisDocContextAssembleEnvelope
+    tools_select_request: ToolsSelectInput
+    tools_select_response: AionisDocToolsSelectEnvelope
+    tools_decision_response: Optional[AionisDocToolsDecisionEnvelope]
+    tools_run_response: Optional[AionisDocToolsRunEnvelope]
+    tools_run_post_feedback_response: Optional[AionisDocToolsRunEnvelope]
+    tools_feedback_request: Optional[ToolsFeedbackInput]
+    tools_feedback_response: Optional[AionisDocToolsFeedbackEnvelope]
 
 
 class MemoryArchiveRehydrateResponse(TypedDict, total=False):

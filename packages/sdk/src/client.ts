@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type {
   AionisClientOptions,
+  AionisDocRecoverAndResumeInput,
+  AionisDocRecoverInput,
+  AionisDocRecoverResult,
+  AionisDocResumeInput,
+  AionisDocResumeResult,
   AionisResponse,
   AutomationCreateInput,
   AutomationAssignReviewerInput,
@@ -296,6 +301,126 @@ function hasHeader(headers: Record<string, string>, name: string): boolean {
   return Object.keys(headers).some((k) => k.toLowerCase() === want);
 }
 
+function firstNonEmptyString(...values: Array<unknown>): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) return value;
+  }
+  return undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function readRecordString(record: Record<string, unknown> | null | undefined, key: string): string | null {
+  const value = record?.[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function readNonNegativeInteger(record: Record<string, unknown> | null | undefined, key: string): number | null {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function buildDocResumeContext(recoverResult: AionisDocRecoverResult): Record<string, unknown> {
+  const recovered = recoverResult.recover_response.data;
+  return {
+    intent: "doc_resume",
+    workflow_kind: "aionis_doc",
+    handoff_anchor: recovered.anchor,
+    ...(recovered.control_profile_v1 ? { control_profile_v1: recovered.control_profile_v1 } : {}),
+  };
+}
+
+function defaultDocRecoverInputKind(input: AionisDocRecoverInput): "publish-result" | "handoff-store-request" {
+  return input.publish_result ? "publish-result" : "handoff-store-request";
+}
+
+function buildDocResumeContextAssembleInput(input: AionisDocResumeInput): ContextAssembleInput {
+  const recovered = input.recover_result.recover_response.data;
+  const executionReady = asRecord(recovered.execution_ready_handoff);
+  const handoff = asRecord(recovered.handoff);
+  return {
+    tenant_id: input.tenant_id ?? recovered.tenant_id,
+    scope: input.scope ?? recovered.scope,
+    query_text:
+      input.query_text ??
+      firstNonEmptyString(
+        executionReady?.next_action,
+        recovered.execution_state_v1?.task_brief,
+        handoff?.summary,
+        recovered.anchor,
+      ) ??
+      "resume recovered handoff",
+    context: buildDocResumeContext(input.recover_result),
+    execution_result_summary: recovered.execution_result_summary,
+    execution_artifacts: recovered.execution_artifacts,
+    execution_evidence: recovered.execution_evidence,
+    execution_state_v1: recovered.execution_state_v1,
+    execution_packet_v1: recovered.execution_packet_v1,
+    include_rules: input.include_rules ?? false,
+    return_layered_context: true,
+  };
+}
+
+function buildDocResumeToolsSelectInput(input: AionisDocResumeInput): ToolsSelectInput & { run_id: string } {
+  const recovered = input.recover_result.recover_response.data;
+  return {
+    tenant_id: input.tenant_id ?? recovered.tenant_id,
+    scope: input.scope ?? recovered.scope,
+    run_id: input.run_id ?? randomUUID(),
+    context: buildDocResumeContext(input.recover_result),
+    execution_result_summary: recovered.execution_result_summary,
+    execution_artifacts: recovered.execution_artifacts,
+    execution_evidence: recovered.execution_evidence,
+    execution_state_v1: recovered.execution_state_v1,
+    candidates: input.candidates,
+    strict: input.strict ?? true,
+    include_shadow: input.include_shadow ?? false,
+    rules_limit: input.rules_limit ?? 50,
+  };
+}
+
+function buildDocResumeFeedbackInput(args: {
+  input: AionisDocResumeInput;
+  toolsSelectRequest: ToolsSelectInput;
+  toolsSelectResponse: AionisResponse<ToolsSelectResponse>;
+  toolsDecisionResponse: AionisResponse<ToolsDecisionResponse> | null;
+}): ToolsFeedbackInput {
+  const selectedTool =
+    args.input.feedback_selected_tool ??
+    firstNonEmptyString(
+      args.toolsDecisionResponse?.data.decision.selected_tool,
+      args.toolsSelectResponse.data.selection.selected,
+    );
+  if (!selectedTool) throw new Error("Unable to derive selected_tool for docResume feedback.");
+  const decision = args.toolsDecisionResponse?.data.decision;
+  return {
+    tenant_id: args.toolsSelectRequest.tenant_id,
+    scope: args.toolsSelectRequest.scope,
+    actor: args.input.feedback_actor,
+    run_id: firstNonEmptyString(decision?.run_id, args.toolsSelectRequest.run_id),
+    decision_id: firstNonEmptyString(decision?.decision_id),
+    decision_uri: firstNonEmptyString(decision?.decision_uri),
+    outcome: args.input.feedback_outcome!,
+    context: args.toolsSelectRequest.context ?? {},
+    candidates: args.toolsSelectRequest.candidates,
+    selected_tool: selectedTool,
+    include_shadow: args.input.include_shadow ?? args.toolsSelectRequest.include_shadow,
+    rules_limit: args.input.rules_limit ?? args.toolsSelectRequest.rules_limit,
+    target: args.input.feedback_target ?? "tool",
+    note: args.input.feedback_note,
+    input_text:
+      args.input.feedback_input_text ??
+      firstNonEmptyString(
+        args.input.feedback_note,
+        selectedTool,
+        readRecordString(asRecord(args.toolsSelectRequest.context), "intent"),
+        "resume feedback",
+      ),
+  };
+}
+
 export class AionisClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
@@ -341,6 +466,168 @@ export class AionisClient {
 
   async handoffRecover(input: HandoffRecoverInput, opts?: RequestOptions): Promise<AionisResponse<HandoffRecoverResponse>> {
     return this.requestPost<HandoffRecoverInput, HandoffRecoverResponse>("/v1/handoff/recover", input, opts);
+  }
+
+  async docRecover(input: AionisDocRecoverInput, opts?: RequestOptions): Promise<AionisDocRecoverResult> {
+    const recoverResponse = await this.handoffRecover(input.recover_request, opts);
+    return {
+      recover_result_version: "aionis_doc_recover_result_v1",
+      recovered_at: input.recovered_at ?? new Date().toISOString(),
+      base_url: this.baseUrl,
+      input_kind: input.input_kind ?? defaultDocRecoverInputKind(input),
+      source_doc_id: input.source_doc_id ?? null,
+      source_doc_version: input.source_doc_version ?? null,
+      publish_result: input.publish_result ?? null,
+      recover_request: input.recover_request,
+      recover_response: recoverResponse,
+    };
+  }
+
+  async docResume(input: AionisDocResumeInput, opts?: RequestOptions): Promise<AionisDocResumeResult> {
+    const contextAssembleRequest = buildDocResumeContextAssembleInput(input);
+    const contextAssembleResponse = await this.contextAssemble(contextAssembleRequest, opts);
+
+    const toolsSelectRequest = buildDocResumeToolsSelectInput(input);
+    const toolsSelectResponse = await this.toolsSelect(toolsSelectRequest, opts);
+
+    const decisionId = firstNonEmptyString(toolsSelectResponse.data.decision?.decision_id);
+    const runId = firstNonEmptyString(toolsSelectResponse.data.decision?.run_id, toolsSelectRequest.run_id);
+
+    let toolsDecisionResponse: AionisResponse<ToolsDecisionResponse> | null = null;
+    if (decisionId || runId) {
+      toolsDecisionResponse = await this.toolsDecision(
+        decisionId
+          ? {
+              tenant_id: toolsSelectRequest.tenant_id,
+              scope: toolsSelectRequest.scope,
+              decision_id: decisionId,
+            }
+          : {
+              tenant_id: toolsSelectRequest.tenant_id,
+              scope: toolsSelectRequest.scope,
+              run_id: runId!,
+            },
+        opts,
+      );
+    }
+
+    let toolsRunResponse: AionisResponse<ToolsRunResponse> | null = null;
+    if (runId) {
+      toolsRunResponse = await this.toolsRun(
+        {
+          tenant_id: toolsSelectRequest.tenant_id,
+          scope: toolsSelectRequest.scope,
+          run_id: runId,
+        },
+        opts,
+      );
+    }
+
+    let toolsFeedbackRequest: ToolsFeedbackInput | null = null;
+    let toolsFeedbackResponse: AionisResponse<ToolsFeedbackResponse> | null = null;
+    let toolsRunPostFeedbackResponse: AionisResponse<ToolsRunResponse> | null = null;
+    if (input.feedback_outcome) {
+      toolsFeedbackRequest = buildDocResumeFeedbackInput({
+        input,
+        toolsSelectRequest,
+        toolsSelectResponse,
+        toolsDecisionResponse,
+      });
+      toolsFeedbackResponse = await this.toolsFeedback(toolsFeedbackRequest, opts);
+      if (runId) {
+        toolsRunPostFeedbackResponse = await this.toolsRun(
+          {
+            tenant_id: toolsSelectRequest.tenant_id,
+            scope: toolsSelectRequest.scope,
+            run_id: runId,
+            include_feedback: true,
+          },
+          opts,
+        );
+      }
+    }
+
+    const selectedTool =
+      firstNonEmptyString(
+        toolsDecisionResponse?.data.decision.selected_tool,
+        toolsSelectResponse.data.selection.selected,
+      ) ?? null;
+    const resolvedDecisionId = firstNonEmptyString(toolsDecisionResponse?.data.decision.decision_id) ?? null;
+    const preStatus = toolsRunResponse?.data.lifecycle?.status ?? null;
+    const postStatus = toolsRunPostFeedbackResponse?.data.lifecycle?.status ?? null;
+    const lifecycleTransition = preStatus && postStatus && preStatus !== postStatus ? `${preStatus} -> ${postStatus}` : null;
+    const feedbackWritten = Boolean(toolsFeedbackResponse);
+    const lifecycleAdvanced = Boolean(lifecycleTransition);
+    const resumeState = !feedbackWritten ? "inspection_only" : lifecycleAdvanced ? "lifecycle_advanced" : "feedback_applied";
+
+    return {
+      resume_result_version: "aionis_doc_resume_result_v1",
+      resumed_at: input.resumed_at ?? new Date().toISOString(),
+      base_url: this.baseUrl,
+      input_kind: "recover-result",
+      source_doc_id: input.recover_result.source_doc_id,
+      source_doc_version: input.recover_result.source_doc_version,
+      run_id: toolsSelectRequest.run_id,
+      resume_summary: {
+        selected_tool: selectedTool,
+        decision_id: resolvedDecisionId,
+        run_id: toolsSelectRequest.run_id,
+        resume_state: resumeState,
+        feedback_written: feedbackWritten,
+        feedback_outcome: input.feedback_outcome ?? null,
+        pre_feedback_run_status: preStatus,
+        post_feedback_run_status: postStatus,
+        lifecycle_transition: lifecycleTransition,
+        lifecycle_advanced: lifecycleAdvanced,
+        feedback_updated_rules: readNonNegativeInteger(asRecord(toolsFeedbackResponse?.data), "updated_rules"),
+      },
+      recover_result: input.recover_result,
+      context_assemble_request: contextAssembleRequest,
+      context_assemble_response: contextAssembleResponse,
+      tools_select_request: toolsSelectRequest,
+      tools_select_response: toolsSelectResponse,
+      tools_decision_response: toolsDecisionResponse,
+      tools_run_response: toolsRunResponse,
+      tools_run_post_feedback_response: toolsRunPostFeedbackResponse,
+      tools_feedback_request: toolsFeedbackRequest,
+      tools_feedback_response: toolsFeedbackResponse,
+    };
+  }
+
+  async docRecoverAndResume(input: AionisDocRecoverAndResumeInput, opts?: RequestOptions): Promise<AionisDocResumeResult> {
+    const recoverResult = await this.docRecover(
+      {
+        recover_request: input.recover_request,
+        input_kind: input.input_kind,
+        source_doc_id: input.source_doc_id,
+        source_doc_version: input.source_doc_version,
+        publish_result: input.publish_result,
+        recovered_at: input.recovered_at,
+      },
+      opts,
+    );
+    return this.docResume(
+      {
+        recover_result: recoverResult,
+        query_text: input.query_text,
+        run_id: input.run_id,
+        tenant_id: input.tenant_id,
+        scope: input.scope,
+        include_rules: input.include_rules,
+        candidates: input.candidates,
+        strict: input.strict,
+        include_shadow: input.include_shadow,
+        rules_limit: input.rules_limit,
+        feedback_outcome: input.feedback_outcome,
+        feedback_target: input.feedback_target,
+        feedback_note: input.feedback_note,
+        feedback_input_text: input.feedback_input_text,
+        feedback_selected_tool: input.feedback_selected_tool,
+        feedback_actor: input.feedback_actor,
+        resumed_at: input.resumed_at,
+      },
+      opts,
+    );
   }
 
   async find(input: MemoryFindInput, opts?: RequestOptions): Promise<AionisResponse<MemoryFindResponse>> {

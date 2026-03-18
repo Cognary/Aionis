@@ -31,10 +31,12 @@ type CommandName =
   | "runtime:doctor"
   | "runtime:selfcheck"
   | "doc:compile"
+  | "doc:execute"
   | "doc:runtime-handoff"
   | "doc:store-request"
   | "doc:publish"
   | "doc:recover"
+  | "doc:resume"
   | "runs:list"
   | "runs:get"
   | "runs:timeline"
@@ -120,6 +122,11 @@ const DOC_BRIDGE_SPECS: Record<DocBridgeCommandName, DocBridgeSpec> = {
     sourceEntry: "cli.ts",
     distEntry: "cli.js",
   },
+  "doc:execute": {
+    binName: "execute-aionis-doc",
+    sourceEntry: "execute-cli.ts",
+    distEntry: "execute-cli.js",
+  },
   "doc:runtime-handoff": {
     binName: "build-aionis-doc-runtime-handoff",
     sourceEntry: "runtime-handoff-cli.ts",
@@ -139,6 +146,11 @@ const DOC_BRIDGE_SPECS: Record<DocBridgeCommandName, DocBridgeSpec> = {
     binName: "recover-aionis-doc-handoff",
     sourceEntry: "recover-cli.ts",
     distEntry: "recover-cli.js",
+  },
+  "doc:resume": {
+    binName: "resume-aionis-doc-runtime",
+    sourceEntry: "resume-cli.ts",
+    distEntry: "resume-cli.js",
   },
 };
 
@@ -167,6 +179,9 @@ async function main() {
     case "doc:compile":
       runDocBridgeCommand(command.name, command.args);
       return;
+    case "doc:execute":
+      runDocBridgeCommand(command.name, command.args);
+      return;
     case "doc:runtime-handoff":
       runDocBridgeCommand(command.name, command.args);
       return;
@@ -177,6 +192,9 @@ async function main() {
       runDocBridgeCommand(command.name, command.args);
       return;
     case "doc:recover":
+      runDocBridgeCommand(command.name, command.args);
+      return;
+    case "doc:resume":
       runDocBridgeCommand(command.name, command.args);
       return;
     case "runs:get":
@@ -288,6 +306,12 @@ function resolveCommand(argv: string[]): ResolvedCommand {
           label: "aionis doc compile",
           args: rest,
         };
+      case "execute":
+        return {
+          name: "doc:execute",
+          label: "aionis doc execute",
+          args: rest,
+        };
       case "runtime-handoff":
         return {
           name: "doc:runtime-handoff",
@@ -310,6 +334,12 @@ function resolveCommand(argv: string[]): ResolvedCommand {
         return {
           name: "doc:recover",
           label: "aionis doc recover",
+          args: rest,
+        };
+      case "resume":
+        return {
+          name: "doc:resume",
+          label: "aionis doc resume",
           args: rest,
         };
       default:
@@ -439,11 +469,13 @@ function printHelp() {
       "  aionis runtime health [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis runtime doctor [--runtime-root /path/to/Aionis] [--runtime-version 0.2.20] [--runtime-cache-dir ~/.aionis/runtime] [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis runtime selfcheck [--base-url http://127.0.0.1:3321] [--json]",
-      "  aionis doc compile <input-file> [--emit all|ast|ir|graph|diagnostics] [--out <path>] [--strict] [--compact]",
+      "  aionis doc compile <input-file> [--emit all|ast|ir|graph|plan|diagnostics] [--out <path>] [--strict] [--compact]",
+      "  aionis doc execute <input-file> [--input-kind source|compile-envelope|plan] [--out <path>] [--compact]",
       "  aionis doc runtime-handoff <input-file> [--input-kind source|compile-envelope] [--scope <scope>] [--out <path>] [--compact]",
       "  aionis doc store-request <runtime-handoff.json> [--scope <scope>] [--tenant-id <tenant>] [--actor <actor>] [--out <path>] [--compact]",
       "  aionis doc publish <input-file> [--input-kind source|runtime-handoff|handoff-store-request] [--base-url <url>] [--scope <scope>] [--compact]",
       "  aionis doc recover <input-file> [--input-kind source|runtime-handoff|handoff-store-request|publish-result] [--base-url <url>] [--scope <scope>] [--compact]",
+      "  aionis doc resume <input-file> [--input-kind source|runtime-handoff|handoff-store-request|publish-result|recover-result] [--candidate <tool>]... [--base-url <url>] [--scope <scope>] [--compact]",
       "  aionis runs list [--scope <scope>] [--limit <n>] [--json]",
       "  aionis runs get --run-id <id> [--scope <scope>] [--decision-limit <n>] [--include-feedback] [--feedback-limit <n>] [--json]",
       "  aionis runs timeline --run-id <id> [--scope <scope>] [--decision-limit <n>] [--feedback-limit <n>] [--json]",

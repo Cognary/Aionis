@@ -672,6 +672,9 @@ export type HandoffStoreResponse = {
   commit_id: string;
   commit_uri?: string;
   handoff: HandoffArtifactView | null;
+  execution_result_summary?: Record<string, unknown>;
+  execution_artifacts?: Array<Record<string, unknown>>;
+  execution_evidence?: Array<Record<string, unknown>>;
   execution_state_v1?: {
     state_id: string;
     scope: string;
@@ -727,6 +730,7 @@ export type HandoffStoreResponse = {
       repo_root?: string | null;
       [k: string]: unknown;
     } | null;
+    artifact_refs: string[];
     evidence_refs: string[];
     [k: string]: unknown;
   };
@@ -807,6 +811,9 @@ export type HandoffRecoverResponse = {
     acceptance_checks: string[];
     [k: string]: unknown;
   };
+  execution_result_summary?: Record<string, unknown>;
+  execution_artifacts?: Array<Record<string, unknown>>;
+  execution_evidence?: Array<Record<string, unknown>>;
   execution_state_v1?: {
     state_id: string;
     scope: string;
@@ -862,6 +869,7 @@ export type HandoffRecoverResponse = {
       repo_root?: string | null;
       [k: string]: unknown;
     } | null;
+    artifact_refs: string[];
     evidence_refs: string[];
     [k: string]: unknown;
   };
@@ -1497,6 +1505,9 @@ export type ToolsSelectResponse = {
   execution_kernel?: {
     control_profile_origin?: "continuity_delivered" | "state_derived" | "none";
     execution_state_v1_present?: boolean;
+    execution_result_summary_present?: boolean;
+    execution_artifacts_count?: number;
+    execution_evidence_count?: number;
     current_stage?: "triage" | "patch" | "review" | "resume" | null;
     active_role?: "orchestrator" | "triage" | "patch" | "review" | "resume" | null;
     tool_registry_present?: boolean;
@@ -1686,6 +1697,94 @@ export type ToolsFeedbackResponse = {
   decision_link_mode?: "provided" | "inferred" | "created_from_feedback";
   decision_policy_sha256?: string;
   [k: string]: unknown;
+};
+
+export type AionisDocRecoverInputKind =
+  | "source"
+  | "runtime-handoff"
+  | "handoff-store-request"
+  | "publish-result";
+
+export type AionisDocResumeInputKind = AionisDocRecoverInputKind | "recover-result";
+
+export type AionisDocResumeState = "inspection_only" | "feedback_applied" | "lifecycle_advanced";
+
+export type AionisDocRecoverResult = {
+  recover_result_version: "aionis_doc_recover_result_v1";
+  recovered_at: string;
+  base_url: string;
+  input_kind: AionisDocRecoverInputKind;
+  source_doc_id: string | null;
+  source_doc_version: string | null;
+  publish_result: Record<string, unknown> | null;
+  recover_request: HandoffRecoverInput;
+  recover_response: AionisResponse<HandoffRecoverResponse>;
+};
+
+export type AionisDocRecoverInput = {
+  recover_request: HandoffRecoverInput;
+  input_kind?: AionisDocRecoverInputKind;
+  source_doc_id?: string | null;
+  source_doc_version?: string | null;
+  publish_result?: Record<string, unknown> | null;
+  recovered_at?: string;
+};
+
+export type AionisDocResumeSummary = {
+  selected_tool: string | null;
+  decision_id: string | null;
+  run_id: string;
+  resume_state: AionisDocResumeState;
+  feedback_written: boolean;
+  feedback_outcome: "positive" | "negative" | "neutral" | null;
+  pre_feedback_run_status: string | null;
+  post_feedback_run_status: string | null;
+  lifecycle_transition: string | null;
+  lifecycle_advanced: boolean;
+  feedback_updated_rules: number | null;
+};
+
+export type AionisDocResumeInput = {
+  recover_result: AionisDocRecoverResult;
+  query_text?: string;
+  run_id?: string;
+  tenant_id?: string;
+  scope?: string;
+  include_rules?: boolean;
+  candidates: string[];
+  strict?: boolean;
+  include_shadow?: boolean;
+  rules_limit?: number;
+  feedback_outcome?: "positive" | "negative" | "neutral";
+  feedback_target?: "tool" | "all";
+  feedback_note?: string;
+  feedback_input_text?: string;
+  feedback_selected_tool?: string;
+  feedback_actor?: string;
+  resumed_at?: string;
+};
+
+export type AionisDocRecoverAndResumeInput = Omit<AionisDocResumeInput, "recover_result"> & AionisDocRecoverInput;
+
+export type AionisDocResumeResult = {
+  resume_result_version: "aionis_doc_resume_result_v1";
+  resumed_at: string;
+  base_url: string;
+  input_kind: AionisDocResumeInputKind;
+  source_doc_id: string | null;
+  source_doc_version: string | null;
+  run_id: string;
+  resume_summary: AionisDocResumeSummary;
+  recover_result: AionisDocRecoverResult | null;
+  context_assemble_request: ContextAssembleInput;
+  context_assemble_response: AionisResponse<ContextAssembleResponse>;
+  tools_select_request: ToolsSelectInput;
+  tools_select_response: AionisResponse<ToolsSelectResponse>;
+  tools_decision_response: AionisResponse<ToolsDecisionResponse> | null;
+  tools_run_response: AionisResponse<ToolsRunResponse> | null;
+  tools_run_post_feedback_response: AionisResponse<ToolsRunResponse> | null;
+  tools_feedback_request: ToolsFeedbackInput | null;
+  tools_feedback_response: AionisResponse<ToolsFeedbackResponse> | null;
 };
 
 export type AutomationCreateResponse = {

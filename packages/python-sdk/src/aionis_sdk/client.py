@@ -60,13 +60,20 @@ if TYPE_CHECKING:
         AutomationShadowValidateDispatchInput,
         AutomationShadowValidateInput,
         AutomationTelemetryInput,
+        AionisDocRecoverAndResumeInput,
+        AionisDocRecoverInput,
+        AionisDocRecoverResult,
+        AionisDocResumeInput,
+        AionisDocResumeResult,
         BackendCapabilityErrorDetails,
         ContextAssembleInput,
+        ContextAssembleResponse,
         PlanningContextInput,
         MemoryArchiveRehydrateInput,
         MemoryEventWriteInput,
         MemoryFindInput,
         HandoffRecoverInput,
+        HandoffRecoverResponse,
         HandoffStoreInput,
         MemoryNodesActivateInput,
         MemoryResolveInput,
@@ -101,9 +108,13 @@ if TYPE_CHECKING:
         SandboxRunLogsInput,
         SandboxSessionCreateInput,
         ToolsDecisionInput,
+        ToolsDecisionResponse,
         ToolsFeedbackInput,
+        ToolsFeedbackResponse,
         ToolsRunInput,
+        ToolsRunResponse,
         ToolsSelectInput,
+        ToolsSelectResponse,
         ShadowDualWriteStrictFailureDetails,
     )
 
@@ -274,6 +285,144 @@ def _as_retry_policy(value: Optional[Mapping[str, Any]], base: RetryPolicy) -> R
     )
 
 
+def _first_non_empty_string(*values: Any) -> Optional[str]:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def _as_dict(value: Any) -> Optional[Dict[str, Any]]:
+    return value if isinstance(value, dict) else None
+
+
+def _read_dict_str(record: Optional[Mapping[str, Any]], key: str) -> Optional[str]:
+    if not isinstance(record, Mapping):
+        return None
+    value = record.get(key)
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _read_non_negative_int(record: Optional[Mapping[str, Any]], key: str) -> Optional[int]:
+    if not isinstance(record, Mapping):
+        return None
+    value = record.get(key)
+    return value if isinstance(value, int) and value >= 0 else None
+
+
+def _build_doc_resume_context(recover_result: Mapping[str, Any]) -> Dict[str, Any]:
+    recovered = _as_dict(recover_result.get("recover_response")) or {}
+    recovered_data = _as_dict(recovered.get("data")) or {}
+    context: Dict[str, Any] = {
+        "intent": "doc_resume",
+        "workflow_kind": "aionis_doc",
+        "handoff_anchor": recovered_data.get("anchor"),
+    }
+    if isinstance(recovered_data.get("control_profile_v1"), dict):
+        context["control_profile_v1"] = recovered_data["control_profile_v1"]
+    return context
+
+
+def _default_doc_recover_input_kind(payload: Mapping[str, Any]) -> str:
+    return "publish-result" if payload.get("publish_result") is not None else "handoff-store-request"
+
+
+def _build_doc_resume_context_assemble_input(payload: Mapping[str, Any]) -> Dict[str, Any]:
+    recover_result = _as_dict(payload.get("recover_result")) or {}
+    recovered = _as_dict(recover_result.get("recover_response")) or {}
+    recovered_data = _as_dict(recovered.get("data")) or {}
+    execution_ready = _as_dict(recovered_data.get("execution_ready_handoff")) or {}
+    handoff = _as_dict(recovered_data.get("handoff")) or {}
+    execution_state = _as_dict(recovered_data.get("execution_state_v1")) or {}
+    return {
+        "tenant_id": payload.get("tenant_id") or recovered_data.get("tenant_id"),
+        "scope": payload.get("scope") or recovered_data.get("scope"),
+        "query_text": payload.get("query_text")
+        or _first_non_empty_string(
+            execution_ready.get("next_action"),
+            execution_state.get("task_brief"),
+            handoff.get("summary"),
+            recovered_data.get("anchor"),
+        )
+        or "resume recovered handoff",
+        "context": _build_doc_resume_context(recover_result),
+        "execution_result_summary": recovered_data.get("execution_result_summary"),
+        "execution_artifacts": recovered_data.get("execution_artifacts"),
+        "execution_evidence": recovered_data.get("execution_evidence"),
+        "execution_state_v1": recovered_data.get("execution_state_v1"),
+        "execution_packet_v1": recovered_data.get("execution_packet_v1"),
+        "include_rules": bool(payload.get("include_rules", False)),
+        "return_layered_context": True,
+    }
+
+
+def _build_doc_resume_tools_select_input(payload: Mapping[str, Any]) -> Dict[str, Any]:
+    recover_result = _as_dict(payload.get("recover_result")) or {}
+    recovered = _as_dict(recover_result.get("recover_response")) or {}
+    recovered_data = _as_dict(recovered.get("data")) or {}
+    strict_value = payload.get("strict")
+    include_shadow_value = payload.get("include_shadow")
+    rules_limit_value = payload.get("rules_limit")
+    return {
+        "tenant_id": payload.get("tenant_id") or recovered_data.get("tenant_id"),
+        "scope": payload.get("scope") or recovered_data.get("scope"),
+        "run_id": payload.get("run_id") or str(uuid.uuid4()),
+        "context": _build_doc_resume_context(recover_result),
+        "execution_result_summary": recovered_data.get("execution_result_summary"),
+        "execution_artifacts": recovered_data.get("execution_artifacts"),
+        "execution_evidence": recovered_data.get("execution_evidence"),
+        "execution_state_v1": recovered_data.get("execution_state_v1"),
+        "candidates": list(payload.get("candidates") or []),
+        "strict": True if strict_value is None else bool(strict_value),
+        "include_shadow": False if include_shadow_value is None else bool(include_shadow_value),
+        "rules_limit": 50 if rules_limit_value is None else int(rules_limit_value),
+    }
+
+
+def _build_doc_resume_feedback_input(
+    payload: Mapping[str, Any],
+    tools_select_request: Mapping[str, Any],
+    tools_select_response: Mapping[str, Any],
+    tools_decision_response: Optional[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    tools_select_data = _as_dict(tools_select_response.get("data")) or {}
+    tools_decision_data = _as_dict(tools_decision_response.get("data") if tools_decision_response else None) or {}
+    decision = _as_dict(tools_decision_data.get("decision")) or {}
+    selection = _as_dict(tools_select_data.get("selection")) or {}
+    selected_tool = _first_non_empty_string(
+        payload.get("feedback_selected_tool"),
+        decision.get("selected_tool"),
+        selection.get("selected"),
+    )
+    if not selected_tool:
+        raise ValueError("Unable to derive selected_tool for doc_resume feedback")
+    include_shadow_value = payload.get("include_shadow", tools_select_request.get("include_shadow"))
+    rules_limit_value = payload.get("rules_limit", tools_select_request.get("rules_limit"))
+    return {
+        "tenant_id": tools_select_request.get("tenant_id"),
+        "scope": tools_select_request.get("scope"),
+        "actor": payload.get("feedback_actor"),
+        "run_id": _first_non_empty_string(decision.get("run_id"), tools_select_request.get("run_id")),
+        "decision_id": _first_non_empty_string(decision.get("decision_id")),
+        "decision_uri": _first_non_empty_string(decision.get("decision_uri")),
+        "outcome": payload.get("feedback_outcome"),
+        "context": tools_select_request.get("context") or {},
+        "candidates": list(tools_select_request.get("candidates") or []),
+        "selected_tool": selected_tool,
+        "include_shadow": False if include_shadow_value is None else bool(include_shadow_value),
+        "rules_limit": 50 if rules_limit_value is None else int(rules_limit_value),
+        "target": payload.get("feedback_target", "tool"),
+        "note": payload.get("feedback_note"),
+        "input_text": payload.get("feedback_input_text")
+        or _first_non_empty_string(
+            payload.get("feedback_note"),
+            selected_tool,
+            _read_dict_str(_as_dict(tools_select_request.get("context")), "intent"),
+            "resume feedback",
+        ),
+    }
+
+
 class AionisClient:
     def __init__(
         self,
@@ -314,6 +463,180 @@ class AionisClient:
 
     def handoff_recover(self, payload: "HandoffRecoverInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/handoff/recover", payload, request_options)
+
+    def doc_recover(self, payload: "AionisDocRecoverInput", **request_options: Any) -> "AionisDocRecoverResult":
+        recover_request = dict(payload.get("recover_request") or {})
+        recover_response = self.handoff_recover(recover_request, **request_options)
+        return {
+            "recover_result_version": "aionis_doc_recover_result_v1",
+            "recovered_at": payload.get("recovered_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "base_url": self.base_url,
+            "input_kind": payload.get("input_kind") or _default_doc_recover_input_kind(payload),
+            "source_doc_id": payload.get("source_doc_id"),
+            "source_doc_version": payload.get("source_doc_version"),
+            "publish_result": payload.get("publish_result"),
+            "recover_request": recover_request,
+            "recover_response": recover_response,
+        }
+
+    def doc_resume(self, payload: "AionisDocResumeInput", **request_options: Any) -> "AionisDocResumeResult":
+        context_assemble_request = _build_doc_resume_context_assemble_input(payload)
+        context_assemble_response = self.context_assemble(context_assemble_request, **request_options)
+
+        tools_select_request = _build_doc_resume_tools_select_input(payload)
+        tools_select_response = self.tools_select(tools_select_request, **request_options)
+
+        tools_select_data = _as_dict(tools_select_response.get("data")) or {}
+        decision = _as_dict(tools_select_data.get("decision")) or {}
+        decision_id = _first_non_empty_string(decision.get("decision_id"))
+        run_id = _first_non_empty_string(decision.get("run_id"), tools_select_request.get("run_id"))
+
+        tools_decision_response: Optional[Dict[str, Any]] = None
+        if decision_id or run_id:
+            decision_request: Dict[str, Any] = {
+                "tenant_id": tools_select_request.get("tenant_id"),
+                "scope": tools_select_request.get("scope"),
+            }
+            if decision_id:
+                decision_request["decision_id"] = decision_id
+            else:
+                decision_request["run_id"] = run_id
+            tools_decision_response = self.tools_decision(decision_request, **request_options)
+
+        tools_run_response: Optional[Dict[str, Any]] = None
+        if run_id:
+            tools_run_response = self.tools_run(
+                {
+                    "tenant_id": tools_select_request.get("tenant_id"),
+                    "scope": tools_select_request.get("scope"),
+                    "run_id": run_id,
+                },
+                **request_options,
+            )
+
+        tools_feedback_request: Optional[Dict[str, Any]] = None
+        tools_feedback_response: Optional[Dict[str, Any]] = None
+        tools_run_post_feedback_response: Optional[Dict[str, Any]] = None
+        if payload.get("feedback_outcome"):
+            tools_feedback_request = _build_doc_resume_feedback_input(
+                payload,
+                tools_select_request,
+                tools_select_response,
+                tools_decision_response,
+            )
+            tools_feedback_response = self.tools_feedback(tools_feedback_request, **request_options)
+            if run_id:
+                tools_run_post_feedback_response = self.tools_run(
+                    {
+                        "tenant_id": tools_select_request.get("tenant_id"),
+                        "scope": tools_select_request.get("scope"),
+                        "run_id": run_id,
+                        "include_feedback": True,
+                    },
+                    **request_options,
+                )
+
+        tools_decision_data = _as_dict(tools_decision_response.get("data") if tools_decision_response else None) or {}
+        tools_decision_record = _as_dict(tools_decision_data.get("decision")) or {}
+        selection = _as_dict(tools_select_data.get("selection")) or {}
+        tools_run_data = _as_dict(tools_run_response.get("data") if tools_run_response else None) or {}
+        tools_run_post_feedback_data = _as_dict(
+            tools_run_post_feedback_response.get("data") if tools_run_post_feedback_response else None
+        ) or {}
+        pre_lifecycle = _as_dict(tools_run_data.get("lifecycle")) or {}
+        post_lifecycle = _as_dict(tools_run_post_feedback_data.get("lifecycle")) or {}
+        pre_status = _read_dict_str(pre_lifecycle, "status")
+        post_status = _read_dict_str(post_lifecycle, "status")
+        lifecycle_transition = (
+            f"{pre_status} -> {post_status}" if pre_status and post_status and pre_status != post_status else None
+        )
+        feedback_written = tools_feedback_response is not None
+        lifecycle_advanced = lifecycle_transition is not None
+        resume_state = (
+            "inspection_only"
+            if not feedback_written
+            else "lifecycle_advanced"
+            if lifecycle_advanced
+            else "feedback_applied"
+        )
+
+        return {
+            "resume_result_version": "aionis_doc_resume_result_v1",
+            "resumed_at": payload.get("resumed_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "base_url": self.base_url,
+            "input_kind": "recover-result",
+            "source_doc_id": (_as_dict(payload.get("recover_result")) or {}).get("source_doc_id"),
+            "source_doc_version": (_as_dict(payload.get("recover_result")) or {}).get("source_doc_version"),
+            "run_id": tools_select_request["run_id"],
+            "resume_summary": {
+                "selected_tool": _first_non_empty_string(
+                    tools_decision_record.get("selected_tool"),
+                    selection.get("selected"),
+                ),
+                "decision_id": _first_non_empty_string(tools_decision_record.get("decision_id")),
+                "run_id": tools_select_request["run_id"],
+                "resume_state": resume_state,
+                "feedback_written": feedback_written,
+                "feedback_outcome": payload.get("feedback_outcome"),
+                "pre_feedback_run_status": pre_status,
+                "post_feedback_run_status": post_status,
+                "lifecycle_transition": lifecycle_transition,
+                "lifecycle_advanced": lifecycle_advanced,
+                "feedback_updated_rules": _read_non_negative_int(
+                    _as_dict(tools_feedback_response.get("data") if tools_feedback_response else None),
+                    "updated_rules",
+                ),
+            },
+            "recover_result": payload.get("recover_result"),
+            "context_assemble_request": context_assemble_request,
+            "context_assemble_response": context_assemble_response,
+            "tools_select_request": tools_select_request,
+            "tools_select_response": tools_select_response,
+            "tools_decision_response": tools_decision_response,
+            "tools_run_response": tools_run_response,
+            "tools_run_post_feedback_response": tools_run_post_feedback_response,
+            "tools_feedback_request": tools_feedback_request,
+            "tools_feedback_response": tools_feedback_response,
+        }
+
+    def doc_recover_and_resume(
+        self,
+        payload: "AionisDocRecoverAndResumeInput",
+        **request_options: Any,
+    ) -> "AionisDocResumeResult":
+        recover_result = self.doc_recover(
+            {
+                "recover_request": payload.get("recover_request") or {},
+                "input_kind": payload.get("input_kind"),
+                "source_doc_id": payload.get("source_doc_id"),
+                "source_doc_version": payload.get("source_doc_version"),
+                "publish_result": payload.get("publish_result"),
+                "recovered_at": payload.get("recovered_at"),
+            },
+            **request_options,
+        )
+        return self.doc_resume(
+            {
+                "recover_result": recover_result,
+                "query_text": payload.get("query_text"),
+                "run_id": payload.get("run_id"),
+                "tenant_id": payload.get("tenant_id"),
+                "scope": payload.get("scope"),
+                "include_rules": payload.get("include_rules"),
+                "candidates": list(payload.get("candidates") or []),
+                "strict": payload.get("strict"),
+                "include_shadow": payload.get("include_shadow"),
+                "rules_limit": payload.get("rules_limit"),
+                "feedback_outcome": payload.get("feedback_outcome"),
+                "feedback_target": payload.get("feedback_target"),
+                "feedback_note": payload.get("feedback_note"),
+                "feedback_input_text": payload.get("feedback_input_text"),
+                "feedback_selected_tool": payload.get("feedback_selected_tool"),
+                "feedback_actor": payload.get("feedback_actor"),
+                "resumed_at": payload.get("resumed_at"),
+            },
+            **request_options,
+        )
 
     def find(self, payload: "MemoryFindInput", **request_options: Any) -> Dict[str, Any]:
         return self._request("/v1/memory/find", payload, request_options)

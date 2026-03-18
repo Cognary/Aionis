@@ -45,6 +45,29 @@ const out = await client.write({
 console.log(out.status, out.request_id, out.data.commit_id);
 ```
 
+For Aionis Doc continuity and resume flows, the SDK also exposes a high-level helper:
+
+```ts
+const resumed = await client.docResume({
+  recover_result,
+  candidates: ["resume_patch", "request_review"],
+  feedback_outcome: "positive",
+});
+
+console.log(resumed.resume_summary.resume_state);
+console.log(resumed.resume_summary.lifecycle_transition);
+```
+
+If you only have a handoff anchor or recover request, use the wrapped flow:
+
+```ts
+const resumed = await client.docRecoverAndResume({
+  recover_request: { anchor: "aionis-doc:workflow-001", scope: "default" },
+  input_kind: "handoff-store-request",
+  candidates: ["resume_patch", "request_review"],
+});
+```
+
 ## Auth Options
 
 1. `api_key`: sends `X-Api-Key`.
@@ -121,8 +144,11 @@ If you set custom headers manually, the SDK will not override existing auth head
 63. `automationRunCompensationRecordAction`
 64. `automationRunResume`
 65. `automationRunRejectRepair`
-66. `health`
-67. `getCapabilityContract`
+66. `docRecover`
+67. `docResume`
+68. `docRecoverAndResume`
+69. `health`
+70. `getCapabilityContract`
 
 ## CLI Commands
 

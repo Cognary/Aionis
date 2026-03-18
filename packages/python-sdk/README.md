@@ -59,6 +59,22 @@ out = client.write(
 print(out["status"], out["request_id"], out["data"]["commit_id"])
 ```
 
+For Aionis Doc continuity flows, the Python client now also exposes high-level helpers:
+
+```python
+resumed = client.doc_recover_and_resume(
+    {
+        "recover_request": {"anchor": "aionis-doc:workflow-001", "scope": "default"},
+        "input_kind": "handoff-store-request",
+        "candidates": ["resume_patch", "request_review"],
+        "feedback_outcome": "positive",
+    }
+)
+
+print(resumed["resume_summary"]["resume_state"])
+print(resumed["resume_summary"]["lifecycle_transition"])
+```
+
 For a complete Python + CLI first-run flow, see:
 
 1. [Python SDK + Aionis CLI](https://doc.aionisos.com/public/en/getting-started/08-python-sdk-with-cli)
@@ -170,8 +186,11 @@ client.tools_run({"scope": "default", "run_id": "run_001"})
 63. `automation_run_compensation_record_action`
 64. `automation_run_resume`
 65. `automation_run_reject_repair`
-66. `health`
-67. `get_capability_contract`
+66. `doc_recover`
+67. `doc_resume`
+68. `doc_recover_and_resume`
+69. `health`
+70. `get_capability_contract`
 
 Admin/control methods (require `admin_token`):
 
