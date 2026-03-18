@@ -31,6 +31,8 @@ npx @aionis/sdk@0.2.20 --help
 
 1. `aionis runtime ...`
 2. `aionis eval ...`
+3. `aionis playbooks ...`
+4. `aionis replay inspect-run`
 
 兼容 alias 仍然可用：
 
@@ -101,6 +103,30 @@ npx @aionis/sdk@0.2.20 eval compare --baseline /path/to/baseline --treatment /pa
 
 ```bash
 npx @aionis/sdk@0.2.20 eval gate --artifact-dir /path/to/artifact
+```
+
+检查一份 replay playbook：
+
+```bash
+npx @aionis/sdk@0.2.20 playbooks get --playbook-id <playbook_id>
+```
+
+检查一份 playbook 的 deterministic replay 候选结果：
+
+```bash
+npx @aionis/sdk@0.2.20 playbooks candidate --playbook-id <playbook_id> --mode strict
+```
+
+检查一份 playbook 的 governed dispatch 结果：
+
+```bash
+npx @aionis/sdk@0.2.20 playbooks dispatch --playbook-id <playbook_id> --mode simulate
+```
+
+检查一条 replay run：
+
+```bash
+npx @aionis/sdk@0.2.20 replay inspect-run --run-id <run_id> --include-steps --include-artifacts
 ```
 
 ## 命令说明
@@ -183,6 +209,52 @@ npx @aionis/sdk@0.2.20 eval gate --artifact-dir /path/to/artifact
 
 如果你要把结果接进 CI 或初始化脚本，建议加 `--json`。
 
+### `aionis playbooks get`
+
+`playbooks get` 用来按 id 获取一份 replay playbook。
+
+当前 V1 支持：
+
+1. `--playbook-id <id>`
+2. 可选 `--scope <scope>`
+3. `--json`
+
+### `aionis playbooks candidate`
+
+`playbooks candidate` 用来检查一份 playbook 是否适合 deterministic replay。
+
+当前 V1 支持：
+
+1. `--playbook-id <id>`
+2. 可选 `--scope <scope>`
+3. 可选 `--version <n>`
+4. 可选 `--mode simulate|strict|guided`
+5. `--json`
+
+### `aionis playbooks dispatch`
+
+`playbooks dispatch` 用来查看一份 playbook 的 governed replay dispatch 返回结果。
+
+当前 V1 支持：
+
+1. `--playbook-id <id>`
+2. 可选 `--scope <scope>`
+3. 可选 `--version <n>`
+4. 可选 `--mode simulate|strict|guided`
+5. `--json`
+
+### `aionis replay inspect-run`
+
+`replay inspect-run` 用来获取一条 replay run，并可选带上 steps 和 artifacts。
+
+当前 V1 支持：
+
+1. `--run-id <id>`
+2. 可选 `--scope <scope>`
+3. 可选 `--include-steps`
+4. 可选 `--include-artifacts`
+5. `--json`
+
 ## 推荐使用场景
 
 这套 CLI 适合：
@@ -191,6 +263,7 @@ npx @aionis/sdk@0.2.20 eval gate --artifact-dir /path/to/artifact
 2. 做重复性的 runtime 自检
 3. 检查 execution eval 结果
 4. 在 CI 里做 scriptable gate
+5. 不用直接打原始 API 就能检查 replay/playbook
 
 ## 相关文档
 

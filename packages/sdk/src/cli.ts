@@ -29,6 +29,10 @@ type CommandName =
   | "runtime:health"
   | "runtime:doctor"
   | "runtime:selfcheck"
+  | "playbooks:get"
+  | "playbooks:candidate"
+  | "playbooks:dispatch"
+  | "replay:inspect-run"
   | "eval:inspect"
   | "eval:compare"
   | "eval:gate"
@@ -100,6 +104,18 @@ async function main() {
     case "runtime:selfcheck":
       await runSelfcheck(command.label, options);
       return;
+    case "playbooks:get":
+      await runPlaybookGet(command.label, options, flags);
+      return;
+    case "playbooks:candidate":
+      await runPlaybookCandidate(command.label, options, flags);
+      return;
+    case "playbooks:dispatch":
+      await runPlaybookDispatch(command.label, options, flags);
+      return;
+    case "replay:inspect-run":
+      await runReplayInspectRun(command.label, options, flags);
+      return;
     case "eval:inspect":
       await runEvalInspect(command.label, options, flags);
       return;
@@ -146,6 +162,34 @@ function resolveCommand(argv: string[]): ResolvedCommand {
         return {
           name: `eval:${second}`,
           label: `aionis eval ${second}`,
+          args: rest,
+        };
+      default:
+        return { name: "help", label: "aionis help", args: argv };
+    }
+  }
+
+  if (first === "playbooks") {
+    switch (second) {
+      case "get":
+      case "candidate":
+      case "dispatch":
+        return {
+          name: `playbooks:${second}`,
+          label: `aionis playbooks ${second}`,
+          args: rest,
+        };
+      default:
+        return { name: "help", label: "aionis help", args: argv };
+    }
+  }
+
+  if (first === "replay") {
+    switch (second) {
+      case "inspect-run":
+        return {
+          name: "replay:inspect-run",
+          label: "aionis replay inspect-run",
           args: rest,
         };
       default:
@@ -212,6 +256,10 @@ function printHelp() {
       "  aionis runtime health [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis runtime doctor [--runtime-root /path/to/Aionis] [--runtime-version 0.2.20] [--runtime-cache-dir ~/.aionis/runtime] [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis runtime selfcheck [--base-url http://127.0.0.1:3321] [--json]",
+      "  aionis playbooks get --playbook-id <id> [--scope <scope>] [--json]",
+      "  aionis playbooks candidate --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
+      "  aionis playbooks dispatch --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
+      "  aionis replay inspect-run --run-id <id> [--scope <scope>] [--include-steps] [--include-artifacts] [--json]",
       "  aionis eval inspect --artifact-dir <dir> [--suite-id <id>] [--json]",
       "  aionis eval compare --baseline <path> --treatment <path> [--suite-id <id>] [--json]",
       "  aionis eval gate --artifact-dir <dir> [--suite-id <id>] [--json]",
@@ -240,6 +288,23 @@ function getRequiredFlag(flags: Map<string, string | boolean>, name: string): st
   const value = getStringFlag(flags, name);
   if (!value) throw new CliUsageError(`--${name} is required`);
   return value;
+}
+
+function getOptionalIntFlag(flags: Map<string, string | boolean>, name: string): number | undefined {
+  const raw = getStringFlag(flags, name);
+  if (!raw) return undefined;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new CliUsageError(`--${name} must be a non-negative integer`);
+  }
+  return parsed;
+}
+
+function getOptionalModeFlag(flags: Map<string, string | boolean>, name: string): "simulate" | "strict" | "guided" | undefined {
+  const raw = getStringFlag(flags, name);
+  if (!raw) return undefined;
+  if (raw === "simulate" || raw === "strict" || raw === "guided") return raw;
+  throw new CliUsageError(`--${name} must be one of: simulate, strict, guided`);
 }
 
 function outputEnvelope(command: string, body: Record<string, unknown>) {
@@ -959,6 +1024,136 @@ async function runSelfcheck(command: string, options: CliOptions) {
 
   emitSuccess(command, options.json, out, out.ok ? "Aionis selfcheck passed" : "Aionis selfcheck found issues");
   if (!out.ok) process.exitCode = 1;
+}
+
+async function runPlaybookGet(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const playbookId = getRequiredFlag(flags, "playbook-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const response = await client.replayPlaybookGet({
+    playbook_id: playbookId,
+    scope,
+  });
+  emitSuccess(
+    command,
+    options.json,
+    {
+      playbook_id: playbookId,
+      scope: scope ?? null,
+      response: response.data,
+      request_id: response.request_id,
+    },
+    [
+      "Replay Playbook",
+      `playbook_id: ${playbookId}`,
+      `scope: ${scope ?? "default"}`,
+      `request_id: ${response.request_id ?? "n/a"}`,
+    ].join("\n"),
+  );
+}
+
+async function runPlaybookCandidate(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const playbookId = getRequiredFlag(flags, "playbook-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const version = getOptionalIntFlag(flags, "version");
+  const mode = getOptionalModeFlag(flags, "mode");
+  const response = await client.replayPlaybookCandidate({
+    playbook_id: playbookId,
+    scope,
+    version,
+    mode,
+  });
+  const candidate = (response.data as Record<string, unknown>)?.candidate as Record<string, unknown> | undefined;
+  emitSuccess(
+    command,
+    options.json,
+    {
+      playbook_id: playbookId,
+      scope: scope ?? null,
+      version: version ?? null,
+      mode: mode ?? null,
+      response: response.data,
+      request_id: response.request_id,
+    },
+    [
+      "Replay Playbook Candidate",
+      `playbook_id: ${playbookId}`,
+      `scope: ${scope ?? "default"}`,
+      `eligible: ${String(candidate?.eligible_for_deterministic_replay ?? "unknown")}`,
+      `recommended_mode: ${String(candidate?.recommended_mode ?? "unknown")}`,
+      `next_action: ${String(candidate?.next_action ?? "unknown")}`,
+    ].join("\n"),
+  );
+}
+
+async function runPlaybookDispatch(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const playbookId = getRequiredFlag(flags, "playbook-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const version = getOptionalIntFlag(flags, "version");
+  const mode = getOptionalModeFlag(flags, "mode");
+  const response = await client.replayPlaybookDispatch({
+    playbook_id: playbookId,
+    scope,
+    version,
+    mode,
+  });
+  const dispatch = (response.data as Record<string, unknown>)?.dispatch as Record<string, unknown> | undefined;
+  emitSuccess(
+    command,
+    options.json,
+    {
+      playbook_id: playbookId,
+      scope: scope ?? null,
+      version: version ?? null,
+      mode: mode ?? null,
+      response: response.data,
+      request_id: response.request_id,
+    },
+    [
+      "Replay Playbook Dispatch",
+      `playbook_id: ${playbookId}`,
+      `scope: ${scope ?? "default"}`,
+      `decision: ${String(dispatch?.decision ?? "unknown")}`,
+      `primary_inference_skipped: ${String(dispatch?.primary_inference_skipped ?? "unknown")}`,
+      `fallback_executed: ${String(dispatch?.fallback_executed ?? "unknown")}`,
+    ].join("\n"),
+  );
+}
+
+async function runReplayInspectRun(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const runId = getRequiredFlag(flags, "run-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const includeSteps = Boolean(flags.get("include-steps"));
+  const includeArtifacts = Boolean(flags.get("include-artifacts"));
+  const response = await client.replayRunGet({
+    run_id: runId,
+    scope,
+    include_steps: includeSteps,
+    include_artifacts: includeArtifacts,
+  });
+  emitSuccess(
+    command,
+    options.json,
+    {
+      run_id: runId,
+      scope: scope ?? null,
+      include_steps: includeSteps,
+      include_artifacts: includeArtifacts,
+      response: response.data,
+      request_id: response.request_id,
+    },
+    [
+      "Replay Run",
+      `run_id: ${runId}`,
+      `scope: ${scope ?? "default"}`,
+      `include_steps: ${String(includeSteps)}`,
+      `include_artifacts: ${String(includeArtifacts)}`,
+      `request_id: ${response.request_id ?? "n/a"}`,
+    ].join("\n"),
+  );
 }
 
 async function runEvalInspect(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
