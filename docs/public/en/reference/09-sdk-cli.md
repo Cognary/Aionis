@@ -33,6 +33,7 @@ Current implemented command groups:
 2. `aionis eval ...`
 3. `aionis playbooks ...`
 4. `aionis replay inspect-run`
+5. `aionis artifacts ...`
 
 Compatibility aliases still work:
 
@@ -127,6 +128,30 @@ Inspect one replay run:
 
 ```bash
 npx @aionis/sdk@0.2.20 replay inspect-run --run-id <run_id> --include-steps --include-artifacts
+```
+
+List artifact contents:
+
+```bash
+npx @aionis/sdk@0.2.20 artifacts list --artifact-dir /path/to/artifact
+```
+
+Show one artifact file:
+
+```bash
+npx @aionis/sdk@0.2.20 artifacts show --artifact-dir /path/to/artifact --name execution_eval_summary.json
+```
+
+Export one artifact directory:
+
+```bash
+npx @aionis/sdk@0.2.20 artifacts export --artifact-dir /path/to/artifact --out /tmp/artifact-copy
+```
+
+Pack one artifact directory:
+
+```bash
+npx @aionis/sdk@0.2.20 artifacts pack --artifact-dir /path/to/artifact --out /tmp/artifact.tgz
 ```
 
 ## Command Notes
@@ -254,6 +279,45 @@ Current V1 support:
 3. optional `--include-steps`
 4. optional `--include-artifacts`
 5. `--json`
+
+### `aionis artifacts list`
+
+`artifacts list` recursively lists files and subdirectories under one artifact directory.
+
+Current V1 support:
+
+1. `--artifact-dir <path>`
+2. `--json`
+
+### `aionis artifacts show`
+
+`artifacts show` loads one file under an artifact directory and prints either UTF-8 text or base64 content.
+
+Current V1 support:
+
+1. `--artifact-dir <path>`
+2. `--name <relative-file>`
+3. `--json`
+
+### `aionis artifacts export`
+
+`artifacts export` copies one artifact directory to another local path.
+
+Current V1 support:
+
+1. `--artifact-dir <path>`
+2. `--out <path>`
+3. `--json`
+
+### `aionis artifacts pack`
+
+`artifacts pack` creates a `.tar.gz` bundle for one artifact directory.
+
+Current V1 support:
+
+1. `--artifact-dir <path>`
+2. `--out <path>`
+3. `--json`
 
 ## Recommended Use
 

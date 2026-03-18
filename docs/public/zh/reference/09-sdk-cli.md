@@ -33,6 +33,7 @@ npx @aionis/sdk@0.2.20 --help
 2. `aionis eval ...`
 3. `aionis playbooks ...`
 4. `aionis replay inspect-run`
+5. `aionis artifacts ...`
 
 兼容 alias 仍然可用：
 
@@ -127,6 +128,30 @@ npx @aionis/sdk@0.2.20 playbooks dispatch --playbook-id <playbook_id> --mode sim
 
 ```bash
 npx @aionis/sdk@0.2.20 replay inspect-run --run-id <run_id> --include-steps --include-artifacts
+```
+
+列出一份 artifact 目录内容：
+
+```bash
+npx @aionis/sdk@0.2.20 artifacts list --artifact-dir /path/to/artifact
+```
+
+查看一份 artifact 文件：
+
+```bash
+npx @aionis/sdk@0.2.20 artifacts show --artifact-dir /path/to/artifact --name execution_eval_summary.json
+```
+
+导出一份 artifact 目录：
+
+```bash
+npx @aionis/sdk@0.2.20 artifacts export --artifact-dir /path/to/artifact --out /tmp/artifact-copy
+```
+
+打包一份 artifact 目录：
+
+```bash
+npx @aionis/sdk@0.2.20 artifacts pack --artifact-dir /path/to/artifact --out /tmp/artifact.tgz
 ```
 
 ## 命令说明
@@ -254,6 +279,45 @@ npx @aionis/sdk@0.2.20 replay inspect-run --run-id <run_id> --include-steps --in
 3. 可选 `--include-steps`
 4. 可选 `--include-artifacts`
 5. `--json`
+
+### `aionis artifacts list`
+
+`artifacts list` 会递归列出一份 artifact 目录下的文件和子目录。
+
+当前 V1 支持：
+
+1. `--artifact-dir <path>`
+2. `--json`
+
+### `aionis artifacts show`
+
+`artifacts show` 会读取 artifact 目录下的一份文件，并输出 UTF-8 文本或 base64 内容。
+
+当前 V1 支持：
+
+1. `--artifact-dir <path>`
+2. `--name <relative-file>`
+3. `--json`
+
+### `aionis artifacts export`
+
+`artifacts export` 会把一份 artifact 目录复制到另一个本地路径。
+
+当前 V1 支持：
+
+1. `--artifact-dir <path>`
+2. `--out <path>`
+3. `--json`
+
+### `aionis artifacts pack`
+
+`artifacts pack` 会把一份 artifact 目录打成 `.tar.gz` 包。
+
+当前 V1 支持：
+
+1. `--artifact-dir <path>`
+2. `--out <path>`
+3. `--json`
 
 ## 推荐使用场景
 

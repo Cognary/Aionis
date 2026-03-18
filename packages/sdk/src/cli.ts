@@ -2,6 +2,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   openSync,
@@ -36,6 +37,10 @@ type CommandName =
   | "eval:inspect"
   | "eval:compare"
   | "eval:gate"
+  | "artifacts:list"
+  | "artifacts:show"
+  | "artifacts:export"
+  | "artifacts:pack"
   | "help";
 
 type ResolvedCommand = {
@@ -76,6 +81,12 @@ type RuntimeResolution = {
   source: "local_repo" | "cached_runtime" | "downloaded_bundle" | "downloaded_source";
   version: string;
   cacheRoot?: string;
+};
+
+type ArtifactEntry = {
+  name: string;
+  size_bytes: number;
+  kind: "file" | "directory";
 };
 
 class CliUsageError extends Error {}
@@ -124,6 +135,18 @@ async function main() {
       return;
     case "eval:gate":
       await runEvalGate(command.label, options, flags);
+      return;
+    case "artifacts:list":
+      await runArtifactsList(command.label, options, flags);
+      return;
+    case "artifacts:show":
+      await runArtifactsShow(command.label, options, flags);
+      return;
+    case "artifacts:export":
+      await runArtifactsExport(command.label, options, flags);
+      return;
+    case "artifacts:pack":
+      await runArtifactsPack(command.label, options, flags);
       return;
     case "help":
     default:
@@ -197,6 +220,22 @@ function resolveCommand(argv: string[]): ResolvedCommand {
     }
   }
 
+  if (first === "artifacts") {
+    switch (second) {
+      case "list":
+      case "show":
+      case "export":
+      case "pack":
+        return {
+          name: `artifacts:${second}`,
+          label: `aionis artifacts ${second}`,
+          args: rest,
+        };
+      default:
+        return { name: "help", label: "aionis help", args: argv };
+    }
+  }
+
   if (first === "dev" || first === "stop" || first === "health" || first === "doctor" || first === "selfcheck") {
     return {
       name: `runtime:${first}`,
@@ -263,6 +302,10 @@ function printHelp() {
       "  aionis eval inspect --artifact-dir <dir> [--suite-id <id>] [--json]",
       "  aionis eval compare --baseline <path> --treatment <path> [--suite-id <id>] [--json]",
       "  aionis eval gate --artifact-dir <dir> [--suite-id <id>] [--json]",
+      "  aionis artifacts list --artifact-dir <dir> [--json]",
+      "  aionis artifacts show --artifact-dir <dir> --name <file> [--json]",
+      "  aionis artifacts export --artifact-dir <dir> --out <path> [--json]",
+      "  aionis artifacts pack --artifact-dir <dir> --out <path> [--json]",
       "",
       "Compatibility aliases:",
       "  aionis dev|stop|health|doctor|selfcheck",
@@ -305,6 +348,68 @@ function getOptionalModeFlag(flags: Map<string, string | boolean>, name: string)
   if (!raw) return undefined;
   if (raw === "simulate" || raw === "strict" || raw === "guided") return raw;
   throw new CliUsageError(`--${name} must be one of: simulate, strict, guided`);
+}
+
+function resolveArtifactDirFlag(flags: Map<string, string | boolean>): string {
+  const artifactDir = resolve(getRequiredFlag(flags, "artifact-dir"));
+  if (!existsSync(artifactDir)) {
+    throw new CliNotFoundError(`artifact directory not found: ${artifactDir}`);
+  }
+  if (!statSync(artifactDir).isDirectory()) {
+    throw new CliUsageError(`--artifact-dir must be a directory: ${artifactDir}`);
+  }
+  return artifactDir;
+}
+
+function listArtifactEntries(rootDir: string): ArtifactEntry[] {
+  const out: ArtifactEntry[] = [];
+  const stack = [{ abs: rootDir, rel: "" }];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) continue;
+    const names = readdirSync(current.abs).sort((a, b) => a.localeCompare(b));
+    for (const name of names) {
+      const abs = join(current.abs, name);
+      const rel = current.rel ? `${current.rel}/${name}` : name;
+      const stats = statSync(abs);
+      if (stats.isDirectory()) {
+        out.push({ name: rel, size_bytes: 0, kind: "directory" });
+        stack.push({ abs, rel });
+      } else {
+        out.push({ name: rel, size_bytes: stats.size, kind: "file" });
+      }
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function resolveArtifactFile(rootDir: string, rawName: string): string {
+  const normalized = rawName.replace(/\\/g, "/");
+  const target = resolve(rootDir, normalized);
+  if (target !== rootDir && !target.startsWith(`${rootDir}/`)) {
+    throw new CliUsageError(`artifact file must stay under artifact directory: ${rawName}`);
+  }
+  if (!existsSync(target)) {
+    throw new CliNotFoundError(`artifact file not found: ${normalized}`);
+  }
+  if (!statSync(target).isFile()) {
+    throw new CliUsageError(`artifact target is not a file: ${normalized}`);
+  }
+  return target;
+}
+
+function detectTextContent(buffer: Buffer): boolean {
+  const sample = buffer.subarray(0, Math.min(buffer.length, 4096));
+  for (const byte of sample) {
+    if (byte === 0) return false;
+  }
+  return true;
+}
+
+function ensureMissingOutputPath(outputPath: string, flagName: string) {
+  if (existsSync(outputPath)) {
+    throw new CliUsageError(`--${flagName} already exists: ${outputPath}`);
+  }
 }
 
 function outputEnvelope(command: string, body: Record<string, unknown>) {
@@ -1249,6 +1354,113 @@ async function runEvalGate(command: string, options: CliOptions, flags: Map<stri
       `artifact_dir: ${resolve(artifactDir)}`,
       `verdict: ${gate.verdict}`,
       ...(gate.reasons.length > 0 ? gate.reasons.map((reason) => `reason: ${reason}`) : ["reason: none"]),
+    ].join("\n"),
+  );
+}
+
+async function runArtifactsList(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const artifactDir = resolveArtifactDirFlag(flags);
+  const files = listArtifactEntries(artifactDir);
+  emitSuccess(
+    command,
+    options.json,
+    {
+      artifact_dir: artifactDir,
+      count: files.length,
+      files,
+    },
+    [
+      "Artifact Listing",
+      `artifact_dir: ${artifactDir}`,
+      `count: ${files.length}`,
+      ...files.map((entry) => `${entry.kind === "directory" ? "dir " : "file"} ${entry.name}${entry.kind === "file" ? ` (${entry.size_bytes} B)` : ""}`),
+    ].join("\n"),
+  );
+}
+
+async function runArtifactsShow(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const artifactDir = resolveArtifactDirFlag(flags);
+  const name = getRequiredFlag(flags, "name");
+  const targetFile = resolveArtifactFile(artifactDir, name);
+  const content = readFileSync(targetFile);
+  const relativeName = targetFile.slice(artifactDir.length + 1);
+  const encoding = detectTextContent(content) ? "utf8" : "base64";
+  const rendered = encoding === "utf8" ? content.toString("utf8") : content.toString("base64");
+  emitSuccess(
+    command,
+    options.json,
+    {
+      artifact_dir: artifactDir,
+      name: relativeName,
+      size_bytes: content.length,
+      encoding,
+      content: rendered,
+    },
+    [
+      "Artifact File",
+      `artifact_dir: ${artifactDir}`,
+      `name: ${relativeName}`,
+      `size_bytes: ${content.length}`,
+      `encoding: ${encoding}`,
+      "",
+      rendered,
+    ].join("\n"),
+  );
+}
+
+async function runArtifactsExport(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const artifactDir = resolveArtifactDirFlag(flags);
+  const out = resolve(getRequiredFlag(flags, "out"));
+  ensureMissingOutputPath(out, "out");
+  cpSync(artifactDir, out, { recursive: true });
+  emitSuccess(
+    command,
+    options.json,
+    {
+      artifact_dir: artifactDir,
+      out,
+      exported: true,
+    },
+    [
+      "Artifact Export",
+      `artifact_dir: ${artifactDir}`,
+      `out: ${out}`,
+      "exported: true",
+    ].join("\n"),
+  );
+}
+
+async function runArtifactsPack(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const artifactDir = resolveArtifactDirFlag(flags);
+  const out = resolve(getRequiredFlag(flags, "out"));
+  ensureMissingOutputPath(out, "out");
+  const parentDir = dirname(artifactDir);
+  const artifactName = basename(artifactDir);
+  const pack = spawnSync("tar", ["-czf", out, "-C", parentDir, artifactName], {
+    encoding: "utf8",
+  });
+  if (pack.error) {
+    throw pack.error;
+  }
+  if (pack.status !== 0) {
+    throw new Error(pack.stderr || `failed to pack artifacts: ${artifactDir}`);
+  }
+  const sizeBytes = statSync(out).size;
+  emitSuccess(
+    command,
+    options.json,
+    {
+      artifact_dir: artifactDir,
+      out,
+      size_bytes: sizeBytes,
+      packed: true,
+    },
+    [
+      "Artifact Pack",
+      `artifact_dir: ${artifactDir}`,
+      `out: ${out}`,
+      `size_bytes: ${sizeBytes}`,
+      "packed: true",
     ].join("\n"),
   );
 }
