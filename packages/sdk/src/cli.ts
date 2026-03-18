@@ -37,6 +37,7 @@ type CommandName =
   | "playbooks:candidate"
   | "playbooks:dispatch"
   | "replay:inspect-run"
+  | "replay:inspect-playbook"
   | "eval:inspect"
   | "eval:compare"
   | "eval:gate"
@@ -139,6 +140,9 @@ async function main() {
     case "replay:inspect-run":
       await runReplayInspectRun(command.label, options, flags);
       return;
+    case "replay:inspect-playbook":
+      await runReplayInspectPlaybook(command.label, options, flags);
+      return;
     case "eval:inspect":
       await runEvalInspect(command.label, options, flags);
       return;
@@ -237,9 +241,10 @@ function resolveCommand(argv: string[]): ResolvedCommand {
   if (first === "replay") {
     switch (second) {
       case "inspect-run":
+      case "inspect-playbook":
         return {
-          name: "replay:inspect-run",
-          label: "aionis replay inspect-run",
+          name: `replay:${second}`,
+          label: `aionis replay ${second}`,
           args: rest,
         };
       default:
@@ -329,6 +334,7 @@ function printHelp() {
       "  aionis playbooks candidate --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
       "  aionis playbooks dispatch --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
       "  aionis replay inspect-run --run-id <id> [--scope <scope>] [--include-steps] [--include-artifacts] [--json]",
+      "  aionis replay inspect-playbook --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
       "  aionis eval inspect --artifact-dir <dir> [--suite-id <id>] [--json]",
       "  aionis eval compare --baseline <path> --treatment <path> [--suite-id <id>] [--json]",
       "  aionis eval gate --artifact-dir <dir> [--suite-id <id>] [--json]",
@@ -1287,6 +1293,56 @@ async function runReplayInspectRun(command: string, options: CliOptions, flags: 
       `include_steps: ${String(includeSteps)}`,
       `include_artifacts: ${String(includeArtifacts)}`,
       `request_id: ${response.request_id ?? "n/a"}`,
+    ].join("\n"),
+  );
+}
+
+async function runReplayInspectPlaybook(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const playbookId = getRequiredFlag(flags, "playbook-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const version = getOptionalIntFlag(flags, "version");
+  const mode = getOptionalModeFlag(flags, "mode");
+  const getResponse = await client.replayPlaybookGet({
+    playbook_id: playbookId,
+    scope,
+  });
+  const candidateResponse = await client.replayPlaybookCandidate({
+    playbook_id: playbookId,
+    scope,
+    version,
+    mode,
+  });
+  const playbook = (getResponse.data as Record<string, unknown>)?.playbook as Record<string, unknown> | undefined;
+  const candidate = (candidateResponse.data as Record<string, unknown>)?.candidate as Record<string, unknown> | undefined;
+  const deterministicGate = (candidateResponse.data as Record<string, unknown>)?.deterministic_gate ?? null;
+  const costSignals = (candidateResponse.data as Record<string, unknown>)?.cost_signals ?? null;
+  emitSuccess(
+    command,
+    options.json,
+    {
+      playbook_id: playbookId,
+      scope: scope ?? null,
+      version: version ?? null,
+      mode: mode ?? null,
+      playbook,
+      candidate,
+      deterministic_gate: deterministicGate,
+      cost_signals: costSignals,
+      request_ids: {
+        playbook_get: getResponse.request_id ?? null,
+        playbook_candidate: candidateResponse.request_id ?? null,
+      },
+    },
+    [
+      "Replay Playbook Inspection",
+      `playbook_id: ${playbookId}`,
+      `scope: ${scope ?? "default"}`,
+      `status: ${String(playbook?.status ?? "unknown")}`,
+      `version: ${String(playbook?.version ?? version ?? "unknown")}`,
+      `eligible: ${String(candidate?.eligible_for_deterministic_replay ?? "unknown")}`,
+      `recommended_mode: ${String(candidate?.recommended_mode ?? "unknown")}`,
+      `next_action: ${String(candidate?.next_action ?? "unknown")}`,
     ].join("\n"),
   );
 }

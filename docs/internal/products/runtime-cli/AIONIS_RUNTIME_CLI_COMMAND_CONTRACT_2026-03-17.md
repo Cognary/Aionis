@@ -594,6 +594,11 @@ Usage:
 aionis replay inspect-playbook <playbook_id> [--json]
 ```
 
+Current V1 implementation note:
+
+1. `replay inspect-playbook` is implemented as an inspection composition over `playbooks/get` and `playbooks/candidate`
+2. it must remain read-only
+
 ### `aionis replay recover <run_id>`
 
 Usage:

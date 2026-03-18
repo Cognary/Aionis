@@ -34,7 +34,8 @@ npx @aionis/sdk@0.2.20 --help
 3. `aionis runs ...`
 4. `aionis playbooks ...`
 5. `aionis replay inspect-run`
-6. `aionis artifacts ...`
+6. `aionis replay inspect-playbook`
+7. `aionis artifacts ...`
 
 兼容 alias 仍然可用：
 
@@ -147,6 +148,12 @@ npx @aionis/sdk@0.2.20 playbooks dispatch --playbook-id <playbook_id> --mode sim
 
 ```bash
 npx @aionis/sdk@0.2.20 replay inspect-run --run-id <run_id> --include-steps --include-artifacts
+```
+
+检查一份 replay playbook：
+
+```bash
+npx @aionis/sdk@0.2.20 replay inspect-playbook --playbook-id <playbook_id> --mode strict
 ```
 
 列出一份 artifact 目录内容：
@@ -343,6 +350,27 @@ npx @aionis/sdk@0.2.20 artifacts pack --artifact-dir /path/to/artifact --out /tm
 3. 可选 `--include-steps`
 4. 可选 `--include-artifacts`
 5. `--json`
+
+### `aionis replay inspect-playbook`
+
+`replay inspect-playbook` 会组合两条 inspection surface：
+
+1. `playbooks/get`
+2. `playbooks/candidate`
+
+当前 V1 支持：
+
+1. `--playbook-id <id>`
+2. 可选 `--scope <scope>`
+3. 可选 `--version <n>`
+4. 可选 `--mode simulate|strict|guided`
+5. `--json`
+
+当前行为：
+
+1. 获取 playbook 元数据和状态
+2. 评估同一份 playbook 的 deterministic replay candidacy
+3. 在一个 envelope 里返回 candidate、deterministic gate 和 cost signals
 
 ### `aionis artifacts list`
 

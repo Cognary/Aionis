@@ -34,7 +34,8 @@ Current implemented command groups:
 3. `aionis runs ...`
 4. `aionis playbooks ...`
 5. `aionis replay inspect-run`
-6. `aionis artifacts ...`
+6. `aionis replay inspect-playbook`
+7. `aionis artifacts ...`
 
 Compatibility aliases still work:
 
@@ -147,6 +148,12 @@ Inspect one replay run:
 
 ```bash
 npx @aionis/sdk@0.2.20 replay inspect-run --run-id <run_id> --include-steps --include-artifacts
+```
+
+Inspect one replay playbook:
+
+```bash
+npx @aionis/sdk@0.2.20 replay inspect-playbook --playbook-id <playbook_id> --mode strict
 ```
 
 List artifact contents:
@@ -343,6 +350,27 @@ Current V1 support:
 3. optional `--include-steps`
 4. optional `--include-artifacts`
 5. `--json`
+
+### `aionis replay inspect-playbook`
+
+`replay inspect-playbook` inspects one playbook by combining:
+
+1. `playbooks/get`
+2. `playbooks/candidate`
+
+Current V1 support:
+
+1. `--playbook-id <id>`
+2. optional `--scope <scope>`
+3. optional `--version <n>`
+4. optional `--mode simulate|strict|guided`
+5. `--json`
+
+Current behavior:
+
+1. fetches playbook metadata and state
+2. evaluates deterministic replay candidacy for the same playbook
+3. returns candidate, deterministic gate, and cost signals in one envelope
 
 ### `aionis artifacts list`
 
