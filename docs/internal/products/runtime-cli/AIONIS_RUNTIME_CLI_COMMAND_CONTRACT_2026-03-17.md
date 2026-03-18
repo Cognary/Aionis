@@ -625,6 +625,12 @@ Purpose:
 2. explain continuity breaks
 3. explain missing state or evidence
 
+Current V1 implementation note:
+
+1. `replay explain` is implemented as a read-only inspection over `replay/runs/get`
+2. it explains `compile_from_run` viability only
+3. it must not mutate or auto-compile anything
+
 ## Group 5: `eval`
 
 Purpose:

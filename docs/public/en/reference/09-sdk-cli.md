@@ -35,7 +35,8 @@ Current implemented command groups:
 4. `aionis playbooks ...`
 5. `aionis replay inspect-run`
 6. `aionis replay inspect-playbook`
-7. `aionis artifacts ...`
+7. `aionis replay explain`
+8. `aionis artifacts ...`
 
 Compatibility aliases still work:
 
@@ -154,6 +155,12 @@ Inspect one replay playbook:
 
 ```bash
 npx @aionis/sdk@0.2.20 replay inspect-playbook --playbook-id <playbook_id> --mode strict
+```
+
+Explain replay compile readiness for one run:
+
+```bash
+npx @aionis/sdk@0.2.20 replay explain --run-id <run_id>
 ```
 
 List artifact contents:
@@ -371,6 +378,23 @@ Current behavior:
 1. fetches playbook metadata and state
 2. evaluates deterministic replay candidacy for the same playbook
 3. returns candidate, deterministic gate, and cost signals in one envelope
+
+### `aionis replay explain`
+
+`replay explain` gives a read-only explanation of whether a replay run is currently compile-ready for playbook generation.
+
+Current V1 support:
+
+1. `--run-id <id>`
+2. optional `--scope <scope>`
+3. optional `--allow-partial`
+4. `--json`
+
+Current behavior:
+
+1. fetches the replay run with steps included
+2. explains whether `compile_from_run` would be blocked right now
+3. returns blockers, next action, and step status frequency in one envelope
 
 ### `aionis artifacts list`
 

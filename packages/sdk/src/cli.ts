@@ -38,6 +38,7 @@ type CommandName =
   | "playbooks:dispatch"
   | "replay:inspect-run"
   | "replay:inspect-playbook"
+  | "replay:explain"
   | "eval:inspect"
   | "eval:compare"
   | "eval:gate"
@@ -143,6 +144,9 @@ async function main() {
     case "replay:inspect-playbook":
       await runReplayInspectPlaybook(command.label, options, flags);
       return;
+    case "replay:explain":
+      await runReplayExplain(command.label, options, flags);
+      return;
     case "eval:inspect":
       await runEvalInspect(command.label, options, flags);
       return;
@@ -242,6 +246,7 @@ function resolveCommand(argv: string[]): ResolvedCommand {
     switch (second) {
       case "inspect-run":
       case "inspect-playbook":
+      case "explain":
         return {
           name: `replay:${second}`,
           label: `aionis replay ${second}`,
@@ -335,6 +340,7 @@ function printHelp() {
       "  aionis playbooks dispatch --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
       "  aionis replay inspect-run --run-id <id> [--scope <scope>] [--include-steps] [--include-artifacts] [--json]",
       "  aionis replay inspect-playbook --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
+      "  aionis replay explain --run-id <id> [--scope <scope>] [--allow-partial] [--json]",
       "  aionis eval inspect --artifact-dir <dir> [--suite-id <id>] [--json]",
       "  aionis eval compare --baseline <path> --treatment <path> [--suite-id <id>] [--json]",
       "  aionis eval gate --artifact-dir <dir> [--suite-id <id>] [--json]",
@@ -1343,6 +1349,83 @@ async function runReplayInspectPlaybook(command: string, options: CliOptions, fl
       `eligible: ${String(candidate?.eligible_for_deterministic_replay ?? "unknown")}`,
       `recommended_mode: ${String(candidate?.recommended_mode ?? "unknown")}`,
       `next_action: ${String(candidate?.next_action ?? "unknown")}`,
+    ].join("\n"),
+  );
+}
+
+async function runReplayExplain(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const runId = getRequiredFlag(flags, "run-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const allowPartial = Boolean(flags.get("allow-partial"));
+  const response = await client.replayRunGet({
+    run_id: runId,
+    scope,
+    include_steps: true,
+    include_artifacts: false,
+  });
+  const payload = response.data as Record<string, unknown>;
+  const run = payload.run && typeof payload.run === "object" ? (payload.run as Record<string, unknown>) : {};
+  const steps = Array.isArray(payload.steps) ? payload.steps : [];
+  const counters = payload.counters && typeof payload.counters === "object" ? (payload.counters as Record<string, unknown>) : {};
+  const runStatus = String(run.status ?? "unknown");
+  const blockerCodes: string[] = [];
+  if (!allowPartial && runStatus !== "success") blockerCodes.push("run_not_successful");
+  if (steps.length === 0) blockerCodes.push("no_step_nodes");
+  const blockers = blockerCodes.map((code) => {
+    switch (code) {
+      case "run_not_successful":
+        return {
+          code,
+          message: `compile_from_run requires run status=success unless --allow-partial is set; current status=${runStatus}`,
+        };
+      case "no_step_nodes":
+        return {
+          code,
+          message: "run does not contain replay step nodes, so replay playbook compilation would have no source steps",
+        };
+      default:
+        return { code, message: code };
+    }
+  });
+  const stepStatusFrequency = new Map<string, number>();
+  for (const step of steps) {
+    const item = step && typeof step === "object" ? (step as Record<string, unknown>) : {};
+    const status = String(item.status ?? "unknown");
+    stepStatusFrequency.set(status, (stepStatusFrequency.get(status) ?? 0) + 1);
+  }
+  const nextAction = blockerCodes.includes("no_step_nodes")
+    ? "instrument replay step nodes before expecting compile-from-run"
+    : blockerCodes.includes("run_not_successful")
+      ? "rerun to success or retry with --allow-partial for inspection-only use"
+      : "run is compile-ready for replay playbook generation";
+  emitSuccess(
+    command,
+    options.json,
+    {
+      run_id: runId,
+      scope: scope ?? null,
+      allow_partial: allowPartial,
+      run,
+      counters,
+      explain: {
+        compile_ready: blockerCodes.length === 0,
+        blocker_count: blockers.length,
+        blockers,
+        next_action: nextAction,
+        step_status_frequency: Object.fromEntries(stepStatusFrequency.entries()),
+      },
+      request_id: response.request_id ?? null,
+    },
+    [
+      "Replay Explain",
+      `run_id: ${runId}`,
+      `scope: ${scope ?? "default"}`,
+      `status: ${runStatus}`,
+      `allow_partial: ${String(allowPartial)}`,
+      `compile_ready: ${String(blockerCodes.length === 0)}`,
+      `blockers: ${blockerCodes.length === 0 ? "none" : blockerCodes.join(",")}`,
+      `next_action: ${nextAction}`,
     ].join("\n"),
   );
 }
