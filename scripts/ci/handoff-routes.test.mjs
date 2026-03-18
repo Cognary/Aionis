@@ -785,7 +785,7 @@ test("http observability maps handoff routes into request telemetry endpoints", 
   const parsed = JSON.parse(out);
   assert.equal(parsed.store, "write");
   assert.equal(parsed.recover, "recall");
-  assert.equal(parsed.corsStore.allow_methods, "POST,OPTIONS");
+  assert.equal(parsed.corsStore.allow_methods, "GET,POST,OPTIONS");
   assert.deepEqual(parsed.corsStore.allow_origins, ["*"]);
-  assert.equal(parsed.corsPreflight.allow_methods, "POST,OPTIONS");
+  assert.equal(parsed.corsPreflight.allow_methods, "GET,POST,OPTIONS");
 });

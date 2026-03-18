@@ -1,9 +1,23 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const require = createRequire(import.meta.url);
+
+const LITE_SQLITE_UNAVAILABLE =
+  (() => {
+    try {
+      const mod = require("node:sqlite");
+      return typeof mod?.DatabaseSync !== "function";
+    } catch {
+      return true;
+    }
+  })()
+    ? "requires Node.js with node:sqlite support"
+    : false;
 
 function extractFirstJsonObject(text) {
   let start = -1;
@@ -57,7 +71,7 @@ function runSnippet(source) {
   return lines[lines.length - 1] ?? "";
 }
 
-test("POST /v1/memory/tools/select returns family-aware ordering metadata", () => {
+test("POST /v1/memory/tools/select returns family-aware ordering metadata", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const out = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";
     import os from "node:os";
