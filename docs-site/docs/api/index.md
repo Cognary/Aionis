@@ -63,6 +63,8 @@ Always persist these fields in logs and telemetry:
 
 > `POST /v1/memory/rules/evaluate`
 > `POST /v1/memory/tools/select`
+> `POST /v1/memory/tools/decision`
+> `POST /v1/memory/tools/run`
 > `POST /v1/memory/tools/feedback`
 
 ### Replay
@@ -87,9 +89,11 @@ Always persist these fields in logs and telemetry:
 4. [POST /v1/memory/context/assemble](/api/endpoints/context-assemble)
 5. [POST /v1/memory/rules/evaluate](/api/endpoints/rules-evaluate)
 6. [POST /v1/memory/tools/select](/api/endpoints/tools-select)
-7. [POST /v1/memory/resolve](/api/endpoints/resolve)
-8. [POST /v1/memory/replay/runs/get](/api/endpoints/replay-runs-get)
-9. [Automation APIs](/api/automation)
+7. [POST /v1/memory/tools/decision](/api/endpoints/tools-decision)
+8. [POST /v1/memory/tools/run](/api/endpoints/tools-run)
+9. [POST /v1/memory/resolve](/api/endpoints/resolve)
+10. [POST /v1/memory/replay/runs/get](/api/endpoints/replay-runs-get)
+11. [Automation APIs](/api/automation)
 
 ## Suggested reading order
 

@@ -11,8 +11,10 @@ Aionis Doc 是 Aionis 的 executable-document 格式。
 1. 被普通编辑器阅读
 2. 被确定性解析
 3. 被编译成 IR 和 execution graph
-4. 被转换成 native runtime handoff
-5. 通过 Aionis handoff memory 做 publish 和 recover
+4. 被编译成 runtime-neutral 的 `execution_plan_v1`
+5. 直接走最小本地执行路径
+6. 被转换成 native runtime handoff
+7. 通过 Aionis handoff memory 做 publish 和 recover
 
 ## 它是什么
 
@@ -34,8 +36,10 @@ Aionis Doc 不是一门独立编程语言，也不是 prompt 模板 DSL。
 3. 基础 schema 校验
 4. scoped ref 解析
 5. 简单 execution graph 构建
-6. runtime handoff 生成
-7. 通过 native handoff endpoint 做 publish 和 recover
+6. `execution_plan_v1` 生成
+7. 最小 direct execution
+8. runtime handoff 生成
+9. 通过 native handoff endpoint 做 publish 和 recover
 
 ## 当前稳定 authoring 子集
 
@@ -79,20 +83,56 @@ Compile a minimal Aionis document.
 
 ## 主工作流
 
-官方 CLI 下最常见的路径是：
+通过 `@aionis/sdk` 暴露的集成 CLI 下，最常见的路径是：
 
 1. `aionis doc compile`
-2. `aionis doc runtime-handoff`
-3. `aionis doc store-request`
-4. `aionis doc publish`
-5. `aionis doc recover`
+2. `aionis doc execute`
+3. `aionis doc runtime-handoff`
+4. `aionis doc store-request`
+5. `aionis doc publish`
+6. `aionis doc recover`
 
 这会把一个 `.aionis.md` 文件推进成：
 
 1. compiler artifacts
-2. runtime continuity payload
-3. 存储后的 handoff artifact
-4. recover 出来的 execution-ready handoff
+2. 可移植的 execution plan
+3. 最小本地 execution result
+4. runtime continuity payload
+5. 存储后的 handoff artifact
+6. recover 出来的 execution-ready handoff
+
+## 独立包命令面
+
+如果你直接使用 `@aionis/doc` 包本身，当前暴露的是独立二进制，而不是 `aionis doc ...` 子命令：
+
+1. `compile-aionis-doc`
+2. `execute-aionis-doc`
+3. `build-aionis-doc-runtime-handoff`
+4. `build-aionis-doc-handoff-store-request`
+5. `publish-aionis-doc-handoff`
+6. `recover-aionis-doc-handoff`
+
+这两层命令面对应的是同一条工作流，但入口不同：
+
+1. `aionis doc ...` 属于 `@aionis/sdk` 集成 CLI
+2. 上面这组独立二进制属于 `@aionis/doc` 包本身
+
+## 当前分发状态
+
+当前更准确的产品状态是：
+
+1. `aionis doc ...` 已经是主 SDK CLI 的公开集成能力
+2. `@aionis/doc` 已经有独立包元数据、README、CHANGELOG 和 `bin` 暴露
+3. `@aionis/doc` 现在已经有独立 release surface，但是否可安装取决于对应版本是否已经实际发布到 npm
+
+当前仓库里已经对齐了独立发布最小闭环：
+
+1. `aionis-doc:pack-dry-run`
+2. `aionis-doc:publish:dry-run`
+3. `aionis-doc:publish`
+4. `aionis-doc:release-check`
+5. `Aionis Doc CI` 和 `Aionis Doc Publish` GitHub workflow
+6. 仓库内发布说明：`docs/AIONIS_DOC_RELEASE.md`
 
 ## 下一步阅读
 

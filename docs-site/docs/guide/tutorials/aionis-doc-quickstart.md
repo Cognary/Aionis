@@ -1,6 +1,6 @@
 # Tutorial: Aionis Doc Quickstart
 
-Create one `.aionis.md` file, compile it, publish it into handoff memory, and recover execution continuity back through the native endpoint.
+Create one `.aionis.md` file, compile it, run a minimal direct execution pass, publish it into handoff memory, and recover execution continuity back through the native endpoint.
 
 ## Before you start
 
@@ -16,12 +16,13 @@ One document-driven workflow that goes through:
 
 1. source authoring
 2. compile
-3. runtime handoff shaping
-4. publish into `/v1/handoff/store`
-5. recover through `/v1/handoff/recover`
+3. direct execution
+4. runtime handoff shaping
+5. publish into `/v1/handoff/store`
+6. recover through `/v1/handoff/recover`
 
 > **Tip - Copy and run**
-> This tutorial uses only the public `aionis doc ...` CLI path. Keep the generated JSON files because they make it easier to inspect contracts and retry steps without recomputing everything.
+> This tutorial uses the `@aionis/sdk` integrated `aionis doc ...` CLI path. Keep the generated JSON files because they make it easier to inspect contracts and retry steps without recomputing everything.
 
 ## Input
 
@@ -42,11 +43,12 @@ If your environment requires API auth:
 | Field | Source step | Why keep it |
 | --- | --- | --- |
 | `compile_result_version` | 2 | Confirms the contract version you compiled against |
-| `runtime_handoff_version` | 3 | Confirms the continuity envelope version |
-| `response.commit_id` | 4 | The stored handoff commit identifier |
-| `response.handoff_anchor` | 4 | The anchor used for later recovery |
-| `recover_result_version` | 5 | Confirms the recover contract version |
-| `recover_response.request_id` | 5 | Native recover request trace |
+| `execution_result_version` | 3 | Confirms the direct execution result contract |
+| `runtime_handoff_version` | 4 | Confirms the continuity envelope version |
+| `response.commit_id` | 5 | The stored handoff commit identifier |
+| `response.handoff_anchor` | 5 | The anchor used for later recovery |
+| `recover_result_version` | 6 | Confirms the recover contract version |
+| `recover_response.request_id` | 6 | Native recover request trace |
 
 ## Step 1: Create a minimal `.aionis.md` file
 
@@ -118,7 +120,25 @@ What to confirm:
 
 If compile fails, stop here and fix the document first.
 
-## Step 3: Build a runtime handoff
+## Step 3: Execute the document directly
+
+```bash
+npx @aionis/sdk@0.2.20 doc execute "$DOC_DIR/workflow.aionis.md" \
+  --out "$DOC_DIR/execution-result.json"
+
+jq '{version: .execution_result_version, status: .status, outputs: .outputs}' \
+  "$DOC_DIR/execution-result.json"
+```
+
+What to confirm:
+
+1. `execution_result_version` is `aionis_doc_execution_result_v1`
+2. `status` is `success`
+3. `outputs["out.summary"].summary` exists
+
+This step uses the current minimal local execution runtime. It is the shortest path from authoring to a concrete result, without going through continuity storage.
+
+## Step 4: Build a runtime handoff
 
 ```bash
 npx @aionis/sdk@0.2.20 doc runtime-handoff "$DOC_DIR/workflow.aionis.md" \
@@ -138,7 +158,7 @@ What this step gives you:
 
 This is the continuity carrier between compile-time structure and runtime storage.
 
-## Step 4: Publish the document into handoff memory
+## Step 5: Publish the document into handoff memory
 
 ### With API key auth
 
@@ -178,7 +198,7 @@ What to confirm:
 3. `response.handoff_anchor` exists
 4. `response.handoff_kind` is populated
 
-## Step 5: Recover continuity from the same document
+## Step 6: Recover continuity from the same document
 
 ### With API key auth
 

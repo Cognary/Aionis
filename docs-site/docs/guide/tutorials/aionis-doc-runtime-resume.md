@@ -1,6 +1,6 @@
 # Tutorial: Aionis Doc + Runtime Resume
 
-Take a recovered Aionis Doc handoff and push it back into the live runtime path through `context/assemble` and `tools/select`.
+Take a recovered Aionis Doc handoff and push it back into the live runtime path through `context/assemble`, `tools/select`, `tools/decision`, and `tools/run`.
 
 ## Before you start
 
@@ -12,12 +12,37 @@ Take a recovered Aionis Doc handoff and push it back into the live runtime path 
 
 This tutorial explains the current public resume boundary for Aionis Doc.
 
+If you want the shortest path, there is now a single command surface for it:
+
+```bash
+npx @aionis/sdk@0.2.20 doc resume "$DOC_DIR/recover-result.json" \
+  --input-kind recover-result \
+  --candidate resume_patch \
+  --candidate request_review \
+  --base-url "$BASE_URL" \
+  --scope "$SCOPE"
+```
+
+The rest of this tutorial shows the underlying runtime calls explicitly, so the boundary stays inspectable.
+
+If you want one extra step after inspection, `aionis doc resume` now also supports an optional `--feedback-outcome` flag to write one `tools/feedback` record after the lifecycle lookups complete, then reread `tools/run` so you can compare the lifecycle before and after feedback.
+
+In the CLI result, prefer reading `resume_summary` first. It gives you the compact transition view without manually diffing the two `tools/run` payloads. If you want a single machine-facing verdict, read `resume_summary.resume_state` before reading the lower-level snapshots.
+
+The practical interpretation is:
+
+1. `inspection_only`: you resumed into inspection surfaces only and did not write feedback.
+2. `feedback_applied`: you wrote feedback, but the reread run lifecycle did not advance to a new status.
+3. `lifecycle_advanced`: you wrote feedback and the reread run lifecycle moved forward.
+
 Today, the runtime path is:
 
 1. recover native continuity from `aionis doc recover`
 2. feed `execution_state_v1` and `execution_packet_v1` into `context/assemble`
 3. feed recovered continuity into `tools/select`
-4. let your runtime execute the selected action using the assembled context and recovered next action
+4. inspect the persisted decision through `tools/decision`
+5. inspect the active run lifecycle through `tools/run`
+6. let your runtime execute the selected action using the assembled context and recovered next action
 
 This is not yet a one-command direct execution path from the document itself. It is the supported bridge into runtime execution.
 
@@ -27,7 +52,9 @@ One recovered Aionis Doc handoff that becomes:
 
 1. runtime context input
 2. policy-governed tool selection input
-3. a real execution attempt with a stable `run_id`
+3. decision lifecycle input
+4. run lifecycle input
+5. a real execution attempt with a stable `run_id`
 
 ## Input
 
@@ -92,6 +119,9 @@ jq '{
     workflow_kind: "aionis_doc",
     control_profile_v1: .recover_response.data.control_profile_v1
   },
+  execution_result_summary: .recover_response.data.execution_result_summary,
+  execution_artifacts: .recover_response.data.execution_artifacts,
+  execution_evidence: .recover_response.data.execution_evidence,
   execution_state_v1: .recover_response.data.execution_state_v1,
   execution_packet_v1: .recover_response.data.execution_packet_v1,
   include_rules: false,
@@ -104,6 +134,7 @@ Why both fields matter:
 1. `execution_state_v1` carries the persisted continuity state
 2. `execution_packet_v1` carries the exact runtime packet, including `next_action`
 3. `context.control_profile_v1` carries the recovered control posture into downstream policy surfaces
+4. recovered `execution_artifacts` / `execution_evidence` can be carried forward as resume-time side outputs
 
 ## Step 3: Assemble resume-ready context
 
@@ -131,6 +162,7 @@ jq '{
   packet_source_mode: .execution_kernel.packet_source_mode,
   execution_state_v1_present: .execution_kernel.execution_state_v1_present,
   execution_packet_v1_present: .execution_kernel.execution_packet_v1_present,
+  execution_side_outputs_present: (.layered_context.merged_text | test("Execution Side Outputs")),
   selected_tool: .assembly_summary.selected_tool,
   context_est_tokens: .assembly_summary.context_est_tokens
 }' "$DOC_DIR/context-assemble-response.json"
@@ -142,12 +174,14 @@ What to confirm:
 2. `execution_state_v1_present` is `true`
 3. `execution_packet_v1_present` is `true`
 4. `layered_context` exists if you requested it
+5. if side outputs were recovered, `Execution Side Outputs` appears in `layered_context.merged_text`
 
 What this means:
 
 1. the runtime accepted recovered continuity as execution kernel input
 2. the server did not have to rebuild the packet from state only
-3. the assembled context is now resume-aware
+3. recovered artifacts and evidence can now be injected into the assembled static context
+4. the assembled context is now resume-aware
 
 ## Step 4: Build a governed resume request for `tools/select`
 
@@ -163,6 +197,9 @@ jq '{
     workflow_kind: "aionis_doc",
     control_profile_v1: .recover_response.data.control_profile_v1
   },
+  execution_result_summary: .recover_response.data.execution_result_summary,
+  execution_artifacts: .recover_response.data.execution_artifacts,
+  execution_evidence: .recover_response.data.execution_evidence,
   execution_state_v1: .recover_response.data.execution_state_v1,
   candidates: [
     "resume_patch",
@@ -200,6 +237,9 @@ jq '{
   decision_id: .decision.decision_id,
   run_id: .decision.run_id,
   control_profile_origin: .execution_kernel.control_profile_origin,
+  execution_result_summary_present: .execution_kernel.execution_result_summary_present,
+  execution_artifacts_count: .execution_kernel.execution_artifacts_count,
+  execution_evidence_count: .execution_kernel.execution_evidence_count,
   execution_state_v1_present: .execution_kernel.execution_state_v1_present,
   current_stage: .execution_kernel.current_stage,
   active_role: .execution_kernel.active_role
@@ -212,15 +252,87 @@ What to confirm:
 2. `decision.decision_id` exists
 3. `execution_kernel.execution_state_v1_present` is `true`
 4. `execution_kernel.control_profile_origin` is `continuity_delivered` when `control_profile_v1` is passed in `context`
+5. `execution_artifacts_count` / `execution_evidence_count` reflect recovered side outputs when present
 
-## Step 6: What actually resumes after selection
+## Step 6: Inspect the persisted decision lifecycle
+
+Use the `decision_id` returned by `tools/select`:
+
+```bash
+jq '.decision.decision_id' -r "$DOC_DIR/tools-select-response.json" > "$DOC_DIR/decision-id.txt"
+```
+
+### With API key auth
+
+```bash
+curl -sS "$BASE_URL/v1/memory/tools/decision" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d "{\"scope\":\"$SCOPE\",\"decision_id\":\"$(cat "$DOC_DIR/decision-id.txt")\"}" > "$DOC_DIR/tools-decision-response.json"
+```
+
+### Without API auth
+
+```bash
+curl -sS "$BASE_URL/v1/memory/tools/decision" \
+  -H 'content-type: application/json' \
+  -d "{\"scope\":\"$SCOPE\",\"decision_id\":\"$(cat "$DOC_DIR/decision-id.txt")\"}" > "$DOC_DIR/tools-decision-response.json"
+```
+
+Inspect the decision lifecycle snapshot:
+
+```bash
+jq '{
+  decision_id: .decision.decision_id,
+  run_id: .decision.run_id,
+  selected_tool: .decision.selected_tool,
+  summary_version: .lifecycle_summary.summary_version,
+  lookup_mode: .lookup_mode
+}' "$DOC_DIR/tools-decision-response.json"
+```
+
+## Step 7: Inspect the run lifecycle snapshot
+
+Use the same `run_id` you passed into `tools/select`:
+
+### With API key auth
+
+```bash
+curl -sS "$BASE_URL/v1/memory/tools/run" \
+  -H "X-Api-Key: $AIONIS_API_KEY" \
+  -H 'content-type: application/json' \
+  -d "{\"scope\":\"$SCOPE\",\"run_id\":\"$RUN_ID\"}" > "$DOC_DIR/tools-run-response.json"
+```
+
+### Without API auth
+
+```bash
+curl -sS "$BASE_URL/v1/memory/tools/run" \
+  -H 'content-type: application/json' \
+  -d "{\"scope\":\"$SCOPE\",\"run_id\":\"$RUN_ID\"}" > "$DOC_DIR/tools-run-response.json"
+```
+
+Inspect the run lifecycle snapshot:
+
+```bash
+jq '{
+  run_id: .run_id,
+  status: .lifecycle.status,
+  decision_count: .lifecycle.decision_count,
+  latest_decision_at: .lifecycle.latest_decision_at,
+  latest_selected_tool: .lifecycle_summary.latest_selected_tool
+}' "$DOC_DIR/tools-run-response.json"
+```
+
+## Step 8: What actually resumes after lifecycle lookup
 
 At this point, your runtime has everything needed to continue the execution attempt:
 
 1. `layered_context` from `context/assemble`
 2. `execution_packet_v1.next_action` from the recovered continuity
 3. `selection.selected` from `tools/select`
-4. `decision.decision_id` and `run_id` for replay continuity
+4. `tools/decision` snapshot for replay continuity
+5. `tools/run` snapshot for current lifecycle state
 
 The practical execution loop is:
 
@@ -234,7 +346,9 @@ The practical execution loop is:
 1. recover returns continuity payloads
 2. `context/assemble` reports `packet_input` execution-kernel mode
 3. `tools/select` returns a real `decision_id` under the recovered execution state
-4. your runtime can now continue work without reconstructing the task from scratch
+4. `tools/decision` resolves the selected decision under the same `run_id`
+5. `tools/run` resolves the live run lifecycle under the same `run_id`
+6. your runtime can now continue work without reconstructing the task from scratch
 
 ## Common failure and fix
 
@@ -256,3 +370,6 @@ Fix:
 2. [Tutorial: Integrate One Agent End-to-End](agent-integration)
 3. [API: POST /v1/memory/context/assemble](/api/endpoints/context-assemble)
 4. [API: POST /v1/memory/tools/select](/api/endpoints/tools-select)
+5. [API: POST /v1/memory/tools/decision](/api/endpoints/tools-decision)
+6. [API: POST /v1/memory/tools/run](/api/endpoints/tools-run)
+7. [API Policy Loop](/api/policy)

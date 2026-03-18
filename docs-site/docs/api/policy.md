@@ -14,15 +14,16 @@ Policy APIs make tool selection and action execution inspectable, enforceable, a
 
 1. Evaluate rules with normalized runtime context.
 2. Select candidate tools under policy constraints.
-3. Persist decision and run linkage.
-4. Submit feedback for closed-loop learning.
+3. Inspect or persist decision linkage.
+4. Inspect run lifecycle state.
+5. Submit feedback for closed-loop learning.
 
 ## What each endpoint does
 
 1. `rules/evaluate` returns policy matches for the current context.
 2. `tools/select` narrows tool candidates under active rules.
-3. `tools/decision` persists the chosen decision and provenance.
-4. `tools/run` links execution to the prior decision.
+3. `tools/decision` reads the chosen decision and provenance from the authoritative store.
+4. `tools/run` reads execution lifecycle linked to the prior decision.
 5. `tools/feedback` records whether the outcome was useful or needs adjustment.
 
 ## Required IDs

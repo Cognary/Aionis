@@ -133,6 +133,76 @@ print(write_res.get("commit_uri"), recall_res.get("request_id"))
 
 完整上手见：[Python SDK + Aionis CLI](/public/zh/getting-started/08-python-sdk-with-cli)
 
+## 核心 SDK 方法
+
+1. TypeScript memory：`write`、`recall`、`recallText`
+2. TypeScript session helpers：`listSessions`、`createSession`、`writeEvent`、`listSessionEvents`
+3. TypeScript context and graph：`contextAssemble`、`find`、`resolve`
+4. TypeScript policy loop：`rulesEvaluate`、`toolsSelect`、`toolsDecision`、`toolsRun`、`toolsFeedback`
+5. TypeScript Aionis Doc helpers：`docRecover`、`docResume`、`docRecoverAndResume`
+6. TypeScript replay：`replayPlaybookGet`、`replayPlaybookCandidate`、`replayPlaybookRun`、`replayPlaybookDispatch`
+7. TypeScript continuity helpers：`handoffStore`、`handoffRecover`
+8. TypeScript automation helpers：`automationCreate`、`automationValidate`、`automationGraphValidate`、`automationRun`
+9. Python SDK 在对应能力上使用 snake_case，例如 `write`、`recall_text`、`list_sessions`、`handoff_store`、`replay_playbook_dispatch`、`automation_graph_validate`
+
+说明：
+
+1. 现在的 TypeScript client 已经覆盖 summary-first helpers、continuity helpers，以及原生 session inventory surface。
+2. 如果你已经有 `recover_result`，现在用 `docResume`；如果你手上只有 recover request 或 handoff anchor，就直接用 `docRecoverAndResume`。
+3. Python SDK 现在也补齐了同一层 Aionis Doc helper：`doc_recover`、`doc_resume`、`doc_recover_and_resume`，同时仍然保持 Python 风格的 snake_case 命名和 plain-dict 响应。
+4. 本地 runtime 启动仍然统一走一套 CLI，避免 TypeScript 和 Python 各自漂移。
+
+## Aionis Doc Resume Helper（TypeScript）
+
+如果你已经拿到了 `aionis_doc_recover_result_v1`，现在不必自己手动串：
+
+`handoff/recover -> context/assemble -> tools/select -> tools/decision -> tools/run`
+
+可以直接用 SDK helper：
+
+```ts
+const resumed = await client.docResume({
+  recover_result,
+  candidates: ["resume_patch", "request_review"],
+  feedback_outcome: "positive",
+});
+
+console.log(resumed.resume_summary.resume_state);
+console.log(resumed.resume_summary.lifecycle_transition);
+```
+
+这个 helper 返回显式类型的 `AionisDocResumeResult`，其中已经包含：
+
+1. `resume_summary`
+2. `context_assemble_response`
+3. `tools_select_response`
+4. `tools_decision_response`
+5. `tools_run_response`
+6. 可选的 `tools_feedback_response`
+7. 可选的 `tools_run_post_feedback_response`
+
+如果你还没有 recover envelope，可以直接用封装好的 helper：
+
+```ts
+const resumed = await client.docRecoverAndResume({
+  recover_request: { anchor: "aionis-doc:workflow-001", scope: "default" },
+  input_kind: "handoff-store-request",
+  candidates: ["resume_patch", "request_review"],
+});
+```
+
+Python 侧现在也有同一条高层路径：
+
+```python
+resumed = client.doc_recover_and_resume(
+    {
+        "recover_request": {"anchor": "aionis-doc:workflow-001", "scope": "default"},
+        "input_kind": "handoff-store-request",
+        "candidates": ["resume_patch", "request_review"],
+    }
+)
+```
+
 ## Find Summary（TypeScript）
 
 现在也可以先把 `find` 当成紧凑的 inventory surface 来用；只有当 `find_summary` 提示需要时，再去读取完整的 `nodes` 列表。

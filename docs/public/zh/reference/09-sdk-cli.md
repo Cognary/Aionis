@@ -23,7 +23,7 @@ npx @aionis/sdk@0.2.20 --help
 这套 CLI 是 Aionis runtime 的命令行产品面，当前覆盖：
 
 1. 本地 Lite runtime 生命周期
-2. Aionis Doc 的编译、handoff、publish、recover 工作流
+2. Aionis Doc 的编译、direct execution、handoff、publish、recover 工作流
 3. tool runs、replay 状态和 artifact 输出检查
 4. runtime 健康检查和环境诊断
 5. execution eval 结果检查
@@ -53,7 +53,7 @@ npx @aionis/sdk@0.2.20 --help
 当前边界：
 
 1. runtime 生命周期仍然只覆盖本地 Lite
-2. Aionis Doc 当前覆盖 compile、handoff、publish、recover 这条工作流
+2. Aionis Doc 当前覆盖 compile、最小 direct execution、handoff、publish、recover 这条工作流
 3. eval 命令消费本地 artifact 目录或预生成的 eval summary
 4. 这仍然不是 hosted control-plane CLI
 
@@ -100,6 +100,12 @@ npx @aionis/sdk@0.2.20 runtime stop --port 3321
 
 ```bash
 npx @aionis/sdk@0.2.20 doc compile ./workflow.aionis.md --emit graph
+```
+
+直接执行一份 Aionis Doc：
+
+```bash
+npx @aionis/sdk@0.2.20 doc execute ./workflow.aionis.md
 ```
 
 把一份 Aionis Doc 发布进原生 handoff store：
@@ -286,37 +292,60 @@ npx @aionis/sdk@0.2.20 artifacts pack --artifact-dir /path/to/artifact --out /tm
 
 `aionis doc ...` 是 Aionis Doc 的 executable-document 工作流入口。
 
+这里说的是 `@aionis/sdk` 主 CLI 里的集成命令面，不是 `@aionis/doc` 包自身的独立二进制名字。
+
 适合用在你想把一份人类可读文档推进成：
 
 1. compile 结果
-2. runtime handoff
-3. handoff/store request
-4. `/v1/handoff/store` 发布
-5. `/v1/handoff/recover` 恢复结果
+2. direct execution 结果
+3. runtime handoff
+4. handoff/store request
+5. `/v1/handoff/store` 发布
+6. `/v1/handoff/recover` 恢复结果
+7. `context/assemble -> tools/select -> tools/decision -> tools/run` resume 结果
+
+底层桥接到的独立二进制是：
+
+1. `compile-aionis-doc`
+2. `execute-aionis-doc`
+3. `build-aionis-doc-runtime-handoff`
+4. `build-aionis-doc-handoff-store-request`
+5. `publish-aionis-doc-handoff`
+6. `recover-aionis-doc-handoff`
+7. `resume-aionis-doc-runtime`
 
 当前 V1 命令：
 
 1. `aionis doc compile <input-file>`
-2. `aionis doc runtime-handoff <input-file>`
-3. `aionis doc store-request <runtime-handoff.json>`
-4. `aionis doc publish <input-file>`
-5. `aionis doc recover <input-file>`
+2. `aionis doc execute <input-file>`
+3. `aionis doc runtime-handoff <input-file>`
+4. `aionis doc store-request <runtime-handoff.json>`
+5. `aionis doc publish <input-file>`
+6. `aionis doc recover <input-file>`
+7. `aionis doc resume <input-file>`
 
 推荐用法：
 
 1. 想看 AST / IR / graph 时，用 `doc compile`
-2. 想拿 execution continuity carrier 时，用 `doc runtime-handoff`
-3. 想拿显式的 native handoff/store payload 时，用 `doc store-request`
-4. 想把 workflow 正式写入 Aionis handoff memory 时，用 `doc publish`
-5. 想通过原生 recover endpoint 拿回 handoff、execution state 和 next action 时，用 `doc recover`
+2. 想直接从文档拿最小执行结果时，用 `doc execute`
+3. 想拿 execution continuity carrier 时，用 `doc runtime-handoff`
+4. 想拿显式的 native handoff/store payload 时，用 `doc store-request`
+5. 想把 workflow 正式写入 Aionis handoff memory 时，用 `doc publish`
+6. 想通过原生 recover endpoint 拿回 handoff、execution state 和 next action 时，用 `doc recover`
+7. 想把 recovered continuity 直接推进到 `context/assemble -> tools/select -> tools/decision -> tools/run` 时，用 `doc resume`
+8. 如果还想顺手写入一次治理反馈，可额外传 `--feedback-outcome`
 
 当前支持的输入模式：
 
-1. `doc runtime-handoff` 支持 `source|compile-envelope`
-2. `doc publish` 支持 `source|runtime-handoff|handoff-store-request`
-3. `doc recover` 支持 `source|runtime-handoff|handoff-store-request|publish-result`
+1. `doc execute` 支持 `source|compile-envelope|plan`
+2. `doc runtime-handoff` 支持 `source|compile-envelope`
+3. `doc publish` 支持 `source|runtime-handoff|handoff-store-request`
+4. `doc recover` 支持 `source|runtime-handoff|handoff-store-request|publish-result`
+5. `doc resume` 支持 `source|runtime-handoff|handoff-store-request|publish-result|recover-result`
 
-这意味着 SDK CLI 现在已经把 Aionis Doc 从源文档一路暴露到 recovered execution continuity，不需要自己去拼原始 API。
+这意味着 SDK CLI 现在已经把 Aionis Doc 从源文档一路暴露到 recovered continuity 以及 post-recover resume，不需要自己手工拼 `context/assemble`、`tools/select`、`tools/decision` 和 `tools/run`。如果显式传 `--feedback-outcome`，还可以继续补一笔 `tools/feedback`，并拿到 feedback 前后的 run lifecycle 对比。
+
+当前文档默认优先讲 `aionis doc ...`，因为这是已经收口到主产品 CLI 的路径。`@aionis/doc` 独立包本身目前仍更适合视为仓内可用的低层入口，而不是已经完全收口的独立公开分发面。
 
 ### `aionis runs ...`
 

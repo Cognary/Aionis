@@ -112,16 +112,69 @@ See [Python SDK + Aionis CLI](/public/en/getting-started/08-python-sdk-with-cli)
 2. TypeScript session helpers: `listSessions`, `createSession`, `writeEvent`, `listSessionEvents`
 3. TypeScript context and graph: `contextAssemble`, `find`, `resolve`
 4. TypeScript policy loop: `rulesEvaluate`, `toolsSelect`, `toolsDecision`, `toolsRun`, `toolsFeedback`
-5. TypeScript replay: `replayPlaybookGet`, `replayPlaybookCandidate`, `replayPlaybookRun`, `replayPlaybookDispatch`
-6. TypeScript continuity helpers: `handoffStore`, `handoffRecover`
-7. TypeScript automation helpers: `automationCreate`, `automationValidate`, `automationGraphValidate`, `automationRun`
-8. Python SDK uses snake_case naming for overlapping core flows, such as `write`, `recall`, `recall_text`, `list_sessions`, `list_session_events`, `handoff_store`, `replay_playbook_dispatch`, and `automation_graph_validate`
+5. TypeScript Aionis Doc helpers: `docRecover`, `docResume`, `docRecoverAndResume`
+6. TypeScript replay: `replayPlaybookGet`, `replayPlaybookCandidate`, `replayPlaybookRun`, `replayPlaybookDispatch`
+7. TypeScript continuity helpers: `handoffStore`, `handoffRecover`
+8. TypeScript automation helpers: `automationCreate`, `automationValidate`, `automationGraphValidate`, `automationRun`
+9. Python SDK uses snake_case naming for overlapping core flows, such as `write`, `recall`, `recall_text`, `list_sessions`, `list_session_events`, `handoff_store`, `replay_playbook_dispatch`, and `automation_graph_validate`
 
 Notes:
 
 1. The current TypeScript client exposes the newest summary-first helpers, continuity helpers, and the native session inventory surface.
-2. The Python SDK mirrors the same main developer-facing route surface, but stays Pythonic with snake_case naming and plain-dict responses.
-3. Local runtime startup is intentionally centralized in one CLI so TypeScript and Python do not drift into two separate bootstrap flows.
+2. `docResume` is the current typed entrypoint when you already have a `recover_result`, and `docRecoverAndResume` is the wrapped entrypoint when you only have a recover request or handoff anchor.
+3. The Python SDK now mirrors the same Aionis Doc high-level helper surface via `doc_recover`, `doc_resume`, and `doc_recover_and_resume`, while staying Pythonic with snake_case naming and plain-dict responses.
+4. Local runtime startup is intentionally centralized in one CLI so TypeScript and Python do not drift into two separate bootstrap flows.
+
+## Aionis Doc Resume Helper (TypeScript)
+
+If you already have an `aionis_doc_recover_result_v1`, you no longer need to manually chain:
+
+`handoff/recover -> context/assemble -> tools/select -> tools/decision -> tools/run`
+
+Use the SDK helper instead:
+
+```ts
+const resumed = await client.docResume({
+  recover_result,
+  candidates: ["resume_patch", "request_review"],
+  feedback_outcome: "positive",
+});
+
+console.log(resumed.resume_summary.resume_state);
+console.log(resumed.resume_summary.lifecycle_transition);
+```
+
+The helper returns a typed `AionisDocResumeResult` envelope that already includes:
+
+1. `resume_summary`
+2. `context_assemble_response`
+3. `tools_select_response`
+4. `tools_decision_response`
+5. `tools_run_response`
+6. optional `tools_feedback_response`
+7. optional `tools_run_post_feedback_response`
+
+If you do not already have a recover envelope, use the wrapped helper:
+
+```ts
+const resumed = await client.docRecoverAndResume({
+  recover_request: { anchor: "aionis-doc:workflow-001", scope: "default" },
+  input_kind: "handoff-store-request",
+  candidates: ["resume_patch", "request_review"],
+});
+```
+
+Python now exposes the same flow shape:
+
+```python
+resumed = client.doc_recover_and_resume(
+    {
+        "recover_request": {"anchor": "aionis-doc:workflow-001", "scope": "default"},
+        "input_kind": "handoff-store-request",
+        "candidates": ["resume_patch", "request_review"],
+    }
+)
+```
 
 ## Coverage Snapshot
 

@@ -23,7 +23,7 @@ npx @aionis/sdk@0.2.20 --help
 The CLI is the command-line surface for:
 
 1. operating local Lite runtime
-2. compiling and operationalizing Aionis Doc workflows
+2. compiling, directly executing, and operationalizing Aionis Doc workflows
 3. inspecting tool runs, replay state, and artifact outputs
 4. checking runtime health and environment state
 5. inspecting execution eval outputs
@@ -53,7 +53,7 @@ Compatibility aliases still work:
 Current boundary:
 
 1. runtime lifecycle covers local Lite only
-2. Aionis Doc commands currently cover compile, handoff, publish, and recover flows
+2. Aionis Doc commands currently cover compile, minimal direct execution, handoff, publish, and recover flows
 3. eval commands operate on local artifact directories or precomputed eval summaries
 4. this is still not a hosted control-plane CLI
 
@@ -100,6 +100,12 @@ Compile one Aionis Doc into graph output:
 
 ```bash
 npx @aionis/sdk@0.2.20 doc compile ./workflow.aionis.md --emit graph
+```
+
+Execute one Aionis Doc directly:
+
+```bash
+npx @aionis/sdk@0.2.20 doc execute ./workflow.aionis.md
 ```
 
 Publish one Aionis Doc into the native handoff store:
@@ -286,37 +292,60 @@ If `--runtime-root` is omitted, the CLI searches:
 
 `aionis doc ...` is the executable-document workflow surface for Aionis Doc.
 
+This refers to the integrated command surface inside the main `@aionis/sdk` CLI, not the standalone binary names exposed by `@aionis/doc` itself.
+
 Use it when you want one human-readable document to move through:
 
 1. compile
-2. runtime handoff shaping
-3. handoff-store request generation
-4. publish into `/v1/handoff/store`
-5. recover from `/v1/handoff/recover`
+2. direct execution
+3. runtime handoff shaping
+4. handoff-store request generation
+5. publish into `/v1/handoff/store`
+6. recover from `/v1/handoff/recover`
+7. continue into `context/assemble -> tools/select -> tools/decision -> tools/run`
+
+The underlying standalone binaries are:
+
+1. `compile-aionis-doc`
+2. `execute-aionis-doc`
+3. `build-aionis-doc-runtime-handoff`
+4. `build-aionis-doc-handoff-store-request`
+5. `publish-aionis-doc-handoff`
+6. `recover-aionis-doc-handoff`
+7. `resume-aionis-doc-runtime`
 
 Current V1 commands:
 
 1. `aionis doc compile <input-file>`
-2. `aionis doc runtime-handoff <input-file>`
-3. `aionis doc store-request <runtime-handoff.json>`
-4. `aionis doc publish <input-file>`
-5. `aionis doc recover <input-file>`
+2. `aionis doc execute <input-file>`
+3. `aionis doc runtime-handoff <input-file>`
+4. `aionis doc store-request <runtime-handoff.json>`
+5. `aionis doc publish <input-file>`
+6. `aionis doc recover <input-file>`
+7. `aionis doc resume <input-file>`
 
 Recommended flow:
 
 1. use `doc compile` when you want AST / IR / graph inspection
-2. use `doc runtime-handoff` when you want an execution continuity carrier
-3. use `doc store-request` when you want an explicit native handoff/store payload
-4. use `doc publish` when you want to persist the workflow into Aionis handoff memory
-5. use `doc recover` when you want the recovered handoff, execution state, and next action back through the native recover endpoint
+2. use `doc execute` when you want a minimal execution result directly from the document
+3. use `doc runtime-handoff` when you want an execution continuity carrier
+4. use `doc store-request` when you want an explicit native handoff/store payload
+5. use `doc publish` when you want to persist the workflow into Aionis handoff memory
+6. use `doc recover` when you want the recovered handoff, execution state, and next action back through the native recover endpoint
+7. use `doc resume` when you want recovered continuity to continue directly into `context/assemble -> tools/select -> tools/decision -> tools/run`
+8. add `--feedback-outcome` when you also want to write one governance feedback record
 
 Important input modes:
 
-1. `doc runtime-handoff` supports `source|compile-envelope`
-2. `doc publish` supports `source|runtime-handoff|handoff-store-request`
-3. `doc recover` supports `source|runtime-handoff|handoff-store-request|publish-result`
+1. `doc execute` supports `source|compile-envelope|plan`
+2. `doc runtime-handoff` supports `source|compile-envelope`
+3. `doc publish` supports `source|runtime-handoff|handoff-store-request`
+4. `doc recover` supports `source|runtime-handoff|handoff-store-request|publish-result`
+5. `doc resume` supports `source|runtime-handoff|handoff-store-request|publish-result|recover-result`
 
-This means the SDK CLI now exposes a full Aionis Doc path from source document to recovered execution continuity without dropping to raw API calls.
+This means the SDK CLI now exposes a full Aionis Doc path from source document to recovered continuity and post-recover resume without dropping to raw `context/assemble`, `tools/select`, `tools/decision`, or `tools/run` calls. When `--feedback-outcome` is set, it can also append one `tools/feedback` write and return before/after run lifecycle snapshots.
+
+The documentation defaults to `aionis doc ...` because that is the surface already integrated into the main product CLI. The standalone `@aionis/doc` package is still better described today as a repo-internal lower-level entrypoint than as a fully released standalone public package.
 
 ### `aionis runs ...`
 

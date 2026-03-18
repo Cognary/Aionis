@@ -238,6 +238,8 @@ export default defineConfig({
             { text: 'POST /v1/memory/context/assemble', link: '/api/endpoints/context-assemble' },
             { text: 'POST /v1/memory/rules/evaluate', link: '/api/endpoints/rules-evaluate' },
             { text: 'POST /v1/memory/tools/select', link: '/api/endpoints/tools-select' },
+            { text: 'POST /v1/memory/tools/decision', link: '/api/endpoints/tools-decision' },
+            { text: 'POST /v1/memory/tools/run', link: '/api/endpoints/tools-run' },
             { text: 'POST /v1/memory/resolve', link: '/api/endpoints/resolve' },
             { text: 'POST /v1/memory/replay/runs/get', link: '/api/endpoints/replay-runs-get' }
           ]

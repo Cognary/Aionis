@@ -18,10 +18,13 @@ Common fields:
 3. `run_id?: string`
 4. `context: object`
 5. `execution_state_v1?: object` (resume continuity state)
-6. `candidates: string[]`
-7. `include_shadow?: boolean` (default `false`)
-8. `rules_limit?: number` (default 50, max 200)
-9. `strict?: boolean` (default `true`)
+6. `execution_result_summary?: object` (recovered execution summary)
+7. `execution_artifacts?: object[]` (recovered execution side outputs)
+8. `execution_evidence?: object[]` (recovered execution evidence)
+9. `candidates: string[]`
+10. `include_shadow?: boolean` (default `false`)
+11. `rules_limit?: number` (default 50, max 200)
+12. `strict?: boolean` (default `true`)
 
 ## Example request
 
@@ -83,3 +86,4 @@ Common errors:
 1. Use one `run_id` per execution attempt and keep it across decision and feedback.
 2. Persist `decision_id` before action execution to ensure replay continuity.
 3. When resuming from recovered handoff continuity, pass `execution_state_v1` and optionally `context.control_profile_v1` so selection runs under the recovered execution posture.
+4. If the recovered payload already carries `execution_artifacts` or `execution_evidence`, pass them through so policy selection can see the same continuity side outputs as context assembly.

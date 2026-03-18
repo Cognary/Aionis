@@ -11,8 +11,10 @@ It keeps Markdown as the human-readable layer, then adds line-leading directive 
 1. readable in a normal editor
 2. parsed deterministically
 3. compiled into IR and an execution graph
-4. converted into a native runtime handoff
-5. published and recovered through Aionis handoff memory
+4. compiled into a runtime-neutral `execution_plan_v1`
+5. executed through a minimal local runtime path
+6. converted into a native runtime handoff
+7. published and recovered through Aionis handoff memory
 
 ## What It Is
 
@@ -34,8 +36,10 @@ The current implementation supports:
 3. basic schema validation
 4. scoped ref resolution
 5. simple execution-graph construction
-6. runtime handoff generation
-7. publish and recover flows through native handoff endpoints
+6. `execution_plan_v1` generation
+7. minimal direct execution
+8. runtime handoff generation
+9. publish and recover flows through native handoff endpoints
 
 ## Current Stable Authoring Subset
 
@@ -79,20 +83,56 @@ Compile a minimal Aionis document.
 
 ## Main Workflow
 
-With the official CLI surface, the common path is:
+Through the `@aionis/sdk` integrated CLI surface, the common path is:
 
 1. `aionis doc compile`
-2. `aionis doc runtime-handoff`
-3. `aionis doc store-request`
-4. `aionis doc publish`
-5. `aionis doc recover`
+2. `aionis doc execute`
+3. `aionis doc runtime-handoff`
+4. `aionis doc store-request`
+5. `aionis doc publish`
+6. `aionis doc recover`
 
 That turns one `.aionis.md` file into:
 
 1. compiler artifacts
-2. runtime continuity payloads
-3. a stored handoff artifact
-4. a recovered execution-ready handoff
+2. a portable execution plan
+3. a minimal local execution result
+4. runtime continuity payloads
+5. a stored handoff artifact
+6. a recovered execution-ready handoff
+
+## Standalone Package Surface
+
+If you use the `@aionis/doc` package directly, the currently exposed commands are standalone binaries rather than `aionis doc ...` subcommands:
+
+1. `compile-aionis-doc`
+2. `execute-aionis-doc`
+3. `build-aionis-doc-runtime-handoff`
+4. `build-aionis-doc-handoff-store-request`
+5. `publish-aionis-doc-handoff`
+6. `recover-aionis-doc-handoff`
+
+These two command surfaces describe the same workflow but through different entrypoints:
+
+1. `aionis doc ...` belongs to the `@aionis/sdk` integrated CLI
+2. the standalone binaries above belong to the `@aionis/doc` package itself
+
+## Current Distribution Status
+
+The more accurate product status today is:
+
+1. `aionis doc ...` is already a public integrated capability in the main SDK CLI
+2. `@aionis/doc` now has standalone package metadata, README, CHANGELOG, and `bin` entries
+3. `@aionis/doc` now has a standalone release surface, although installability still depends on whether the corresponding version has actually been published to npm
+
+The repository now includes the minimum standalone release path:
+
+1. `aionis-doc:pack-dry-run`
+2. `aionis-doc:publish:dry-run`
+3. `aionis-doc:publish`
+4. `aionis-doc:release-check`
+5. `Aionis Doc CI` and `Aionis Doc Publish` GitHub workflows
+6. repo-local release runbook: `docs/AIONIS_DOC_RELEASE.md`
 
 ## Read Next
 

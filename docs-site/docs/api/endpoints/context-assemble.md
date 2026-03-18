@@ -18,10 +18,13 @@ Common fields:
 4. `context?: object` (runtime execution context)
 5. `execution_state_v1?: object` (resume continuity state)
 6. `execution_packet_v1?: object` (resume-ready execution packet)
-7. `include_rules?: boolean` (default `true`)
-8. `tool_candidates?: string[]`
-9. `return_layered_context?: boolean` (default `true`)
-10. `context_layers?: object`
+7. `execution_result_summary?: object` (recovered execution summary)
+8. `execution_artifacts?: object[]` (recovered execution side outputs)
+9. `execution_evidence?: object[]` (recovered execution evidence)
+10. `include_rules?: boolean` (default `true`)
+11. `tool_candidates?: string[]`
+12. `return_layered_context?: boolean` (default `true`)
+13. `context_layers?: object`
 
 ## Example request
 
@@ -87,3 +90,4 @@ Common errors:
 1. Use this endpoint as planner input assembly before policy and tool execution.
 2. Keep the same `run_id` across context assembly, tool selection, and action execution.
 3. When resuming from `handoff/recover`, pass recovered `execution_state_v1` and `execution_packet_v1` to preserve continuity exactly.
+4. If recovered continuity already includes `execution_artifacts` or `execution_evidence`, pass them through unchanged so they become part of the assembled static context.

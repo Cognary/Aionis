@@ -26,6 +26,8 @@ Contract-level request/response references for high-traffic Aionis endpoints.
 
 1. [POST /v1/memory/rules/evaluate](rules-evaluate)
 2. [POST /v1/memory/tools/select](tools-select)
+3. [POST /v1/memory/tools/decision](tools-decision)
+4. [POST /v1/memory/tools/run](tools-run)
 
 ## Replay
 
