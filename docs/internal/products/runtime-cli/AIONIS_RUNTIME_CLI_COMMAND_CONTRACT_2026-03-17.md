@@ -5,7 +5,7 @@ title: "Aionis Runtime CLI Command Contract"
 # Aionis Runtime CLI Command Contract
 
 Date: `2026-03-17`  
-Status: `proposed executable command and output contract`
+Status: `phase 1 command and output contract partially implemented`
 
 Related:
 

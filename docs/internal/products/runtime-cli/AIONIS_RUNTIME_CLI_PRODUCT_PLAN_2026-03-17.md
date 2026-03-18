@@ -5,7 +5,7 @@ title: "Aionis Runtime CLI Product Plan"
 # Aionis Runtime CLI Product Plan
 
 Date: `2026-03-17`  
-Status: `proposed executable product plan`
+Status: `phase 1 runtime cli product surface established`
 
 Related:
 
@@ -47,9 +47,9 @@ That means the CLI must cover two things at once:
 1. runtime lifecycle
 2. execution lifecycle
 
-Today the CLI only covers the first part in a narrow way.
+The CLI now covers runtime lifecycle plus the first real operator path for inspection, replay diagnosis, artifacts, and execution eval.
 
-This plan defines how to extend it into a full product CLI.
+This plan now acts as the product-definition anchor for extending the CLI without losing the runtime-infra boundary.
 
 ## Current State
 
@@ -59,21 +59,22 @@ Current CLI entrypoint:
 
 Current commands:
 
-1. `aionis dev`
-2. `aionis stop`
-3. `aionis health`
-4. `aionis doctor`
-5. `aionis selfcheck`
+1. `aionis runtime dev|stop|health|doctor|selfcheck`
+2. `aionis eval inspect|compare|gate`
+3. `aionis runs list|get|timeline|decisions|feedback`
+4. `aionis playbooks get|candidate|dispatch`
+5. `aionis replay inspect-run|inspect-playbook|recover|explain`
+6. `aionis artifacts list|show|export|pack`
 
 Current boundary:
 
 1. local Lite only
-2. local developer bootstrap only
-3. not yet a runtime operator CLI
+2. still inspection-first rather than mutation-heavy
+3. not yet a hosted multi-tenant control-plane CLI
 
-This is a good Phase 1 base.
+This is now a real Phase 1 runtime CLI surface.
 
-It is not yet a complete product.
+It is not yet a complete hosted runtime product.
 
 ## Why CLI First Is The Right Move
 
@@ -163,6 +164,12 @@ It is not:
 1. a generic shell for everything in the repo
 2. a developer-only bootstrap script
 3. an internal admin tool
+
+Current reading:
+
+1. it has already moved past bootstrap-only
+2. it is already a usable runtime operator shell
+3. the remaining work is hardening and backend-surface completion, not proving the product surface exists
 
 The user-facing promise should be:
 

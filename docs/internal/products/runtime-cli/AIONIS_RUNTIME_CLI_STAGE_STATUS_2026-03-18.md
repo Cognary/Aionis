@@ -99,7 +99,8 @@ Implemented:
 
 1. `aionis replay inspect-run`
 2. `aionis replay inspect-playbook`
-3. `aionis replay explain`
+3. `aionis replay recover`
+4. `aionis replay explain`
 
 Current replay coverage is inspection-only and diagnosis-first.
 
@@ -123,8 +124,9 @@ The CLI can already support a real runtime workflow:
 5. inspect recent runs
 6. inspect run decisions and feedback
 7. inspect replay runs and playbooks
-8. explain whether a replay run is currently compile-ready
-9. browse and export artifacts
+8. inspect recovery plans for replay runs
+9. explain whether a replay run is currently compile-ready
+10. browse and export artifacts
 
 This is enough to call the CLI a real runtime product surface.
 
@@ -132,7 +134,7 @@ This is enough to call the CLI a real runtime product surface.
 
 Current maturity:
 
-**`~80% of V1 core CLI surface`**
+**`~90% of V1 core CLI surface`**
 
 That does not mean every planned command exists.
 
@@ -186,15 +188,15 @@ The next stage should stay narrow.
 
 Priority order:
 
-1. expose real backend surfaces for `runs list` and `runs timeline`
-2. add CLI commands on top of those real surfaces
-3. keep replay mutation commands inspection-first unless backend mutation contracts become clearly stable
-4. improve one canonical CLI workflow narrative:
+1. keep replay mutation commands inspection-first unless backend mutation contracts become clearly stable
+2. improve one canonical CLI workflow narrative:
    - start runtime
    - inspect run
    - inspect replay
    - evaluate artifacts
    - gate
+3. harden human-readable output for heavy inspection commands
+4. only add broader filtering or pagination when stronger backend support exists
 
 ## Bottom Line
 

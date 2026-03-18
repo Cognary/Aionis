@@ -137,6 +137,24 @@ Current rule:
 2. use it to score completion, reviewer-readiness, continuity, recovery, and control quality
 3. do not turn it into a generic agent-eval platform
 
+### 6. Runtime CLI foundation
+
+The Runtime CLI is no longer only a local bootstrap helper.
+
+It now has a real Phase 1 operator surface:
+
+1. runtime lifecycle commands
+2. execution eval inspection and gate commands
+3. run inspection commands
+4. replay/playbook inspection and recovery-planning commands
+5. artifact inspection and export commands
+
+Current reading:
+
+1. Aionis now has a viable CLI-first product surface
+2. this fits the runtime-infra positioning better than a premature UI would
+3. remaining CLI work is hardening, not first-principles validation
+
 ## What Is In Progress
 
 ### 1. Strongest-slice refresh after ControlProfile adoption
