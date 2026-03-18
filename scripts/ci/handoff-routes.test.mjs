@@ -178,6 +178,113 @@ test("native handoff routes store and recover exact handoff artifact in lite mod
   assert.equal(parsed.recoverBody.matched_nodes, 1);
 });
 
+test("native handoff routes preserve explicit Aionis Doc runtime continuity payloads", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
+  const out = runSnippet(`
+    import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+    import os from "node:os";
+    import path from "node:path";
+    import { createHttpApp } from "./src/host/bootstrap.ts";
+    import { registerHostErrorHandler } from "./src/host/http-host.ts";
+    import { registerHandoffRoutes } from "./src/routes/handoff.ts";
+    import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
+    import {
+      compileAionisDoc,
+      buildRuntimeHandoffV1,
+      buildHandoffStoreRequestFromRuntimeHandoff,
+    } from "./packages/aionis-doc/src/index.ts";
+
+    const main = async () => {
+      const tmpDir = mkdtempSync(path.join(os.tmpdir(), "aionis-doc-handoff-routes-"));
+      const sqlitePath = path.join(tmpDir, "handoff.sqlite");
+      const liteWriteStore = createLiteWriteStore(sqlitePath);
+      const app = createHttpApp({ TRUST_PROXY: false });
+      registerHostErrorHandler(app);
+
+      try {
+        registerHandoffRoutes({
+          app,
+          env: {
+            MEMORY_SCOPE: "default",
+            MEMORY_TENANT_ID: "default",
+            MAX_TEXT_LEN: 4096,
+            PII_REDACTION: false,
+            ALLOW_CROSS_SCOPE_EDGES: false,
+            MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+            MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+          },
+          store: {
+            withTx: async () => { throw new Error("lite handoff store should not use store.withTx"); },
+            withClient: async () => { throw new Error("lite handoff recover should not use store.withClient"); },
+          },
+          embedder: null,
+          embeddedRuntime: null,
+          liteWriteStore,
+          writeAccessForClient: () => { throw new Error("lite handoff routes should not use postgres write access"); },
+          requireMemoryPrincipal: async () => ({ sub: "tester" }),
+          withIdentityFromRequest: (_req, body) => body,
+          enforceRateLimit: async () => {},
+          enforceTenantQuota: async () => {},
+          tenantFromBody: () => "default",
+          acquireInflightSlot: async () => ({ release() {}, wait_ms: 0 }),
+        });
+
+        const sourcePath = path.join(process.cwd(), "packages/aionis-doc/fixtures/valid-workflow.aionis.md");
+        const compile = compileAionisDoc(readFileSync(sourcePath, "utf8"));
+        const runtimeHandoff = buildRuntimeHandoffV1({
+          inputPath: sourcePath,
+          result: compile,
+          scope: "default",
+          repoRoot: process.cwd(),
+        });
+        const storePayload = buildHandoffStoreRequestFromRuntimeHandoff({
+          handoff: runtimeHandoff,
+          scope: "default",
+        });
+
+        const storeRes = await app.inject({
+          method: "POST",
+          url: "/v1/handoff/store",
+          payload: storePayload,
+        });
+
+        const recoverRes = await app.inject({
+          method: "POST",
+          url: "/v1/handoff/recover",
+          payload: {
+            anchor: storePayload.anchor,
+            handoff_kind: "task_handoff",
+          },
+        });
+
+        process.stdout.write("__RESULT__" + JSON.stringify({
+          storeStatus: storeRes.statusCode,
+          recoverStatus: recoverRes.statusCode,
+          storeBody: JSON.parse(storeRes.body),
+          recoverBody: JSON.parse(recoverRes.body),
+        }));
+      } finally {
+        await app.close();
+        await liteWriteStore.close();
+        rmSync(tmpDir, { recursive: true, force: true });
+      }
+    };
+
+    main().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  `);
+
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.storeStatus, 200);
+  assert.equal(parsed.recoverStatus, 200);
+  assert.equal(parsed.storeBody.execution_state_v1.current_stage, "patch");
+  assert.equal(parsed.storeBody.execution_packet_v1.review_contract.required_outputs[0], "out.hero");
+  assert.equal(parsed.recoverBody.execution_state_v1.current_stage, "patch");
+  assert.equal(parsed.recoverBody.execution_packet_v1.review_contract.required_outputs[0], "out.hero");
+  assert.equal(parsed.recoverBody.handoff.handoff_kind, "task_handoff");
+});
+
 test("native handoff recover prefers the newest matching handoff", { skip: LITE_SQLITE_UNAVAILABLE }, () => {
   const out = runSnippet(`
     import { mkdtempSync, rmSync } from "node:fs";
