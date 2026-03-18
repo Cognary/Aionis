@@ -182,6 +182,7 @@ function readInlineExecutionProjection(raw: Record<string, unknown>, executionRe
       : buildExecutionPacketV1({
           state,
           hard_constraints: executionReady.must_change,
+          artifact_refs: [],
           evidence_refs: [],
         });
     const controlProfile = raw.control_profile_v1
@@ -296,6 +297,9 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
           must_change: parsed.must_change ?? [],
           must_remove: parsed.must_remove ?? [],
           must_keep: parsed.must_keep ?? [],
+          execution_result_summary: parsed.execution_result_summary ?? null,
+          execution_artifacts: parsed.execution_artifacts ?? [],
+          execution_evidence: parsed.execution_evidence ?? [],
           execution_state_v1: effectiveExecutionProjection.execution_state_v1,
           execution_packet_v1: effectiveExecutionProjection.execution_packet_v1,
           control_profile_v1: effectiveExecutionProjection.control_profile_v1,
@@ -444,6 +448,7 @@ function buildExecutionProjectionFromRecoveredHandoff(node: HandoffNode, promptS
   const packet = buildExecutionPacketV1({
     state,
     hard_constraints: executionReady.must_change,
+    artifact_refs: [node.uri].filter((value): value is string => typeof value === "string" && value.length > 0),
     evidence_refs: [node.uri].filter((value): value is string => typeof value === "string" && value.length > 0),
   });
   const controlProfile = deriveControlProfile(state.current_stage);
@@ -490,6 +495,7 @@ function readExecutionProjectionFromStateStore(
   const packet = buildExecutionPacketV1({
     state,
     hard_constraints: executionReady.must_change,
+    artifact_refs: [node.uri].filter((value): value is string => typeof value === "string" && value.length > 0),
     evidence_refs: [node.uri].filter((value): value is string => typeof value === "string" && value.length > 0),
   });
   return {
@@ -512,6 +518,7 @@ function normalizeRecoveredHandoff(
 ) {
   const promptSafe = buildPromptSafeHandoff(node, input);
   const executionReady = buildExecutionReadyHandoff(node, input, promptSafe);
+  const slots = node.slots && typeof node.slots === "object" ? (node.slots as Record<string, unknown>) : {};
   const executionProjection =
     readExecutionProjectionFromStateStore(executionStateStore, promptSafe.anchor, executionReady, node) ??
     readStoredExecutionProjection(node) ??
@@ -545,6 +552,12 @@ function normalizeRecoveredHandoff(
     },
     prompt_safe_handoff: promptSafe,
     execution_ready_handoff: executionReady,
+    execution_result_summary:
+      slots && "execution_result_summary" in slots ? (slots.execution_result_summary as Record<string, unknown> | null) : undefined,
+    execution_artifacts:
+      slots && "execution_artifacts" in slots ? (slots.execution_artifacts as Array<Record<string, unknown>>) : undefined,
+    execution_evidence:
+      slots && "execution_evidence" in slots ? (slots.execution_evidence as Array<Record<string, unknown>>) : undefined,
     ...executionProjection,
   };
 }

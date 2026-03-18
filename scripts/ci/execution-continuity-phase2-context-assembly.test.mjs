@@ -231,6 +231,9 @@ test("context assembly reports state-first packet assembly when execution_state_
             payload: {
               query_text: "deploy workflow",
               context: { intent: "deploy", agent: { id: "agent-lite", team_id: "team-lite" } },
+              execution_result_summary: { runtime_id: "resume-demo", status: "partial" },
+              execution_artifacts: [{ ref: "artifact:deploy:1", uri: "memory://artifacts/deploy-plan.json", kind: "plan" }],
+              execution_evidence: [{ ref: "evidence:deploy:1", claim: "Rollback path validated", type: "claim" }],
               execution_state_v1: executionState,
               return_layered_context: true,
               include_shadow: false,
@@ -243,6 +246,9 @@ test("context assembly reports state-first packet assembly when execution_state_
             payload: {
               query_text: "deploy workflow",
               context: { intent: "deploy", agent: { id: "agent-lite", team_id: "team-lite" } },
+              execution_result_summary: { runtime_id: "resume-demo", status: "partial" },
+              execution_artifacts: [{ ref: "artifact:deploy:1", uri: "memory://artifacts/deploy-plan.json", kind: "plan" }],
+              execution_evidence: [{ ref: "evidence:deploy:1", claim: "Rollback path validated", type: "claim" }],
               execution_state_v1: executionState,
               return_layered_context: true,
               include_rules: false,
@@ -278,10 +284,14 @@ test("context assembly reports state-first packet assembly when execution_state_
   assert.equal(parsed.planningBody.execution_kernel.state_first_assembly, true);
   assert.match(parsed.planningBody.layered_context.merged_text, /Finish deploy remediation review packet/);
   assert.match(parsed.planningBody.layered_context.merged_text, /current_stage=patch/);
+  assert.match(parsed.planningBody.layered_context.merged_text, /artifact:deploy:1/);
+  assert.match(parsed.planningBody.layered_context.merged_text, /Rollback path validated/);
 
   assert.equal(parsed.assembleStatus, 200);
   assert.equal(parsed.assembleBody.execution_kernel.packet_source_mode, "state_first");
   assert.equal(parsed.assembleBody.execution_kernel.state_first_assembly, true);
   assert.match(parsed.assembleBody.layered_context.merged_text, /Finish deploy remediation review packet/);
   assert.match(parsed.assembleBody.layered_context.merged_text, /current_stage=patch/);
+  assert.match(parsed.assembleBody.layered_context.merged_text, /artifact:deploy:1/);
+  assert.match(parsed.assembleBody.layered_context.merged_text, /Rollback path validated/);
 });

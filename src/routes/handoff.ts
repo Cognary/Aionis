@@ -164,6 +164,18 @@ export function registerHandoffRoutes(args: {
               memory_lane: body.memory_lane,
             }
           : null,
+        execution_result_summary:
+          continuitySlots && "execution_result_summary" in continuitySlots
+            ? (continuitySlots as any).execution_result_summary
+            : undefined,
+        execution_artifacts:
+          continuitySlots && "execution_artifacts" in continuitySlots
+            ? (continuitySlots as any).execution_artifacts
+            : undefined,
+        execution_evidence:
+          continuitySlots && "execution_evidence" in continuitySlots
+            ? (continuitySlots as any).execution_evidence
+            : undefined,
         execution_state_v1:
           continuitySlots && "execution_state_v1" in continuitySlots ? (continuitySlots as any).execution_state_v1 : undefined,
         execution_packet_v1:

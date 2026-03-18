@@ -127,3 +127,31 @@ test("tools/select does not reorder candidates by default", async () => {
   assert.equal(result.selection.selected, "read-markdown-impl");
   assert.equal(result.execution_kernel?.family_aware_ordering_applied, false);
 });
+
+test("tools/select carries recovered execution artifacts and evidence into execution kernel metadata", async () => {
+  const result = await selectTools(
+    null,
+    {
+      scope: "openclaw:test",
+      context: { source: "test-tools-select-continuity" },
+      execution_result_summary: { runtime_id: "resume-demo", status: "partial" },
+      execution_artifacts: [{ ref: "artifact:resume:1", uri: "memory://artifacts/resume.json", kind: "resume" }],
+      execution_evidence: [{ ref: "evidence:resume:1", claim: "Recovered continuity preserved", type: "claim" }],
+      candidates: ["read-source-focused-v2"],
+      strict: false,
+    },
+    "memory",
+    "default",
+    {
+      liteWriteStore: {
+        insertExecutionDecision: async () => ({ id: "decision-3", created_at: new Date().toISOString() }),
+        listRuleCandidates: async () => [],
+      },
+    },
+  );
+
+  assert.equal(result.execution_kernel?.execution_result_summary_present, true);
+  assert.equal(result.execution_kernel?.execution_artifacts_count, 1);
+  assert.equal(result.execution_kernel?.execution_evidence_count, 1);
+  assert.equal(result.selection.selected, "read-source-focused-v2");
+});

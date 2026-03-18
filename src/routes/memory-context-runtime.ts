@@ -110,15 +110,117 @@ function executionPacketToStaticBlocks(packet: ExecutionPacketV1): Array<{
   return blocks;
 }
 
+function normalizeExecutionContinuitySideOutputs(parsed: {
+  execution_result_summary?: unknown;
+  execution_artifacts?: unknown;
+  execution_evidence?: unknown;
+}) {
+  const executionResultSummary =
+    parsed.execution_result_summary && typeof parsed.execution_result_summary === "object" && !Array.isArray(parsed.execution_result_summary)
+      ? (parsed.execution_result_summary as Record<string, unknown>)
+      : null;
+  const executionArtifacts = Array.isArray(parsed.execution_artifacts)
+    ? parsed.execution_artifacts.filter(
+        (value): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value),
+      )
+    : [];
+  const executionEvidence = Array.isArray(parsed.execution_evidence)
+    ? parsed.execution_evidence.filter(
+        (value): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value),
+      )
+    : [];
+  return {
+    executionResultSummary,
+    executionArtifacts,
+    executionEvidence,
+  };
+}
+
+function sideOutputToLine(prefix: string, value: Record<string, unknown>) {
+  const fields = ["ref", "uri", "claim", "kind", "type", "label"]
+    .map((key) => (typeof value[key] === "string" && value[key].length > 0 ? `${key}=${String(value[key])}` : null))
+    .filter(Boolean);
+  return `${prefix}${fields.length > 0 ? ` ${fields.join("; ")}` : ""}`.trim();
+}
+
+function executionContinuityToStaticBlocks(parsed: {
+  execution_result_summary?: unknown;
+  execution_artifacts?: unknown;
+  execution_evidence?: unknown;
+}) {
+  const sideOutputs = normalizeExecutionContinuitySideOutputs(parsed);
+  const blocks: Array<{
+    id: string;
+    title: string;
+    content: string;
+    tags: string[];
+    intents: string[];
+    priority: number;
+    always_include: boolean;
+  }> = [];
+
+  const contentLines: string[] = [];
+  if (sideOutputs.executionResultSummary) {
+    const summaryLine = Object.entries(sideOutputs.executionResultSummary)
+      .slice(0, 8)
+      .map(([key, value]) => `${key}=${typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : JSON.stringify(value)}`)
+      .join("; ");
+    if (summaryLine) contentLines.push(`summary: ${summaryLine}`);
+  }
+  if (sideOutputs.executionArtifacts.length > 0) {
+    contentLines.push(...sideOutputs.executionArtifacts.slice(0, 5).map((artifact, index) => sideOutputToLine(`artifact_${index + 1}:`, artifact)));
+  }
+  if (sideOutputs.executionEvidence.length > 0) {
+    contentLines.push(...sideOutputs.executionEvidence.slice(0, 5).map((evidence, index) => sideOutputToLine(`evidence_${index + 1}:`, evidence)));
+  }
+
+  if (contentLines.length > 0) {
+    blocks.push(
+      toStaticContextBlock(
+        "execution-side-outputs",
+        "Execution Side Outputs",
+        contentLines.join("\n"),
+      ),
+    );
+  }
+
+  return { blocks, sideOutputs };
+}
+
+function buildExecutionContinuityContext(parsed: {
+  context?: unknown;
+  execution_result_summary?: unknown;
+  execution_artifacts?: unknown;
+  execution_evidence?: unknown;
+}) {
+  const base =
+    parsed.context && typeof parsed.context === "object" && !Array.isArray(parsed.context) ? { ...(parsed.context as Record<string, unknown>) } : {};
+  const { sideOutputs } = executionContinuityToStaticBlocks(parsed);
+  if (sideOutputs.executionResultSummary && !("execution_result_summary" in base)) {
+    base.execution_result_summary = sideOutputs.executionResultSummary;
+  }
+  if (sideOutputs.executionArtifacts.length > 0 && !("execution_artifacts" in base)) {
+    base.execution_artifacts = sideOutputs.executionArtifacts;
+  }
+  if (sideOutputs.executionEvidence.length > 0 && !("execution_evidence" in base)) {
+    base.execution_evidence = sideOutputs.executionEvidence;
+  }
+  return base;
+}
+
 export function mergeExecutionPacketStaticBlocks(parsed: {
   static_context_blocks?: any[];
   execution_packet_v1?: ExecutionPacketV1;
   execution_state_v1?: ExecutionStateV1;
+  execution_result_summary?: unknown;
+  execution_artifacts?: unknown;
+  execution_evidence?: unknown;
 }) {
   const base = Array.isArray(parsed.static_context_blocks) ? parsed.static_context_blocks : [];
+  const continuityBlocks = executionContinuityToStaticBlocks(parsed).blocks;
   const { packet } = resolveExecutionPacketAssembly(parsed);
-  if (!packet) return base;
-  return [...executionPacketToStaticBlocks(packet), ...base];
+  if (!packet) return [...continuityBlocks, ...base];
+  return [...executionPacketToStaticBlocks(packet), ...continuityBlocks, ...base];
 }
 
 function resolveExecutionKernelContext(parsed: {
@@ -722,6 +824,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
         : env.MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT,
     );
     parsed = PlanningContextRequest.parse(planningOptimization.parsed);
+    const planningExecutionContext = buildExecutionContinuityContext(parsed);
 
     let out: any;
     try {
@@ -811,7 +914,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           {
             scope: recallParsed.scope ?? env.MEMORY_SCOPE,
             tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
-            context: parsed.context,
+            context: planningExecutionContext,
             include_shadow: parsed.include_shadow,
             limit: parsed.rules_limit,
           },
@@ -831,7 +934,10 @@ export function registerMemoryContextRuntimeRoutes(args: {
               scope: recallParsed.scope ?? env.MEMORY_SCOPE,
               tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
               run_id: parsed.run_id,
-              context: parsed.context,
+              context: planningExecutionContext,
+              execution_result_summary: parsed.execution_result_summary,
+              execution_artifacts: parsed.execution_artifacts,
+              execution_evidence: parsed.execution_evidence,
               candidates: parsed.tool_candidates,
               include_shadow: parsed.include_shadow,
               rules_limit: parsed.rules_limit,
@@ -875,7 +981,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
             {
               scope: recallParsed.scope ?? env.MEMORY_SCOPE,
               tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
-              context: parsed.context,
+              context: planningExecutionContext,
               include_shadow: parsed.include_shadow,
               limit: parsed.rules_limit,
             },
@@ -892,7 +998,10 @@ export function registerMemoryContextRuntimeRoutes(args: {
                 scope: recallParsed.scope ?? env.MEMORY_SCOPE,
                 tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
                 run_id: parsed.run_id,
-                context: parsed.context,
+                context: planningExecutionContext,
+                execution_result_summary: parsed.execution_result_summary,
+                execution_artifacts: parsed.execution_artifacts,
+                execution_evidence: parsed.execution_evidence,
                 candidates: parsed.tool_candidates,
                 include_shadow: parsed.include_shadow,
                 rules_limit: parsed.rules_limit,
@@ -1030,7 +1139,11 @@ export function registerMemoryContextRuntimeRoutes(args: {
     );
 
     const effectiveStaticBlocks = executionKernel.packet
-      ? [...executionPacketToStaticBlocks(executionKernel.packet), ...(Array.isArray(parsed.static_context_blocks) ? parsed.static_context_blocks : [])]
+      ? [
+          ...executionPacketToStaticBlocks(executionKernel.packet),
+          ...executionContinuityToStaticBlocks(parsed).blocks,
+          ...(Array.isArray(parsed.static_context_blocks) ? parsed.static_context_blocks : []),
+        ]
       : mergeExecutionPacketStaticBlocks(parsed);
     const layeredContext = parsed.return_layered_context
       ? assembleLayeredContext({
@@ -1038,7 +1151,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
           rules: out.rules,
           tools: out.tools,
           query_text: parsed.query_text,
-          execution_context: parsed.context,
+          execution_context: planningExecutionContext,
           tool_candidates: parsed.tool_candidates,
           static_blocks: effectiveStaticBlocks ?? null,
           static_injection: parsed.static_injection ?? null,
@@ -1186,6 +1299,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
         : env.MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT,
     );
     parsed = ContextAssembleRequest.parse(assembleOptimization.parsed);
+    const executionContext = buildExecutionContinuityContext(parsed);
 
     let out: any;
     try {
@@ -1247,9 +1361,6 @@ export function registerMemoryContextRuntimeRoutes(args: {
       const unsafeDropTrustAnchors = allowUnsafeDropTrustAnchors(req);
       const applyLayerPolicyToRetrieval = allowLayerPolicyRetrievalFiltering(req);
       const internalAllowL4Selection = allowInternalL4Serving(req);
-      const executionContext =
-        parsed.context && typeof parsed.context === "object" && !Array.isArray(parsed.context) ? parsed.context : {};
-
       if (liteModeActive) {
         const recall = await memoryRecallParsed(
           {} as any,
@@ -1300,6 +1411,9 @@ export function registerMemoryContextRuntimeRoutes(args: {
               scope: recallParsed.scope ?? env.MEMORY_SCOPE,
               tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
               context: executionContext,
+              execution_result_summary: parsed.execution_result_summary,
+              execution_artifacts: parsed.execution_artifacts,
+              execution_evidence: parsed.execution_evidence,
               candidates: parsed.tool_candidates,
               include_shadow: parsed.include_shadow,
               rules_limit: parsed.rules_limit,
@@ -1363,6 +1477,9 @@ export function registerMemoryContextRuntimeRoutes(args: {
                 scope: recallParsed.scope ?? env.MEMORY_SCOPE,
                 tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
                 context: executionContext,
+                execution_result_summary: parsed.execution_result_summary,
+                execution_artifacts: parsed.execution_artifacts,
+                execution_evidence: parsed.execution_evidence,
                 candidates: parsed.tool_candidates,
                 include_shadow: parsed.include_shadow,
                 rules_limit: parsed.rules_limit,
@@ -1451,7 +1568,11 @@ export function registerMemoryContextRuntimeRoutes(args: {
 
     const executionKernel = resolveExecutionKernelContext(parsed);
     const effectiveStaticBlocks = executionKernel.packet
-      ? [...executionPacketToStaticBlocks(executionKernel.packet), ...(Array.isArray(parsed.static_context_blocks) ? parsed.static_context_blocks : [])]
+      ? [
+          ...executionPacketToStaticBlocks(executionKernel.packet),
+          ...executionContinuityToStaticBlocks(parsed).blocks,
+          ...(Array.isArray(parsed.static_context_blocks) ? parsed.static_context_blocks : []),
+        ]
       : mergeExecutionPacketStaticBlocks(parsed);
     const layeredContext = parsed.return_layered_context
       ? assembleLayeredContext({

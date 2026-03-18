@@ -39,6 +39,55 @@ function deriveControlProfileFromExecutionState(state: ExecutionStateV1): Contro
   return controlProfileDefaults(state.current_stage);
 }
 
+function normalizeExecutionSideOutputs(raw: {
+  execution_result_summary?: unknown;
+  execution_artifacts?: unknown;
+  execution_evidence?: unknown;
+}) {
+  const executionResultSummary =
+    raw.execution_result_summary && typeof raw.execution_result_summary === "object" && !Array.isArray(raw.execution_result_summary)
+      ? (raw.execution_result_summary as Record<string, unknown>)
+      : null;
+  const executionArtifacts = Array.isArray(raw.execution_artifacts)
+    ? raw.execution_artifacts.filter(
+        (value): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value),
+      )
+    : [];
+  const executionEvidence = Array.isArray(raw.execution_evidence)
+    ? raw.execution_evidence.filter(
+        (value): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value),
+      )
+    : [];
+  return {
+    executionResultSummary,
+    executionArtifacts,
+    executionEvidence,
+  };
+}
+
+function mergeExecutionContinuityContext(
+  rawContext: unknown,
+  rawSideOutputs: {
+    execution_result_summary?: unknown;
+    execution_artifacts?: unknown;
+    execution_evidence?: unknown;
+  },
+) {
+  const context =
+    rawContext && typeof rawContext === "object" && !Array.isArray(rawContext) ? { ...(rawContext as Record<string, unknown>) } : {};
+  const sideOutputs = normalizeExecutionSideOutputs(rawSideOutputs);
+  if (sideOutputs.executionResultSummary && !("execution_result_summary" in context)) {
+    context.execution_result_summary = sideOutputs.executionResultSummary;
+  }
+  if (sideOutputs.executionArtifacts.length > 0 && !("execution_artifacts" in context)) {
+    context.execution_artifacts = sideOutputs.executionArtifacts;
+  }
+  if (sideOutputs.executionEvidence.length > 0 && !("execution_evidence" in context)) {
+    context.execution_evidence = sideOutputs.executionEvidence;
+  }
+  return { context, sideOutputs };
+}
+
 export function resolveExecutionKernelInputs(
   rawContext: unknown,
   rawExecutionState: unknown,
@@ -133,12 +182,17 @@ export async function selectTools(
   } = {},
 ) {
   const parsed = ToolsSelectRequest.parse(body);
+  const { context: evaluationContext, sideOutputs } = mergeExecutionContinuityContext(parsed.context, {
+    execution_result_summary: parsed.execution_result_summary,
+    execution_artifacts: parsed.execution_artifacts,
+    execution_evidence: parsed.execution_evidence,
+  });
   const tenancy = resolveTenantScope(
     { scope: parsed.scope, tenant_id: parsed.tenant_id },
     { defaultScope, defaultTenantId },
   );
   const normalizedCandidates = normalizeToolCandidates(parsed.candidates);
-  const kernelInputs = resolveExecutionKernelInputs(parsed.context, parsed.execution_state_v1);
+  const kernelInputs = resolveExecutionKernelInputs(evaluationContext, parsed.execution_state_v1);
   const { filteredCandidates, deniedByProfile } = applyControlProfileCandidateFilter(
     normalizedCandidates,
     kernelInputs.controlProfile,
@@ -149,7 +203,7 @@ export async function selectTools(
     scope: tenancy.scope,
     tenant_id: tenancy.tenant_id,
     default_tenant_id: defaultTenantId,
-    context: parsed.context,
+    context: evaluationContext,
     include_shadow: parsed.include_shadow,
     limit: parsed.rules_limit,
   }, {
@@ -182,7 +236,7 @@ export async function selectTools(
     : undefined;
   const source_rule_ids = uniqueRuleIds((((rules.applied as any)?.sources as any[]) ?? []).map((s: any) => String(s?.rule_node_id)));
   const decision_id = randomUUID();
-  const context_sha256 = hashExecutionContext(parsed.context);
+  const context_sha256 = hashExecutionContext(evaluationContext);
   const policy_sha256 = hashPolicy((rules.applied as any)?.policy ?? {});
   const decisionMetadata = {
     strict: parsed.strict,
@@ -195,6 +249,9 @@ export async function selectTools(
     control_profile_origin: kernelInputs.controlProfileOrigin,
     execution_stage: kernelInputs.executionState?.current_stage ?? null,
     execution_role: kernelInputs.executionState?.active_role ?? null,
+    execution_result_summary_present: !!sideOutputs.executionResultSummary,
+    execution_artifacts_count: sideOutputs.executionArtifacts.length,
+    execution_evidence_count: sideOutputs.executionEvidence.length,
     candidate_families: candidateFamilies,
     ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
   };
@@ -269,6 +326,9 @@ export async function selectTools(
     execution_kernel: {
       control_profile_origin: kernelInputs.controlProfileOrigin,
       execution_state_v1_present: !!kernelInputs.executionState,
+      execution_result_summary_present: !!sideOutputs.executionResultSummary,
+      execution_artifacts_count: sideOutputs.executionArtifacts.length,
+      execution_evidence_count: sideOutputs.executionEvidence.length,
       current_stage: kernelInputs.executionState?.current_stage ?? null,
       active_role: kernelInputs.executionState?.active_role ?? null,
       tool_registry_present: true,

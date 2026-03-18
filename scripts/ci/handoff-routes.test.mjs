@@ -189,6 +189,9 @@ test("native handoff routes preserve explicit Aionis Doc runtime continuity payl
     import { createLiteWriteStore } from "./src/store/lite-write-store.ts";
     import {
       compileAionisDoc,
+      compileAndExecuteAionisDoc,
+      ModuleRegistryExecutionRuntime,
+      StaticModuleRegistry,
       buildRuntimeHandoffV1,
       buildHandoffStoreRequestFromRuntimeHandoff,
     } from "./packages/aionis-doc/src/index.ts";
@@ -230,9 +233,94 @@ test("native handoff routes preserve explicit Aionis Doc runtime continuity payl
 
         const sourcePath = path.join(process.cwd(), "packages/aionis-doc/fixtures/valid-workflow.aionis.md");
         const compile = compileAionisDoc(readFileSync(sourcePath, "utf8"));
+        const executionResult = await compileAndExecuteAionisDoc(readFileSync(sourcePath, "utf8"), {
+          runtime: new ModuleRegistryExecutionRuntime({
+            runtime_id: "handoff_routes_runtime_v1",
+            capabilities: {
+              evidence_capture: true,
+            },
+            registry: new StaticModuleRegistry([
+              {
+                manifest: {
+                  module: "research.claims.v1",
+                  version: "1.0.0",
+                  required_capabilities: ["direct_execution", "evidence_capture"],
+                  input_contract: {
+                    kind: "object",
+                    additional_properties: true,
+                  },
+                  output_contract: {
+                    kind: "object",
+                    properties: {
+                      claims: {
+                        kind: "array",
+                        items: { kind: "string" },
+                      },
+                    },
+                    required: ["claims"],
+                    additional_properties: false,
+                  },
+                  artifact_contract: {
+                    kind: "object",
+                    properties: {
+                      uri: { kind: "string" },
+                    },
+                    required: ["uri"],
+                    additional_properties: false,
+                  },
+                  evidence_contract: {
+                    kind: "object",
+                    properties: {
+                      claim: { kind: "string" },
+                    },
+                    required: ["claim"],
+                    additional_properties: false,
+                  },
+                },
+                handler: () => ({
+                  kind: "module_result",
+                  output: {
+                    claims: ["workflow claim 1", "workflow claim 2"],
+                  },
+                  artifacts: [{ uri: "memory://artifacts/research.claims.v1/result.json" }],
+                  evidence: [{ claim: "Claims were generated" }],
+                }),
+              },
+              {
+                manifest: {
+                  module: "copy.hero.v1",
+                  version: "1.0.0",
+                  input_contract: {
+                    kind: "object",
+                    properties: {
+                      claims: {
+                        kind: "array",
+                        items: { kind: "string" },
+                      },
+                    },
+                    required: ["claims"],
+                    additional_properties: false,
+                  },
+                  output_contract: {
+                    kind: "object",
+                    properties: {
+                      hero: { kind: "string" },
+                    },
+                    required: ["hero"],
+                    additional_properties: false,
+                  },
+                },
+                handler: (input) => ({
+                  hero: Array.isArray(input?.claims) ? input.claims[0] : "fallback",
+                }),
+              },
+            ]),
+          }),
+        });
         const runtimeHandoff = buildRuntimeHandoffV1({
           inputPath: sourcePath,
           result: compile,
+          executionResult,
           scope: "default",
           repoRoot: process.cwd(),
         });
@@ -278,9 +366,17 @@ test("native handoff routes preserve explicit Aionis Doc runtime continuity payl
   const parsed = JSON.parse(out);
   assert.equal(parsed.storeStatus, 200);
   assert.equal(parsed.recoverStatus, 200);
+  assert.equal(parsed.storeBody.execution_result_summary.runtime_id, "handoff_routes_runtime_v1");
+  assert.equal(parsed.storeBody.execution_artifacts.length, 1);
+  assert.equal(parsed.storeBody.execution_evidence.length, 1);
   assert.equal(parsed.storeBody.execution_state_v1.current_stage, "patch");
+  assert.equal(parsed.storeBody.execution_packet_v1.artifact_refs[0], "artifact:run.claims:1");
   assert.equal(parsed.storeBody.execution_packet_v1.review_contract.required_outputs[0], "out.hero");
+  assert.equal(parsed.recoverBody.execution_result_summary.runtime_id, "handoff_routes_runtime_v1");
+  assert.equal(parsed.recoverBody.execution_artifacts[0].ref, "artifact:run.claims:1");
+  assert.equal(parsed.recoverBody.execution_evidence[0].ref, "evidence:run.claims:1");
   assert.equal(parsed.recoverBody.execution_state_v1.current_stage, "patch");
+  assert.equal(parsed.recoverBody.execution_packet_v1.artifact_refs[0], "artifact:run.claims:1");
   assert.equal(parsed.recoverBody.execution_packet_v1.review_contract.required_outputs[0], "out.hero");
   assert.equal(parsed.recoverBody.handoff.handoff_kind, "task_handoff");
 });

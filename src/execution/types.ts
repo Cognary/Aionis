@@ -61,6 +61,7 @@ export const ExecutionPacketV1Schema = z.object({
   rollback_notes: StringList,
   review_contract: ReviewerContractSchema.nullable().default(null),
   resume_anchor: ResumeAnchorSchema.nullable().default(null),
+  artifact_refs: StringList,
   evidence_refs: StringList,
 });
 export type ExecutionPacketV1 = z.infer<typeof ExecutionPacketV1Schema>;

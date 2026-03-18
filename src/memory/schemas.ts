@@ -274,6 +274,9 @@ export const PlanningContextRequest = z.object({
   context_layers: ContextLayerConfig.optional(),
   static_context_blocks: z.array(StaticContextBlock).max(100).optional(),
   static_injection: StaticInjectionPolicy.optional(),
+  execution_result_summary: z.record(z.unknown()).optional(),
+  execution_artifacts: z.array(z.record(z.unknown())).optional(),
+  execution_evidence: z.array(z.record(z.unknown())).optional(),
   execution_state_v1: ExecutionStateV1Schema.optional(),
   execution_packet_v1: ExecutionPacketV1Schema.optional(),
 });
@@ -318,6 +321,9 @@ export const ContextAssembleRequest = z.object({
   context_layers: ContextLayerConfig.optional(),
   static_context_blocks: z.array(StaticContextBlock).max(100).optional(),
   static_injection: StaticInjectionPolicy.optional(),
+  execution_result_summary: z.record(z.unknown()).optional(),
+  execution_artifacts: z.array(z.record(z.unknown())).optional(),
+  execution_evidence: z.array(z.record(z.unknown())).optional(),
   execution_state_v1: ExecutionStateV1Schema.optional(),
   execution_packet_v1: ExecutionPacketV1Schema.optional(),
 });
@@ -385,6 +391,9 @@ export const HandoffStoreRequest = z.object({
   must_change: z.array(z.string().min(1)).max(100).optional(),
   must_remove: z.array(z.string().min(1)).max(100).optional(),
   must_keep: z.array(z.string().min(1)).max(100).optional(),
+  execution_result_summary: z.record(z.unknown()).optional(),
+  execution_artifacts: z.array(z.record(z.unknown())).optional(),
+  execution_evidence: z.array(z.record(z.unknown())).optional(),
   execution_state_v1: ExecutionStateV1Schema.optional(),
   execution_packet_v1: ExecutionPacketV1Schema.optional(),
   control_profile_v1: ControlProfileV1Schema.optional(),
@@ -676,6 +685,9 @@ export const ToolsSelectRequest = z.object({
   // Optional execution run correlation id for provenance.
   run_id: z.string().min(1).optional(),
   context: z.any(),
+  execution_result_summary: z.record(z.unknown()).optional(),
+  execution_artifacts: z.array(z.record(z.unknown())).optional(),
+  execution_evidence: z.array(z.record(z.unknown())).optional(),
   execution_state_v1: ExecutionStateV1Schema.optional(),
   // Tool names provided by the caller's execution environment.
   candidates: z.array(z.string().min(1)).min(1).max(200),

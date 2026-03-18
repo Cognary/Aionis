@@ -103,6 +103,7 @@ type LayerCandidateLine = {
   tier: string | null;
   salience: number | null;
   lifecycle_state: string | null;
+  always_include?: boolean;
 };
 
 function pushCandidate(bucket: LayerCandidateLine[], text: string, meta?: Omit<LayerCandidateLine, "text">) {
@@ -113,6 +114,7 @@ function pushCandidate(bucket: LayerCandidateLine[], text: string, meta?: Omit<L
     tier: meta?.tier ?? null,
     salience: Number.isFinite(meta?.salience as number) ? Number(meta?.salience) : null,
     lifecycle_state: meta?.lifecycle_state ?? null,
+    always_include: meta?.always_include === true,
   });
 }
 
@@ -386,7 +388,14 @@ function collectStaticContextCandidates(args: {
     })
     .sort((a, b) => b.score - a.score || Number(b.block.priority ?? 50) - Number(a.block.priority ?? 50) || a.block.id.localeCompare(b.block.id));
 
-  const selected = ranked.filter((entry) => entry.selected).slice(0, policy.maxBlocks);
+  const alwaysIncluded = ranked.filter((entry) => entry.block.always_include === true && entry.selected);
+  const remainingBudget = Math.max(0, policy.maxBlocks - alwaysIncluded.length);
+  const selected = [
+    ...alwaysIncluded,
+    ...ranked
+      .filter((entry) => entry.selected && entry.block.always_include !== true)
+      .slice(0, remainingBudget),
+  ];
   const selectedIds = new Set(selected.map((entry) => entry.block.id));
   return {
     lines: selected.map((entry) => ({
@@ -394,6 +403,7 @@ function collectStaticContextCandidates(args: {
       tier: null,
       salience: null,
       lifecycle_state: null,
+      always_include: entry.block.always_include === true,
     })),
     summary: {
       enabled: true,
@@ -489,7 +499,7 @@ export function assembleLayeredContext(args: {
     let droppedByLayer = 0;
 
     for (const candidate of eligible) {
-      if (kept.length >= maxItems) {
+      if (candidate.always_include !== true && kept.length >= maxItems) {
         droppedByLayer += 1;
         droppedReasons.push(`${layer}: max_items limit reached`);
         continue;
@@ -497,12 +507,12 @@ export function assembleLayeredContext(args: {
       const line = `- ${candidate.text}`;
       const projectedLayer = used + line.length + 1;
       const projectedTotal = totalUsedChars + line.length + 1;
-      if (projectedLayer > charBudget) {
+      if (candidate.always_include !== true && projectedLayer > charBudget) {
         droppedByLayer += 1;
         droppedReasons.push(`${layer}: layer char budget exceeded`);
         continue;
       }
-      if (projectedTotal > totalBudget) {
+      if (candidate.always_include !== true && projectedTotal > totalBudget) {
         droppedByLayer += 1;
         droppedReasons.push(`${layer}: total char budget exceeded`);
         continue;
