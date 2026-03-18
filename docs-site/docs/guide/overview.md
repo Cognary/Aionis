@@ -128,11 +128,15 @@ Think of Aionis as four connected layers:
 4. [Memory and Policy Loop](memory-policy-loop)
 5. [API Guide](api-guide)
 6. [Operations and Gates](operations-and-gates)
+7. [Tutorial: Aionis Doc Quickstart](tutorials/aionis-doc-quickstart)
+8. [Tutorial: Aionis Doc + Runtime Resume](tutorials/aionis-doc-runtime-resume)
 
 ## Role-based reading paths
 
 1. [Role-based Paths](role-based-paths)
-2. [Tutorial: Integrate One Agent End-to-End](tutorials/agent-integration)
-3. [Tutorial: Incident Replay for a Production Failure](tutorials/incident-replay)
-4. [Tutorial: Release Gate with Replay Evidence](tutorials/release-gate)
-5. [Tutorial: Policy Tuning with Closed-loop Feedback](tutorials/policy-tuning)
+2. [Tutorial: Aionis Doc Quickstart](tutorials/aionis-doc-quickstart)
+3. [Tutorial: Aionis Doc + Runtime Resume](tutorials/aionis-doc-runtime-resume)
+4. [Tutorial: Integrate One Agent End-to-End](tutorials/agent-integration)
+5. [Tutorial: Incident Replay for a Production Failure](tutorials/incident-replay)
+6. [Tutorial: Release Gate with Replay Evidence](tutorials/release-gate)
+7. [Tutorial: Policy Tuning with Closed-loop Feedback](tutorials/policy-tuning)

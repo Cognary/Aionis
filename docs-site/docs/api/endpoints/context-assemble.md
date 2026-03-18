@@ -16,10 +16,12 @@ Common fields:
 2. `scope?: string`
 3. `query_text: string`
 4. `context?: object` (runtime execution context)
-5. `include_rules?: boolean` (default `true`)
-6. `tool_candidates?: string[]`
-7. `return_layered_context?: boolean` (default `true`)
-8. `context_layers?: object`
+5. `execution_state_v1?: object` (resume continuity state)
+6. `execution_packet_v1?: object` (resume-ready execution packet)
+7. `include_rules?: boolean` (default `true`)
+8. `tool_candidates?: string[]`
+9. `return_layered_context?: boolean` (default `true`)
+10. `context_layers?: object`
 
 ## Example request
 
@@ -43,11 +45,13 @@ Key response fields:
 
 1. `tenant_id`
 2. `scope`
-3. `query` (`text`, `embedding_provider`)
-4. `recall` (includes `trajectory` and `observability`)
-5. `rules` (optional)
-6. `tools` (optional)
-7. `layered_context` (optional)
+3. `execution_kernel`
+4. `query` (`text`, `embedding_provider`)
+5. `recall` (includes `trajectory` and `observability`)
+6. `rules` (optional)
+7. `tools` (optional)
+8. `assembly_summary`
+9. `layered_context` (optional)
 
 ## Idempotency
 
@@ -82,3 +86,4 @@ Common errors:
 
 1. Use this endpoint as planner input assembly before policy and tool execution.
 2. Keep the same `run_id` across context assembly, tool selection, and action execution.
+3. When resuming from `handoff/recover`, pass recovered `execution_state_v1` and `execution_packet_v1` to preserve continuity exactly.

@@ -61,6 +61,7 @@ Focus:
 1. stronger MCP and framework integration patterns
 2. better SDK ergonomics for production teams
 3. cleaner multi-runtime interoperability guidance
+4. document-driven workflow integration through Aionis Doc
 
 Success indicators:
 
@@ -74,6 +75,7 @@ Success indicators:
 1. strengthen context orchestration presets and tuning guidance
 2. standardize benchmark snapshot reproducibility for release workflows
 3. improve operator-facing diagnostics for policy-loop health
+4. formalize Aionis Doc as a public executable-document workflow surface
 
 ### Mid-Term
 
@@ -99,3 +101,4 @@ Success indicators:
 2. [Policy and Execution Loop](/public/en/policy-execution/00-policy-execution-loop)
 3. [Operate and Production](/public/en/operate-production/00-operate-production)
 4. [Benchmarks](/public/en/benchmarks/01-benchmarks)
+5. [Aionis Doc Roadmap](/public/en/reference/17-aionis-doc-roadmap)

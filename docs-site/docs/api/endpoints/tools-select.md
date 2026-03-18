@@ -17,10 +17,11 @@ Common fields:
 2. `scope?: string`
 3. `run_id?: string`
 4. `context: object`
-5. `candidates: string[]`
-6. `include_shadow?: boolean` (default `false`)
-7. `rules_limit?: number` (default 50, max 200)
-8. `strict?: boolean` (default `true`)
+5. `execution_state_v1?: object` (resume continuity state)
+6. `candidates: string[]`
+7. `include_shadow?: boolean` (default `false`)
+8. `rules_limit?: number` (default 50, max 200)
+9. `strict?: boolean` (default `true`)
 
 ## Example request
 
@@ -43,10 +44,12 @@ Key response fields:
 
 1. `selection.selected`
 2. `selection.allowed[]`
-3. `rules.applied`
-4. `decision.decision_id`
-5. `decision.decision_uri`
-6. `decision.run_id`
+3. `execution_kernel`
+4. `rules.applied`
+5. `decision.decision_id`
+6. `decision.decision_uri`
+7. `decision.run_id`
+8. `selection_summary`
 
 ## Idempotency
 
@@ -79,3 +82,4 @@ Common errors:
 
 1. Use one `run_id` per execution attempt and keep it across decision and feedback.
 2. Persist `decision_id` before action execution to ensure replay continuity.
+3. When resuming from recovered handoff continuity, pass `execution_state_v1` and optionally `context.control_profile_v1` so selection runs under the recovered execution posture.

@@ -23,21 +23,24 @@ npx @aionis/sdk@0.2.20 --help
 The CLI is the command-line surface for:
 
 1. operating local Lite runtime
-2. checking runtime health and environment state
-3. inspecting execution eval outputs
-4. enforcing execution eval gates in CI
+2. compiling and operationalizing Aionis Doc workflows
+3. inspecting tool runs, replay state, and artifact outputs
+4. checking runtime health and environment state
+5. inspecting execution eval outputs
+6. enforcing execution eval gates in CI
 
 Current implemented command groups:
 
 1. `aionis runtime ...`
-2. `aionis eval ...`
-3. `aionis runs ...`
-4. `aionis playbooks ...`
-5. `aionis replay inspect-run`
-6. `aionis replay inspect-playbook`
-7. `aionis replay recover`
-8. `aionis replay explain`
-9. `aionis artifacts ...`
+2. `aionis doc ...`
+3. `aionis eval ...`
+4. `aionis runs ...`
+5. `aionis playbooks ...`
+6. `aionis replay inspect-run`
+7. `aionis replay inspect-playbook`
+8. `aionis replay recover`
+9. `aionis replay explain`
+10. `aionis artifacts ...`
 
 Compatibility aliases still work:
 
@@ -50,8 +53,9 @@ Compatibility aliases still work:
 Current boundary:
 
 1. runtime lifecycle covers local Lite only
-2. eval commands operate on local artifact directories or precomputed eval summaries
-3. this is still not a hosted control-plane CLI
+2. Aionis Doc commands currently cover compile, handoff, publish, and recover flows
+3. eval commands operate on local artifact directories or precomputed eval summaries
+4. this is still not a hosted control-plane CLI
 
 Bootstrap path when no local repo is available:
 
@@ -90,6 +94,24 @@ Stop the tracked Lite process:
 
 ```bash
 npx @aionis/sdk@0.2.20 runtime stop --port 3321
+```
+
+Compile one Aionis Doc into graph output:
+
+```bash
+npx @aionis/sdk@0.2.20 doc compile ./workflow.aionis.md --emit graph
+```
+
+Publish one Aionis Doc into the native handoff store:
+
+```bash
+npx @aionis/sdk@0.2.20 doc publish ./workflow.aionis.md --base-url http://127.0.0.1:3001 --scope default
+```
+
+Recover the handoff continuity for one Aionis Doc:
+
+```bash
+npx @aionis/sdk@0.2.20 doc recover ./workflow.aionis.md --base-url http://127.0.0.1:3001 --scope default
 ```
 
 Inspect execution eval output from a benchmark artifact:
@@ -260,6 +282,54 @@ If `--runtime-root` is omitted, the CLI searches:
 6. `tools/select`
 7. replay run + compile
 
+### `aionis doc ...`
+
+`aionis doc ...` is the executable-document workflow surface for Aionis Doc.
+
+Use it when you want one human-readable document to move through:
+
+1. compile
+2. runtime handoff shaping
+3. handoff-store request generation
+4. publish into `/v1/handoff/store`
+5. recover from `/v1/handoff/recover`
+
+Current V1 commands:
+
+1. `aionis doc compile <input-file>`
+2. `aionis doc runtime-handoff <input-file>`
+3. `aionis doc store-request <runtime-handoff.json>`
+4. `aionis doc publish <input-file>`
+5. `aionis doc recover <input-file>`
+
+Recommended flow:
+
+1. use `doc compile` when you want AST / IR / graph inspection
+2. use `doc runtime-handoff` when you want an execution continuity carrier
+3. use `doc store-request` when you want an explicit native handoff/store payload
+4. use `doc publish` when you want to persist the workflow into Aionis handoff memory
+5. use `doc recover` when you want the recovered handoff, execution state, and next action back through the native recover endpoint
+
+Important input modes:
+
+1. `doc runtime-handoff` supports `source|compile-envelope`
+2. `doc publish` supports `source|runtime-handoff|handoff-store-request`
+3. `doc recover` supports `source|runtime-handoff|handoff-store-request|publish-result`
+
+This means the SDK CLI now exposes a full Aionis Doc path from source document to recovered execution continuity without dropping to raw API calls.
+
+### `aionis runs ...`
+
+`aionis runs ...` inspects recorded tool-selection runs and their decision / feedback history.
+
+Current V1 commands:
+
+1. `aionis runs list`
+2. `aionis runs get`
+3. `aionis runs timeline`
+4. `aionis runs decisions`
+5. `aionis runs feedback`
+
 ### `aionis eval inspect`
 
 `eval inspect` loads either:
@@ -365,17 +435,16 @@ Current V1 support:
 4. optional `--mode simulate|strict|guided`
 5. `--json`
 
-### `aionis replay inspect-run`
+### `aionis replay ...`
 
-`replay inspect-run` fetches one replay run and can request steps and artifacts.
+`aionis replay ...` inspects replay runs and replay-derived recovery state.
 
-Current V1 support:
+Current V1 commands:
 
-1. `--run-id <id>`
-2. optional `--scope <scope>`
-3. optional `--include-steps`
-4. optional `--include-artifacts`
-5. `--json`
+1. `aionis replay inspect-run`
+2. `aionis replay inspect-playbook`
+3. `aionis replay recover`
+4. `aionis replay explain`
 
 ### `aionis replay inspect-playbook`
 
@@ -512,9 +581,10 @@ Use the SDK CLI when you want:
 
 1. a fast local Aionis Lite bootstrap
 2. a repeatable runtime health check
-3. a stable execution-eval inspection surface
-4. a scriptable execution gate in CI
-5. replay/playbook inspection without dropping to raw API calls
+3. a documented executable-document workflow through `aionis doc ...`
+4. a stable execution-eval inspection surface
+5. a scriptable execution gate in CI
+6. replay/playbook/run inspection without dropping to raw API calls
 
 ## Related
 

@@ -151,7 +151,7 @@ The TypeScript package now includes a Phase 1 Lite developer CLI:
 
 Use it when you want the SDK package to manage a local Lite runtime during development.
 
-See [SDK CLI](/public/en/reference/09-sdk-cli) for command details.
+See [SDK CLI](/public/en/reference/09-sdk-cli) for command details, and see [Aionis Doc](/public/en/reference/10-aionis-doc) for the executable-document surface built on top of the CLI.
 
 ## Find Summary (TypeScript)
 
