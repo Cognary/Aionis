@@ -4,7 +4,7 @@ title: "SDK CLI"
 
 # SDK CLI
 
-TypeScript SDK 现在内置了一套 Phase 1 本地开发 CLI。
+TypeScript SDK 现在内置了一套面向 runtime 的 CLI。
 
 安装：
 
@@ -20,9 +20,19 @@ npx @aionis/sdk@0.2.20 --help
 
 ## 它是什么
 
-这套 CLI 是本地 Lite 开发入口，不是 hosted control-plane CLI。
+这套 CLI 是 Aionis runtime 的命令行产品面，当前覆盖：
 
-当前命令：
+1. 本地 Lite runtime 生命周期
+2. runtime 健康检查和环境诊断
+3. execution eval 结果检查
+4. execution eval gate
+
+当前已实现的命令组：
+
+1. `aionis runtime ...`
+2. `aionis eval ...`
+
+兼容 alias 仍然可用：
 
 1. `aionis dev`
 2. `aionis stop`
@@ -30,11 +40,11 @@ npx @aionis/sdk@0.2.20 --help
 4. `aionis doctor`
 5. `aionis selfcheck`
 
-Phase 1 边界：
+当前边界：
 
-1. 只管理本地 Lite
-2. 不负责 Server 或 Cloud runtime 生命周期
-3. `stop` 只管理由 CLI 自己启动并追踪的进程
+1. runtime 生命周期仍然只覆盖本地 Lite
+2. eval 命令消费本地 artifact 目录或预生成的 eval summary
+3. 这仍然不是 hosted control-plane CLI
 
 如果本地没有 Aionis 仓库，当前 bootstrap 路径是：
 
@@ -48,38 +58,56 @@ Phase 1 边界：
 启动 Lite：
 
 ```bash
-npx @aionis/sdk@0.2.20 dev
+npx @aionis/sdk@0.2.20 runtime dev
 ```
 
 检查健康：
 
 ```bash
-npx aionis health --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 runtime health --base-url http://127.0.0.1:3321
 ```
 
 运行 doctor：
 
 ```bash
-npx @aionis/sdk@0.2.20 doctor --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 runtime doctor --base-url http://127.0.0.1:3321
 ```
 
 运行 selfcheck：
 
 ```bash
-npx @aionis/sdk@0.2.20 selfcheck --base-url http://127.0.0.1:3321
+npx @aionis/sdk@0.2.20 runtime selfcheck --base-url http://127.0.0.1:3321
 ```
 
 停止当前端口上由 CLI 追踪的 Lite：
 
 ```bash
-npx @aionis/sdk@0.2.20 stop --port 3321
+npx @aionis/sdk@0.2.20 runtime stop --port 3321
+```
+
+检查一份 benchmark artifact 的 execution eval：
+
+```bash
+npx @aionis/sdk@0.2.20 eval inspect --artifact-dir /path/to/artifact
+```
+
+对比两份 eval：
+
+```bash
+npx @aionis/sdk@0.2.20 eval compare --baseline /path/to/baseline --treatment /path/to/treatment
+```
+
+对 nightly 或 regression artifact 做 gate：
+
+```bash
+npx @aionis/sdk@0.2.20 eval gate --artifact-dir /path/to/artifact
 ```
 
 ## 命令说明
 
-### `aionis dev`
+### `aionis runtime dev`
 
-`aionis dev` 会启动或附着到一个本地 Lite runtime。
+`aionis runtime dev` 会启动或附着到一个本地 Lite runtime。
 
 常用参数：
 
@@ -101,9 +129,9 @@ npx @aionis/sdk@0.2.20 stop --port 3321
 4. 已缓存的 runtime bootstrap 目录
 5. 远程 runtime bootstrap 源
 
-### `aionis doctor`
+### `aionis runtime doctor`
 
-`doctor` 当前会检查：
+`runtime doctor` 当前会检查：
 
 1. `node:sqlite` 支持
 2. runtime root 发现
@@ -117,9 +145,9 @@ npx @aionis/sdk@0.2.20 stop --port 3321
 10. write / replay SQLite 路径
 11. runtime health
 
-### `aionis selfcheck`
+### `aionis runtime selfcheck`
 
-`selfcheck` 会跑一套最小闭环：
+`runtime selfcheck` 会跑一套最小闭环：
 
 1. `health`
 2. `memory/write`
@@ -129,6 +157,30 @@ npx @aionis/sdk@0.2.20 stop --port 3321
 6. `tools/select`
 7. replay run + compile
 
+### `aionis eval inspect`
+
+`eval inspect` 会读取：
+
+1. 已存在的 `execution_eval_summary.json`
+2. 或包含 `summary.json` 与 `cases.jsonl` 的原始 artifact 目录
+
+适合用来从 CLI 直接拿稳定的 execution-eval summary。
+
+### `aionis eval compare`
+
+`eval compare` 会比较两份 eval 输入，输出：
+
+1. treatment 结果变化
+2. treatment score 变化
+3. delta 变化
+
+### `aionis eval gate`
+
+`eval gate` 会套用当前 execution gate 规则，并返回：
+
+1. 通过时退出码 `0`
+2. gate 失败时退出码 `5`
+
 如果你要把结果接进 CI 或初始化脚本，建议加 `--json`。
 
 ## 推荐使用场景
@@ -136,8 +188,9 @@ npx @aionis/sdk@0.2.20 stop --port 3321
 这套 CLI 适合：
 
 1. 快速拉起本地 Aionis Lite
-2. 做重复性的开发环境自检
-3. 用 SDK-first 的方式取代零散 runtime shell 脚本
+2. 做重复性的 runtime 自检
+3. 检查 execution eval 结果
+4. 在 CI 里做 scriptable gate
 
 ## 相关文档
 

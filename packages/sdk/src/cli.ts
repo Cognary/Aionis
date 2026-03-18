@@ -17,8 +17,28 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { AionisApiError, AionisClient, AionisNetworkError } from "./index.js";
+import {
+  buildExecutionEvalComparison,
+  buildExecutionEvalGateVerdict,
+  resolveExecutionEvalSummary,
+} from "./eval-cli.js";
 
-type Command = "dev" | "stop" | "health" | "doctor" | "selfcheck" | "help";
+type CommandName =
+  | "runtime:dev"
+  | "runtime:stop"
+  | "runtime:health"
+  | "runtime:doctor"
+  | "runtime:selfcheck"
+  | "eval:inspect"
+  | "eval:compare"
+  | "eval:gate"
+  | "help";
+
+type ResolvedCommand = {
+  name: CommandName;
+  label: string;
+  args: string[];
+};
 
 type CliOptions = {
   baseUrl: string;
@@ -31,6 +51,7 @@ type CliOptions = {
   offline: boolean;
   foreground: boolean;
   json: boolean;
+  noColor: boolean;
   timeoutMs: number;
 };
 
@@ -53,27 +74,40 @@ type RuntimeResolution = {
   cacheRoot?: string;
 };
 
+class CliUsageError extends Error {}
+class CliNotFoundError extends Error {}
+class CliGateFailureError extends Error {}
+
 async function main() {
   const argv = process.argv.slice(2);
-  const command = resolveCommand(argv[0]);
-  const flags = parseFlags(argv.slice(command === "help" ? 0 : 1));
+  const command = resolveCommand(argv);
+  const flags = parseFlags(command.args);
   const options = resolveOptions(flags);
 
-  switch (command) {
-    case "dev":
-      await runDev(options);
+  switch (command.name) {
+    case "runtime:dev":
+      await runDev(command.label, options);
       return;
-    case "stop":
-      await runStop(options);
+    case "runtime:stop":
+      await runStop(command.label, options);
       return;
-    case "health":
-      await runHealth(options);
+    case "runtime:health":
+      await runHealth(command.label, options);
       return;
-    case "doctor":
-      await runDoctor(options);
+    case "runtime:doctor":
+      await runDoctor(command.label, options);
       return;
-    case "selfcheck":
-      await runSelfcheck(options);
+    case "runtime:selfcheck":
+      await runSelfcheck(command.label, options);
+      return;
+    case "eval:inspect":
+      await runEvalInspect(command.label, options, flags);
+      return;
+    case "eval:compare":
+      await runEvalCompare(command.label, options, flags);
+      return;
+    case "eval:gate":
+      await runEvalGate(command.label, options, flags);
       return;
     case "help":
     default:
@@ -81,10 +115,53 @@ async function main() {
   }
 }
 
-function resolveCommand(raw: string | undefined): Command {
-  if (!raw || raw === "--help" || raw === "-h" || raw === "help") return "help";
-  if (raw === "dev" || raw === "stop" || raw === "health" || raw === "doctor" || raw === "selfcheck") return raw;
-  return "help";
+function resolveCommand(argv: string[]): ResolvedCommand {
+  const [first, second, ...rest] = argv;
+  if (!first || first === "--help" || first === "-h" || first === "help") {
+    return { name: "help", label: "aionis help", args: argv };
+  }
+
+  if (first === "runtime") {
+    switch (second) {
+      case "dev":
+      case "stop":
+      case "health":
+      case "doctor":
+      case "selfcheck":
+        return {
+          name: `runtime:${second}`,
+          label: `aionis runtime ${second}`,
+          args: rest,
+        };
+      default:
+        return { name: "help", label: "aionis help", args: argv };
+    }
+  }
+
+  if (first === "eval") {
+    switch (second) {
+      case "inspect":
+      case "compare":
+      case "gate":
+        return {
+          name: `eval:${second}`,
+          label: `aionis eval ${second}`,
+          args: rest,
+        };
+      default:
+        return { name: "help", label: "aionis help", args: argv };
+    }
+  }
+
+  if (first === "dev" || first === "stop" || first === "health" || first === "doctor" || first === "selfcheck") {
+    return {
+      name: `runtime:${first}`,
+      label: `aionis ${first}`,
+      args: argv.slice(1),
+    };
+  }
+
+  return { name: "help", label: "aionis help", args: argv };
 }
 
 function parseFlags(argv: string[]): Map<string, string | boolean> {
@@ -93,7 +170,7 @@ function parseFlags(argv: string[]): Map<string, string | boolean> {
     const token = argv[i];
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
-    if (key === "foreground" || key === "json") {
+    if (key === "foreground" || key === "json" || key === "no-color") {
       out.set(key, true);
       continue;
     }
@@ -119,29 +196,59 @@ function resolveOptions(flags: Map<string, string | boolean>): CliOptions {
   const offline = Boolean(flags.get("offline"));
   const foreground = Boolean(flags.get("foreground"));
   const json = Boolean(flags.get("json"));
+  const noColor = Boolean(flags.get("no-color"));
   const timeoutMs = Number(flags.get("timeout-ms") || process.env.AIONIS_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
-  return { baseUrl, host, port, runtimeRoot, runtimeVersion, runtimeCacheDir, forceDownload, offline, foreground, json, timeoutMs };
+  return { baseUrl, host, port, runtimeRoot, runtimeVersion, runtimeCacheDir, forceDownload, offline, foreground, json, noColor, timeoutMs };
 }
 
 function printHelp() {
   process.stdout.write(
     [
-      "Aionis CLI (Phase 1)",
+      "Aionis Runtime CLI",
       "",
       "Usage:",
-      "  aionis dev [--port 3321] [--host 127.0.0.1] [--runtime-root /path/to/Aionis] [--runtime-version 0.2.18] [--force-download] [--offline] [--foreground]",
-      "  aionis stop [--port 3321] [--json]",
-      "  aionis health [--base-url http://127.0.0.1:3321] [--json]",
-      "  aionis doctor [--runtime-root /path/to/Aionis] [--runtime-version 0.2.18] [--runtime-cache-dir ~/.aionis/runtime] [--base-url http://127.0.0.1:3321] [--json]",
-      "  aionis selfcheck [--base-url http://127.0.0.1:3321] [--json]",
+      "  aionis runtime dev [--port 3321] [--host 127.0.0.1] [--runtime-root /path/to/Aionis] [--runtime-version 0.2.20] [--force-download] [--offline] [--foreground] [--json]",
+      "  aionis runtime stop [--port 3321] [--json]",
+      "  aionis runtime health [--base-url http://127.0.0.1:3321] [--json]",
+      "  aionis runtime doctor [--runtime-root /path/to/Aionis] [--runtime-version 0.2.20] [--runtime-cache-dir ~/.aionis/runtime] [--base-url http://127.0.0.1:3321] [--json]",
+      "  aionis runtime selfcheck [--base-url http://127.0.0.1:3321] [--json]",
+      "  aionis eval inspect --artifact-dir <dir> [--suite-id <id>] [--json]",
+      "  aionis eval compare --baseline <path> --treatment <path> [--suite-id <id>] [--json]",
+      "  aionis eval gate --artifact-dir <dir> [--suite-id <id>] [--json]",
+      "",
+      "Compatibility aliases:",
+      "  aionis dev|stop|health|doctor|selfcheck",
+      "",
+      "Global flags:",
+      "  --json --base-url <url> --timeout-ms <int> --no-color",
       "",
       "Notes:",
-      "  - Phase 1 is a local Lite developer CLI.",
-      "  - `aionis dev` starts or attaches to a local Lite runtime.",
+      "  - Runtime commands operate local Lite.",
+      "  - Eval commands inspect precomputed or raw execution artifacts.",
       "  - If runtime root is not given, the CLI searches local paths first, then runtime cache, then bootstrap download.",
       "",
     ].join("\n"),
   );
+}
+
+function getStringFlag(flags: Map<string, string | boolean>, name: string): string | null {
+  const value = flags.get(name);
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getRequiredFlag(flags: Map<string, string | boolean>, name: string): string {
+  const value = getStringFlag(flags, name);
+  if (!value) throw new CliUsageError(`--${name} is required`);
+  return value;
+}
+
+function outputEnvelope(command: string, body: Record<string, unknown>) {
+  return {
+    command,
+    version: packageVersion(),
+    generated_at: new Date().toISOString(),
+    ...body,
+  };
 }
 
 function runtimePidFile(port: number) {
@@ -481,12 +588,12 @@ function processAlive(pid: number): boolean {
   }
 }
 
-async function runDev(options: CliOptions) {
+async function runDev(command: string, options: CliOptions) {
   ensureStateDir();
   try {
     const existing = await healthCheck(options.baseUrl, options.timeoutMs);
     if (existing.data?.ok) {
-      emit(options.json, {
+      emitSuccess(command, options.json, {
         ok: true,
         mode: "attached",
         base_url: options.baseUrl,
@@ -518,7 +625,7 @@ async function runDev(options: CliOptions) {
     const pid = Number(pidRaw);
     if (Number.isFinite(pid) && processAlive(pid)) {
       await waitForHealth(options.baseUrl, options.timeoutMs, 12_000);
-      emit(options.json, {
+      emitSuccess(command, options.json, {
         ok: true,
         mode: "attached_pid",
         base_url: options.baseUrl,
@@ -563,7 +670,7 @@ async function runDev(options: CliOptions) {
   writeFileSync(pidPath, String(child.pid));
   child.unref();
   const health = await waitForHealth(options.baseUrl, options.timeoutMs, 15_000);
-  emit(options.json, {
+  emitSuccess(command, options.json, {
     ok: true,
     mode: "started",
     base_url: options.baseUrl,
@@ -578,9 +685,9 @@ async function runDev(options: CliOptions) {
   }, `Started Aionis Lite at ${options.baseUrl}`);
 }
 
-async function runHealth(options: CliOptions) {
+async function runHealth(command: string, options: CliOptions) {
   const out = await healthCheck(options.baseUrl, options.timeoutMs);
-  emit(options.json, {
+  emitSuccess(command, options.json, {
     ok: Boolean(out.data?.ok),
     base_url: options.baseUrl,
     edition: out.data?.aionis_edition ?? null,
@@ -589,12 +696,12 @@ async function runHealth(options: CliOptions) {
   }, `Aionis health ok at ${options.baseUrl}`);
 }
 
-async function runStop(options: CliOptions) {
+async function runStop(command: string, options: CliOptions) {
   ensureStateDir();
   const pidPath = runtimePidFile(options.port);
   const pid = readPidFile(pidPath);
   if (!pid) {
-    emit(options.json, {
+    emitSuccess(command, options.json, {
       ok: true,
       stopped: false,
       reason: "pid_file_missing",
@@ -624,7 +731,7 @@ async function runStop(options: CliOptions) {
   const aliveAfter = processAlive(pid);
   if (!aliveAfter && existsSync(pidPath)) rmSync(pidPath, { force: true });
   const ok = !aliveAfter;
-  emit(options.json, {
+  emitSuccess(command, options.json, {
     ok,
     stopped: ok,
     pid,
@@ -634,7 +741,7 @@ async function runStop(options: CliOptions) {
   if (!ok) process.exitCode = 1;
 }
 
-async function runDoctor(options: CliOptions) {
+async function runDoctor(command: string, options: CliOptions) {
   const runtimeRoot = resolveRuntimeRoot(options.runtimeRoot) ?? findRuntimeRootCandidate(runtimeBundleRoot(options)) ?? findRuntimeRootCandidate(runtimeSourceRoot(options), 4);
   ensureStateDir();
   const pidPath = runtimePidFile(options.port);
@@ -722,11 +829,11 @@ async function runDoctor(options: CliOptions) {
   }
 
   const ok = checks.every((c) => c.ok);
-  emit(options.json, { ok, checks, runtime_version: options.runtimeVersion, runtime_platform: runtimePlatformKey() }, renderDoctor(checks));
+  emitSuccess(command, options.json, { ok, checks, runtime_version: options.runtimeVersion, runtime_platform: runtimePlatformKey() }, renderDoctor(checks));
   if (!ok) process.exitCode = 1;
 }
 
-async function runSelfcheck(options: CliOptions) {
+async function runSelfcheck(command: string, options: CliOptions) {
   const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
   const scope = `sdk:cli:selfcheck:${Date.now()}`;
   const out: Record<string, unknown> = {
@@ -850,8 +957,105 @@ async function runSelfcheck(options: CliOptions) {
       Number((compile.data as any)?.usage?.total_tokens ?? (compile.data as any)?.compile_summary?.usage_estimate?.total_tokens ?? 0),
   };
 
-  emit(options.json, out, out.ok ? "Aionis selfcheck passed" : "Aionis selfcheck found issues");
+  emitSuccess(command, options.json, out, out.ok ? "Aionis selfcheck passed" : "Aionis selfcheck found issues");
   if (!out.ok) process.exitCode = 1;
+}
+
+async function runEvalInspect(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const artifactDir = getRequiredFlag(flags, "artifact-dir");
+  const suiteId = getStringFlag(flags, "suite-id") ?? undefined;
+  const summary = resolveExecutionEvalSummary({
+    inputPath: artifactDir,
+    suiteId,
+  });
+  const treatment = summary.variants.treatment ?? null;
+  const baseline = summary.variants.baseline ?? null;
+  emitSuccess(
+    command,
+    options.json,
+    {
+      artifact_dir: resolve(artifactDir),
+      summary,
+    },
+    [
+      "Execution Eval Summary",
+      `suite: ${summary.suite_id}`,
+      `case_group: ${summary.case_group_id}`,
+      `baseline: ${baseline?.result ?? "unknown"}`,
+      `treatment: ${treatment?.result ?? "unknown"}`,
+      `completion_gain: ${summary.delta.completion_gain}`,
+      `reviewer_readiness_gain: ${summary.delta.reviewer_readiness_gain}`,
+      `continuity_gain: ${summary.delta.continuity_gain}`,
+      `recovery_gain: ${summary.delta.recovery_gain}`,
+      `control_quality_gain: ${summary.delta.control_quality_gain}`,
+    ].join("\n"),
+  );
+}
+
+async function runEvalCompare(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const baselinePath = getRequiredFlag(flags, "baseline");
+  const treatmentPath = getRequiredFlag(flags, "treatment");
+  const suiteId = getStringFlag(flags, "suite-id") ?? undefined;
+  const comparison = buildExecutionEvalComparison({
+    baselinePath,
+    treatmentPath,
+    suiteId,
+  });
+  emitSuccess(
+    command,
+    options.json,
+    comparison,
+    [
+      "Execution Eval Compare",
+      `baseline_ref: ${comparison.baseline_ref}`,
+      `treatment_ref: ${comparison.treatment_ref}`,
+      `baseline_treatment_result: ${comparison.baseline.treatment_result}`,
+      `treatment_treatment_result: ${comparison.treatment.treatment_result}`,
+      `completion_change: ${comparison.changes.completion}`,
+      `reviewer_readiness_change: ${comparison.changes.reviewer_readiness}`,
+      `continuity_change: ${comparison.changes.continuity}`,
+      `recovery_change: ${comparison.changes.recovery}`,
+      `control_quality_change: ${comparison.changes.control_quality}`,
+    ].join("\n"),
+  );
+}
+
+async function runEvalGate(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const artifactDir = getRequiredFlag(flags, "artifact-dir");
+  const suiteId = getStringFlag(flags, "suite-id") ?? undefined;
+  const summary = resolveExecutionEvalSummary({
+    inputPath: artifactDir,
+    suiteId,
+  });
+  const gate = buildExecutionEvalGateVerdict(summary);
+  if (gate.verdict !== "pass") {
+    throw Object.assign(
+      new CliGateFailureError(gate.reasons.join("; ") || "execution eval gate failed"),
+      {
+        details: {
+          artifact_dir: resolve(artifactDir),
+          verdict: gate.verdict,
+          reasons: gate.reasons,
+        },
+      },
+    );
+  }
+  emitSuccess(
+    command,
+    options.json,
+    {
+      artifact_dir: resolve(artifactDir),
+      verdict: gate.verdict,
+      reasons: gate.reasons,
+      summary,
+    },
+    [
+      "Execution Eval Gate",
+      `artifact_dir: ${resolve(artifactDir)}`,
+      `verdict: ${gate.verdict}`,
+      ...(gate.reasons.length > 0 ? gate.reasons.map((reason) => `reason: ${reason}`) : ["reason: none"]),
+    ].join("\n"),
+  );
 }
 
 function renderDoctor(checks: DoctorCheck[]) {
@@ -862,9 +1066,9 @@ function renderDoctor(checks: DoctorCheck[]) {
   return lines.join("\n");
 }
 
-function emit(json: boolean, payload: Record<string, unknown>, text: string) {
+function emitSuccess(command: string, json: boolean, payload: Record<string, unknown>, text: string) {
   if (json) {
-    process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(outputEnvelope(command, { data: payload }), null, 2)}\n`);
     return;
   }
   process.stdout.write(`${text}\n`);
@@ -878,6 +1082,20 @@ function emit(json: boolean, payload: Record<string, unknown>, text: string) {
   }
 }
 
+function emitFailure(command: string, json: boolean, code: string, message: string, details?: Record<string, unknown>) {
+  if (json) {
+    process.stdout.write(`${JSON.stringify(outputEnvelope(command, {
+      error: {
+        code,
+        message,
+        details: details ?? {},
+      },
+    }), null, 2)}\n`);
+    return;
+  }
+  process.stderr.write(`${message}\n`);
+}
+
 function formatErr(err: unknown) {
   if (err instanceof AionisApiError) return `${err.code ?? "api_error"} (${err.status ?? "?"})`;
   if (err instanceof AionisNetworkError) return err.message;
@@ -886,6 +1104,27 @@ function formatErr(err: unknown) {
 }
 
 main().catch((err) => {
-  process.stderr.write(`${formatErr(err)}\n`);
-  process.exit(1);
+  const argv = process.argv.slice(2);
+  const command = resolveCommand(argv);
+  const flags = parseFlags(command.args);
+  const json = Boolean(flags.get("json"));
+  const message = formatErr(err);
+  let code = "cli_error";
+  let exitCode = 1;
+  const details = err && typeof err === "object" && "details" in err ? ((err as { details?: Record<string, unknown> }).details ?? {}) : {};
+  if (err instanceof CliUsageError) {
+    code = "usage_error";
+    exitCode = 2;
+  } else if (err instanceof CliNotFoundError || (err instanceof Error && "code" in err && (err as Error & { code?: string }).code === "ENOENT")) {
+    code = "not_found";
+    exitCode = 4;
+  } else if (err instanceof CliGateFailureError) {
+    code = "gate_failed";
+    exitCode = 5;
+  } else if (err instanceof AionisNetworkError) {
+    code = "runtime_unavailable";
+    exitCode = 3;
+  }
+  emitFailure(command.label, json, code, message, details);
+  process.exit(exitCode);
 });
