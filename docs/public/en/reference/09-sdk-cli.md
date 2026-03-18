@@ -31,9 +31,10 @@ Current implemented command groups:
 
 1. `aionis runtime ...`
 2. `aionis eval ...`
-3. `aionis playbooks ...`
-4. `aionis replay inspect-run`
-5. `aionis artifacts ...`
+3. `aionis runs ...`
+4. `aionis playbooks ...`
+5. `aionis replay inspect-run`
+6. `aionis artifacts ...`
 
 Compatibility aliases still work:
 
@@ -104,6 +105,24 @@ Gate a nightly or regression artifact:
 
 ```bash
 npx @aionis/sdk@0.2.20 eval gate --artifact-dir /path/to/artifact
+```
+
+Inspect one run lifecycle:
+
+```bash
+npx @aionis/sdk@0.2.20 runs get --run-id <run_id> --include-feedback
+```
+
+Inspect decisions linked to one run:
+
+```bash
+npx @aionis/sdk@0.2.20 runs decisions --run-id <run_id>
+```
+
+Inspect feedback linked to one run:
+
+```bash
+npx @aionis/sdk@0.2.20 runs feedback --run-id <run_id>
 ```
 
 Inspect one replay playbook:
@@ -233,6 +252,51 @@ Use it when you want a stable execution-eval summary from the CLI.
 2. exit code `5` on gate failure
 
 Use `--json` when you want machine-readable output in CI or local setup scripts.
+
+### `aionis runs get`
+
+`runs get` inspects one run through the current tools lifecycle surface.
+
+Current V1 support:
+
+1. `--run-id <id>`
+2. optional `--scope <scope>`
+3. optional `--decision-limit <n>`
+4. optional `--include-feedback`
+5. optional `--feedback-limit <n>`
+6. `--json`
+
+Current boundary:
+
+1. this is a real run-inspection surface backed by `/v1/memory/tools/run`
+2. it is not yet a generic all-runtime run model
+
+### `aionis runs decisions`
+
+`runs decisions` inspects decisions linked to one run.
+
+Current V1 support:
+
+1. `--run-id <id>`
+2. optional `--scope <scope>`
+3. optional `--decision-limit <n>`
+4. `--json`
+
+Current behavior:
+
+1. reads run decisions from `tools/run`
+2. also fetches the latest decision for the run from `tools/decision`
+
+### `aionis runs feedback`
+
+`runs feedback` inspects feedback linked to one run.
+
+Current V1 support:
+
+1. `--run-id <id>`
+2. optional `--scope <scope>`
+3. optional `--feedback-limit <n>`
+4. `--json`
 
 ### `aionis playbooks get`
 

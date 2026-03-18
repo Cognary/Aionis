@@ -345,6 +345,11 @@ JSON `data` shape:
 }
 ```
 
+V1 implementation note:
+
+1. `runs list` remains deferred until a real generic run-list surface exists
+2. shipping a fake or host-specific list command is explicitly disallowed
+
 ### `aionis runs get <run_id>`
 
 Usage:
@@ -373,6 +378,11 @@ JSON `data` shape:
 }
 ```
 
+Current V1 implementation note:
+
+1. `runs get` is currently backed by `tools/run`
+2. this is a real run inspection surface for tool-selection lifecycle, not a generic cross-runtime run model
+
 ### `aionis runs timeline <run_id>`
 
 Usage:
@@ -400,6 +410,10 @@ JSON `data` shape:
 }
 ```
 
+V1 implementation note:
+
+1. `runs timeline` remains deferred until a stable timeline/event surface exists
+
 ### `aionis runs decisions <run_id>`
 
 Usage:
@@ -424,6 +438,10 @@ JSON `data` shape:
 }
 ```
 
+Current V1 implementation note:
+
+1. `runs decisions` is backed by `tools/run` decisions plus `tools/decision` latest-by-run lookup
+
 ### `aionis runs feedback <run_id>`
 
 Usage:
@@ -447,6 +465,10 @@ JSON `data` shape:
   ]
 }
 ```
+
+Current V1 implementation note:
+
+1. `runs feedback` is backed by `tools/run` with `include_feedback=true`
 
 ## Group 3: `playbooks`
 

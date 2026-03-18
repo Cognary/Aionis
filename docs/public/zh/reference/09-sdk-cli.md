@@ -31,9 +31,10 @@ npx @aionis/sdk@0.2.20 --help
 
 1. `aionis runtime ...`
 2. `aionis eval ...`
-3. `aionis playbooks ...`
-4. `aionis replay inspect-run`
-5. `aionis artifacts ...`
+3. `aionis runs ...`
+4. `aionis playbooks ...`
+5. `aionis replay inspect-run`
+6. `aionis artifacts ...`
 
 兼容 alias 仍然可用：
 
@@ -104,6 +105,24 @@ npx @aionis/sdk@0.2.20 eval compare --baseline /path/to/baseline --treatment /pa
 
 ```bash
 npx @aionis/sdk@0.2.20 eval gate --artifact-dir /path/to/artifact
+```
+
+检查一条 run lifecycle：
+
+```bash
+npx @aionis/sdk@0.2.20 runs get --run-id <run_id> --include-feedback
+```
+
+检查一条 run 关联的 decisions：
+
+```bash
+npx @aionis/sdk@0.2.20 runs decisions --run-id <run_id>
+```
+
+检查一条 run 关联的 feedback：
+
+```bash
+npx @aionis/sdk@0.2.20 runs feedback --run-id <run_id>
 ```
 
 检查一份 replay playbook：
@@ -233,6 +252,51 @@ npx @aionis/sdk@0.2.20 artifacts pack --artifact-dir /path/to/artifact --out /tm
 2. gate 失败时退出码 `5`
 
 如果你要把结果接进 CI 或初始化脚本，建议加 `--json`。
+
+### `aionis runs get`
+
+`runs get` 会通过当前 tools lifecycle surface 检查一条 run。
+
+当前 V1 支持：
+
+1. `--run-id <id>`
+2. 可选 `--scope <scope>`
+3. 可选 `--decision-limit <n>`
+4. 可选 `--include-feedback`
+5. 可选 `--feedback-limit <n>`
+6. `--json`
+
+当前边界：
+
+1. 这是基于 `/v1/memory/tools/run` 的真实 run inspection surface
+2. 还不是一个泛 runtime 的统一 run model
+
+### `aionis runs decisions`
+
+`runs decisions` 会检查一条 run 关联的 decisions。
+
+当前 V1 支持：
+
+1. `--run-id <id>`
+2. 可选 `--scope <scope>`
+3. 可选 `--decision-limit <n>`
+4. `--json`
+
+当前行为：
+
+1. 先从 `tools/run` 读取这条 run 的 decisions
+2. 再从 `tools/decision` 读取这条 run 的 latest decision
+
+### `aionis runs feedback`
+
+`runs feedback` 会检查一条 run 关联的 feedback。
+
+当前 V1 支持：
+
+1. `--run-id <id>`
+2. 可选 `--scope <scope>`
+3. 可选 `--feedback-limit <n>`
+4. `--json`
 
 ### `aionis playbooks get`
 

@@ -30,6 +30,9 @@ type CommandName =
   | "runtime:health"
   | "runtime:doctor"
   | "runtime:selfcheck"
+  | "runs:get"
+  | "runs:decisions"
+  | "runs:feedback"
   | "playbooks:get"
   | "playbooks:candidate"
   | "playbooks:dispatch"
@@ -115,6 +118,15 @@ async function main() {
     case "runtime:selfcheck":
       await runSelfcheck(command.label, options);
       return;
+    case "runs:get":
+      await runRunGet(command.label, options, flags);
+      return;
+    case "runs:decisions":
+      await runRunDecisions(command.label, options, flags);
+      return;
+    case "runs:feedback":
+      await runRunFeedback(command.label, options, flags);
+      return;
     case "playbooks:get":
       await runPlaybookGet(command.label, options, flags);
       return;
@@ -185,6 +197,21 @@ function resolveCommand(argv: string[]): ResolvedCommand {
         return {
           name: `eval:${second}`,
           label: `aionis eval ${second}`,
+          args: rest,
+        };
+      default:
+        return { name: "help", label: "aionis help", args: argv };
+    }
+  }
+
+  if (first === "runs") {
+    switch (second) {
+      case "get":
+      case "decisions":
+      case "feedback":
+        return {
+          name: `runs:${second}`,
+          label: `aionis runs ${second}`,
           args: rest,
         };
       default:
@@ -295,6 +322,9 @@ function printHelp() {
       "  aionis runtime health [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis runtime doctor [--runtime-root /path/to/Aionis] [--runtime-version 0.2.20] [--runtime-cache-dir ~/.aionis/runtime] [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis runtime selfcheck [--base-url http://127.0.0.1:3321] [--json]",
+      "  aionis runs get --run-id <id> [--scope <scope>] [--decision-limit <n>] [--include-feedback] [--feedback-limit <n>] [--json]",
+      "  aionis runs decisions --run-id <id> [--scope <scope>] [--decision-limit <n>] [--json]",
+      "  aionis runs feedback --run-id <id> [--scope <scope>] [--feedback-limit <n>] [--json]",
       "  aionis playbooks get --playbook-id <id> [--scope <scope>] [--json]",
       "  aionis playbooks candidate --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
       "  aionis playbooks dispatch --playbook-id <id> [--scope <scope>] [--version <n>] [--mode simulate|strict|guided] [--json]",
@@ -1257,6 +1287,131 @@ async function runReplayInspectRun(command: string, options: CliOptions, flags: 
       `include_steps: ${String(includeSteps)}`,
       `include_artifacts: ${String(includeArtifacts)}`,
       `request_id: ${response.request_id ?? "n/a"}`,
+    ].join("\n"),
+  );
+}
+
+async function runRunGet(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const runId = getRequiredFlag(flags, "run-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const decisionLimit = getOptionalIntFlag(flags, "decision-limit");
+  const includeFeedback = Boolean(flags.get("include-feedback"));
+  const feedbackLimit = getOptionalIntFlag(flags, "feedback-limit");
+  const response = await client.toolsRun({
+    run_id: runId,
+    scope,
+    decision_limit: decisionLimit,
+    include_feedback: includeFeedback,
+    feedback_limit: feedbackLimit,
+  });
+  const lifecycle = (response.data as Record<string, unknown>)?.lifecycle as Record<string, unknown> | undefined;
+  emitSuccess(
+    command,
+    options.json,
+    {
+      run_id: runId,
+      scope: scope ?? null,
+      include_feedback: includeFeedback,
+      response: response.data,
+      request_id: response.request_id,
+    },
+    [
+      "Run",
+      `run_id: ${runId}`,
+      `scope: ${scope ?? "default"}`,
+      `status: ${String(lifecycle?.status ?? "unknown")}`,
+      `decision_count: ${String(lifecycle?.decision_count ?? "unknown")}`,
+      `latest_decision_at: ${String(lifecycle?.latest_decision_at ?? "unknown")}`,
+      `latest_feedback_at: ${String(lifecycle?.latest_feedback_at ?? "unknown")}`,
+      `include_feedback: ${String(includeFeedback)}`,
+    ].join("\n"),
+  );
+}
+
+async function runRunDecisions(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const runId = getRequiredFlag(flags, "run-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const decisionLimit = getOptionalIntFlag(flags, "decision-limit");
+  const runResponse = await client.toolsRun({
+    run_id: runId,
+    scope,
+    decision_limit: decisionLimit,
+    include_feedback: false,
+  });
+  const runData = runResponse.data as Record<string, unknown>;
+  const decisions = Array.isArray(runData.decisions) ? runData.decisions : [];
+  let latestDecision: Record<string, unknown> | null = null;
+  try {
+    const latestResponse = await client.toolsDecision({
+      run_id: runId,
+      scope,
+    });
+    latestDecision = (latestResponse.data as Record<string, unknown>)?.decision as Record<string, unknown> | null;
+  } catch {
+    latestDecision = null;
+  }
+  emitSuccess(
+    command,
+    options.json,
+    {
+      run_id: runId,
+      scope: scope ?? null,
+      decision_count: decisions.length,
+      latest_decision: latestDecision,
+      decisions,
+      request_id: runResponse.request_id,
+    },
+    [
+      "Run Decisions",
+      `run_id: ${runId}`,
+      `scope: ${scope ?? "default"}`,
+      `decision_count: ${decisions.length}`,
+      `latest_decision_id: ${String(latestDecision?.decision_id ?? "unknown")}`,
+      ...decisions.map((decision) => {
+        const item = decision && typeof decision === "object" ? (decision as Record<string, unknown>) : {};
+        return `decision ${String(item.decision_id ?? "unknown")}: ${String(item.selected_tool ?? "unknown")}`;
+      }),
+    ].join("\n"),
+  );
+}
+
+async function runRunFeedback(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const runId = getRequiredFlag(flags, "run-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const feedbackLimit = getOptionalIntFlag(flags, "feedback-limit");
+  const response = await client.toolsRun({
+    run_id: runId,
+    scope,
+    include_feedback: true,
+    feedback_limit: feedbackLimit,
+  });
+  const runData = response.data as Record<string, unknown>;
+  const feedback = runData.feedback && typeof runData.feedback === "object" ? (runData.feedback as Record<string, unknown>) : null;
+  const recent = Array.isArray(feedback?.recent) ? feedback.recent : [];
+  emitSuccess(
+    command,
+    options.json,
+    {
+      run_id: runId,
+      scope: scope ?? null,
+      feedback,
+      recent,
+      request_id: response.request_id,
+    },
+    [
+      "Run Feedback",
+      `run_id: ${runId}`,
+      `scope: ${scope ?? "default"}`,
+      `total: ${String(feedback?.total ?? 0)}`,
+      `tools_feedback_count: ${String(feedback?.tools_feedback_count ?? 0)}`,
+      `linked_decision_count: ${String(feedback?.linked_decision_count ?? 0)}`,
+      ...recent.map((entry) => {
+        const item = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
+        return `feedback ${String(item.id ?? "unknown")}: ${String(item.outcome ?? "unknown")} (${String(item.source ?? "unknown")})`;
+      }),
     ].join("\n"),
   );
 }
