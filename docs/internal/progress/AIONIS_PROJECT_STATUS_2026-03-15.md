@@ -25,6 +25,7 @@ Related:
 14. [Execution Runtime Console V1 Plan](../products/execution-runtime-console/AIONIS_EXECUTION_RUNTIME_CONSOLE_V1_PLAN_2026-03-17.md)
 15. [Runtime CLI Product Plan](../products/runtime-cli/AIONIS_RUNTIME_CLI_PRODUCT_PLAN_2026-03-17.md)
 16. [Runtime CLI Command Contract](../products/runtime-cli/AIONIS_RUNTIME_CLI_COMMAND_CONTRACT_2026-03-17.md)
+17. [Runtime CLI Stage Status](../products/runtime-cli/AIONIS_RUNTIME_CLI_STAGE_STATUS_2026-03-18.md)
 
 ## Executive Summary
 
