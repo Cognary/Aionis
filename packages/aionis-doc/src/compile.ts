@@ -1,6 +1,7 @@
 import type { DirectiveNode } from "./ast/types.js";
 import type { Diagnostic, SourceRange } from "./diagnostics/types.js";
 import type { ExecutionGraph } from "./graph/types.js";
+import type { ExecutionPlanV1 } from "./plan/types.js";
 import type {
   AionisDocIR,
   AionisObject,
@@ -21,11 +22,13 @@ import { scanSource } from "./scanner/scanSource.js";
 import { validateIrSchemas } from "./schema/validateIrSchemas.js";
 import { buildExecutionGraph } from "./graph/buildExecutionGraph.js";
 import type { DocumentNode } from "./ast/types.js";
+import { buildExecutionPlanV1 } from "./plan/buildExecutionPlan.js";
 
 export interface CompileResult {
   ast: DocumentNode;
   ir: AionisDocIR;
   graph: ExecutionGraph | null;
+  plan: ExecutionPlanV1;
   diagnostics: Diagnostic[];
 }
 
@@ -243,11 +246,17 @@ export function compileAionisDoc(source: string): CompileResult {
     ...refResult.diagnostics,
     ...graphResult.diagnostics,
   ];
+  const plan = buildExecutionPlanV1({
+    ir: refResult.ir,
+    graph: graphResult.value,
+    diagnostics,
+  });
 
   return {
     ast,
     ir: refResult.ir,
     graph: graphResult.value,
+    plan,
     diagnostics,
   };
 }

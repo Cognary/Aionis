@@ -1,0 +1,89 @@
+name: Aionis Doc Publish
+
+on:
+  push:
+    tags:
+      - "doc-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. doc-v0.2.20). Leave empty to use package version."
+        required: false
+        type: string
+      dry_run:
+        description: "If true, run publish dry-run only."
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install release-check tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Validate Aionis Doc release surface
+        run: npm run -s ci:aionis-doc-validate
+
+      - name: Resolve publish mode
+        shell: bash
+        env:
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || '' }}
+          INPUT_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            echo "DOC_TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+            echo "DOC_DRY_RUN=false" >> "$GITHUB_ENV"
+          else
+            input_tag="${INPUT_TAG}"
+            if [[ -z "$input_tag" ]]; then
+              version="$(node -e 'const fs=require(\"fs\"); const p=JSON.parse(fs.readFileSync(\"packages/aionis-doc/package.json\",\"utf8\")); process.stdout.write((p&&p.version)||\"\");')"
+              if [[ -z "$version" ]]; then
+                echo "failed to resolve aionis doc version from packages/aionis-doc/package.json" >&2
+                exit 1
+              fi
+              input_tag="doc-v${version}"
+            fi
+            echo "DOC_TAG=$input_tag" >> "$GITHUB_ENV"
+            echo "DOC_DRY_RUN=${INPUT_DRY_RUN}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Release contract checks
+        run: npm run -s aionis-doc:release-check -- --tag "$DOC_TAG"
+
+      - name: Publish dry-run
+        if: env.DOC_DRY_RUN == 'true'
+        run: npm run -s aionis-doc:publish:dry-run
+
+      - name: Publish to npm
+        if: env.DOC_DRY_RUN != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "NPM_TOKEN secret is required for publish" >&2
+            exit 1
+          fi
+          npm run -s aionis-doc:publish

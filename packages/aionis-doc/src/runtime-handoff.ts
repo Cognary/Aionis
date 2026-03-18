@@ -9,6 +9,8 @@ import {
 import type { DocumentNode } from "./ast/types.js";
 import type { ExecutionGraph } from "./graph/types.js";
 import type { AionisDocIR } from "./ir/types.js";
+import type { ExecutionResultV1 } from "./execute/types.js";
+import { buildExecutionPlanV1 } from "./plan/buildExecutionPlan.js";
 
 export const AIONIS_DOC_RUNTIME_HANDOFF_VERSION = "aionis_doc_runtime_handoff_v1" as const;
 
@@ -67,6 +69,7 @@ export const RuntimeExecutionPacketSchema = z.object({
   rollback_notes: z.array(z.string()),
   review_contract: RuntimeReviewerContractSchema.nullable(),
   resume_anchor: RuntimeResumeAnchorSchema.nullable(),
+  artifact_refs: z.array(z.string()),
   evidence_refs: z.array(z.string()),
 });
 
@@ -88,6 +91,30 @@ export const RuntimeGraphSummarySchema = z.object({
   module_refs: z.array(z.string()),
   output_refs: z.array(z.string()),
   expected_outputs: z.array(z.string()),
+  artifact_count: z.number().int().nonnegative(),
+  evidence_count: z.number().int().nonnegative(),
+});
+
+export const RuntimeExecutionArtifactSchema = z.object({
+  ref: z.string().trim().min(1),
+  execution_id: z.string().trim().min(1),
+  module: z.string().trim().min(1).optional(),
+  value: z.unknown(),
+});
+
+export const RuntimeExecutionEvidenceSchema = z.object({
+  ref: z.string().trim().min(1),
+  execution_id: z.string().trim().min(1),
+  module: z.string().trim().min(1).optional(),
+  value: z.unknown(),
+});
+
+export const RuntimeExecutionResultSummarySchema = z.object({
+  runtime_id: z.string().trim().min(1),
+  status: z.enum(["success", "failed"]),
+  output_refs: z.array(z.string()),
+  artifact_count: z.number().int().nonnegative(),
+  evidence_count: z.number().int().nonnegative(),
 });
 
 export const AionisDocRuntimeHandoffSchema = z.object({
@@ -99,6 +126,9 @@ export const AionisDocRuntimeHandoffSchema = z.object({
   scope: z.string().trim().min(1),
   task_brief: z.string().trim().min(1),
   graph_summary: RuntimeGraphSummarySchema,
+  execution_result_summary: RuntimeExecutionResultSummarySchema.nullable(),
+  execution_artifacts: z.array(RuntimeExecutionArtifactSchema),
+  execution_evidence: z.array(RuntimeExecutionEvidenceSchema),
   execution_state_v1: RuntimeExecutionStateSchema,
   execution_packet_v1: RuntimeExecutionPacketSchema,
   execution_ready_handoff: RuntimeExecutionReadyHandoffSchema,
@@ -114,6 +144,7 @@ export class AionisDocRuntimeHandoffError extends Error {
 }
 
 type RuntimeHandoffOptions = {
+  executionResult?: ExecutionResultV1 | null;
   scope?: string;
   generatedAt?: string;
   currentStage?: z.infer<typeof RuntimeExecutionStageSchema>;
@@ -165,6 +196,30 @@ function collectEvidenceRefs(result: CompileResult): string[] {
     }
   }
   return refs;
+}
+
+function buildExecutionArtifactRecords(executionResult?: ExecutionResultV1 | null) {
+  const records = executionResult?.artifacts ?? [];
+  return records.map((record, index) =>
+    RuntimeExecutionArtifactSchema.parse({
+      ref: `artifact:${record.execution_id}:${index + 1}`,
+      execution_id: record.execution_id,
+      module: record.module,
+      value: record.value,
+    }),
+  );
+}
+
+function buildExecutionEvidenceRecords(executionResult?: ExecutionResultV1 | null) {
+  const records = executionResult?.evidence ?? [];
+  return records.map((record, index) =>
+    RuntimeExecutionEvidenceSchema.parse({
+      ref: `evidence:${record.execution_id}:${index + 1}`,
+      execution_id: record.execution_id,
+      module: record.module,
+      value: record.value,
+    }),
+  );
 }
 
 function collectModuleRefs(result: CompileResult): string[] {
@@ -239,10 +294,25 @@ export function buildRuntimeHandoffV1(args: {
   const activeRole = args.activeRole ?? inferRole(currentStage);
   const expectedOutputs = collectExpectedOutputs(args.result);
   const hardConstraints = collectContextConstraints(args.result);
-  const evidenceRefs = collectEvidenceRefs(args.result);
+  const executionArtifacts = buildExecutionArtifactRecords(args.executionResult);
+  const executionEvidence = buildExecutionEvidenceRecords(args.executionResult);
+  const artifactRefs = executionArtifacts.map((record) => record.ref);
+  const evidenceRefs = [
+    ...collectEvidenceRefs(args.result),
+    ...executionEvidence.map((record) => record.ref),
+  ];
   const acceptedFacts = collectAcceptedFacts(args.result);
   const nextAction = inferNextAction(args.result, expectedOutputs);
   const reviewerContract = buildReviewerContract(args.result, expectedOutputs, hardConstraints);
+  const executionResultSummary = args.executionResult
+    ? RuntimeExecutionResultSummarySchema.parse({
+        runtime_id: args.executionResult.runtime_id,
+        status: args.executionResult.status,
+        output_refs: Object.keys(args.executionResult.outputs),
+        artifact_count: executionArtifacts.length,
+        evidence_count: executionEvidence.length,
+      })
+    : null;
 
   const stateId = `aionis-doc:${doc.id}`;
   const resumeAnchor = RuntimeResumeAnchorSchema.parse({
@@ -288,6 +358,7 @@ export function buildRuntimeHandoffV1(args: {
     rollback_notes: [],
     review_contract: reviewerContract,
     resume_anchor: resumeAnchor,
+    artifact_refs: artifactRefs,
     evidence_refs: evidenceRefs,
   });
 
@@ -317,7 +388,12 @@ export function buildRuntimeHandoffV1(args: {
       module_refs: collectModuleRefs(args.result),
       output_refs: collectOutputRefs(args.result),
       expected_outputs: expectedOutputs,
+      artifact_count: executionArtifacts.length,
+      evidence_count: executionEvidence.length,
     },
+    execution_result_summary: executionResultSummary,
+    execution_artifacts: executionArtifacts,
+    execution_evidence: executionEvidence,
     execution_state_v1: executionState,
     execution_packet_v1: executionPacket,
     execution_ready_handoff: executionReadyHandoff,
@@ -343,6 +419,8 @@ export function buildRuntimeHandoffV1FromEnvelope(args: {
 }
 
 function compileResultFromEnvelope(envelope: AionisDocCompileEnvelope): CompileResult {
+  const ir = envelope.artifacts.ir as unknown as AionisDocIR;
+  const graph = envelope.artifacts.graph as unknown as ExecutionGraph | null;
   return {
     ast: (envelope.artifacts.ast ??
       {
@@ -354,8 +432,14 @@ function compileResultFromEnvelope(envelope: AionisDocCompileEnvelope): CompileR
         end: { line: 1, column: 1, offset: 0 },
       },
     }) as unknown as DocumentNode,
-    ir: envelope.artifacts.ir as unknown as AionisDocIR,
-    graph: envelope.artifacts.graph as unknown as ExecutionGraph | null,
+    ir,
+    graph,
+    plan: (envelope.artifacts.plan ??
+      buildExecutionPlanV1({
+        ir,
+        graph,
+        diagnostics: envelope.diagnostics,
+      })) as CompileResult["plan"],
     diagnostics: envelope.diagnostics,
   };
 }

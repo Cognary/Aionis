@@ -3,15 +3,21 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 
-import { compileAionisDoc } from "./compile.js";
-import { buildCompileEnvelope, type EmitMode } from "./contracts.js";
+import { AionisDocExecutionResultSchema } from "./contracts.js";
+import {
+  AionisDocExecutionError,
+  compileAndExecuteAionisDoc,
+  executeCompileEnvelope,
+  executeExecutionPlan,
+} from "./execute.js";
 
 class CliUsageError extends Error {}
 
+type InputKind = "source" | "compile-envelope" | "plan";
+
 type CliFlags = {
-  emit: EmitMode;
+  inputKind: InputKind;
   out: string | null;
-  strict: boolean;
   compact: boolean;
   help: boolean;
 };
@@ -19,17 +25,16 @@ type CliFlags = {
 function printHelp(): void {
   process.stdout.write(
     [
-      "compile-aionis-doc",
+      "execute-aionis-doc",
       "",
       "Usage:",
-      "  compile-aionis-doc <input-file> [--emit all|ast|ir|graph|plan|diagnostics] [--out <path>] [--strict] [--compact]",
+      "  execute-aionis-doc <input-file> [--input-kind source|compile-envelope|plan] [--out <path>] [--compact]",
       "",
       "Options:",
-      "  --emit <mode>   Select which compiler artifact to print. Default: all",
-      "  --out <path>    Write output JSON to a file instead of stdout",
-      "  --strict        Exit with code 1 when error diagnostics are present",
-      "  --compact       Print compact JSON instead of pretty JSON",
-      "  --help          Show this message",
+      "  --input-kind <kind>   Select source, compile-envelope, or plan input. Default: source",
+      "  --out <path>          Write output JSON to a file instead of stdout",
+      "  --compact             Print compact JSON instead of pretty JSON",
+      "  --help                Show this message",
       "",
     ].join("\n"),
   );
@@ -38,9 +43,8 @@ function printHelp(): void {
 function parseArgs(argv: string[]): { inputPath: string | null; flags: CliFlags } {
   let inputPath: string | null = null;
   const flags: CliFlags = {
-    emit: "all",
+    inputKind: "source",
     out: null,
-    strict: false,
     compact: false,
     help: false,
   };
@@ -51,21 +55,17 @@ function parseArgs(argv: string[]): { inputPath: string | null; flags: CliFlags 
       flags.help = true;
       continue;
     }
-    if (token === "--strict") {
-      flags.strict = true;
-      continue;
-    }
     if (token === "--compact") {
       flags.compact = true;
       continue;
     }
-    if (token === "--emit") {
+    if (token === "--input-kind") {
       const next = argv[i + 1];
-      if (!next) throw new CliUsageError("Missing value for --emit.");
-      if (!["all", "ast", "ir", "graph", "plan", "diagnostics"].includes(next)) {
-        throw new CliUsageError(`Unsupported emit mode '${next}'.`);
+      if (!next) throw new CliUsageError("Missing value for --input-kind.");
+      if (!["source", "compile-envelope", "plan"].includes(next)) {
+        throw new CliUsageError(`Unsupported input kind '${next}'.`);
       }
-      flags.emit = next as EmitMode;
+      flags.inputKind = next as InputKind;
       i += 1;
       continue;
     }
@@ -79,17 +79,11 @@ function parseArgs(argv: string[]): { inputPath: string | null; flags: CliFlags 
     if (token.startsWith("--")) {
       throw new CliUsageError(`Unknown flag '${token}'.`);
     }
-    if (inputPath) {
-      throw new CliUsageError("Only one input file may be provided.");
-    }
+    if (inputPath) throw new CliUsageError("Only one input file may be provided.");
     inputPath = token;
   }
 
   return { inputPath, flags };
-}
-
-function hasErrorDiagnostics(result: ReturnType<typeof compileAionisDoc>): boolean {
-  return result.diagnostics.some((diagnostic) => diagnostic.severity === "error");
 }
 
 async function writeOutput(pathname: string, contents: string): Promise<void> {
@@ -103,19 +97,20 @@ async function main(): Promise<void> {
     printHelp();
     return;
   }
-  if (!inputPath) {
-    throw new CliUsageError("An input file path is required.");
-  }
+  if (!inputPath) throw new CliUsageError("An input file path is required.");
 
   const resolvedInput = resolve(process.cwd(), inputPath);
   const source = await readFile(resolvedInput, "utf8");
-  const result = compileAionisDoc(source);
-  const envelope = buildCompileEnvelope({
-    inputPath: resolvedInput,
-    emit: flags.emit,
-    result,
-  });
-  const rendered = flags.compact ? JSON.stringify(envelope) : `${JSON.stringify(envelope, null, 2)}\n`;
+
+  const result =
+    flags.inputKind === "source"
+      ? await compileAndExecuteAionisDoc(source)
+      : flags.inputKind === "compile-envelope"
+        ? await executeCompileEnvelope(JSON.parse(source))
+        : await executeExecutionPlan(JSON.parse(source));
+
+  const parsed = AionisDocExecutionResultSchema.parse(result);
+  const rendered = flags.compact ? JSON.stringify(parsed) : `${JSON.stringify(parsed, null, 2)}\n`;
 
   if (flags.out) {
     await writeOutput(resolve(process.cwd(), flags.out), rendered);
@@ -123,16 +118,16 @@ async function main(): Promise<void> {
     process.stdout.write(rendered);
   }
 
-  if (flags.strict && hasErrorDiagnostics(result)) {
+  if (parsed.status === "failed") {
     process.exitCode = 1;
   }
 }
 
 main().catch((error: unknown) => {
-  if (error instanceof CliUsageError) {
+  if (error instanceof CliUsageError || error instanceof AionisDocExecutionError) {
     process.stderr.write(`${error.message}\n`);
-    printHelp();
-    process.exitCode = 2;
+    if (error instanceof CliUsageError) printHelp();
+    process.exitCode = error instanceof CliUsageError ? 2 : 1;
     return;
   }
   const message = error instanceof Error ? error.message : String(error);

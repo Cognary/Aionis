@@ -233,6 +233,21 @@ make sdk-pack-dry-run
 make sdk-release-check
 ```
 
+### Aionis Doc Package
+
+Aionis Doc is also available as its own TypeScript package surface:
+
+- `/path/to/Aionis/packages/aionis-doc` (`@aionis/doc`)
+- `/path/to/Aionis/docs/AIONIS_DOC_RELEASE.md`
+
+Standalone package checks:
+
+```bash
+npm run aionis-doc:build
+npm run aionis-doc:release-check
+npm run aionis-doc:pack-dry-run
+```
+
 ### Docker Image Release (GHCR)
 
 Runbook:

@@ -1,10 +1,12 @@
 import { z } from "zod";
 
 import type { CompileResult } from "./compile.js";
+import { EXECUTION_PLAN_V1 } from "./plan/types.js";
 
 export const AIONIS_DOC_COMPILE_RESULT_VERSION = "aionis_doc_compile_result_v1" as const;
+export const AIONIS_DOC_EXECUTION_RESULT_VERSION = "aionis_doc_execution_result_v1" as const;
 
-export const EmitModeSchema = z.enum(["all", "ast", "ir", "graph", "diagnostics"]);
+export const EmitModeSchema = z.enum(["all", "ast", "ir", "graph", "plan", "diagnostics"]);
 export type EmitMode = z.infer<typeof EmitModeSchema>;
 
 export const SourcePosSchema = z.object({
@@ -217,10 +219,56 @@ export const ExecutionGraphSchema = z.object({
   diagnostics: z.array(DiagnosticSchema).optional(),
 });
 
+export const ExecutionPlanDocMetaSchema = z.object({
+  id: z.string().min(1),
+  version: z.string().min(1),
+  kind: z.string().optional(),
+  title: z.string().optional(),
+  status: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+export const ExecutionPlanContextSchema = z.object({
+  merged: z.record(AionisValueSchema),
+  frames: z.array(z.record(AionisValueSchema)),
+});
+
+export const ExecutionPlanStepSchema = z.object({
+  execution_id: z.string().min(1),
+  module: z.string().optional(),
+  tool: z.string().optional(),
+  agent: z.string().optional(),
+  input: z.record(AionisValueSchema).optional(),
+  input_ref: z.string().optional(),
+  output_ref: z.string().optional(),
+  depends_on: z.array(z.string()),
+  deterministic: z.boolean().optional(),
+  loc: SourceRangeSchema.optional(),
+});
+
+export const ExecutionPlanDeterminismSchema = z.object({
+  executable: z.boolean(),
+  replay_mode: z.enum(["deterministic", "assisted", "advisory"]).optional(),
+  requires_resume_support: z.boolean(),
+});
+
+export const ExecutionPlanSchema = z.object({
+  plan_version: z.literal(EXECUTION_PLAN_V1),
+  doc: ExecutionPlanDocMetaSchema.nullable(),
+  context: ExecutionPlanContextSchema,
+  executions: z.array(ExecutionPlanStepSchema),
+  graph: ExecutionGraphSchema.nullable(),
+  expected_outputs: z.array(z.string()),
+  required_capabilities: z.array(z.string()),
+  determinism: ExecutionPlanDeterminismSchema,
+  diagnostics: z.array(DiagnosticSchema),
+});
+
 export const CompileArtifactsSchema = z.object({
   ast: DocumentNodeSchema.nullable(),
   ir: AionisDocIRSchema.nullable(),
   graph: ExecutionGraphSchema.nullable(),
+  plan: ExecutionPlanSchema.nullable(),
 });
 
 export const CompileSummarySchema = z.object({
@@ -247,18 +295,97 @@ export const AionisDocCompileEnvelopeSchema = z.object({
 
 export type AionisDocCompileEnvelope = z.infer<typeof AionisDocCompileEnvelopeSchema>;
 
+export const ExecutionNodeResultSchema = z.object({
+  execution_id: z.string().min(1),
+  module: z.string().optional(),
+  tool: z.string().optional(),
+  agent: z.string().optional(),
+  status: z.enum(["success", "failed", "skipped"]),
+  input_ref: z.string().optional(),
+  output_ref: z.string().optional(),
+  output: AionisValueSchema.optional(),
+  artifacts: z.array(AionisValueSchema).optional(),
+  evidence: z.array(AionisValueSchema).optional(),
+  error: z.string().optional(),
+});
+
+export const ExecutionArtifactRecordSchema = z.object({
+  execution_id: z.string().min(1),
+  module: z.string().optional(),
+  value: AionisValueSchema,
+});
+
+export const ExecutionEvidenceRecordSchema = z.object({
+  execution_id: z.string().min(1),
+  module: z.string().optional(),
+  value: AionisValueSchema,
+});
+
+export const AionisDocExecutionResultSchema = z.object({
+  execution_result_version: z.literal(AIONIS_DOC_EXECUTION_RESULT_VERSION),
+  runtime_id: z.string().min(1),
+  executed_at: z.string().min(1),
+  plan_version: z.literal(EXECUTION_PLAN_V1),
+  doc_id: z.string().nullable(),
+  status: z.enum(["success", "failed"]),
+  outputs: z.record(AionisValueSchema),
+  artifacts: z.array(ExecutionArtifactRecordSchema),
+  evidence: z.array(ExecutionEvidenceRecordSchema),
+  node_results: z.array(ExecutionNodeResultSchema),
+  expected_outputs: z.array(z.string()),
+  warnings: z.array(z.string()),
+  errors: z.array(z.string()),
+  diagnostics: z.array(DiagnosticSchema),
+});
+
+export const ExecutionRuntimeCapabilitySchema = z.enum([
+  "direct_execution",
+  "deterministic_replay",
+  "state_persistence",
+  "memory_publish",
+  "handoff_recover",
+  "module_registry",
+  "evidence_capture",
+]);
+
+export const ExecutionModuleValueContractSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.object({
+    kind: z.enum(["any", "string", "number", "boolean", "null", "array", "object"]),
+    description: z.string().optional(),
+    properties: z.record(ExecutionModuleValueContractSchema).optional(),
+    required: z.array(z.string()).optional(),
+    items: ExecutionModuleValueContractSchema.optional(),
+    additional_properties: z.boolean().optional(),
+  }),
+);
+
+export const ExecutionModuleManifestSchema = z.object({
+  module: z.string().min(1),
+  version: z.string().min(1),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  deterministic: z.boolean().optional(),
+  required_capabilities: z.array(ExecutionRuntimeCapabilitySchema).optional(),
+  input_contract: ExecutionModuleValueContractSchema.optional(),
+  output_contract: ExecutionModuleValueContractSchema.optional(),
+  artifact_contract: ExecutionModuleValueContractSchema.optional(),
+  evidence_contract: ExecutionModuleValueContractSchema.optional(),
+});
+
 function selectArtifacts(result: CompileResult, emit: EmitMode) {
   if (emit === "all") {
     return {
       ast: result.ast,
       ir: result.ir,
       graph: result.graph,
+      plan: result.plan,
     };
   }
   return {
     ast: emit === "ast" ? result.ast : null,
     ir: emit === "ir" ? result.ir : null,
     graph: emit === "graph" ? result.graph : null,
+    plan: emit === "plan" ? result.plan : null,
   };
 }
 
@@ -301,4 +428,9 @@ export function buildCompileEnvelope(args: {
 
 export function validateCompileEnvelope(value: unknown): AionisDocCompileEnvelope {
   return AionisDocCompileEnvelopeSchema.parse(value);
+}
+
+export function validateExecutionModuleManifest<T = unknown>(value: T): T {
+  ExecutionModuleManifestSchema.parse(value);
+  return value;
 }

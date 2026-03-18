@@ -39,8 +39,11 @@ test("build-aionis-doc-handoff-store-request converts runtime handoff into hando
     const parsed = JSON.parse(result.stdout);
     assert.equal(parsed.request_version, "aionis_doc_handoff_store_request_v1");
     assert.equal(parsed.handoff_kind, "task_handoff");
+    assert.deepEqual(parsed.execution_artifacts, []);
+    assert.deepEqual(parsed.execution_evidence, []);
     assert.equal(parsed.execution_state_v1.current_stage, "patch");
     assert.equal(parsed.execution_packet_v1.state_id, parsed.execution_state_v1.state_id);
+    assert.deepEqual(parsed.execution_packet_v1.artifact_refs, []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

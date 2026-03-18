@@ -140,7 +140,7 @@ test("publish-aionis-doc-handoff supports handoff-store-request input mode", asy
         summary: "Demo summary",
         handoff_text: "Demo handoff",
         execution_state_v1: { state_id: "s1", scope: "default", task_brief: "Demo", current_stage: "patch", active_role: "patch", owned_files: [], modified_files: [], pending_validations: [], completed_validations: [], last_accepted_hypothesis: null, rejected_paths: [], unresolved_blockers: [], rollback_notes: [], reviewer_contract: null, resume_anchor: null, updated_at: "2026-03-18T00:00:00.000Z", version: 1 },
-        execution_packet_v1: { version: 1, state_id: "s1", current_stage: "patch", active_role: "patch", task_brief: "Demo", target_files: [], next_action: null, hard_constraints: [], accepted_facts: [], rejected_paths: [], pending_validations: [], unresolved_blockers: [], rollback_notes: [], review_contract: null, resume_anchor: null, evidence_refs: [] },
+        execution_packet_v1: { version: 1, state_id: "s1", current_stage: "patch", active_role: "patch", task_brief: "Demo", target_files: [], next_action: null, hard_constraints: [], accepted_facts: [], rejected_paths: [], pending_validations: [], unresolved_blockers: [], rollback_notes: [], review_contract: null, resume_anchor: null, artifact_refs: [], evidence_refs: [] },
       }),
       "utf8",
     );

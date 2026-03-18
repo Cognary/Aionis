@@ -1,0 +1,66 @@
+name: Aionis Doc CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/aionis-doc/**"
+      - "scripts/aionis-doc-release-check.sh"
+      - "scripts/ci/aionis-doc-*"
+      - "docs/AIONIS_DOC_RELEASE.md"
+      - "docs/public/**/09-sdk-cli.md"
+      - "docs/public/**/10-aionis-doc.md"
+      - "docs/public/**/11-aionis-doc-syntax.md"
+      - "docs/public/**/12-aionis-doc-authoring.md"
+      - "docs/public/**/13-aionis-doc-cli-workflow.md"
+      - "docs/public/**/14-aionis-doc-contracts.md"
+      - "docs/public/**/15-aionis-doc-examples.md"
+      - "docs/public/**/16-aionis-doc-diagnostics.md"
+      - "docs/public/**/17-aionis-doc-roadmap.md"
+      - "docs-site/docs/guide/tutorials/aionis-doc-quickstart.md"
+      - "docs-site/docs/guide/tutorials/aionis-doc-runtime-resume.md"
+      - ".github/workflows/aionis-doc-ci.yml"
+      - ".github/workflows/aionis-doc-publish.yml"
+      - "package.json"
+      - "package-lock.json"
+  push:
+    branches: ["main"]
+    paths:
+      - "packages/aionis-doc/**"
+      - "scripts/aionis-doc-release-check.sh"
+      - "scripts/ci/aionis-doc-*"
+      - "docs/AIONIS_DOC_RELEASE.md"
+      - "docs/public/**/09-sdk-cli.md"
+      - "docs/public/**/10-aionis-doc.md"
+      - "docs/public/**/11-aionis-doc-syntax.md"
+      - "docs/public/**/12-aionis-doc-authoring.md"
+      - "docs/public/**/13-aionis-doc-cli-workflow.md"
+      - "docs/public/**/14-aionis-doc-contracts.md"
+      - "docs/public/**/15-aionis-doc-examples.md"
+      - "docs/public/**/16-aionis-doc-diagnostics.md"
+      - "docs/public/**/17-aionis-doc-roadmap.md"
+      - "docs-site/docs/guide/tutorials/aionis-doc-quickstart.md"
+      - "docs-site/docs/guide/tutorials/aionis-doc-runtime-resume.md"
+      - ".github/workflows/aionis-doc-ci.yml"
+      - ".github/workflows/aionis-doc-publish.yml"
+      - "package.json"
+      - "package-lock.json"
+
+jobs:
+  aionis-doc-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Aionis Doc validation
+        run: npm run -s ci:aionis-doc-validate

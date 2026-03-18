@@ -40,6 +40,25 @@ test("compile-aionis-doc supports graph-only output", () => {
   assert.equal(parsed.artifacts.ir, null);
   assert.equal(parsed.artifacts.graph.doc_id, "workflow-001");
   assert.equal(parsed.artifacts.graph.nodes.length, 2);
+  assert.equal(parsed.artifacts.plan, null);
+});
+
+test("compile-aionis-doc supports plan-only output", () => {
+  const result = runCli([
+    "packages/aionis-doc/fixtures/valid-workflow.aionis.md",
+    "--emit",
+    "plan",
+  ]);
+  assert.equal(result.status, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.selected_artifact, "plan");
+  assert.equal(parsed.artifacts.ast, null);
+  assert.equal(parsed.artifacts.ir, null);
+  assert.equal(parsed.artifacts.graph, null);
+  assert.equal(parsed.artifacts.plan.plan_version, "execution_plan_v1");
+  assert.equal(parsed.artifacts.plan.doc.id, "workflow-001");
+  assert.deepEqual(parsed.artifacts.plan.expected_outputs, ["out.hero"]);
+  assert.ok(parsed.artifacts.plan.required_capabilities.includes("direct_execution"));
 });
 
 test("compile-aionis-doc strict mode exits non-zero on compiler errors", () => {

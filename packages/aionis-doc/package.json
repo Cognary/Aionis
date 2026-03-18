@@ -7,10 +7,12 @@
   "types": "dist/index.d.ts",
   "bin": {
     "compile-aionis-doc": "dist/cli.js",
+    "execute-aionis-doc": "dist/execute-cli.js",
     "build-aionis-doc-runtime-handoff": "dist/runtime-handoff-cli.js",
     "build-aionis-doc-handoff-store-request": "dist/handoff-store-cli.js",
     "publish-aionis-doc-handoff": "dist/publish-cli.js",
-    "recover-aionis-doc-handoff": "dist/recover-cli.js"
+    "recover-aionis-doc-handoff": "dist/recover-cli.js",
+    "resume-aionis-doc-runtime": "dist/resume-cli.js"
   },
   "exports": {
     ".": {
@@ -19,14 +21,20 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "pack:dry-run": "npm pack --dry-run --cache /tmp/aionis-npm-cache"
   },
   "dependencies": {
     "zod": "^3.23.8"
