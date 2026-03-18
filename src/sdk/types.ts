@@ -49,6 +49,7 @@ import type {
   ToolsDecisionInput,
   ToolsFeedbackInput,
   ToolsRunInput,
+  ToolsRunsListInput,
   ToolsSelectInput,
 } from "../memory/schemas.js";
 
@@ -101,6 +102,7 @@ export type {
   ToolsDecisionInput,
   ToolsFeedbackInput,
   ToolsRunInput,
+  ToolsRunsListInput,
   ToolsSelectInput,
 };
 
@@ -1649,6 +1651,22 @@ export type ToolsRunResponse = {
     }>;
     [k: string]: unknown;
   };
+  [k: string]: unknown;
+};
+
+export type ToolsRunsListResponse = {
+  tenant_id: string;
+  scope: string;
+  items: Array<{
+    run_id: string;
+    status: "decision_recorded" | "feedback_linked";
+    decision_count: number;
+    feedback_total: number;
+    latest_decision_at: string;
+    latest_feedback_at: string | null;
+    latest_selected_tool: string | null;
+    [k: string]: unknown;
+  }>;
   [k: string]: unknown;
 };
 

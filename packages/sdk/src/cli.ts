@@ -30,7 +30,9 @@ type CommandName =
   | "runtime:health"
   | "runtime:doctor"
   | "runtime:selfcheck"
+  | "runs:list"
   | "runs:get"
+  | "runs:timeline"
   | "runs:decisions"
   | "runs:feedback"
   | "playbooks:get"
@@ -123,6 +125,12 @@ async function main() {
     case "runs:get":
       await runRunGet(command.label, options, flags);
       return;
+    case "runs:list":
+      await runRunsList(command.label, options, flags);
+      return;
+    case "runs:timeline":
+      await runRunTimeline(command.label, options, flags);
+      return;
     case "runs:decisions":
       await runRunDecisions(command.label, options, flags);
       return;
@@ -214,7 +222,9 @@ function resolveCommand(argv: string[]): ResolvedCommand {
 
   if (first === "runs") {
     switch (second) {
+      case "list":
       case "get":
+      case "timeline":
       case "decisions":
       case "feedback":
         return {
@@ -332,7 +342,9 @@ function printHelp() {
       "  aionis runtime health [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis runtime doctor [--runtime-root /path/to/Aionis] [--runtime-version 0.2.20] [--runtime-cache-dir ~/.aionis/runtime] [--base-url http://127.0.0.1:3321] [--json]",
       "  aionis runtime selfcheck [--base-url http://127.0.0.1:3321] [--json]",
+      "  aionis runs list [--scope <scope>] [--limit <n>] [--json]",
       "  aionis runs get --run-id <id> [--scope <scope>] [--decision-limit <n>] [--include-feedback] [--feedback-limit <n>] [--json]",
+      "  aionis runs timeline --run-id <id> [--scope <scope>] [--decision-limit <n>] [--feedback-limit <n>] [--json]",
       "  aionis runs decisions --run-id <id> [--scope <scope>] [--decision-limit <n>] [--json]",
       "  aionis runs feedback --run-id <id> [--scope <scope>] [--feedback-limit <n>] [--json]",
       "  aionis playbooks get --playbook-id <id> [--scope <scope>] [--json]",
@@ -1426,6 +1438,99 @@ async function runReplayExplain(command: string, options: CliOptions, flags: Map
       `compile_ready: ${String(blockerCodes.length === 0)}`,
       `blockers: ${blockerCodes.length === 0 ? "none" : blockerCodes.join(",")}`,
       `next_action: ${nextAction}`,
+    ].join("\n"),
+  );
+}
+
+async function runRunsList(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const limit = getOptionalIntFlag(flags, "limit");
+  const response = await client.toolsRunsList({
+    scope,
+    limit,
+  });
+  const payload = response.data as Record<string, unknown>;
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  emitSuccess(
+    command,
+    options.json,
+    {
+      scope: scope ?? null,
+      items,
+      request_id: response.request_id,
+    },
+    [
+      "Runs",
+      `scope: ${scope ?? "default"}`,
+      `count: ${items.length}`,
+      ...items.map((item) => {
+        const row = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+        return [
+          String(row.run_id ?? "unknown"),
+          String(row.status ?? "unknown"),
+          `decisions=${String(row.decision_count ?? 0)}`,
+          `feedback=${String(row.feedback_total ?? 0)}`,
+          `latest=${String(row.latest_decision_at ?? "unknown")}`,
+        ].join(" | ");
+      }),
+    ].join("\n"),
+  );
+}
+
+async function runRunTimeline(command: string, options: CliOptions, flags: Map<string, string | boolean>) {
+  const client = new AionisClient({ base_url: options.baseUrl, timeout_ms: options.timeoutMs });
+  const runId = getRequiredFlag(flags, "run-id");
+  const scope = getStringFlag(flags, "scope") ?? undefined;
+  const decisionLimit = getOptionalIntFlag(flags, "decision-limit");
+  const feedbackLimit = getOptionalIntFlag(flags, "feedback-limit");
+  const response = await client.toolsRun({
+    run_id: runId,
+    scope,
+    decision_limit: decisionLimit,
+    include_feedback: true,
+    feedback_limit: feedbackLimit,
+  });
+  const payload = response.data as Record<string, unknown>;
+  const decisions = Array.isArray(payload.decisions) ? payload.decisions : [];
+  const feedback = payload.feedback && typeof payload.feedback === "object" ? (payload.feedback as Record<string, unknown>) : null;
+  const recentFeedback = Array.isArray(feedback?.recent) ? feedback.recent : [];
+  const events = [
+    ...decisions.map((entry) => {
+      const item = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
+      return {
+        type: "decision",
+        timestamp: String(item.created_at ?? ""),
+        summary: `selected_tool=${String(item.selected_tool ?? "unknown")}`,
+        decision_id: item.decision_id ?? null,
+      };
+    }),
+    ...recentFeedback.map((entry) => {
+      const item = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
+      return {
+        type: "feedback",
+        timestamp: String(item.created_at ?? ""),
+        summary: `outcome=${String(item.outcome ?? "unknown")} source=${String(item.source ?? "unknown")}`,
+        decision_id: item.decision_id ?? null,
+        feedback_id: item.id ?? null,
+      };
+    }),
+  ].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  emitSuccess(
+    command,
+    options.json,
+    {
+      run_id: runId,
+      scope: scope ?? null,
+      events,
+      request_id: response.request_id,
+    },
+    [
+      "Run Timeline",
+      `run_id: ${runId}`,
+      `scope: ${scope ?? "default"}`,
+      `events: ${events.length}`,
+      ...events.map((event) => `${event.timestamp} | ${event.type} | ${event.summary}`),
     ].join("\n"),
   );
 }

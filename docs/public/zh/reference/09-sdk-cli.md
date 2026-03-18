@@ -127,6 +127,18 @@ npx @aionis/sdk@0.2.20 runs decisions --run-id <run_id>
 npx @aionis/sdk@0.2.20 runs feedback --run-id <run_id>
 ```
 
+列出最近的 tool-lifecycle runs：
+
+```bash
+npx @aionis/sdk@0.2.20 runs list --limit 20
+```
+
+检查一条 run timeline：
+
+```bash
+npx @aionis/sdk@0.2.20 runs timeline --run-id <run_id>
+```
+
 检查一份 replay playbook：
 
 ```bash
@@ -395,6 +407,40 @@ npx @aionis/sdk@0.2.20 artifacts pack --artifact-dir /path/to/artifact --out /tm
 1. 拉取包含 steps 的 replay run
 2. 解释当前 `compile_from_run` 会不会被阻断
 3. 在一个 envelope 里返回 blockers、next action 和 step status frequency
+
+### `aionis runs list`
+
+`runs list` 会从真实的 execution-decision store 返回最近的 tool-lifecycle runs。
+
+当前 V1 支持：
+
+1. 可选 `--scope <scope>`
+2. 可选 `--limit <n>`
+3. `--json`
+
+当前行为：
+
+1. 从持久化 execution decisions 做 recent runs rollup
+2. 返回 decision count、feedback total、latest decision time 和 latest selected tool
+3. 不暴露假的 scenario filter 或 cursor 语义
+
+### `aionis runs timeline`
+
+`runs timeline` 会返回一条 tool-lifecycle run 的真实有序事件流。
+
+当前 V1 支持：
+
+1. `--run-id <id>`
+2. 可选 `--scope <scope>`
+3. 可选 `--decision-limit <n>`
+4. 可选 `--feedback-limit <n>`
+5. `--json`
+
+当前行为：
+
+1. 通过 `tools/run` 拉取单条 run
+2. 将 decisions 和 recent feedback 合并成一个有序事件流
+3. 暴露的是窄版 tool-lifecycle timeline，不是通用 runtime event log
 
 ### `aionis artifacts list`
 

@@ -709,6 +709,14 @@ export const ToolsRunRequest = z.object({
 
 export type ToolsRunInput = z.infer<typeof ToolsRunRequest>;
 
+export const ToolsRunsListRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  limit: z.number().int().positive().max(200).default(20),
+});
+
+export type ToolsRunsListInput = z.infer<typeof ToolsRunsListRequest>;
+
 export const ToolsFeedbackRequest = z
   .object({
     tenant_id: z.string().min(1).optional(),

@@ -315,40 +315,41 @@ All `runs` commands should accept:
 Usage:
 
 ```bash
-aionis runs list [--limit <int>] [--cursor <cursor>] [--status <status>] [--scenario-id <id>] [--json]
+aionis runs list [--scope <scope>] [--limit <int>] [--json]
 ```
 
 Human output columns:
 
 1. `RUN_ID`
 2. `STATUS`
-3. `SCENARIO`
-4. `STARTED`
-5. `UPDATED`
-6. `RESULT`
+3. `DECISIONS`
+4. `FEEDBACK`
+5. `LATEST_DECISION_AT`
 
 JSON `data` shape:
 
 ```json
 {
+  "scope": "default",
   "items": [
     {
       "run_id": "run_123",
-      "status": "completed",
-      "scenario_id": "glm_dashboard_auth_drift_reviewer_ready_workflow",
-      "started_at": "2026-03-17T12:00:00.000Z",
-      "updated_at": "2026-03-17T12:10:00.000Z",
-      "result": "pass"
+      "status": "feedback_linked",
+      "decision_count": 3,
+      "feedback_total": 1,
+      "latest_decision_at": "2026-03-17T12:10:00.000Z",
+      "latest_feedback_at": "2026-03-17T12:11:00.000Z",
+      "latest_selected_tool": "rg"
     }
-  ],
-  "next_cursor": null
+  ]
 }
 ```
 
-V1 implementation note:
+Current V1 implementation note:
 
-1. `runs list` remains deferred until a real generic run-list surface exists
-2. shipping a fake or host-specific list command is explicitly disallowed
+1. `runs list` is implemented as a real execution-decision rollup
+2. it is scoped to tool-selection lifecycle runs, not a generic cross-runtime run model
+3. it intentionally does not expose fake cursor or host-specific scenario filters
 
 ### `aionis runs get <run_id>`
 
@@ -388,7 +389,7 @@ Current V1 implementation note:
 Usage:
 
 ```bash
-aionis runs timeline <run_id> [--json]
+aionis runs timeline <run_id> [--scope <scope>] [--decision-limit <n>] [--feedback-limit <n>] [--json]
 ```
 
 Human output:
@@ -402,17 +403,23 @@ JSON `data` shape:
   "run_id": "run_123",
   "events": [
     {
-      "type": "handoff_store",
+      "type": "feedback",
+      "timestamp": "2026-03-17T12:01:00.000Z",
+      "summary": "outcome=positive source=tools_feedback"
+    },
+    {
+      "type": "decision",
       "timestamp": "2026-03-17T12:00:00.000Z",
-      "summary": "Stored handoff packet"
+      "summary": "selected_tool=rg"
     }
   ]
 }
 ```
 
-V1 implementation note:
+Current V1 implementation note:
 
-1. `runs timeline` remains deferred until a stable timeline/event surface exists
+1. `runs timeline` is implemented by composing real `tools/run` decisions and feedback
+2. it is a tool-lifecycle event stream, not a universal runtime timeline
 
 ### `aionis runs decisions <run_id>`
 

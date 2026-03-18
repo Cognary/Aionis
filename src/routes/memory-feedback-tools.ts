@@ -4,7 +4,7 @@ import { updateRuleState } from "../memory/rules.js";
 import { evaluateRules } from "../memory/rules-evaluate.js";
 import { selectTools } from "../memory/tools-select.js";
 import { getToolsDecisionById } from "../memory/tools-decision.js";
-import { getToolsRunLifecycle } from "../memory/tools-run.js";
+import { getToolsRunLifecycle, listToolsRuns } from "../memory/tools-run.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
 
 type StoreLike = {
@@ -157,6 +157,27 @@ export function registerMemoryFeedbackToolRoutes(args: {
           })
         : await store.withClient((client) =>
             getToolsRunLifecycle(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
+          );
+    } finally {
+      gate.release();
+    }
+    return reply.code(200).send(out);
+  });
+
+  app.post("/v1/memory/tools/runs/list", async (req: any, reply: any) => {
+    const principal = await requireMemoryPrincipal(req);
+    const body = withIdentityFromRequest(req, req.body, principal, "tools_runs_list");
+    await enforceRateLimit(req, reply, "recall");
+    await enforceTenantQuota(req, reply, "recall", tenantFromBody(body));
+    const gate = await acquireInflightSlot("recall");
+    let out: any;
+    try {
+      out = liteWriteStore
+        ? await listToolsRuns(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+            liteWriteStore,
+          })
+        : await store.withClient((client) =>
+            listToolsRuns(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
           );
     } finally {
       gate.release();

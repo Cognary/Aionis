@@ -127,6 +127,18 @@ Inspect feedback linked to one run:
 npx @aionis/sdk@0.2.20 runs feedback --run-id <run_id>
 ```
 
+List recent tool-lifecycle runs:
+
+```bash
+npx @aionis/sdk@0.2.20 runs list --limit 20
+```
+
+Inspect one run timeline:
+
+```bash
+npx @aionis/sdk@0.2.20 runs timeline --run-id <run_id>
+```
+
 Inspect one replay playbook:
 
 ```bash
@@ -395,6 +407,40 @@ Current behavior:
 1. fetches the replay run with steps included
 2. explains whether `compile_from_run` would be blocked right now
 3. returns blockers, next action, and step status frequency in one envelope
+
+### `aionis runs list`
+
+`runs list` returns recent tool-lifecycle runs from the real execution-decision store.
+
+Current V1 support:
+
+1. optional `--scope <scope>`
+2. optional `--limit <n>`
+3. `--json`
+
+Current behavior:
+
+1. rolls up recent runs from persisted execution decisions
+2. reports decision count, feedback total, latest decision time, and latest selected tool
+3. does not expose fake scenario filters or cursor semantics
+
+### `aionis runs timeline`
+
+`runs timeline` returns a real ordered event stream for one tool-lifecycle run.
+
+Current V1 support:
+
+1. `--run-id <id>`
+2. optional `--scope <scope>`
+3. optional `--decision-limit <n>`
+4. optional `--feedback-limit <n>`
+5. `--json`
+
+Current behavior:
+
+1. fetches one run through `tools/run`
+2. merges decisions and recent feedback into one ordered event stream
+3. exposes a narrow tool-lifecycle timeline, not a universal runtime event log
 
 ### `aionis artifacts list`
 

@@ -74,11 +74,16 @@ This group is already aligned with real artifact-based execution evaluation and 
 
 Implemented:
 
-1. `aionis runs get`
-2. `aionis runs decisions`
-3. `aionis runs feedback`
+1. `aionis runs list`
+2. `aionis runs timeline`
+3. `aionis runs get`
+4. `aionis runs decisions`
+5. `aionis runs feedback`
 
-This group is intentionally narrow and only exposes run surfaces backed by real backend APIs.
+Current boundary:
+
+1. `runs list` is an execution-decision rollup, not a generic host run list
+2. `runs timeline` is a merged decision/feedback stream, not a universal event model
 
 ### Playbooks
 
@@ -115,10 +120,11 @@ The CLI can already support a real runtime workflow:
 2. verify runtime health
 3. inspect execution eval outputs
 4. enforce eval gate in CI
-5. inspect run decisions and feedback
-6. inspect replay runs and playbooks
-7. explain whether a replay run is currently compile-ready
-8. browse and export artifacts
+5. inspect recent runs
+6. inspect run decisions and feedback
+7. inspect replay runs and playbooks
+8. explain whether a replay run is currently compile-ready
+9. browse and export artifacts
 
 This is enough to call the CLI a real runtime product surface.
 
@@ -143,15 +149,14 @@ It means the core CLI skeleton is now real:
 
 The most important missing pieces are:
 
-1. `aionis runs list`
-2. `aionis runs timeline`
-3. `aionis replay recover`
-4. richer human-readable formatting for heavy inspection commands
-5. a canonical end-to-end CLI happy-path demo
+1. `aionis replay recover`
+2. richer human-readable formatting for heavy inspection commands
+3. a canonical end-to-end CLI happy-path demo
+4. broader run filtering and pagination only after stronger backend support exists
 
 These were not skipped accidentally.
 
-They remain deferred because the current backend does not yet expose a clean, generic run-list or timeline surface that would justify a stable product command.
+The remaining missing pieces are deferred because the current backend still does not expose a broader generic runtime-run model that would justify larger commands.
 
 ## Current Boundaries
 

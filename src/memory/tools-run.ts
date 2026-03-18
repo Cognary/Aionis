@@ -1,6 +1,6 @@
 import type pg from "pg";
 import { HttpError } from "../util/http.js";
-import { ToolsRunRequest } from "./schemas.js";
+import { ToolsRunRequest, ToolsRunsListRequest } from "./schemas.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildToolsRunLifecycleSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri } from "./uri.js";
@@ -248,5 +248,100 @@ export async function getToolsRunLifecycle(
       decisions: response.decisions,
       feedback: response.feedback,
     }),
+  };
+}
+
+export async function listToolsRuns(
+  client: pg.PoolClient | null,
+  body: unknown,
+  defaultScope: string,
+  defaultTenantId: string,
+  opts: {
+    liteWriteStore?: Pick<LiteWriteStore, "listExecutionRuns"> | null;
+  } = {},
+) {
+  const parsed = ToolsRunsListRequest.parse(body);
+  const tenancy = resolveTenantScope(
+    { scope: parsed.scope, tenant_id: parsed.tenant_id },
+    { defaultScope, defaultTenantId },
+  );
+  const scope = tenancy.scope_key;
+
+  const rows = opts.liteWriteStore
+    ? await opts.liteWriteStore.listExecutionRuns({
+        scope,
+        limit: parsed.limit,
+      })
+    : await client!.query<{
+        run_id: string;
+        decision_count: string;
+        latest_decision_at: string;
+        latest_selected_tool: string | null;
+        feedback_total: string;
+        latest_feedback_at: string | null;
+      }>(
+        `
+        WITH decision_rollup AS (
+          SELECT
+            run_id,
+            count(*)::text AS decision_count,
+            max(created_at)::text AS latest_decision_at
+          FROM memory_execution_decisions
+          WHERE scope = $1
+            AND run_id IS NOT NULL
+          GROUP BY run_id
+        )
+        SELECT
+          d.run_id,
+          d.decision_count,
+          d.latest_decision_at,
+          (
+            SELECT ed.selected_tool
+            FROM memory_execution_decisions ed
+            WHERE ed.scope = $1
+              AND ed.run_id = d.run_id
+            ORDER BY ed.created_at DESC, ed.id DESC
+            LIMIT 1
+          ) AS latest_selected_tool,
+          COALESCE((
+            SELECT count(*)::text
+            FROM memory_rule_feedback rf
+            WHERE rf.scope = $1
+              AND rf.run_id = d.run_id
+          ), '0') AS feedback_total,
+          (
+            SELECT max(rf.created_at)::text
+            FROM memory_rule_feedback rf
+            WHERE rf.scope = $1
+              AND rf.run_id = d.run_id
+          ) AS latest_feedback_at
+        FROM decision_rollup d
+        ORDER BY d.latest_decision_at DESC, d.run_id DESC
+        LIMIT $2
+        `,
+        [scope, parsed.limit],
+      ).then((res) =>
+        res.rows.map((row) => ({
+          run_id: row.run_id,
+          decision_count: Number(row.decision_count ?? "0"),
+          latest_decision_at: row.latest_decision_at,
+          latest_selected_tool: row.latest_selected_tool ?? null,
+          feedback_total: Number(row.feedback_total ?? "0"),
+          latest_feedback_at: row.latest_feedback_at ?? null,
+        })),
+      );
+
+  return {
+    tenant_id: tenancy.tenant_id,
+    scope: tenancy.scope,
+    items: rows.map((row) => ({
+      run_id: row.run_id,
+      status: row.feedback_total > 0 ? "feedback_linked" : "decision_recorded",
+      decision_count: Number(row.decision_count ?? 0),
+      feedback_total: Number(row.feedback_total ?? 0),
+      latest_decision_at: row.latest_decision_at,
+      latest_feedback_at: row.latest_feedback_at ?? null,
+      latest_selected_tool: row.latest_selected_tool ?? null,
+    })),
   };
 }

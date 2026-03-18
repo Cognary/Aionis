@@ -151,6 +151,8 @@ import type {
   ToolsFeedbackInput,
   ToolsFeedbackResponse,
   ToolsRunInput,
+  ToolsRunsListInput,
+  ToolsRunsListResponse,
   ToolsRunSummary,
   ToolsRunResponse,
   ToolsSelectInput,
@@ -441,6 +443,10 @@ export class AionisClient {
 
   async toolsRun(input: ToolsRunInput, opts?: RequestOptions): Promise<AionisResponse<ToolsRunResponse>> {
     return this.requestPost<ToolsRunInput, ToolsRunResponse>("/v1/memory/tools/run", input, opts);
+  }
+
+  async toolsRunsList(input: ToolsRunsListInput, opts?: RequestOptions): Promise<AionisResponse<ToolsRunsListResponse>> {
+    return this.requestPost<ToolsRunsListInput, ToolsRunsListResponse>("/v1/memory/tools/runs/list", input, opts);
   }
 
   async inspectToolsRun(

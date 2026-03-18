@@ -334,6 +334,17 @@ export type LiteWriteStore = WriteStoreAccess & {
     latest_created_at: string | null;
     rows: LiteExecutionDecisionRow[];
   }>;
+  listExecutionRuns(args: {
+    scope: string;
+    limit: number;
+  }): Promise<Array<{
+    run_id: string;
+    decision_count: number;
+    latest_decision_at: string;
+    latest_selected_tool: string | null;
+    feedback_total: number;
+    latest_feedback_at: string | null;
+  }>>;
   findExecutionDecisionForFeedback(args: {
     scope: string;
     runId: string | null;
@@ -1361,6 +1372,63 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
           created_at: row.created_at,
         })),
       };
+    },
+
+    async listExecutionRuns(args): Promise<Array<{
+      run_id: string;
+      decision_count: number;
+      latest_decision_at: string;
+      latest_selected_tool: string | null;
+      feedback_total: number;
+      latest_feedback_at: string | null;
+    }>> {
+      const rows = db.prepare(
+        `SELECT
+           d.run_id AS run_id,
+           COUNT(*) AS decision_count,
+           MAX(d.created_at) AS latest_decision_at,
+           (
+             SELECT d2.selected_tool
+             FROM lite_memory_execution_decisions d2
+             WHERE d2.scope = d.scope
+               AND d2.run_id = d.run_id
+             ORDER BY d2.created_at DESC, d2.id DESC
+             LIMIT 1
+           ) AS latest_selected_tool,
+           COALESCE((
+             SELECT COUNT(*)
+             FROM lite_memory_rule_feedback f
+             WHERE f.scope = d.scope
+               AND f.run_id = d.run_id
+           ), 0) AS feedback_total,
+           (
+             SELECT MAX(f.created_at)
+             FROM lite_memory_rule_feedback f
+             WHERE f.scope = d.scope
+               AND f.run_id = d.run_id
+           ) AS latest_feedback_at
+         FROM lite_memory_execution_decisions d
+         WHERE d.scope = ?
+           AND d.run_id IS NOT NULL
+         GROUP BY d.run_id
+         ORDER BY latest_decision_at DESC, d.run_id DESC
+         LIMIT ?`,
+      ).all(args.scope, Math.max(1, args.limit)) as Array<{
+        run_id: string;
+        decision_count: number;
+        latest_decision_at: string;
+        latest_selected_tool: string | null;
+        feedback_total: number;
+        latest_feedback_at: string | null;
+      }>;
+      return rows.map((row) => ({
+        run_id: row.run_id,
+        decision_count: Number(row.decision_count ?? 0),
+        latest_decision_at: row.latest_decision_at,
+        latest_selected_tool: row.latest_selected_tool ?? null,
+        feedback_total: Number(row.feedback_total ?? 0),
+        latest_feedback_at: row.latest_feedback_at ?? null,
+      }));
     },
 
     async findExecutionDecisionForFeedback(args): Promise<LiteExecutionDecisionRow | null> {
