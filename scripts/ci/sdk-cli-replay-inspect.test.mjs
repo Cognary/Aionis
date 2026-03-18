@@ -3,10 +3,13 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { once } from "node:events";
 import { spawn } from "node:child_process";
+import path from "node:path";
+
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 
 async function runCli(args, env = {}) {
   const child = spawn(process.execPath, ["--import", "tsx", "packages/sdk/src/cli.ts", ...args], {
-    cwd: "/Users/lucio/Desktop/Aionis",
+    cwd: ROOT,
     env: {
       ...process.env,
       ...env,

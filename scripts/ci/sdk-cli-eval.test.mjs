@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+
 function makeArtifactDir({ baselineReady, treatmentReady, scenarioId = "dashboard_auth_drift" }) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "aionis-sdk-cli-eval-"));
   const summary = {
@@ -74,7 +76,7 @@ function makeArtifactDir({ baselineReady, treatmentReady, scenarioId = "dashboar
 
 function runCli(args) {
   return spawnSync(process.execPath, ["--import", "tsx", "packages/sdk/src/cli.ts", ...args], {
-    cwd: "/Users/lucio/Desktop/Aionis",
+    cwd: ROOT,
     encoding: "utf8",
   });
 }

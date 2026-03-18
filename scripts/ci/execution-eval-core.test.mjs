@@ -7,6 +7,8 @@ import test from "node:test";
 
 import { buildExecutionEvalSummaryFromArtifact } from "../../src/eval/summarize.ts";
 
+const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+
 function makeArtifactDir() {
   const dir = mkdtempSync(path.join(os.tmpdir(), "aionis-execution-eval-"));
   const summary = {
@@ -122,11 +124,11 @@ test("execution eval report writes summary files", async () => {
   try {
     const outDir = path.join(dir, "eval");
     execFileSync(
-      "node",
+      process.execPath,
       ["--import=tsx", "./scripts/eval/execution-eval.ts", "--artifact-dir", dir, "--out-dir", outDir],
       {
-        cwd: "/Users/lucio/Desktop/Aionis",
-        env: { ...process.env, TSX_TSCONFIG_PATH: "/Users/lucio/Desktop/Aionis/tsconfig.json" },
+        cwd: ROOT,
+        env: { ...process.env, TSX_TSCONFIG_PATH: path.join(ROOT, "tsconfig.json") },
         stdio: "pipe",
       },
     );
