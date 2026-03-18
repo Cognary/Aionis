@@ -341,6 +341,10 @@ class HandoffStoreInput(TypedDict, total=False):
     must_change: List[str]
     must_remove: List[str]
     must_keep: List[str]
+    execution_state_v1: Dict[str, Any]
+    execution_packet_v1: Dict[str, Any]
+    control_profile_v1: Dict[str, Any]
+    execution_transitions_v1: List[Dict[str, Any]]
 
 
 class HandoffRecoverInput(TypedDict, total=False):

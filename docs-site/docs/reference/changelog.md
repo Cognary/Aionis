@@ -21,6 +21,12 @@ This page is for documentation changes, not product release notes. Use it when y
 3. Improved reference coverage for security, FAQ, and docs lifecycle pages.
 4. Refined Mintlify navigation labels and footer shortcuts for faster onboarding.
 
+## 2026-03-18
+
+1. Added a public Aionis Doc documentation set covering overview, syntax, authoring, CLI workflow, contracts, examples, diagnostics, and roadmap.
+2. Promoted Aionis Doc as an official executable-document workflow surface in SDK and CLI documentation.
+3. Tightened cross-links between SDK CLI, reference navigation, and Aionis Doc pages for faster onboarding.
+
 For repository/package release notes, see:
 
 1. Root `CHANGELOG.md`

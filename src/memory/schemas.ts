@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { ExecutionPacketV1Schema, ExecutionStateV1Schema } from "../execution/types.js";
+import { ControlProfileV1Schema, ExecutionPacketV1Schema, ExecutionStateV1Schema } from "../execution/types.js";
+import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
 
 export const UUID = z.string().uuid();
 
@@ -384,6 +385,10 @@ export const HandoffStoreRequest = z.object({
   must_change: z.array(z.string().min(1)).max(100).optional(),
   must_remove: z.array(z.string().min(1)).max(100).optional(),
   must_keep: z.array(z.string().min(1)).max(100).optional(),
+  execution_state_v1: ExecutionStateV1Schema.optional(),
+  execution_packet_v1: ExecutionPacketV1Schema.optional(),
+  control_profile_v1: ControlProfileV1Schema.optional(),
+  execution_transitions_v1: z.array(ExecutionStateTransitionV1Schema).optional(),
 }).superRefine((value, ctx) => {
   if (value.handoff_kind !== "task_handoff" && !value.file_path) {
     ctx.addIssue({

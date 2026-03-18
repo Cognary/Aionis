@@ -61,6 +61,7 @@ title: "路线图"
 1. MCP 与框架集成模式增强。
 2. SDK 生产可用性与易用性提升。
 3. 多运行时互操作指南完善。
+4. 通过 Aionis Doc 接入 document-driven workflow。
 
 成功指标：
 
@@ -74,6 +75,7 @@ title: "路线图"
 1. 强化上下文编排预设与调优指南。
 2. 标准化基准快照复现流程。
 3. 增强策略闭环运维可观测性。
+4. 把 Aionis Doc 正式化成公开的 executable-document workflow surface。
 
 ### 中期
 
@@ -99,3 +101,4 @@ title: "路线图"
 2. [策略与执行闭环](/public/zh/policy-execution/00-policy-execution-loop)
 3. [运维与生产](/public/zh/operate-production/00-operate-production)
 4. [基准测试](/public/zh/benchmarks/01-benchmarks)
+5. [Aionis Doc 路线图](/public/zh/reference/17-aionis-doc-roadmap)

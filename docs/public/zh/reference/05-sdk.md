@@ -81,7 +81,7 @@ TypeScript 包现在还带一套 Phase 1 Lite 开发 CLI：
 
 如果你希望直接通过 SDK 包管理本地 Lite 运行时，就用这套 CLI。
 
-具体用法见：[SDK CLI](/public/zh/reference/09-sdk-cli)
+具体用法见：[SDK CLI](/public/zh/reference/09-sdk-cli)，如果你要看 executable-document 这条产品面，见：[Aionis Doc](/public/zh/reference/10-aionis-doc)
 
 Python 本地开发也推荐复用这套 CLI，再让 Python client 连接本地地址。
 

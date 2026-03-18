@@ -172,6 +172,31 @@ function buildStoredExecutionReadyHandoff(input: {
   };
 }
 
+function readInlineExecutionProjection(raw: Record<string, unknown>, executionReady: ExecutionReadyHandoff): RecoveredExecutionProjection | null {
+  const rawState = raw.execution_state_v1;
+  if (!rawState) return null;
+  try {
+    const state = ExecutionStateV1Schema.parse(rawState);
+    const packet = raw.execution_packet_v1
+      ? ExecutionPacketV1Schema.parse(raw.execution_packet_v1)
+      : buildExecutionPacketV1({
+          state,
+          hard_constraints: executionReady.must_change,
+          evidence_refs: [],
+        });
+    const controlProfile = raw.control_profile_v1
+      ? ControlProfileV1Schema.parse(raw.control_profile_v1)
+      : deriveControlProfile(state.current_stage);
+    return {
+      execution_state_v1: state,
+      execution_packet_v1: packet,
+      control_profile_v1: controlProfile,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
   const parsed = HandoffStoreRequest.parse(input);
   const raw = input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
@@ -217,7 +242,10 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
     promptSafe,
     executionReady,
   );
-  const executionTransitions = buildHandoffStoreExecutionTransitions(executionProjection.execution_state_v1);
+  const effectiveExecutionProjection = readInlineExecutionProjection(raw, executionReady) ?? executionProjection;
+  const executionTransitions = Array.isArray(raw.execution_transitions_v1)
+    ? raw.execution_transitions_v1.map((transition) => ExecutionStateTransitionV1Schema.parse(transition))
+    : buildHandoffStoreExecutionTransitions(effectiveExecutionProjection.execution_state_v1);
   const handoffText = [
     `anchor=${parsed.anchor}`,
     parsed.file_path ? `file=${parsed.file_path}` : null,
@@ -268,9 +296,9 @@ export function buildHandoffWriteBody(input: unknown): MemoryWriteInput {
           must_change: parsed.must_change ?? [],
           must_remove: parsed.must_remove ?? [],
           must_keep: parsed.must_keep ?? [],
-          execution_state_v1: executionProjection.execution_state_v1,
-          execution_packet_v1: executionProjection.execution_packet_v1,
-          control_profile_v1: executionProjection.control_profile_v1,
+          execution_state_v1: effectiveExecutionProjection.execution_state_v1,
+          execution_packet_v1: effectiveExecutionProjection.execution_packet_v1,
+          control_profile_v1: effectiveExecutionProjection.control_profile_v1,
           execution_transitions_v1: executionTransitions,
         },
       },

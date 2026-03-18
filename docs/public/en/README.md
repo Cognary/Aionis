@@ -42,7 +42,8 @@ Start with:
 1. [SDK Guide](/public/en/reference/05-sdk)
 2. [SDK Compatibility Matrix](/public/en/reference/06-sdk-compatibility-matrix)
 3. [SDK CLI](/public/en/reference/09-sdk-cli)
-4. [Python SDK + Aionis CLI](/public/en/getting-started/08-python-sdk-with-cli)
+4. [Aionis Doc](/public/en/reference/10-aionis-doc)
+5. [Python SDK + Aionis CLI](/public/en/getting-started/08-python-sdk-with-cli)
 
 ## Start Here
 

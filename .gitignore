@@ -6,6 +6,7 @@ node_modules
 .next
 **/.next
 dist
+packages/aionis-doc/dist/
 .aionis
 *.tsbuildinfo
 .eslintcache

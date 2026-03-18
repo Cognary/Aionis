@@ -26,6 +26,8 @@ const pageDescriptionOverrides: Record<string, string> = {
   '/guide/deploy': 'Deploy Aionis in production with environment setup, rollout strategy, and reliability controls.',
   '/guide/troubleshooting': 'Diagnose and fix common Aionis integration and runtime issues quickly.',
   '/guide/tutorials/feature-bundles': 'Apply copy-ready Aionis feature bundles for conservative local use, experiments, shared environments, and approved high-risk windows.',
+  '/guide/tutorials/aionis-doc-quickstart': 'Create one Aionis Doc, compile it, publish it into handoff memory, and recover continuity through the official CLI path.',
+  '/guide/tutorials/aionis-doc-runtime-resume': 'Take a recovered Aionis Doc handoff and push it into runtime context assembly and governed tool selection.',
   '/api': 'Aionis API reference for memory, policy loop, replay, and sandbox endpoints.',
   '/operations': 'Operations handbook for Aionis go-live, monitoring, incident response, and runbooks.',
   '/reference': 'Reference docs for configuration, security, FAQ, changelog, and roadmap.'
@@ -202,6 +204,8 @@ export default defineConfig({
             { text: 'Tutorials Overview', link: '/guide/tutorials/' },
             { text: 'Environment Template', link: '/guide/tutorials/env-template' },
             { text: 'Feature Bundles', link: '/guide/tutorials/feature-bundles' },
+            { text: 'Aionis Doc Quickstart', link: '/guide/tutorials/aionis-doc-quickstart' },
+            { text: 'Aionis Doc + Runtime Resume', link: '/guide/tutorials/aionis-doc-runtime-resume' },
             { text: 'Agent Integration', link: '/guide/tutorials/agent-integration' },
             { text: 'Incident Replay', link: '/guide/tutorials/incident-replay' },
             { text: 'Release Gate', link: '/guide/tutorials/release-gate' },

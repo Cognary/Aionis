@@ -23,21 +23,24 @@ npx @aionis/sdk@0.2.20 --help
 这套 CLI 是 Aionis runtime 的命令行产品面，当前覆盖：
 
 1. 本地 Lite runtime 生命周期
-2. runtime 健康检查和环境诊断
-3. execution eval 结果检查
-4. execution eval gate
+2. Aionis Doc 的编译、handoff、publish、recover 工作流
+3. tool runs、replay 状态和 artifact 输出检查
+4. runtime 健康检查和环境诊断
+5. execution eval 结果检查
+6. execution eval gate
 
 当前已实现的命令组：
 
 1. `aionis runtime ...`
-2. `aionis eval ...`
-3. `aionis runs ...`
-4. `aionis playbooks ...`
-5. `aionis replay inspect-run`
-6. `aionis replay inspect-playbook`
-7. `aionis replay recover`
-8. `aionis replay explain`
-9. `aionis artifacts ...`
+2. `aionis doc ...`
+3. `aionis eval ...`
+4. `aionis runs ...`
+5. `aionis playbooks ...`
+6. `aionis replay inspect-run`
+7. `aionis replay inspect-playbook`
+8. `aionis replay recover`
+9. `aionis replay explain`
+10. `aionis artifacts ...`
 
 兼容 alias 仍然可用：
 
@@ -50,8 +53,9 @@ npx @aionis/sdk@0.2.20 --help
 当前边界：
 
 1. runtime 生命周期仍然只覆盖本地 Lite
-2. eval 命令消费本地 artifact 目录或预生成的 eval summary
-3. 这仍然不是 hosted control-plane CLI
+2. Aionis Doc 当前覆盖 compile、handoff、publish、recover 这条工作流
+3. eval 命令消费本地 artifact 目录或预生成的 eval summary
+4. 这仍然不是 hosted control-plane CLI
 
 如果本地没有 Aionis 仓库，当前 bootstrap 路径是：
 
@@ -90,6 +94,24 @@ npx @aionis/sdk@0.2.20 runtime selfcheck --base-url http://127.0.0.1:3321
 
 ```bash
 npx @aionis/sdk@0.2.20 runtime stop --port 3321
+```
+
+把一份 Aionis Doc 编译成 graph 输出：
+
+```bash
+npx @aionis/sdk@0.2.20 doc compile ./workflow.aionis.md --emit graph
+```
+
+把一份 Aionis Doc 发布进原生 handoff store：
+
+```bash
+npx @aionis/sdk@0.2.20 doc publish ./workflow.aionis.md --base-url http://127.0.0.1:3001 --scope default
+```
+
+把这份 Aionis Doc 对应的 handoff continuity 再恢复出来：
+
+```bash
+npx @aionis/sdk@0.2.20 doc recover ./workflow.aionis.md --base-url http://127.0.0.1:3001 --scope default
 ```
 
 检查一份 benchmark artifact 的 execution eval：
@@ -260,6 +282,54 @@ npx @aionis/sdk@0.2.20 artifacts pack --artifact-dir /path/to/artifact --out /tm
 6. `tools/select`
 7. replay run + compile
 
+### `aionis doc ...`
+
+`aionis doc ...` 是 Aionis Doc 的 executable-document 工作流入口。
+
+适合用在你想把一份人类可读文档推进成：
+
+1. compile 结果
+2. runtime handoff
+3. handoff/store request
+4. `/v1/handoff/store` 发布
+5. `/v1/handoff/recover` 恢复结果
+
+当前 V1 命令：
+
+1. `aionis doc compile <input-file>`
+2. `aionis doc runtime-handoff <input-file>`
+3. `aionis doc store-request <runtime-handoff.json>`
+4. `aionis doc publish <input-file>`
+5. `aionis doc recover <input-file>`
+
+推荐用法：
+
+1. 想看 AST / IR / graph 时，用 `doc compile`
+2. 想拿 execution continuity carrier 时，用 `doc runtime-handoff`
+3. 想拿显式的 native handoff/store payload 时，用 `doc store-request`
+4. 想把 workflow 正式写入 Aionis handoff memory 时，用 `doc publish`
+5. 想通过原生 recover endpoint 拿回 handoff、execution state 和 next action 时，用 `doc recover`
+
+当前支持的输入模式：
+
+1. `doc runtime-handoff` 支持 `source|compile-envelope`
+2. `doc publish` 支持 `source|runtime-handoff|handoff-store-request`
+3. `doc recover` 支持 `source|runtime-handoff|handoff-store-request|publish-result`
+
+这意味着 SDK CLI 现在已经把 Aionis Doc 从源文档一路暴露到 recovered execution continuity，不需要自己去拼原始 API。
+
+### `aionis runs ...`
+
+`aionis runs ...` 用来检查 tool-selection runs 及其 decision / feedback 历史。
+
+当前 V1 命令：
+
+1. `aionis runs list`
+2. `aionis runs get`
+3. `aionis runs timeline`
+4. `aionis runs decisions`
+5. `aionis runs feedback`
+
 ### `aionis eval inspect`
 
 `eval inspect` 会读取：
@@ -365,17 +435,16 @@ npx @aionis/sdk@0.2.20 artifacts pack --artifact-dir /path/to/artifact --out /tm
 4. 可选 `--mode simulate|strict|guided`
 5. `--json`
 
-### `aionis replay inspect-run`
+### `aionis replay ...`
 
-`replay inspect-run` 用来获取一条 replay run，并可选带上 steps 和 artifacts。
+`aionis replay ...` 用来检查 replay runs 以及 replay 派生的恢复状态。
 
-当前 V1 支持：
+当前 V1 命令：
 
-1. `--run-id <id>`
-2. 可选 `--scope <scope>`
-3. 可选 `--include-steps`
-4. 可选 `--include-artifacts`
-5. `--json`
+1. `aionis replay inspect-run`
+2. `aionis replay inspect-playbook`
+3. `aionis replay recover`
+4. `aionis replay explain`
 
 ### `aionis replay inspect-playbook`
 
@@ -512,9 +581,10 @@ npx @aionis/sdk@0.2.20 artifacts pack --artifact-dir /path/to/artifact --out /tm
 
 1. 快速拉起本地 Aionis Lite
 2. 做重复性的 runtime 自检
-3. 检查 execution eval 结果
-4. 在 CI 里做 scriptable gate
-5. 不用直接打原始 API 就能检查 replay/playbook
+3. 用 `aionis doc ...` 跑一条正式的 executable-document 工作流
+4. 检查 execution eval 结果
+5. 在 CI 里做 scriptable gate
+6. 不用直接打原始 API 就能检查 replay/playbook/run
 
 ## 相关文档
 
