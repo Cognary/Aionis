@@ -264,3 +264,19 @@ test("lite host does not register broken memory lifecycle routes and exposes the
   assert.match(liteEditionFile, /\/v1\/memory\/archive\/rehydrate/);
   assert.match(liteEditionFile, /\/v1\/memory\/nodes\/activate/);
 });
+
+test("lite memory-replay-governed routes do not keep store fallback branches", () => {
+  const replayGovernedFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-replay-governed.ts"), "utf8");
+  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const forbiddenSymbols = [
+    "type StoreLike",
+    "store.withTx",
+    "store.withClient",
+    "liteModeActive",
+  ];
+  for (const symbol of forbiddenSymbols) {
+    assert.equal(replayGovernedFile.includes(symbol), false, `${symbol} should be absent from lite memory-replay-governed routes`);
+  }
+  assert.equal(hostFile.includes("registerMemoryReplayGovernedRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-replay-governed routes");
+  assert.match(replayGovernedFile, /aionis-lite memory-replay-governed routes only support AIONIS_EDITION=lite/);
+});

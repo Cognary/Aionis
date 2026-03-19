@@ -5,11 +5,6 @@ import { replayPlaybookDispatch, replayPlaybookRepairReview, replayPlaybookRun }
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 
-type StoreLike = {
-  withTx: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
-  withClient: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
-};
-
 type ReplayGovernedRequest = FastifyRequest<{ Body: unknown }>;
 type ReplayPlaybookReviewOptionsLike = Parameters<typeof replayPlaybookRepairReview>[2];
 type ReplayPlaybookRunOptionsLike = Parameters<typeof replayPlaybookRun>[2];
@@ -24,9 +19,8 @@ type LiteWriteStoreLike = NonNullable<ReplayPlaybookReviewOptionsLike["writeAcce
 
 export function registerMemoryReplayGovernedRoutes(args: {
   app: FastifyInstance;
-  env?: { AIONIS_EDITION?: string };
-  store: StoreLike;
-  liteWriteStore?: LiteWriteStoreLike | null;
+  env: { AIONIS_EDITION?: string };
+  liteWriteStore: LiteWriteStoreLike;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
     req: FastifyRequest,
@@ -45,7 +39,6 @@ export function registerMemoryReplayGovernedRoutes(args: {
   const {
     app,
     env,
-    store,
     liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,
@@ -57,19 +50,18 @@ export function registerMemoryReplayGovernedRoutes(args: {
     buildReplayRepairReviewOptions,
     buildReplayPlaybookRunOptions,
   } = args;
-  const liteModeActive = env?.AIONIS_EDITION === "lite" && !!liteWriteStore;
+  if (env?.AIONIS_EDITION !== "lite") {
+    throw new Error("aionis-lite memory-replay-governed routes only support AIONIS_EDITION=lite");
+  }
   const executeGovernedWrite = <TResult>(
     body: unknown,
     operation: (client: pg.PoolClient, requestBody: unknown) => Promise<TResult>,
-  ) =>
-    liteModeActive
-      ? liteWriteStore.withTx(() => operation({} as pg.PoolClient, body))
-      : store.withTx((client) => operation(client, body));
+  ) => liteWriteStore.withTx(() => operation({} as pg.PoolClient, body));
 
   const executeGovernedRead = <TResult>(
     body: unknown,
     operation: (client: pg.PoolClient, requestBody: unknown) => Promise<TResult>,
-  ) => store.withClient((client) => operation(client, body));
+  ) => operation({} as pg.PoolClient, body);
 
   const resolveReplayPlaybookRunRateKind = (body: unknown): ReplayGovernedRateKind => {
     const parsedForMode = ReplayPlaybookRunRequest.safeParse(body);
@@ -137,9 +129,7 @@ export function registerMemoryReplayGovernedRoutes(args: {
       },
       execute: (body) => {
         const reviewOptions = buildReplayRepairReviewOptions();
-        if (liteModeActive) {
-          reviewOptions.writeAccess = liteWriteStore;
-        }
+        reviewOptions.writeAccess = liteWriteStore;
         return executeGovernedWrite(body, (client, requestBody) =>
           replayPlaybookRepairReview(client, requestBody, reviewOptions),
         );
@@ -162,7 +152,7 @@ export function registerMemoryReplayGovernedRoutes(args: {
       rateKind,
       execute: (requestBody) => {
         const runOptions = buildReplayPlaybookRunOptions(reply, "replay_playbook_run");
-        if (liteModeActive && runOptions.writeOptions) {
+        if (runOptions.writeOptions) {
           runOptions.writeOptions.writeAccess = liteWriteStore;
         }
         return executeGovernedRead(requestBody, (client, resolvedBody) => replayPlaybookRun(client, resolvedBody, runOptions));
@@ -182,7 +172,7 @@ export function registerMemoryReplayGovernedRoutes(args: {
       rateKind,
       execute: (requestBody) => {
         const runOptions = buildReplayPlaybookRunOptions(reply, "replay_playbook_dispatch");
-        if (liteModeActive && runOptions.writeOptions) {
+        if (runOptions.writeOptions) {
           runOptions.writeOptions.writeAccess = liteWriteStore;
         }
         return executeGovernedRead(requestBody, (client, resolvedBody) =>

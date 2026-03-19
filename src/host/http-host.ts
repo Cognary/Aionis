@@ -538,7 +538,6 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
   registerMemoryReplayGovernedRoutes({
     app,
     env,
-    store,
     liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,
