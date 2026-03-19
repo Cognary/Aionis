@@ -17,6 +17,7 @@ const FORBIDDEN_PATHS = [
   "src/routes/admin-control-config.ts",
   "src/routes/admin-control-dashboard.ts",
   "src/routes/admin-control-entities.ts",
+  "src/util/error-format.ts",
 ];
 
 const ALLOWED_JOB_FILES = [
