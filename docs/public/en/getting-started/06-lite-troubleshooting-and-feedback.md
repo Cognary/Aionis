@@ -49,6 +49,16 @@ Expected:
 
 If `storage.backend` is not `lite_sqlite`, you are not actually running the Lite runtime you think you are.
 
+### sandbox returns `sandbox_disabled` or unexpectedly asks for admin token
+
+Check:
+
+1. `SANDBOX_ENABLED` is still `true`
+2. `SANDBOX_ADMIN_ONLY` was not set back to `true`
+3. `/health` shows `sandbox.enabled = true`
+
+Current Lite default is local direct use, not admin-only gating.
+
 ## Write, Recall, and Context Problems
 
 ### write succeeds but `find` looks empty

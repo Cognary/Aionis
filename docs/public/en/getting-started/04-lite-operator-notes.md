@@ -69,6 +69,22 @@ Healthy Lite should show:
 2. `storage.backend = "lite_sqlite"`
 3. `lite.stores.write` and `lite.stores.recall` present
 
+## Sandbox Defaults
+
+Lite now exposes sandbox routes to the ordinary local user path by default.
+
+Current default startup behavior:
+
+1. `SANDBOX_ENABLED=true`
+2. `SANDBOX_ADMIN_ONLY=false`
+3. `SANDBOX_EXECUTOR_MODE=mock`
+
+If you want to relock sandbox behind the local admin token:
+
+```bash
+SANDBOX_ADMIN_ONLY=true npm run start:lite
+```
+
 ## Default Local Files
 
 By default Lite stores local state in:

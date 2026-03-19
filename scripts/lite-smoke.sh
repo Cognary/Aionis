@@ -80,6 +80,10 @@ if (health?.storage?.backend !== "lite_sqlite") {
   console.error(`expected lite_sqlite backend, got ${health?.storage?.backend}`);
   process.exit(1);
 }
+if (health?.sandbox?.enabled !== true || health?.sandbox?.mode !== "mock") {
+  console.error(`expected enabled mock sandbox, got ${JSON.stringify(health?.sandbox ?? null)}`);
+  process.exit(1);
+}
 if (!health?.lite?.stores?.write || !health?.lite?.stores?.recall) {
   console.error("expected lite health stores for write and recall");
   process.exit(1);
@@ -88,6 +92,65 @@ console.log(JSON.stringify({
   ok: true,
   runtime: health.runtime,
   storage: { backend: health.storage.backend },
+  sandbox: { enabled: health.sandbox.enabled, mode: health.sandbox.mode },
+}, null, 2));
+JS
+
+curl -fsS -X POST "${BASE_URL}/v1/memory/sandbox/sessions" \
+  -H 'content-type: application/json' \
+  -d '{"actor":"lite-smoke"}' \
+  > "${TMP_DIR}/sandbox-session.json"
+
+SANDBOX_SESSION_ID="$(node - <<'JS' "${TMP_DIR}/sandbox-session.json"
+const fs = require("fs");
+const created = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const sessionId = created?.session?.session_id;
+if (!sessionId) {
+  console.error(JSON.stringify(created, null, 2));
+  process.exit(1);
+}
+process.stdout.write(String(sessionId));
+JS
+)"
+
+curl -fsS -X POST "${BASE_URL}/v1/memory/sandbox/execute" \
+  -H 'content-type: application/json' \
+  -d "{\"session_id\":\"${SANDBOX_SESSION_ID}\",\"actor\":\"lite-smoke\",\"mode\":\"sync\",\"action\":{\"kind\":\"command\",\"argv\":[\"echo\",\"lite-sandbox-smoke\"]}}" \
+  > "${TMP_DIR}/sandbox-execute.json"
+
+SANDBOX_RUN_ID="$(node - <<'JS' "${TMP_DIR}/sandbox-execute.json"
+const fs = require("fs");
+const run = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (run?.run?.status !== "succeeded" || run?.run?.result?.executor !== "mock") {
+  console.error(JSON.stringify(run, null, 2));
+  process.exit(1);
+}
+process.stdout.write(String(run.run.run_id));
+JS
+)"
+
+curl -fsS -X POST "${BASE_URL}/v1/memory/sandbox/runs/logs" \
+  -H 'content-type: application/json' \
+  -d "{\"run_id\":\"${SANDBOX_RUN_ID}\"}" \
+  > "${TMP_DIR}/sandbox-logs.json"
+
+node - <<'JS' "${TMP_DIR}/sandbox-execute.json" "${TMP_DIR}/sandbox-logs.json"
+const fs = require("fs");
+const executed = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const logs = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+if (!String(executed?.run?.output?.stdout ?? "").includes("mock executor: echo lite-sandbox-smoke")) {
+  console.error(JSON.stringify(executed, null, 2));
+  process.exit(1);
+}
+if (!String(logs?.logs?.stdout ?? "").includes("mock executor: echo lite-sandbox-smoke")) {
+  console.error(JSON.stringify(logs, null, 2));
+  process.exit(1);
+}
+console.log(JSON.stringify({
+  sandbox_kernel_ok: true,
+  session_id: executed.run.session_id,
+  run_id: executed.run.run_id,
+  status: executed.run.status,
 }, null, 2));
 JS
 

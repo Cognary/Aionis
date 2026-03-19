@@ -66,6 +66,22 @@ Override it when you want a stable local identity:
 LITE_LOCAL_ACTOR_ID=lucio npm run start:lite
 ```
 
+## Sandbox
+
+Lite now starts with the local sandbox enabled for ordinary local users.
+
+By default:
+
+1. `SANDBOX_ENABLED=true`
+2. `SANDBOX_ADMIN_ONLY=false`
+3. the default executor stays on `mock`, so `smoke:lite` can validate the path without extra system setup
+
+If you want the old lock-back behavior:
+
+```bash
+SANDBOX_ADMIN_ONLY=true npm run start:lite
+```
+
 ## Validation
 
 ```bash
@@ -78,6 +94,7 @@ npm run smoke:lite
 1. Lite health and startup
 2. approval-only automation run/resume
 3. replay compile -> playbook promote -> playbook-driven automation run
+4. local sandbox session -> command execute -> logs
 
 ## Repository Operations
 

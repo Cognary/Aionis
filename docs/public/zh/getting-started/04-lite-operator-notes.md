@@ -69,6 +69,22 @@ curl -fsS http://localhost:3001/health | jq '{ok,runtime,storage,lite}'
 2. `storage.backend = "lite_sqlite"`
 3. `lite.stores.write` 和 `lite.stores.recall` 都存在
 
+## Sandbox 默认行为
+
+Lite 现在默认把 sandbox 路由开放给本地普通用户直接使用。
+
+当前默认启动行为：
+
+1. `SANDBOX_ENABLED=true`
+2. `SANDBOX_ADMIN_ONLY=false`
+3. `SANDBOX_EXECUTOR_MODE=mock`
+
+如果你想把 sandbox 再锁回本地 admin token：
+
+```bash
+SANDBOX_ADMIN_ONLY=true npm run start:lite
+```
+
 ## 默认本地文件
 
 Lite 默认把本地状态写到：

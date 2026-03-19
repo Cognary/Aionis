@@ -20,11 +20,15 @@ test("apps/lite owns the startup script", () => {
   assert.equal(litePkg.scripts["start:print-env"], "bash ./scripts/start-lite-app.sh --print-env");
   const startScript = fs.readFileSync(path.join(ROOT, "apps", "lite", "scripts", "start-lite-app.sh"), "utf8");
   assert.match(startScript, /LITE_LOCAL_ACTOR_ID/);
+  assert.match(startScript, /SANDBOX_ENABLED/);
+  assert.match(startScript, /SANDBOX_ADMIN_ONLY/);
 });
 
-test(".env.example exposes the Lite local actor knob", () => {
+test(".env.example exposes the Lite local actor and sandbox knobs", () => {
   const envExample = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
   assert.match(envExample, /^LITE_LOCAL_ACTOR_ID=local-user$/m);
+  assert.match(envExample, /^SANDBOX_ENABLED=true$/m);
+  assert.match(envExample, /^SANDBOX_ADMIN_ONLY=false$/m);
 });
 
 test("runtime manifest points at the Lite app startup command", () => {

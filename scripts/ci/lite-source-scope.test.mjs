@@ -180,14 +180,17 @@ test("lite memory-access routes do not keep store fallback branches", () => {
   assert.match(memoryAccessFile, /aionis-lite memory-access routes only support AIONIS_EDITION=lite/);
 });
 
-test("lite memory-sandbox routes keep admin-only guard but drop principal plumbing", () => {
+test("lite memory-sandbox routes keep optional admin-only guard but default to local direct use", () => {
   const memorySandboxFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-sandbox.ts"), "utf8");
   const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const configFile = fs.readFileSync(path.join(ROOT, "src", "config.ts"), "utf8");
   assert.match(memorySandboxFile, /aionis-lite memory-sandbox routes only support AIONIS_EDITION=lite/);
   assert.match(memorySandboxFile, /if \(env\.SANDBOX_ADMIN_ONLY\)/);
   assert.match(memorySandboxFile, /requireAdminToken\(req\)/);
   assert.equal(memorySandboxFile.includes("requireMemoryPrincipal"), false, "memory-sandbox should not depend on principal plumbing in lite");
   assert.equal(hostFile.includes("registerMemorySandboxRoutes({\n    app,\n    env,\n    store,\n    sandboxExecutor,\n    requireAdminToken,\n    requireMemoryPrincipal,"), false, "lite host should not pass requireMemoryPrincipal into memory-sandbox routes");
+  assert.match(configFile, /SANDBOX_ENABLED:[\s\S]*v \?\? "true"/);
+  assert.match(configFile, /SANDBOX_ADMIN_ONLY:[\s\S]*v \?\? "false"/);
 });
 
 test("lite memory-feedback-tools routes do not keep store fallback branches", () => {

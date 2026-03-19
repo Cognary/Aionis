@@ -355,13 +355,13 @@ const EnvSchema = z.object({
   SANDBOX_ENABLED: z
     .string()
     .optional()
-    .transform((v) => (v ?? "false").toLowerCase())
+    .transform((v) => (v ?? "true").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
   SANDBOX_ADMIN_ONLY: z
     .string()
     .optional()
-    .transform((v) => (v ?? "true").toLowerCase())
+    .transform((v) => (v ?? "false").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
   SANDBOX_EXECUTOR_MODE: z.enum(["mock", "local_process", "http_remote"]).default("mock"),

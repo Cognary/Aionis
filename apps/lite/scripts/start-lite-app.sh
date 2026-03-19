@@ -33,6 +33,8 @@ export RATE_LIMIT_BYPASS_LOOPBACK="${RATE_LIMIT_BYPASS_LOOPBACK:-true}"
 export LITE_REPLAY_SQLITE_PATH="${LITE_REPLAY_SQLITE_PATH:-${ROOT_DIR}/.tmp/aionis-lite-replay.sqlite}"
 export LITE_WRITE_SQLITE_PATH="${LITE_WRITE_SQLITE_PATH:-${ROOT_DIR}/.tmp/aionis-lite-write.sqlite}"
 export LITE_LOCAL_ACTOR_ID="${LITE_LOCAL_ACTOR_ID:-local-user}"
+export SANDBOX_ENABLED="${SANDBOX_ENABLED:-true}"
+export SANDBOX_ADMIN_ONLY="${SANDBOX_ADMIN_ONLY:-false}"
 
 if [[ "${1:-}" == "--print-env" ]]; then
   python3 - <<'PY'
@@ -46,6 +48,8 @@ keys = [
   "LITE_REPLAY_SQLITE_PATH",
   "LITE_WRITE_SQLITE_PATH",
   "LITE_LOCAL_ACTOR_ID",
+  "SANDBOX_ENABLED",
+  "SANDBOX_ADMIN_ONLY",
 ]
 print(json.dumps({key: os.environ.get(key) for key in keys}))
 PY

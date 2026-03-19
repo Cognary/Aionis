@@ -36,3 +36,9 @@ Useful override:
 ```bash
 LITE_LOCAL_ACTOR_ID=lucio npm --prefix apps/lite run start
 ```
+
+Default sandbox behavior:
+
+1. Lite startup exports `SANDBOX_ENABLED=true`
+2. Lite startup exports `SANDBOX_ADMIN_ONLY=false`
+3. set `SANDBOX_ADMIN_ONLY=true` when you want to relock sandbox routes behind the admin token

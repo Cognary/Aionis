@@ -49,6 +49,16 @@ curl -fsS http://localhost:3001/health | jq '{ok,runtime,storage,lite}'
 
 如果 `storage.backend` 不是 `lite_sqlite`，说明你实际跑起来的不是想要的 Lite。
 
+### sandbox 返回 `sandbox_disabled` 或意外要求 admin token
+
+先检查：
+
+1. `SANDBOX_ENABLED` 仍然是 `true`
+2. `SANDBOX_ADMIN_ONLY` 是否被重新设成了 `true`
+3. `/health` 里是否显示 `sandbox.enabled = true`
+
+当前 Lite 默认语义是本地直接可用，不是 admin-only。
+
 ## Write、Recall、Context 问题
 
 ### write 成功但 `find` 为空

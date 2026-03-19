@@ -107,7 +107,7 @@ export async function createRuntimeServices(env: Env) {
   const sandboxRemoteAllowedHosts = parseSandboxRemoteAllowedHosts(env.SANDBOX_REMOTE_EXECUTOR_ALLOWED_HOSTS_JSON);
   const sandboxRemoteAllowedCidrs = parseSandboxRemoteAllowedCidrs(env.SANDBOX_REMOTE_EXECUTOR_EGRESS_ALLOWED_CIDRS_JSON);
   const sandboxAllowedCommands = parseAllowedSandboxCommands(env.SANDBOX_ALLOWED_COMMANDS_JSON);
-  const store = createLiteHostStore();
+  const store = createLiteHostStore(env.LITE_WRITE_SQLITE_PATH);
   const db = createNoopDb();
   const embeddedRuntime = null;
   const liteReplayStore = createLiteReplayStore(env.LITE_REPLAY_SQLITE_PATH);
