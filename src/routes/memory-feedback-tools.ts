@@ -12,11 +12,6 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 
-type StoreLike = {
-  withTx: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
-  withClient: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
-};
-
 type MemoryFeedbackToolKind =
   | "feedback"
   | "rules_state"
@@ -26,7 +21,6 @@ type MemoryFeedbackToolKind =
   | "tools_run"
   | "tools_feedback";
 type MemoryFeedbackInflightKind = "write" | "recall";
-type MemoryFeedbackRunner = "tx" | "client";
 
 type MemoryFeedbackToolRequest = FastifyRequest<{ Body: unknown }>;
 
@@ -45,9 +39,8 @@ type LiteFeedbackStoreLike =
 type RegisterMemoryFeedbackToolRoutesArgs = {
   app: FastifyInstance;
   env: Env;
-  store: StoreLike;
   embeddedRuntime: EmbeddedMemoryRuntime | null;
-  liteWriteStore?: LiteFeedbackStoreLike | null;
+  liteWriteStore: LiteFeedbackStoreLike;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
     req: FastifyRequest,
@@ -65,7 +58,6 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
   const {
     app,
     env,
-    store,
     embeddedRuntime,
     liteWriteStore,
     requireMemoryPrincipal,
@@ -75,6 +67,9 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
     tenantFromBody,
     acquireInflightSlot,
   } = args;
+  if (env.AIONIS_EDITION !== "lite") {
+    throw new Error("aionis-lite memory-feedback-tools routes only support AIONIS_EDITION=lite");
+  }
 
   const runFeedbackRoute = async <TResult>(args: {
     req: MemoryFeedbackToolRequest;
@@ -99,32 +94,14 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
       gate.release();
     }
   };
-  const executeFeedbackStoreOperation = <TResult>(args: {
-    runner: MemoryFeedbackRunner;
-    executeLite: () => Promise<TResult>;
-    executeStore: (client: pg.PoolClient) => Promise<TResult>;
-  }) => {
-    if (liteWriteStore) return args.executeLite();
-    return args.runner === "tx" ? store.withTx(args.executeStore) : store.withClient(args.executeStore);
-  };
   const executeFeedbackWriteOperation = <TResult>(args: {
     executeLite: (liteStore: LiteFeedbackStoreLike) => Promise<TResult>;
-    executeStore: (client: pg.PoolClient) => Promise<TResult>;
   }) =>
-    executeFeedbackStoreOperation({
-      runner: "tx",
-      executeLite: () => args.executeLite(liteWriteStore!),
-      executeStore: args.executeStore,
-    });
+    args.executeLite(liteWriteStore);
   const executeFeedbackReadOperation = <TResult>(args: {
     executeLite: (liteStore: LiteFeedbackStoreLike) => Promise<TResult>;
-    executeStore: (client: pg.PoolClient) => Promise<TResult>;
   }) =>
-    executeFeedbackStoreOperation({
-      runner: "client",
-      executeLite: () => args.executeLite(liteWriteStore!),
-      executeStore: args.executeStore,
-    });
+    args.executeLite(liteWriteStore);
   const registerFeedbackPostRoute = <TResult>(args: {
     path: string;
     requestKind: MemoryFeedbackToolKind;
@@ -151,11 +128,12 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
     inflightKind: "write",
     withGate: false,
     execute: (body) =>
-      store.withTx((client) =>
-        ruleFeedback(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
+      liteWriteStore.withTx(() =>
+        ruleFeedback({} as pg.PoolClient, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
           maxTextLen: env.MAX_TEXT_LEN,
           piiRedaction: env.PII_REDACTION,
           embeddedRuntime,
+          liteWriteStore,
         }),
       ),
   });
@@ -173,10 +151,6 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
               liteWriteStore: liteStore,
             }),
           ),
-        executeStore: (client) =>
-          updateRuleState(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
-            embeddedRuntime,
-          }),
       }),
   });
   registerFeedbackPostRoute({
@@ -190,8 +164,6 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
             embeddedRuntime,
             liteWriteStore: liteStore,
           }),
-        executeStore: (client) =>
-          evaluateRules(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, { embeddedRuntime }),
       }),
   });
   registerFeedbackPostRoute({
@@ -205,8 +177,6 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
             embeddedRuntime,
             liteWriteStore: liteStore,
           }),
-        executeStore: (client) =>
-          selectTools(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, { embeddedRuntime }),
       }),
   });
   registerFeedbackPostRoute({
@@ -219,8 +189,6 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
           getToolsDecisionById(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
             liteWriteStore: liteStore,
           }),
-        executeStore: (client) =>
-          getToolsDecisionById(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
       }),
   });
   registerFeedbackPostRoute({
@@ -233,8 +201,6 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
           getToolsRunLifecycle(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
             liteWriteStore: liteStore,
           }),
-        executeStore: (client) =>
-          getToolsRunLifecycle(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
       }),
   });
   registerFeedbackPostRoute({
@@ -247,8 +213,6 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
           listToolsRuns(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
             liteWriteStore: liteStore,
           }),
-        executeStore: (client) =>
-          listToolsRuns(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
       }),
   });
   registerFeedbackPostRoute({
@@ -267,12 +231,6 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
               liteWriteStore: liteStore,
             }),
           ),
-        executeStore: (client) =>
-          toolSelectionFeedback(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
-            maxTextLen: env.MAX_TEXT_LEN,
-            piiRedaction: env.PII_REDACTION,
-            embeddedRuntime,
-          }),
       }),
   });
 }

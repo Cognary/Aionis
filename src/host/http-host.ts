@@ -519,7 +519,6 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
   registerMemoryFeedbackToolRoutes({
     app,
     env,
-    store,
     embeddedRuntime,
     liteWriteStore,
     requireMemoryPrincipal,

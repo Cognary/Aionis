@@ -189,3 +189,22 @@ test("lite memory-sandbox routes keep admin-only guard but drop principal plumbi
   assert.equal(memorySandboxFile.includes("requireMemoryPrincipal"), false, "memory-sandbox should not depend on principal plumbing in lite");
   assert.equal(hostFile.includes("registerMemorySandboxRoutes({\n    app,\n    env,\n    store,\n    sandboxExecutor,\n    requireAdminToken,\n    requireMemoryPrincipal,"), false, "lite host should not pass requireMemoryPrincipal into memory-sandbox routes");
 });
+
+test("lite memory-feedback-tools routes do not keep store fallback branches", () => {
+  const memoryFeedbackToolsFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-feedback-tools.ts"), "utf8");
+  const feedbackFile = fs.readFileSync(path.join(ROOT, "src", "memory", "feedback.ts"), "utf8");
+  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const forbiddenSymbols = [
+    "type StoreLike",
+    "store.withTx",
+    "store.withClient",
+    "executeStore:",
+    "MemoryFeedbackRunner",
+  ];
+  for (const symbol of forbiddenSymbols) {
+    assert.equal(memoryFeedbackToolsFile.includes(symbol), false, `${symbol} should be absent from lite memory-feedback-tools routes`);
+  }
+  assert.equal(hostFile.includes("registerMemoryFeedbackToolRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-feedback-tools routes");
+  assert.match(memoryFeedbackToolsFile, /aionis-lite memory-feedback-tools routes only support AIONIS_EDITION=lite/);
+  assert.match(feedbackFile, /lite_write_store_required/);
+});
