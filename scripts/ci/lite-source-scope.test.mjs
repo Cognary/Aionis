@@ -162,3 +162,20 @@ test("lite pack routes do not keep admin-token-only gating", () => {
   assert.equal(memoryAccessFile.includes("requireAdmin: true"), false, "pack routes should not require admin token in lite");
   assert.equal(memoryAccessFile.includes("requireAdminToken"), false, "memory-access should not depend on admin token helper in lite");
 });
+
+test("lite memory-access routes do not keep store fallback branches", () => {
+  const memoryAccessFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-access.ts"), "utf8");
+  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const forbiddenSymbols = [
+    "store.withTx",
+    "store.withClient",
+    "memoryFind(",
+    "memoryResolve(",
+    "embeddedRuntime",
+  ];
+  for (const symbol of forbiddenSymbols) {
+    assert.equal(memoryAccessFile.includes(symbol), false, `${symbol} should be absent from lite memory-access routes`);
+  }
+  assert.equal(hostFile.includes("registerMemoryAccessRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-access routes");
+  assert.match(memoryAccessFile, /aionis-lite memory-access routes only support AIONIS_EDITION=lite/);
+});

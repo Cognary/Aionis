@@ -8,6 +8,7 @@ Current source boundary:
 - `src/runtime-entry.ts` is the runtime truth for Lite startup.
 - `src/app/runtime-services.ts` is narrowed to Lite-owned store/runtime wiring only.
 - `src/app/request-guards.ts` is narrowed to local-only identity and rate-limit guards.
+- `src/routes/memory-access.ts` is narrowed to Lite SQLite access only.
 - `packages/runtime-core/` is the shared extraction seam.
 - `src/host/http-host.ts` is Lite-only and rejects non-lite source startup.
 - `src/routes/automations.ts` is reintroduced as a Lite-local automation kernel surface.

@@ -446,10 +446,8 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
   registerMemoryAccessRoutes({
     app,
     env,
-    store,
     embedder,
     embeddingSurfacePolicy,
-    embeddedRuntime,
     liteWriteStore,
     writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
     requireStoreFeatureCapability,

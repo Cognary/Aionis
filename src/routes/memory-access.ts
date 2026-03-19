@@ -3,22 +3,15 @@ import type pg from "pg";
 import type { Env } from "../config.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
-import { memoryFind, memoryFindLite } from "../memory/find.js";
+import { memoryFindLite } from "../memory/find.js";
 import { exportMemoryPack, importMemoryPack } from "../memory/packs.js";
-import { memoryResolve, memoryResolveLite } from "../memory/resolve.js";
+import { memoryResolveLite } from "../memory/resolve.js";
 import { createSession, listSessions, listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
-import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 
-type StoreLike = {
-  withTx: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
-  withClient: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
-};
-
 type MemoryAccessRequestKind = "write" | "find" | "resolve";
 type MemoryAccessInflightKind = "write" | "recall";
-type MemoryAccessRunner = "tx" | "client";
 
 type MemoryAccessRequest = FastifyRequest<{ Body: unknown; Querystring: Record<string, unknown>; Params: Record<string, unknown> }>;
 
@@ -37,11 +30,9 @@ type SessionWriteOptionsLike = Parameters<typeof createSession>[2];
 type RegisterMemoryAccessRoutesArgs = {
   app: FastifyInstance;
   env: Env;
-  store: StoreLike;
   embedder: EmbeddingProvider | null;
   embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
-  embeddedRuntime: EmbeddedMemoryRuntime | null;
-  liteWriteStore?: MemoryAccessLiteStoreLike | null;
+  liteWriteStore: MemoryAccessLiteStoreLike;
   writeAccessShadowMirrorV2: boolean;
   requireStoreFeatureCapability: (capability: "sessions_graph" | "packs_export" | "packs_import") => void;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
@@ -65,10 +56,8 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
   const {
     app,
     env,
-    store,
     embedder,
     embeddingSurfacePolicy: embeddingSurfacePolicyArg,
-    embeddedRuntime,
     liteWriteStore,
     writeAccessShadowMirrorV2,
     requireStoreFeatureCapability,
@@ -79,6 +68,9 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     tenantFromBody,
     acquireInflightSlot,
   } = args;
+  if (env.AIONIS_EDITION !== "lite") {
+    throw new Error("aionis-lite memory-access routes only support AIONIS_EDITION=lite");
+  }
   const embeddingSurfacePolicy =
     embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
   const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
@@ -91,11 +83,10 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
     shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
     shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
-      writeAccessShadowMirrorV2,
-      embedder: writeEmbedder,
-      embeddedRuntime,
-      liteWriteStore,
-    } satisfies SessionWriteOptionsLike;
+    writeAccessShadowMirrorV2,
+    embedder: writeEmbedder,
+    liteWriteStore,
+  } satisfies SessionWriteOptionsLike;
 
   const runMemoryAccessRoute = async <TResult>(args: {
     req: MemoryAccessRequest;
@@ -119,14 +110,6 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     } finally {
       gate.release();
     }
-  };
-  const executeMemoryAccessStoreOperation = <TResult>(args: {
-    runner: MemoryAccessRunner;
-    executeLite: () => Promise<TResult>;
-    executeStore: (client: pg.PoolClient) => Promise<TResult>;
-  }) => {
-    if (liteWriteStore) return args.executeLite();
-    return args.runner === "tx" ? store.withTx(args.executeStore) : store.withClient(args.executeStore);
   };
   const registerMemoryAccessRoute = <TResult>(args: {
     method: "get" | "post";
@@ -162,12 +145,7 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     requestKind: "write",
     inflightKind: "write",
     requiredCapability: "sessions_graph",
-    execute: (body) =>
-      executeMemoryAccessStoreOperation({
-        runner: "tx",
-        executeLite: () => createSession({} as pg.PoolClient, body, writeDefaults),
-        executeStore: (client) => createSession(client, body, writeDefaults),
-      }),
+    execute: (body) => createSession({} as pg.PoolClient, body, writeDefaults),
   });
 
   registerMemoryAccessRoute({
@@ -178,22 +156,10 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     requiredCapability: "sessions_graph",
     bodyFactory: (request) => asObject(request.query),
     execute: (input) =>
-      executeMemoryAccessStoreOperation({
-        runner: "client",
-        executeLite: () =>
-          listSessions({} as pg.PoolClient, input, {
-            defaultScope: env.MEMORY_SCOPE,
-            defaultTenantId: env.MEMORY_TENANT_ID,
-            embeddedRuntime,
-            liteWriteStore,
-          }),
-        executeStore: (client) =>
-          listSessions(client, input, {
-            defaultScope: env.MEMORY_SCOPE,
-            defaultTenantId: env.MEMORY_TENANT_ID,
-            embeddedRuntime,
-            liteWriteStore,
-          }),
+      listSessions({} as pg.PoolClient, input, {
+        defaultScope: env.MEMORY_SCOPE,
+        defaultTenantId: env.MEMORY_TENANT_ID,
+        liteWriteStore,
       }),
   });
 
@@ -203,12 +169,7 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     requestKind: "write",
     inflightKind: "write",
     requiredCapability: "sessions_graph",
-    execute: (body) =>
-      executeMemoryAccessStoreOperation({
-        runner: "tx",
-        executeLite: () => writeSessionEvent({} as pg.PoolClient, body, writeDefaults),
-        executeStore: (client) => writeSessionEvent(client, body, writeDefaults),
-      }),
+    execute: (body) => writeSessionEvent({} as pg.PoolClient, body, writeDefaults),
   });
 
   app.get("/v1/memory/sessions/:session_id/events", async (req: FastifyRequest<{ Querystring: Record<string, unknown>; Params: SessionEventsParams }>, reply: FastifyReply) => {
@@ -223,22 +184,10 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
         session_id: String((request.params as SessionEventsParams)?.session_id ?? ""),
       }),
       execute: (input) =>
-        executeMemoryAccessStoreOperation({
-          runner: "client",
-          executeLite: () =>
-            listSessionEvents({} as pg.PoolClient, input, {
-              defaultScope: env.MEMORY_SCOPE,
-              defaultTenantId: env.MEMORY_TENANT_ID,
-              embeddedRuntime,
-              liteWriteStore,
-            }),
-          executeStore: (client) =>
-            listSessionEvents(client, input, {
-              defaultScope: env.MEMORY_SCOPE,
-              defaultTenantId: env.MEMORY_TENANT_ID,
-              embeddedRuntime,
-              liteWriteStore,
-            }),
+        listSessionEvents({} as pg.PoolClient, input, {
+          defaultScope: env.MEMORY_SCOPE,
+          defaultTenantId: env.MEMORY_TENANT_ID,
+          liteWriteStore,
         }),
     });
     return reply.code(200).send(out);
@@ -251,12 +200,7 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     inflightKind: "recall",
     requiredCapability: "packs_export",
     bodyFactory: (request) => request.body ?? {},
-    execute: (body) =>
-      executeMemoryAccessStoreOperation({
-        runner: "client",
-        executeLite: () => exportMemoryPack({} as pg.PoolClient, body, writeDefaults),
-        executeStore: (client) => exportMemoryPack(client, body, writeDefaults),
-      }),
+    execute: (body) => exportMemoryPack({} as pg.PoolClient, body, writeDefaults),
   });
 
   registerMemoryAccessRoute({
@@ -266,12 +210,7 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     inflightKind: "write",
     requiredCapability: "packs_import",
     bodyFactory: (request) => request.body ?? {},
-    execute: (body) =>
-      executeMemoryAccessStoreOperation({
-        runner: "tx",
-        executeLite: () => importMemoryPack({} as pg.PoolClient, body, writeDefaults),
-        executeStore: (client) => importMemoryPack(client, body, writeDefaults),
-      }),
+    execute: (body) => importMemoryPack({} as pg.PoolClient, body, writeDefaults),
   });
 
   registerMemoryAccessRoute({
@@ -279,10 +218,7 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     path: "/v1/memory/find",
     requestKind: "find",
     inflightKind: "recall",
-    execute: (body) =>
-      liteWriteStore
-        ? memoryFindLite(liteWriteStore, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID)
-        : store.withClient((client) => memoryFind(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID)),
+    execute: (body) => memoryFindLite(liteWriteStore, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
   });
 
   registerMemoryAccessRoute({
@@ -290,9 +226,6 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
     path: "/v1/memory/resolve",
     requestKind: "resolve",
     inflightKind: "recall",
-    execute: (body) =>
-      liteWriteStore
-        ? memoryResolveLite(liteWriteStore, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID)
-        : store.withClient((client) => memoryResolve(client, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID)),
+    execute: (body) => memoryResolveLite(liteWriteStore, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
   });
 }
