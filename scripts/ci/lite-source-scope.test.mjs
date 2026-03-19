@@ -223,3 +223,19 @@ test("lite memory-recall routes do not keep store-client recall plumbing", () =>
   assert.equal(hostFile.includes("registerMemoryRecallRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-recall routes");
   assert.match(memoryRecallFile, /aionis-lite memory-recall routes only support AIONIS_EDITION=lite/);
 });
+
+test("lite memory-context-runtime routes do not keep store-client recall plumbing", () => {
+  const memoryContextRuntimeFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-context-runtime.ts"), "utf8");
+  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const forbiddenSymbols = [
+    "type StoreLike",
+    "store.withClient",
+    "recallAccessForClient",
+    "liteModeActive",
+  ];
+  for (const symbol of forbiddenSymbols) {
+    assert.equal(memoryContextRuntimeFile.includes(symbol), false, `${symbol} should be absent from lite memory-context-runtime routes`);
+  }
+  assert.equal(hostFile.includes("registerMemoryContextRuntimeRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-context-runtime routes");
+  assert.match(memoryContextRuntimeFile, /aionis-lite memory-context-runtime routes only support AIONIS_EDITION=lite/);
+});

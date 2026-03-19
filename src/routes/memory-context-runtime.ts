@@ -20,16 +20,13 @@ import { estimateTokenCountFromText } from "../memory/context.js";
 import { assembleLayeredContext } from "../memory/context-orchestrator.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { HttpError } from "../util/http.js";
 import { normalizeText } from "../util/normalize.js";
 import { redactPII } from "../util/redaction.js";
 import type { Env } from "../config.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
-
-type StoreLike = {
-  withClient: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
-};
 
 type ContextRuntimeRequest = FastifyRequest<{ Body: unknown }>;
 type ContextRuntimeSurface = "recall_text" | "planning_context" | "context_assemble";
@@ -502,13 +499,12 @@ function buildRecallRequestFromQuery(args: {
 export function registerMemoryContextRuntimeRoutes(args: {
   app: FastifyInstance;
   env: Env;
-  store: StoreLike;
   embedder: EmbeddingProvider | null;
   embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
   embeddedRuntime: EmbeddedMemoryRuntime | null;
-  liteWriteStore?: ContextRuntimeLiteStoreLike | null;
+  liteWriteStore: ContextRuntimeLiteStoreLike;
+  liteRecallAccess: RecallStoreAccess;
   recallTextEmbedBatcher: unknown;
-  recallAccessForClient: (client: pg.PoolClient) => RecallStoreAccess;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
     req: FastifyRequest,
@@ -576,13 +572,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
   const {
     app,
     env,
-    store,
     embedder,
     embeddingSurfacePolicy: embeddingSurfacePolicyArg,
     embeddedRuntime,
     liteWriteStore,
+    liteRecallAccess,
     recallTextEmbedBatcher,
-    recallAccessForClient,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,
@@ -605,9 +600,11 @@ export function registerMemoryContextRuntimeRoutes(args: {
     mapRecallTextEmbeddingError,
     recordContextAssemblyTelemetryBestEffort,
   } = args;
+  if (env.AIONIS_EDITION !== "lite") {
+    throw new Error("aionis-lite memory-context-runtime routes only support AIONIS_EDITION=lite");
+  }
   const embeddingSurfacePolicy =
     embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
-  const liteModeActive = env.AIONIS_EDITION === "lite" && !!liteWriteStore;
   const recallTextEmbedBatcherStats = () =>
     recallTextEmbedBatcher && typeof recallTextEmbedBatcher === "object" && "stats" in recallTextEmbedBatcher
     && typeof recallTextEmbedBatcher.stats === "function"
@@ -744,33 +741,28 @@ export function registerMemoryContextRuntimeRoutes(args: {
     recallParsed: ParsedMemoryRecall;
     auth: RecallAuth;
     timings: Record<string, number>;
-    buildRuntimeOptions: (client: pg.PoolClient | null) => MemoryRecallRuntimeOptions;
-    finalize: (client: pg.PoolClient | null, recall: MemoryRecallOutput) => Promise<T>;
+    buildRuntimeOptions: () => MemoryRecallRuntimeOptions;
+    finalize: (recall: MemoryRecallOutput) => Promise<T>;
   }): Promise<T> => {
-    const execute = async (client: pg.PoolClient | null) => {
-      const recall = await memoryRecallParsed(
-        client ?? ({} as pg.PoolClient),
-        args.recallParsed,
-        env.MEMORY_SCOPE,
-        env.MEMORY_TENANT_ID,
-        args.auth,
-        buildRulesTimingObserver(args.timings),
-        args.endpoint,
-        args.buildRuntimeOptions(client),
-      );
-      return args.finalize(client, recall);
-    };
-    if (liteModeActive) return execute(null);
-    return store.withClient((client) => execute(client));
+    const recall = await memoryRecallParsed(
+      {} as pg.PoolClient,
+      args.recallParsed,
+      env.MEMORY_SCOPE,
+      env.MEMORY_TENANT_ID,
+      args.auth,
+      buildRulesTimingObserver(args.timings),
+      args.endpoint,
+      args.buildRuntimeOptions(),
+    );
+    return args.finalize(recall);
   };
   const buildRecallRuntimeOptions = (args: {
-    client: pg.PoolClient | null;
     internalAllowL4Selection: boolean;
     unsafeDropTrustAnchors?: boolean;
     applyLayerPolicyToRetrieval?: boolean;
   }): MemoryRecallRuntimeOptions => ({
     stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
-    recall_access: recallAccessForClient(args.client ?? ({} as pg.PoolClient)),
+    recall_access: liteRecallAccess,
     internal_allow_l4_selection: args.internalAllowL4Selection,
     ...(args.unsafeDropTrustAnchors !== undefined
       ? { unsafe_allow_drop_trust_anchors: args.unsafeDropTrustAnchors }
@@ -855,7 +847,6 @@ export function registerMemoryContextRuntimeRoutes(args: {
     strict: args.parsed.tool_strict,
   });
   const maybeEvaluateContextRules = async (args: {
-    client: pg.PoolClient | null;
     recallParsed: ParsedMemoryRecall;
     context: unknown;
     includeShadow: boolean | undefined;
@@ -864,7 +855,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
   }): Promise<RulesEvaluationLike | null> => {
     if (args.includeRules === false) return null;
     return evaluateRules(
-      args.client ?? ({} as pg.PoolClient),
+      {} as pg.PoolClient,
       buildContextRulesRequest({
         recallParsed: args.recallParsed,
         context: args.context,
@@ -873,16 +864,13 @@ export function registerMemoryContextRuntimeRoutes(args: {
       }),
       env.MEMORY_SCOPE,
       env.MEMORY_TENANT_ID,
-      args.client
-        ? { embeddedRuntime }
-        : {
-            embeddedRuntime,
-            liteWriteStore,
-        },
+      {
+        embeddedRuntime,
+        liteWriteStore,
+      },
     );
   };
   const evaluateContextRules = async (args: {
-    client: pg.PoolClient | null;
     recallParsed: ParsedMemoryRecall;
     context: unknown;
     includeShadow: boolean | undefined;
@@ -898,7 +886,6 @@ export function registerMemoryContextRuntimeRoutes(args: {
     return rules;
   };
   const maybeSelectContextTools = async (args: {
-    client: pg.PoolClient | null;
     recallParsed: ParsedMemoryRecall;
     parsed: ParsedPlanningContext | ParsedContextAssemble;
     context: unknown;
@@ -907,7 +894,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       return null;
     }
     return selectTools(
-      args.client,
+      null,
       buildContextToolsRequest({
         recallParsed: args.recallParsed,
         parsed: args.parsed,
@@ -915,12 +902,10 @@ export function registerMemoryContextRuntimeRoutes(args: {
       }),
       env.MEMORY_SCOPE,
       env.MEMORY_TENANT_ID,
-      args.client
-        ? { embeddedRuntime }
-        : {
-            embeddedRuntime,
-            liteWriteStore,
-          },
+      {
+        embeddedRuntime,
+        liteWriteStore,
+      },
     );
   };
   const buildRecallRouteDiagnostics = (args: {
@@ -1160,17 +1145,16 @@ export function registerMemoryContextRuntimeRoutes(args: {
         recallParsed,
         auth,
         timings,
-        buildRuntimeOptions: (client) =>
+        buildRuntimeOptions: () =>
           buildRecallRuntimeOptions({
-            client,
             internalAllowL4Selection,
           }),
-        finalize: async (client, base) => {
+        finalize: async (base) => {
           if (recallParsed.rules_context === undefined || recallParsed.rules_context === null) {
             return base;
           }
           const rulesRes = await evaluateRules(
-            client ?? ({} as pg.PoolClient),
+            {} as pg.PoolClient,
             {
               scope: recallParsed.scope ?? env.MEMORY_SCOPE,
               tenant_id: recallParsed.tenant_id ?? env.MEMORY_TENANT_ID,
@@ -1180,7 +1164,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
             },
             env.MEMORY_SCOPE,
             env.MEMORY_TENANT_ID,
-            client ? { embeddedRuntime } : { embeddedRuntime, liteWriteStore },
+            { embeddedRuntime, liteWriteStore },
           );
           return attachRecallRules(base, rulesRes);
         },
@@ -1362,23 +1346,20 @@ export function registerMemoryContextRuntimeRoutes(args: {
         recallParsed,
         auth,
         timings,
-        buildRuntimeOptions: (client) =>
+        buildRuntimeOptions: () =>
           buildRecallRuntimeOptions({
-            client,
             internalAllowL4Selection,
             unsafeDropTrustAnchors,
             applyLayerPolicyToRetrieval,
           }),
-        finalize: async (client, recall) => {
+        finalize: async (recall) => {
           const rules = await evaluateContextRules({
-            client,
             recallParsed,
             context: planningExecutionContext,
             includeShadow: parsed.include_shadow,
             rulesLimit: parsed.rules_limit,
           });
           const tools = await maybeSelectContextTools({
-            client,
             recallParsed,
             parsed,
             context: planningExecutionContext,
@@ -1603,16 +1584,14 @@ export function registerMemoryContextRuntimeRoutes(args: {
         recallParsed,
         auth,
         timings,
-        buildRuntimeOptions: (client) =>
+        buildRuntimeOptions: () =>
           buildRecallRuntimeOptions({
-            client,
             internalAllowL4Selection,
             unsafeDropTrustAnchors,
             applyLayerPolicyToRetrieval,
           }),
-        finalize: async (client, recall) => {
+        finalize: async (recall) => {
           const rules = await maybeEvaluateContextRules({
-            client,
             recallParsed,
             context: executionContext,
             includeShadow: parsed.include_shadow,
@@ -1620,7 +1599,6 @@ export function registerMemoryContextRuntimeRoutes(args: {
             includeRules: parsed.include_rules,
           });
           const tools = await maybeSelectContextTools({
-            client,
             recallParsed,
             parsed,
             context: executionContext,
