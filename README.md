@@ -2,6 +2,11 @@
 
 A standalone `Aionis Lite` repository for the single-user local runtime.
 
+Repository split:
+
+1. `Cognary/Aionis` = standalone Lite repository
+2. `Cognary/AionisPro` = full repository with Server, SDKs, docs, playground, ops surfaces, and shared-core split scaffolding
+
 This repository carries the Lite runtime, SQLite-backed stores, Lite operator docs, and the local automation kernel.
 
 Current scope:
@@ -16,7 +21,7 @@ Current limitations:
 1. some shared runtime implementation still lives in the copied `src/` tree
 2. replay/playbook and automation still share one local-user identity model rather than a multi-user control plane
 3. release packaging is intentionally source-first
-4. the repository still needs an initial curated commit baseline before public release
+4. Lite keeps a narrower capability surface than Server by design
 
 ## Automation API Contract
 
@@ -85,4 +90,4 @@ Release-baseline checks are part of the standard Lite test suite.
 
 ## Provenance
 
-Derived from the `Aionis` mainline runtime and now maintained as the standalone Lite baseline.
+Derived from the `Aionis` mainline runtime and now maintained as the standalone Lite baseline that occupies the public `Cognary/Aionis` repository.
