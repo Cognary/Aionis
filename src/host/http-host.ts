@@ -289,6 +289,7 @@ export type RegisterApplicationRoutesArgs = {
   embedder: any;
   embeddingSurfacePolicy: EmbeddingSurfacePolicy;
   embeddedRuntime: any;
+  liteRecallAccess: any;
   liteReplayAccess: any;
   liteReplayStore: any;
   liteWriteStore: any;
@@ -353,14 +354,15 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
     embedder,
     embeddingSurfacePolicy,
     embeddedRuntime,
-    liteReplayAccess,
-    liteReplayStore,
-    liteWriteStore,
-    liteAutomationStore,
-    liteAutomationRunStore,
-    recallTextEmbedBatcher,
-    recallAccessForClient,
-    writeStoreCapabilities,
+  liteReplayAccess,
+  liteReplayStore,
+  liteWriteStore,
+  liteAutomationStore,
+  liteAutomationRunStore,
+  recallTextEmbedBatcher,
+  recallAccessForClient,
+  liteRecallAccess,
+  writeStoreCapabilities,
     requireAdminToken,
     requireStoreFeatureCapability,
     requireMemoryPrincipal,
@@ -462,9 +464,9 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
   registerMemoryRecallRoutes({
     app,
     env,
-    store,
     embeddedRuntime,
-    recallAccessForClient,
+    liteRecallAccess,
+    liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,

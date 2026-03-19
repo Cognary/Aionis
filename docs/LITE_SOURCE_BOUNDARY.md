@@ -10,6 +10,7 @@ Current source boundary:
 - `src/app/request-guards.ts` is narrowed to local-only identity and rate-limit guards.
 - `src/routes/memory-access.ts` is narrowed to Lite SQLite access only.
 - `src/routes/memory-feedback-tools.ts` is narrowed to Lite SQLite feedback/rules/tools access only.
+- `src/routes/memory-recall.ts` is narrowed to direct Lite recall access plus Lite rule evaluation.
 - `src/routes/memory-sandbox.ts` stays Lite-only while preserving `SANDBOX_ADMIN_ONLY`.
 - `packages/runtime-core/` is the shared extraction seam.
 - `src/host/http-host.ts` is Lite-only and rejects non-lite source startup.

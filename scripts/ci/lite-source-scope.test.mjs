@@ -208,3 +208,18 @@ test("lite memory-feedback-tools routes do not keep store fallback branches", ()
   assert.match(memoryFeedbackToolsFile, /aionis-lite memory-feedback-tools routes only support AIONIS_EDITION=lite/);
   assert.match(feedbackFile, /lite_write_store_required/);
 });
+
+test("lite memory-recall routes do not keep store-client recall plumbing", () => {
+  const memoryRecallFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-recall.ts"), "utf8");
+  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const forbiddenSymbols = [
+    "type StoreLike",
+    "store.withClient",
+    "recallAccessForClient",
+  ];
+  for (const symbol of forbiddenSymbols) {
+    assert.equal(memoryRecallFile.includes(symbol), false, `${symbol} should be absent from lite memory-recall routes`);
+  }
+  assert.equal(hostFile.includes("registerMemoryRecallRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-recall routes");
+  assert.match(memoryRecallFile, /aionis-lite memory-recall routes only support AIONIS_EDITION=lite/);
+});

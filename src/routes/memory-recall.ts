@@ -8,12 +8,9 @@ import { evaluateRules } from "../memory/rules-evaluate.js";
 import { MemoryRecallRequest, type MemoryRecallInput } from "../memory/schemas.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
-
-type StoreLike = {
-  withClient: <T>(fn: (client: pg.PoolClient) => Promise<T>) => Promise<T>;
-};
 
 type RecallProfileLike = {
   profile: string;
@@ -110,9 +107,9 @@ function getRecallContextMetrics(out: RecallRouteOutput) {
 type RegisterMemoryRecallRoutesArgs = {
   app: FastifyInstance;
   env: Env;
-  store: StoreLike;
   embeddedRuntime: EmbeddedMemoryRuntime | null;
-  recallAccessForClient: (client: pg.PoolClient) => RecallStoreAccess;
+  liteRecallAccess: RecallStoreAccess;
+  liteWriteStore: Pick<LiteWriteStore, "listRuleCandidates">;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (req: FastifyRequest, body: unknown, principal: AuthPrincipal | null, kind: "recall") => unknown;
   enforceRateLimit: (req: FastifyRequest, reply: FastifyReply, kind: "recall" | "debug_embeddings") => Promise<void>;
@@ -151,9 +148,9 @@ export function registerMemoryRecallRoutes(args: RegisterMemoryRecallRoutesArgs)
   const {
     app,
     env,
-    store,
     embeddedRuntime,
-    recallAccessForClient,
+    liteRecallAccess,
+    liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,
     enforceRateLimit,
@@ -171,62 +168,64 @@ export function registerMemoryRecallRoutes(args: RegisterMemoryRecallRoutesArgs)
     buildRecallTrajectory,
     buildRecallAuth,
   } = args;
+  if (env.AIONIS_EDITION !== "lite") {
+    throw new Error("aionis-lite memory-recall routes only support AIONIS_EDITION=lite");
+  }
 
   const runRecallWithOptionalRules = async (
     parsed: ParsedRecallRequest,
     auth: RecallAuth,
     timings: Record<string, number>,
-  ): Promise<RecallRouteOutput> =>
-    store.withClient(async (client) => {
-      const base = await memoryRecallParsed(
-        client,
-        parsed,
-        env.MEMORY_SCOPE,
-        env.MEMORY_TENANT_ID,
-        auth,
-        {
-          timing: (stage, ms) => {
-            timings[stage] = (timings[stage] ?? 0) + ms;
-          },
+  ): Promise<RecallRouteOutput> => {
+    const base = await memoryRecallParsed(
+      {} as pg.PoolClient,
+      parsed,
+      env.MEMORY_SCOPE,
+      env.MEMORY_TENANT_ID,
+      auth,
+      {
+        timing: (stage, ms) => {
+          timings[stage] = (timings[stage] ?? 0) + ms;
         },
-        "recall",
-        {
-          stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
-          recall_access: recallAccessForClient(client),
-        },
-      );
+      },
+      "recall",
+      {
+        stage1_exact_fallback_on_empty: env.MEMORY_RECALL_STAGE1_EXACT_FALLBACK_ON_EMPTY,
+        recall_access: liteRecallAccess,
+      },
+    );
 
-      if (parsed.rules_context === undefined || parsed.rules_context === null) {
-        return base;
-      }
+    if (parsed.rules_context === undefined || parsed.rules_context === null) {
+      return base;
+    }
 
-      const rulesRes = await evaluateRules(
-        client,
-        {
-          scope: parsed.scope ?? env.MEMORY_SCOPE,
-          tenant_id: parsed.tenant_id ?? env.MEMORY_TENANT_ID,
-          context: parsed.rules_context,
-          include_shadow: parsed.rules_include_shadow,
-          limit: parsed.rules_limit,
-        },
-        env.MEMORY_SCOPE,
-        env.MEMORY_TENANT_ID,
-        { embeddedRuntime },
-      );
+    const rulesRes = await evaluateRules(
+      {} as pg.PoolClient,
+      {
+        scope: parsed.scope ?? env.MEMORY_SCOPE,
+        tenant_id: parsed.tenant_id ?? env.MEMORY_TENANT_ID,
+        context: parsed.rules_context,
+        include_shadow: parsed.rules_include_shadow,
+        limit: parsed.rules_limit,
+      },
+      env.MEMORY_SCOPE,
+      env.MEMORY_TENANT_ID,
+      { embeddedRuntime, liteWriteStore },
+    );
 
-      return {
-        ...base,
+    return {
+      ...base,
+      scope: rulesRes.scope,
+      rules: {
         scope: rulesRes.scope,
-        rules: {
-          scope: rulesRes.scope,
-          considered: rulesRes.considered,
-          matched: rulesRes.matched,
-          skipped_invalid_then: rulesRes.skipped_invalid_then,
-          invalid_then_sample: rulesRes.invalid_then_sample,
-          applied: rulesRes.applied,
-        },
-      };
-    });
+        considered: rulesRes.considered,
+        matched: rulesRes.matched,
+        skipped_invalid_then: rulesRes.skipped_invalid_then,
+        invalid_then_sample: rulesRes.invalid_then_sample,
+        applied: rulesRes.applied,
+      },
+    };
+  };
 
   app.post("/v1/memory/recall", async (req: FastifyRequest<{ Body: unknown }>, reply: FastifyReply) => {
     const t0 = performance.now();
