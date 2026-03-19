@@ -43,8 +43,9 @@ Expected:
 1. `ok = true`
 2. `runtime.edition = "lite"`
 3. `storage.backend = "lite_sqlite"`
-4. `lite.stores.write` present
-5. `lite.stores.recall` present
+4. `lite.identity.local_actor_id` present
+5. `lite.stores.write` present
+6. `lite.stores.recall` present
 
 If `storage.backend` is not `lite_sqlite`, you are not actually running the Lite runtime you think you are.
 

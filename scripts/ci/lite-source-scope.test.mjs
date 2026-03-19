@@ -139,3 +139,20 @@ test("lite request guards do not keep full auth or tenant quota plumbing", () =>
   assert.match(requestGuardsFile, /aionis-lite request guards only support MEMORY_AUTH_MODE=off/);
   assert.match(requestGuardsFile, /aionis-lite request guards only support TENANT_QUOTA_ENABLED=false/);
 });
+
+test("lite health surface avoids backend implementation detail fields", () => {
+  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const forbiddenSymbols = [
+    "configured_backend",
+    "database_target_hash",
+    "memory_store_capability_contract",
+    "recall_store_access_capability_version",
+    "replay_store_access_capability_version",
+    "write_store_access_capability_version",
+    "memory_store_embedded_runtime",
+  ];
+  for (const symbol of forbiddenSymbols) {
+    assert.equal(hostFile.includes(symbol), false, `${symbol} should be absent from lite host health/config surfaces`);
+  }
+  assert.match(hostFile, /local_actor_id: env\.LITE_LOCAL_ACTOR_ID/);
+});

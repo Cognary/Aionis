@@ -43,8 +43,9 @@ curl -fsS http://localhost:3001/health | jq '{ok,runtime,storage,lite}'
 1. `ok = true`
 2. `runtime.edition = "lite"`
 3. `storage.backend = "lite_sqlite"`
-4. `lite.stores.write` 存在
-5. `lite.stores.recall` 存在
+4. `lite.identity.local_actor_id` 存在
+5. `lite.stores.write` 存在
+6. `lite.stores.recall` 存在
 
 如果 `storage.backend` 不是 `lite_sqlite`，说明你实际跑起来的不是想要的 Lite。
 
