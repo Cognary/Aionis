@@ -653,7 +653,7 @@ export const ContextAssembleRequest = z.object({
   context_compaction_profile: z.enum(["balanced", "aggressive"]).optional(),
   context_optimization_profile: z.enum(["balanced", "aggressive"]).optional(),
   memory_layer_preference: MemoryLayerPreference.optional(),
-  return_layered_context: z.boolean().default(true),
+  return_layered_context: z.boolean().default(false),
   context_layers: ContextLayerConfig.optional(),
   static_context_blocks: z.array(StaticContextBlock).max(100).optional(),
   static_injection: StaticInjectionPolicy.optional(),

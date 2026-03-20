@@ -121,7 +121,7 @@ Why:
 
 Avoid building a new integration around:
 
-1. `layered_context` as the primary execution-memory read path
+1. `layered_context` as the primary execution-memory read path or as a default route dependency
 2. top-level packet-array mirrors as the only source of workflow/pattern collections
 3. reconstructing signal counts from raw collections when summary objects already exist
 
@@ -130,6 +130,11 @@ Reason:
 1. these paths are noisier
 2. they are less stable as long-term ownership layers
 3. they force consumers to recreate contract logic the runtime already provides
+
+Operational rule:
+
+1. `layered_context` should now be treated as explicit debug/operator output only
+2. default planner/context integrations should assume the slim product surface
 
 ## Current Stability Guide
 

@@ -95,7 +95,7 @@ Say:
 
 Avoid centering the demo on:
 
-1. `layered_context`
+1. `layered_context` as if it were part of the default planner/context response
 2. raw node dumps
 3. legacy packet mirrors or layered-context internals as if they were the long-term ownership layer
 

@@ -1490,10 +1490,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
       contextEstTokens,
       optimizationProfile: planningOptimization.optimization_profile,
     });
+    const plannerSurface = extractPlannerPacketSurface({ layeredContext, recall: recallOut });
     const planningSummary = buildPlanningSummary({
       rules: out.rules,
       tools: out.tools,
       layered_context: layeredContext,
+      planner_surface: plannerSurface,
       cost_signals: costSignals,
       context_est_tokens: contextEstTokens,
       context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
@@ -1511,7 +1513,6 @@ export function registerMemoryContextRuntimeRoutes(args: {
       costSignals,
       selectionPolicy: recallOut?.context?.selection_policy ?? null,
     });
-    const plannerSurface = extractPlannerPacketSurface({ layeredContext, recall: recallOut });
 
     return reply.code(200).send({
       tenant_id: tenantIdOut,
@@ -1683,10 +1684,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
       contextEstTokens,
       optimizationProfile: assembleOptimization.optimization_profile,
     });
+    const plannerSurface = extractPlannerPacketSurface({ layeredContext, recall: recallOut });
     const assemblySummary = buildAssemblySummary({
       rules: out.rules,
       tools: out.tools,
       layered_context: layeredContext,
+      planner_surface: plannerSurface,
       cost_signals: costSignals,
       context_est_tokens: contextEstTokens,
       context_compaction_profile: recallParsed.context_compaction_profile ?? "balanced",
@@ -1756,7 +1759,6 @@ export function registerMemoryContextRuntimeRoutes(args: {
       },
       "memory context_assemble",
     );
-    const plannerSurface = extractPlannerPacketSurface({ layeredContext, recall: recallOut });
 
     return reply.code(200).send({
       tenant_id: tenantIdOut,

@@ -403,23 +403,51 @@ export function extractPlannerPacketSurface(args: { layeredContext?: unknown; re
   const recall = args.recall && typeof args.recall === "object"
     ? args.recall as Record<string, unknown>
     : null;
+  const normalizedPacket = recall ? normalizeActionRecallPacket(recall) : null;
+  const derivedPlannerPacket = normalizedPacket ? buildPlannerPacketText(normalizedPacket) : undefined;
+  const derivedPatternSignals = recall ? collectPatternSignals(recall) : [];
+  const derivedWorkflowSignals = normalizedPacket ? collectWorkflowSignals(normalizedPacket) : [];
   return {
-    planner_packet: layered && "planner_packet" in layered ? layered.planner_packet : undefined,
+    planner_packet:
+      layered && "planner_packet" in layered
+        ? layered.planner_packet
+        : derivedPlannerPacket,
     action_recall_packet:
       recall?.action_recall_packet && typeof recall.action_recall_packet === "object"
         ? recall.action_recall_packet
         : layered?.action_recall_packet && typeof layered.action_recall_packet === "object"
           ? layered.action_recall_packet
           : undefined,
-    recommended_workflows: Array.isArray(layered?.recommended_workflows) ? layered.recommended_workflows : [],
-    candidate_workflows: Array.isArray(layered?.candidate_workflows) ? layered.candidate_workflows : [],
-    candidate_patterns: Array.isArray(layered?.candidate_patterns) ? layered.candidate_patterns : [],
-    trusted_patterns: Array.isArray(layered?.trusted_patterns) ? layered.trusted_patterns : [],
-    contested_patterns: Array.isArray(layered?.contested_patterns) ? layered.contested_patterns : [],
-    rehydration_candidates: Array.isArray(layered?.rehydration_candidates) ? layered.rehydration_candidates : [],
-    supporting_knowledge: Array.isArray(layered?.supporting_knowledge) ? layered.supporting_knowledge : [],
-    pattern_signals: Array.isArray(layered?.pattern_signals) ? layered.pattern_signals : [],
-    workflow_signals: Array.isArray(layered?.workflow_signals) ? layered.workflow_signals : [],
+    recommended_workflows:
+      Array.isArray(layered?.recommended_workflows)
+        ? layered.recommended_workflows
+        : normalizedPacket?.recommended_workflows ?? [],
+    candidate_workflows:
+      Array.isArray(layered?.candidate_workflows)
+        ? layered.candidate_workflows
+        : normalizedPacket?.candidate_workflows ?? [],
+    candidate_patterns:
+      Array.isArray(layered?.candidate_patterns)
+        ? layered.candidate_patterns
+        : normalizedPacket?.candidate_patterns ?? [],
+    trusted_patterns:
+      Array.isArray(layered?.trusted_patterns)
+        ? layered.trusted_patterns
+        : normalizedPacket?.trusted_patterns ?? [],
+    contested_patterns:
+      Array.isArray(layered?.contested_patterns)
+        ? layered.contested_patterns
+        : normalizedPacket?.contested_patterns ?? [],
+    rehydration_candidates:
+      Array.isArray(layered?.rehydration_candidates)
+        ? layered.rehydration_candidates
+        : normalizedPacket?.rehydration_candidates ?? [],
+    supporting_knowledge:
+      Array.isArray(layered?.supporting_knowledge)
+        ? layered.supporting_knowledge
+        : normalizedPacket?.supporting_knowledge ?? [],
+    pattern_signals: Array.isArray(layered?.pattern_signals) ? layered.pattern_signals : derivedPatternSignals,
+    workflow_signals: Array.isArray(layered?.workflow_signals) ? layered.workflow_signals : derivedWorkflowSignals,
   };
 }
 

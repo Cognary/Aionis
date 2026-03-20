@@ -72,8 +72,9 @@ Recommended interpretation:
 1. `planner_packet.sections.*` is now the only default full collection surface on planner/context routes
 2. `workflow_signals` and `pattern_signals` remain canonical signal surfaces
 3. `execution_kernel.*_summary` is the compact runtime surface
-4. `layered_context` should not be the primary execution-memory read path for a new integration
+4. `layered_context` is no longer part of the default planner/context response and should be treated as explicit debug/operator output only
 5. use `POST /v1/memory/execution/introspect` when you want a heavier demo or inspection surface
+6. use `return_layered_context=true` only when you intentionally want the lower-level assembly view
 
 If you need the more detailed integrator-oriented guide, see [Execution-Memory Integrator Guide](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md).
 

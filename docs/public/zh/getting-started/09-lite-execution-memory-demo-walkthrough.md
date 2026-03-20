@@ -145,7 +145,7 @@ title: "Lite Execution-Memory Demo Walkthrough"
 
 不建议把演示中心放在：
 
-1. `layered_context`
+1. `layered_context`，或者把它讲得像默认响应字段一样
 2. raw node dump
 3. 把遗留 packet mirrors 或 layered-context 内部结构当成长期 ownership layer 来讲
 
@@ -154,6 +154,7 @@ title: "Lite Execution-Memory Demo Walkthrough"
 1. 这些面更噪
 2. 会把 execution-memory 产品形态讲得不清楚
 3. 会让 Lite 看起来更像 generic memory，而不是 execution-memory runtime
+4. `layered_context` 现在属于显式 debug/operator 输出，不属于默认 slim planner/context 面
 
 ## 收尾一句话
 

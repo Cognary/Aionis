@@ -249,7 +249,7 @@ function buildPlannerExplanation(args: {
   selectedTool: string | null;
   decision: Record<string, unknown>;
   patternSignalSummary: PatternSignalSummary;
-  layeredContext: Record<string, unknown>;
+  plannerSurface: PlannerPacketSummarySurface;
   actionPacketSummary: ActionPacketSummary;
   workflowLifecycleSummary: WorkflowLifecycleSummary;
 }): string | null {
@@ -258,8 +258,8 @@ function buildPlannerExplanation(args: {
       ? (args.decision.pattern_summary as Record<string, unknown>)
       : {};
   const actionPacket =
-    args.layeredContext.action_recall_packet && typeof args.layeredContext.action_recall_packet === "object"
-      ? (args.layeredContext.action_recall_packet as Record<string, unknown>)
+    args.plannerSurface.action_recall_packet && typeof args.plannerSurface.action_recall_packet === "object"
+      ? (args.plannerSurface.action_recall_packet as Record<string, unknown>)
       : {};
   const workflowLabels = summarizePacketEntryLabels(safeRecordArray(actionPacket.recommended_workflows), "title");
   const candidateWorkflowEntries = safeRecordArray(actionPacket.candidate_workflows);
@@ -708,6 +708,7 @@ export function buildPlanningSummary(args: {
   rules?: unknown;
   tools?: unknown;
   layered_context?: unknown;
+  planner_surface?: PlannerPacketSummarySurface;
   cost_signals?: unknown;
   context_est_tokens: number;
   context_compaction_profile: "balanced" | "aggressive";
@@ -731,7 +732,7 @@ export function buildPlanningSummary(args: {
       : {};
   const costSignals =
     args.cost_signals && typeof args.cost_signals === "object" ? (args.cost_signals as Record<string, unknown>) : {};
-  const summaryBundle = buildExecutionMemorySummaryBundle({
+  const plannerSurface = args.planner_surface ?? {
     action_recall_packet: layeredContext.action_recall_packet,
     pattern_signals: layeredContext.pattern_signals,
     workflow_signals: layeredContext.workflow_signals,
@@ -740,7 +741,10 @@ export function buildPlanningSummary(args: {
     candidate_patterns: layeredContext.candidate_patterns,
     trusted_patterns: layeredContext.trusted_patterns,
     contested_patterns: layeredContext.contested_patterns,
-  });
+    rehydration_candidates: layeredContext.rehydration_candidates,
+    supporting_knowledge: layeredContext.supporting_knowledge,
+  };
+  const summaryBundle = buildExecutionMemorySummaryBundle(plannerSurface);
   const patternSignalSummary = summaryBundle.pattern_signal_summary;
   const workflowSignalSummary = summaryBundle.workflow_signal_summary;
   const actionPacketSummary = summaryBundle.action_packet_summary;
@@ -758,7 +762,7 @@ export function buildPlanningSummary(args: {
           : null,
       decision,
       patternSignalSummary,
-      layeredContext,
+      plannerSurface,
       actionPacketSummary,
       workflowLifecycleSummary,
     }),
@@ -798,6 +802,7 @@ export function buildAssemblySummary(args: {
   rules?: unknown;
   tools?: unknown;
   layered_context?: unknown;
+  planner_surface?: PlannerPacketSummarySurface;
   cost_signals?: unknown;
   context_est_tokens: number;
   context_compaction_profile: "balanced" | "aggressive";
@@ -809,6 +814,7 @@ export function buildAssemblySummary(args: {
     rules: args.rules,
     tools: args.tools,
     layered_context: args.layered_context,
+    planner_surface: args.planner_surface,
     cost_signals: args.cost_signals,
     context_est_tokens: args.context_est_tokens,
     context_compaction_profile: args.context_compaction_profile,

@@ -14,7 +14,7 @@ import {
   MemoryAnchorV1Schema,
   PlanningContextRouteContractSchema,
 } from "../../src/memory/schemas.ts";
-import { buildExecutionMemorySummaryBundle } from "../../src/app/planning-summary.ts";
+import { buildExecutionMemorySummaryBundle, summarizePatternSignals } from "../../src/app/planning-summary.ts";
 import { updateRuleState } from "../../src/memory/rules.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
 import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
@@ -113,6 +113,62 @@ function assertExecutionKernelBundle(body: {
   assert.deepEqual(body.execution_kernel.workflow_maintenance_summary, expected.workflow_maintenance_summary);
   assert.deepEqual(body.execution_kernel.pattern_lifecycle_summary, expected.pattern_lifecycle_summary);
   assert.deepEqual(body.execution_kernel.pattern_maintenance_summary, expected.pattern_maintenance_summary);
+}
+
+function assertKernelMatchesRouteSurface(body: {
+  pattern_signals: unknown[];
+  workflow_signals: unknown[];
+  execution_kernel: {
+    action_packet_summary: unknown;
+    pattern_signal_summary: unknown;
+    workflow_signal_summary: unknown;
+    workflow_lifecycle_summary: unknown;
+    workflow_maintenance_summary: unknown;
+    pattern_lifecycle_summary: unknown;
+    pattern_maintenance_summary: unknown;
+  };
+  planning_summary?: {
+    action_packet_summary: unknown;
+    workflow_signal_summary: unknown;
+    workflow_lifecycle_summary: unknown;
+    workflow_maintenance_summary: unknown;
+    pattern_lifecycle_summary: unknown;
+    pattern_maintenance_summary: unknown;
+    trusted_pattern_count: number;
+    contested_pattern_count: number;
+    trusted_pattern_tools: string[];
+    contested_pattern_tools: string[];
+  };
+  assembly_summary?: {
+    action_packet_summary: unknown;
+    workflow_signal_summary: unknown;
+    workflow_lifecycle_summary: unknown;
+    workflow_maintenance_summary: unknown;
+    pattern_lifecycle_summary: unknown;
+    pattern_maintenance_summary: unknown;
+    trusted_pattern_count: number;
+    contested_pattern_count: number;
+    trusted_pattern_tools: string[];
+    contested_pattern_tools: string[];
+  };
+}) {
+  const routeSummary = body.planning_summary ?? body.assembly_summary;
+  assert.ok(routeSummary, "route summary should exist");
+  assert.deepEqual(body.execution_kernel.action_packet_summary, routeSummary.action_packet_summary);
+  assert.deepEqual(body.execution_kernel.workflow_signal_summary, routeSummary.workflow_signal_summary);
+  assert.deepEqual(body.execution_kernel.workflow_lifecycle_summary, routeSummary.workflow_lifecycle_summary);
+  assert.deepEqual(body.execution_kernel.workflow_maintenance_summary, routeSummary.workflow_maintenance_summary);
+  assert.deepEqual(body.execution_kernel.pattern_lifecycle_summary, routeSummary.pattern_lifecycle_summary);
+  assert.deepEqual(body.execution_kernel.pattern_maintenance_summary, routeSummary.pattern_maintenance_summary);
+  const signalOnlyPatternSummary = summarizePatternSignals({ pattern_signals: body.pattern_signals });
+  assert.deepEqual(body.execution_kernel.pattern_signal_summary, {
+    candidate_pattern_count: signalOnlyPatternSummary.candidate_pattern_count,
+    candidate_pattern_tools: signalOnlyPatternSummary.candidate_pattern_tools,
+    trusted_pattern_count: routeSummary.trusted_pattern_count,
+    contested_pattern_count: routeSummary.contested_pattern_count,
+    trusted_pattern_tools: routeSummary.trusted_pattern_tools,
+    contested_pattern_tools: routeSummary.contested_pattern_tools,
+  });
 }
 
 function tmpDbPath(name: string): string {
@@ -519,27 +575,25 @@ test("planning_context returns aligned planner packet, action packet summary, an
         tool_candidates: ["bash", "edit", "test"],
         include_shadow: false,
         rules_limit: 20,
-        return_layered_context: true,
       },
     });
     assert.equal(response.statusCode, 200);
     const body = PlanningContextRouteContractSchema.parse(response.json());
     assertNoLegacyPlannerMirrors(body as Record<string, unknown>);
+    assert.ok(!("layered_context" in (body as Record<string, unknown>)), "default planning_context should not expose layered_context");
     assertActionPacketSummaryMatchesPacket(body.planning_summary.action_packet_summary, body);
     assertActionPacketSummaryMatchesPacket(body.execution_kernel.action_packet_summary, body);
-    assertExecutionKernelBundle(body);
+    assertKernelMatchesRouteSurface(body);
     assert.equal(body.planner_packet.packet_version, "planner_packet_v1");
     assert.equal(body.planner_packet.sections.recommended_workflows.length, 1);
     assert.equal(body.planner_packet.sections.candidate_workflows.length, 1);
     assert.equal(body.workflow_signals.length, 2);
-    assert.equal(body.workflow_signals.length, body.layered_context.workflow_signals.length);
     assert.equal(body.planner_packet.sections.candidate_workflows.length, 1);
     assert.equal(body.planning_summary.action_packet_summary.candidate_workflow_count, 1);
     assert.equal(body.execution_kernel.action_packet_summary.candidate_workflow_count, 1);
     assert.equal(body.planner_packet.sections.candidate_patterns.length, body.planning_summary.action_packet_summary.candidate_pattern_count);
     assert.equal(body.planner_packet.sections.trusted_patterns.length, 1);
     assert.equal(body.planner_packet.sections.contested_patterns.length, body.planning_summary.action_packet_summary.contested_pattern_count);
-    assert.equal(body.pattern_signals.length, body.layered_context.pattern_signals.length);
     assert.ok(body.planner_packet.sections.rehydration_candidates.length >= 1);
     assert.ok(body.planner_packet.sections.supporting_knowledge.length >= 1);
     assert.equal(body.planning_summary.action_packet_summary.recommended_workflow_count, 1);
@@ -636,17 +690,16 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     assert.equal(response.statusCode, 200);
     const body = ContextAssembleRouteContractSchema.parse(response.json());
     assertNoLegacyPlannerMirrors(body as Record<string, unknown>);
+    assert.ok(!("layered_context" in (body as Record<string, unknown>)), "default context_assemble should not expose layered_context");
     assertActionPacketSummaryMatchesPacket(body.assembly_summary.action_packet_summary, body);
     assertActionPacketSummaryMatchesPacket(body.execution_kernel.action_packet_summary, body);
-    assertExecutionKernelBundle(body);
+    assertKernelMatchesRouteSurface(body);
     assert.equal(body.planner_packet.packet_version, "planner_packet_v1");
     assert.deepEqual(body.planner_packet.sections.recommended_workflows.length, 1);
     assert.deepEqual(body.planner_packet.sections.candidate_workflows.length, 1);
     assert.equal(body.workflow_signals.length, 2);
-    assert.equal(body.workflow_signals.length, body.layered_context.workflow_signals.length);
     assert.equal(body.planner_packet.sections.candidate_patterns.length, body.assembly_summary.action_packet_summary.candidate_pattern_count);
     assert.deepEqual(body.planner_packet.sections.trusted_patterns.length, 1);
-    assert.equal(body.pattern_signals.length, body.layered_context.pattern_signals.length);
     assert.equal(body.assembly_summary.action_packet_summary.recommended_workflow_count, 1);
     assert.equal(body.assembly_summary.action_packet_summary.candidate_workflow_count, 1);
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.stable_count, body.planner_packet.sections.recommended_workflows.length);
@@ -699,6 +752,57 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     assert.match(body.assembly_summary.planner_explanation, /trusted patterns available but not used: edit/);
     assert.match(body.assembly_summary.planner_explanation, new RegExp(`supporting knowledge appended: ${body.planner_packet.sections.supporting_knowledge.length}`));
     assert.equal(body.tools.selection_summary.provenance_explanation, "selected tool: edit; candidate patterns visible but not yet trusted: edit");
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("context_assemble can still return layered_context when explicitly requested for debug/operator inspection", async () => {
+  const dbPath = tmpDbPath("context-assemble-debug");
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedContextRuntimeFixture(dbPath);
+  try {
+    registerContextRuntimeApp({ app, liteWriteStore, liteRecallStore });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/context/assemble",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair export failure in node tests",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        include_rules: true,
+        include_shadow: false,
+        rules_limit: 20,
+        tool_candidates: ["bash", "edit", "test"],
+        return_layered_context: true,
+      },
+    });
+    assert.equal(response.statusCode, 200);
+    const body = ContextAssembleRouteContractSchema.parse(response.json()) as Record<string, unknown>;
+    assert.ok("layered_context" in body, "debug/operator context_assemble should expose layered_context when requested");
+    assert.equal(body.workflow_signals.length, (body.layered_context as Record<string, unknown>).workflow_signals.length);
+    assert.equal(body.pattern_signals.length, (body.layered_context as Record<string, unknown>).pattern_signals.length);
+    assertExecutionKernelBundle(body as {
+      layered_context: Record<string, unknown>;
+      execution_kernel: {
+        action_packet_summary: unknown;
+        pattern_signal_summary: unknown;
+        workflow_signal_summary: unknown;
+        workflow_lifecycle_summary: unknown;
+        workflow_maintenance_summary: unknown;
+        pattern_lifecycle_summary: unknown;
+        pattern_maintenance_summary: unknown;
+      };
+    });
   } finally {
     await app.close();
     await liteRecallStore.close();

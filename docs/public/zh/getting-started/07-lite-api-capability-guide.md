@@ -70,8 +70,9 @@ Lite 也支持本地 sessions 和 packs：
 1. `planner_packet.sections.*` 现在是 planner/context 默认响应里唯一的完整 collections surface
 2. `workflow_signals` 和 `pattern_signals` 仍然是 canonical signal surface
 3. `execution_kernel.*_summary` 是紧凑的 runtime state surface
-4. 对新集成来说，不建议把 `layered_context` 当成 execution-memory 的主读取入口
+4. `layered_context` 已经不在默认 planner/context 响应里，应该只被视为显式 debug/operator 输出
 5. 如果需要更重的演示或检查输出，使用 `POST /v1/memory/execution/introspect`
+6. 只有在你明确想看更底层的 assembly 视图时，才使用 `return_layered_context=true`
 
 如果你需要更详细的集成指引，可以直接看 [Execution-Memory Integrator Guide](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)。
 

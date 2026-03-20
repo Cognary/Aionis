@@ -95,7 +95,7 @@ title: "Lite Execution-Memory Demo Checklist"
 
 避免把演示中心放在：
 
-1. `layered_context`
+1. 把 `layered_context` 讲得像默认 planner/context 响应的一部分
 2. raw node dump
 3. 把遗留 packet mirrors 或 layered-context 内部结构当成长期 ownership layer 来讲
 

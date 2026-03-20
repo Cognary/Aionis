@@ -89,7 +89,7 @@ The current contract is:
 
 1. `planner_packet` is the primary structured planner surface
 2. `pattern_signals` and `workflow_signals` remain top-level canonical signal surfaces so planner/runtime consumers do not have to reach through `layered_context`
-3. `layered_context` remains available, but it is no longer the planner-facing ownership layer
+3. `layered_context` is now an explicit debug/operator surface via `return_layered_context=true`, not part of the default planner/context response
 4. `action_recall_packet` remains the substrate that feeds planner packet assembly, but it is no longer part of the default planner/context response surface
 5. if only `runtime_tool_hints` are present, the planner packet may be derived from those hints so planner-facing output does not silently collapse
 
@@ -99,6 +99,7 @@ Default route response rule:
 2. `workflow_signals` and `pattern_signals` are canonical route-level signal surfaces, not packet mirrors
 3. `execution_kernel` is the compact aligned runtime surface
 4. heavy inspection belongs on `POST /v1/memory/execution/introspect`
+5. `layered_context` is returned only when the caller explicitly opts into debug/operator output
 
 ## Planner Summary Contract
 

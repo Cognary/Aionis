@@ -145,7 +145,7 @@ This is the cleanest path because it matches the current canonical and recommend
 
 Avoid centering the story on:
 
-1. `layered_context` as the main reading surface
+1. `layered_context` as the main reading surface or as if it were still a default response field
 2. raw node dumps
 3. legacy packet mirrors or layered-context internals as if they were the long-term ownership layer
 
@@ -154,6 +154,7 @@ Reason:
 1. those are noisier
 2. they hide the execution-memory product shape
 3. they make Lite look more generic than it really is
+4. `layered_context` now belongs to explicit debug/operator output, not the slim default planner/context surface
 
 ## One-Sentence Close
 
