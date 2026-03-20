@@ -9,6 +9,10 @@ Repository split:
 
 This repository carries the Lite runtime, SQLite-backed stores, Lite operator docs, and the local automation kernel.
 
+Architecture and completion reference:
+
+1. [docs/LITE_ARCHITECTURE_AND_COMPLETION.md](/Volumes/ziel/Aionisgo/docs/LITE_ARCHITECTURE_AND_COMPLETION.md)
+
 Current scope:
 
 1. local Lite runtime packaging
@@ -82,11 +86,24 @@ If you want the old lock-back behavior:
 SANDBOX_ADMIN_ONLY=true npm run start:lite
 ```
 
+If you want a practical local-process sandbox preset without writing raw JSON env by hand:
+
+```bash
+npm run start:lite:local-process
+```
+
+That preset currently maps to:
+
+1. `LITE_SANDBOX_PROFILE=local_process_echo`
+2. `SANDBOX_EXECUTOR_MODE=local_process`
+3. `SANDBOX_ALLOWED_COMMANDS_JSON=["echo"]`
+
 ## Validation
 
 ```bash
 npm run test:lite
 npm run smoke:lite
+npm run smoke:lite:local-process
 ```
 
 `smoke:lite` now verifies:
@@ -95,6 +112,8 @@ npm run smoke:lite
 2. approval-only automation run/resume
 3. replay compile -> playbook promote -> playbook-driven automation run
 4. local sandbox session -> command execute -> logs
+
+`smoke:lite:local-process` verifies the same sandbox path against the Lite local-process preset.
 
 ## Repository Operations
 

@@ -38,6 +38,12 @@ TMP_DIR="$(mktemp -d /tmp/aionis_lite_repo_smoke_XXXXXX)"
 PORT="${PORT:-$(pick_free_port)}"
 BASE_URL="http://127.0.0.1:${PORT}"
 LOG_FILE="${TMP_DIR}/lite-smoke.log"
+DEFAULT_SANDBOX_MODE="mock"
+if [[ "${LITE_SANDBOX_PROFILE:-}" == "local_process_echo" ]]; then
+  DEFAULT_SANDBOX_MODE="local_process"
+fi
+EXPECTED_SANDBOX_MODE="${SMOKE_SANDBOX_EXPECTED_MODE:-${SANDBOX_EXECUTOR_MODE:-${DEFAULT_SANDBOX_MODE}}}"
+EXPECTED_SANDBOX_EXECUTOR="${SMOKE_SANDBOX_EXPECTED_EXECUTOR:-${EXPECTED_SANDBOX_MODE}}"
 
 cleanup() {
   if [[ -n "${PID:-}" ]]; then
@@ -50,6 +56,7 @@ trap cleanup EXIT
 
 LITE_WRITE_SQLITE_PATH="${TMP_DIR}/write.sqlite" \
 LITE_REPLAY_SQLITE_PATH="${TMP_DIR}/replay.sqlite" \
+LITE_SANDBOX_PROFILE="${LITE_SANDBOX_PROFILE:-}" \
 PORT="${PORT}" \
 bash apps/lite/scripts/start-lite-app.sh >"${LOG_FILE}" 2>&1 &
 PID=$!
@@ -69,7 +76,7 @@ if [[ "${ok}" != "1" ]]; then
   exit 1
 fi
 
-node - <<'JS' "${TMP_DIR}/health.json"
+node - <<'JS' "${TMP_DIR}/health.json" "${EXPECTED_SANDBOX_MODE}"
 const fs = require("fs");
 const health = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 if (health?.runtime?.edition !== "lite") {
@@ -80,8 +87,9 @@ if (health?.storage?.backend !== "lite_sqlite") {
   console.error(`expected lite_sqlite backend, got ${health?.storage?.backend}`);
   process.exit(1);
 }
-if (health?.sandbox?.enabled !== true || health?.sandbox?.mode !== "mock") {
-  console.error(`expected enabled mock sandbox, got ${JSON.stringify(health?.sandbox ?? null)}`);
+const expectedMode = process.argv[3];
+if (health?.sandbox?.enabled !== true || health?.sandbox?.mode !== expectedMode) {
+  console.error(`expected enabled ${expectedMode} sandbox, got ${JSON.stringify(health?.sandbox ?? null)}`);
   process.exit(1);
 }
 if (!health?.lite?.stores?.write || !health?.lite?.stores?.recall) {
@@ -118,10 +126,11 @@ curl -fsS -X POST "${BASE_URL}/v1/memory/sandbox/execute" \
   -d "{\"session_id\":\"${SANDBOX_SESSION_ID}\",\"actor\":\"lite-smoke\",\"mode\":\"sync\",\"action\":{\"kind\":\"command\",\"argv\":[\"echo\",\"lite-sandbox-smoke\"]}}" \
   > "${TMP_DIR}/sandbox-execute.json"
 
-SANDBOX_RUN_ID="$(node - <<'JS' "${TMP_DIR}/sandbox-execute.json"
+SANDBOX_RUN_ID="$(node - <<'JS' "${TMP_DIR}/sandbox-execute.json" "${EXPECTED_SANDBOX_EXECUTOR}"
 const fs = require("fs");
 const run = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-if (run?.run?.status !== "succeeded" || run?.run?.result?.executor !== "mock") {
+const expectedExecutor = process.argv[3];
+if (run?.run?.status !== "succeeded" || run?.run?.result?.executor !== expectedExecutor) {
   console.error(JSON.stringify(run, null, 2));
   process.exit(1);
 }
@@ -134,23 +143,38 @@ curl -fsS -X POST "${BASE_URL}/v1/memory/sandbox/runs/logs" \
   -d "{\"run_id\":\"${SANDBOX_RUN_ID}\"}" \
   > "${TMP_DIR}/sandbox-logs.json"
 
-node - <<'JS' "${TMP_DIR}/sandbox-execute.json" "${TMP_DIR}/sandbox-logs.json"
+node - <<'JS' "${TMP_DIR}/sandbox-execute.json" "${TMP_DIR}/sandbox-logs.json" "${EXPECTED_SANDBOX_EXECUTOR}"
 const fs = require("fs");
 const executed = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const logs = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
-if (!String(executed?.run?.output?.stdout ?? "").includes("mock executor: echo lite-sandbox-smoke")) {
-  console.error(JSON.stringify(executed, null, 2));
-  process.exit(1);
-}
-if (!String(logs?.logs?.stdout ?? "").includes("mock executor: echo lite-sandbox-smoke")) {
-  console.error(JSON.stringify(logs, null, 2));
-  process.exit(1);
+const expectedExecutor = process.argv[4];
+const stdout = String(executed?.run?.output?.stdout ?? "");
+const logsStdout = String(logs?.logs?.stdout ?? "");
+if (expectedExecutor === "mock") {
+  if (!stdout.includes("mock executor: echo lite-sandbox-smoke")) {
+    console.error(JSON.stringify(executed, null, 2));
+    process.exit(1);
+  }
+  if (!logsStdout.includes("mock executor: echo lite-sandbox-smoke")) {
+    console.error(JSON.stringify(logs, null, 2));
+    process.exit(1);
+  }
+} else {
+  if (!stdout.includes("lite-sandbox-smoke")) {
+    console.error(JSON.stringify(executed, null, 2));
+    process.exit(1);
+  }
+  if (!logsStdout.includes("lite-sandbox-smoke")) {
+    console.error(JSON.stringify(logs, null, 2));
+    process.exit(1);
+  }
 }
 console.log(JSON.stringify({
   sandbox_kernel_ok: true,
   session_id: executed.run.session_id,
   run_id: executed.run.run_id,
   status: executed.run.status,
+  executor: expectedExecutor,
 }, null, 2));
 JS
 

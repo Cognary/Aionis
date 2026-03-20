@@ -35,6 +35,24 @@ export LITE_WRITE_SQLITE_PATH="${LITE_WRITE_SQLITE_PATH:-${ROOT_DIR}/.tmp/aionis
 export LITE_LOCAL_ACTOR_ID="${LITE_LOCAL_ACTOR_ID:-local-user}"
 export SANDBOX_ENABLED="${SANDBOX_ENABLED:-true}"
 export SANDBOX_ADMIN_ONLY="${SANDBOX_ADMIN_ONLY:-false}"
+export LITE_SANDBOX_PROFILE="${LITE_SANDBOX_PROFILE:-}"
+
+case "${LITE_SANDBOX_PROFILE}" in
+  "")
+    ;;
+  local_process_echo)
+    export SANDBOX_EXECUTOR_MODE="${SANDBOX_EXECUTOR_MODE:-local_process}"
+    export SANDBOX_ALLOWED_COMMANDS_JSON="${SANDBOX_ALLOWED_COMMANDS_JSON:-[\"echo\"]}"
+    ;;
+  *)
+    cat >&2 <<EOF
+Unknown LITE_SANDBOX_PROFILE=${LITE_SANDBOX_PROFILE}
+Supported profiles:
+  local_process_echo
+EOF
+    exit 1
+    ;;
+esac
 
 if [[ "${1:-}" == "--print-env" ]]; then
   python3 - <<'PY'
@@ -48,8 +66,11 @@ keys = [
   "LITE_REPLAY_SQLITE_PATH",
   "LITE_WRITE_SQLITE_PATH",
   "LITE_LOCAL_ACTOR_ID",
+  "LITE_SANDBOX_PROFILE",
   "SANDBOX_ENABLED",
   "SANDBOX_ADMIN_ONLY",
+  "SANDBOX_EXECUTOR_MODE",
+  "SANDBOX_ALLOWED_COMMANDS_JSON",
 ]
 print(json.dumps({key: os.environ.get(key) for key in keys}))
 PY

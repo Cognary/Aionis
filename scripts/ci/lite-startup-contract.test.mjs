@@ -12,14 +12,19 @@ function readJson(file) {
 test("root start:lite delegates to apps/lite", () => {
   const rootPkg = readJson(path.join(ROOT, "package.json"));
   assert.equal(rootPkg.scripts["start:lite"], "npm --prefix apps/lite run start --");
+  assert.equal(rootPkg.scripts["start:lite:local-process"], "npm --prefix apps/lite run start:local-process --");
+  assert.equal(rootPkg.scripts["smoke:lite:local-process"], "LITE_SANDBOX_PROFILE=local_process_echo bash scripts/lite-smoke.sh");
 });
 
 test("apps/lite owns the startup script", () => {
   const litePkg = readJson(path.join(ROOT, "apps", "lite", "package.json"));
   assert.equal(litePkg.scripts.start, "bash ./scripts/start-lite-app.sh");
   assert.equal(litePkg.scripts["start:print-env"], "bash ./scripts/start-lite-app.sh --print-env");
+  assert.equal(litePkg.scripts["start:local-process"], "LITE_SANDBOX_PROFILE=local_process_echo bash ./scripts/start-lite-app.sh");
   const startScript = fs.readFileSync(path.join(ROOT, "apps", "lite", "scripts", "start-lite-app.sh"), "utf8");
   assert.match(startScript, /LITE_LOCAL_ACTOR_ID/);
+  assert.match(startScript, /LITE_SANDBOX_PROFILE/);
+  assert.match(startScript, /local_process_echo/);
   assert.match(startScript, /SANDBOX_ENABLED/);
   assert.match(startScript, /SANDBOX_ADMIN_ONLY/);
 });
@@ -29,6 +34,7 @@ test(".env.example exposes the Lite local actor and sandbox knobs", () => {
   assert.match(envExample, /^LITE_LOCAL_ACTOR_ID=local-user$/m);
   assert.match(envExample, /^SANDBOX_ENABLED=true$/m);
   assert.match(envExample, /^SANDBOX_ADMIN_ONLY=false$/m);
+  assert.match(envExample, /^# LITE_SANDBOX_PROFILE=local_process_echo$/m);
 });
 
 test("runtime manifest points at the Lite app startup command", () => {

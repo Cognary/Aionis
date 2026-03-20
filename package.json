@@ -22,8 +22,10 @@
     "runtime-core:build": "npm --prefix packages/runtime-core run build",
     "build": "npm run -s build:runtime-host && npm run -s runtime-core:build && npm run -s build:app:lite",
     "start:lite": "npm --prefix apps/lite run start --",
+    "start:lite:local-process": "npm --prefix apps/lite run start:local-process --",
     "test:lite": "node --test scripts/ci/lite-startup-contract.test.mjs scripts/ci/lite-source-scope.test.mjs scripts/ci/lite-release-baseline.test.mjs && npx tsx --test scripts/ci/lite-automation-kernel.test.ts scripts/ci/lite-health-contract.test.ts scripts/ci/lite-error-contract.test.ts scripts/ci/lite-replay-repair-policy.test.ts",
-    "smoke:lite": "bash scripts/lite-smoke.sh"
+    "smoke:lite": "bash scripts/lite-smoke.sh",
+    "smoke:lite:local-process": "LITE_SANDBOX_PROFILE=local_process_echo bash scripts/lite-smoke.sh"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

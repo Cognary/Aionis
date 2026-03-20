@@ -85,6 +85,17 @@ If you want to relock sandbox behind the local admin token:
 SANDBOX_ADMIN_ONLY=true npm run start:lite
 ```
 
+If you want a practical local-process sandbox preset:
+
+```bash
+npm run start:lite:local-process
+```
+
+That preset keeps the default allowlist intentionally narrow:
+
+1. `SANDBOX_EXECUTOR_MODE=local_process`
+2. `SANDBOX_ALLOWED_COMMANDS_JSON=["echo"]`
+
 ## Default Local Files
 
 By default Lite stores local state in:

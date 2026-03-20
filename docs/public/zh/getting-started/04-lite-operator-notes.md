@@ -85,6 +85,17 @@ Lite 现在默认把 sandbox 路由开放给本地普通用户直接使用。
 SANDBOX_ADMIN_ONLY=true npm run start:lite
 ```
 
+如果你想直接启用一个更实用的本地进程 sandbox 预设：
+
+```bash
+npm run start:lite:local-process
+```
+
+这个预设当前故意保持很窄的 allowlist：
+
+1. `SANDBOX_EXECUTOR_MODE=local_process`
+2. `SANDBOX_ALLOWED_COMMANDS_JSON=["echo"]`
+
 ## 默认本地文件
 
 Lite 默认把本地状态写到：
