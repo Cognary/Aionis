@@ -17,13 +17,13 @@ Its current product center is:
 Fast entry points:
 
 1. public beta narrative:
-   [docs/public/en/getting-started/08-lite-execution-memory-beta-narrative.md](/Volumes/ziel/Aionisgo/docs/public/en/getting-started/08-lite-execution-memory-beta-narrative.md)
+   [docs/public/en/getting-started/08-lite-execution-memory-beta-narrative.md](docs/public/en/getting-started/08-lite-execution-memory-beta-narrative.md)
 2. demo walkthrough:
-   [docs/public/en/getting-started/09-lite-execution-memory-demo-walkthrough.md](/Volumes/ziel/Aionisgo/docs/public/en/getting-started/09-lite-execution-memory-demo-walkthrough.md)
+   [docs/public/en/getting-started/09-lite-execution-memory-demo-walkthrough.md](docs/public/en/getting-started/09-lite-execution-memory-demo-walkthrough.md)
 3. demo checklist:
-   [docs/public/en/getting-started/10-lite-execution-memory-demo-checklist.md](/Volumes/ziel/Aionisgo/docs/public/en/getting-started/10-lite-execution-memory-demo-checklist.md)
+   [docs/public/en/getting-started/10-lite-execution-memory-demo-checklist.md](docs/public/en/getting-started/10-lite-execution-memory-demo-checklist.md)
 4. integrator guide:
-   [docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
+   [docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
 
 Repository split:
 
@@ -60,35 +60,35 @@ Documentation map:
 
 Public docs:
 
-1. [docs/public/en/getting-started/05-lite-public-beta-boundary.md](/Volumes/ziel/Aionisgo/docs/public/en/getting-started/05-lite-public-beta-boundary.md)
-2. [docs/public/en/getting-started/07-lite-api-capability-guide.md](/Volumes/ziel/Aionisgo/docs/public/en/getting-started/07-lite-api-capability-guide.md)
-3. [docs/public/en/getting-started/08-lite-execution-memory-beta-narrative.md](/Volumes/ziel/Aionisgo/docs/public/en/getting-started/08-lite-execution-memory-beta-narrative.md)
-4. [docs/public/en/getting-started/09-lite-execution-memory-demo-walkthrough.md](/Volumes/ziel/Aionisgo/docs/public/en/getting-started/09-lite-execution-memory-demo-walkthrough.md)
-5. [docs/public/en/getting-started/10-lite-execution-memory-demo-checklist.md](/Volumes/ziel/Aionisgo/docs/public/en/getting-started/10-lite-execution-memory-demo-checklist.md)
+1. [docs/public/en/getting-started/05-lite-public-beta-boundary.md](docs/public/en/getting-started/05-lite-public-beta-boundary.md)
+2. [docs/public/en/getting-started/07-lite-api-capability-guide.md](docs/public/en/getting-started/07-lite-api-capability-guide.md)
+3. [docs/public/en/getting-started/08-lite-execution-memory-beta-narrative.md](docs/public/en/getting-started/08-lite-execution-memory-beta-narrative.md)
+4. [docs/public/en/getting-started/09-lite-execution-memory-demo-walkthrough.md](docs/public/en/getting-started/09-lite-execution-memory-demo-walkthrough.md)
+5. [docs/public/en/getting-started/10-lite-execution-memory-demo-checklist.md](docs/public/en/getting-started/10-lite-execution-memory-demo-checklist.md)
 
 Integrator docs:
 
-1. [docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
-2. [docs/LITE_API_CAPABILITY_MATRIX.md](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md)
-3. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
-4. [docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
-5. [docs/LITE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
-6. [docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
+1. [docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
+2. [docs/LITE_API_CAPABILITY_MATRIX.md](docs/LITE_API_CAPABILITY_MATRIX.md)
+3. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+4. [docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+5. [docs/LITE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md](docs/LITE_EXECUTION_MEMORY_PRODUCT_CONTRACT_V1.md)
+6. [docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md](docs/LITE_EXECUTION_MEMORY_V2_MIRROR_MIGRATION_SKETCH.md)
 
 Internal design docs:
 
-1. [docs/LITE_ARCHITECTURE_AND_COMPLETION.md](/Volumes/ziel/Aionisgo/docs/LITE_ARCHITECTURE_AND_COMPLETION.md)
-2. [docs/LITE_EXECUTION_MEMORY_STRATEGY.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_STRATEGY.md)
-3. [docs/LITE_MEMORY_GOVERNANCE_MODEL.md](/Volumes/ziel/Aionisgo/docs/LITE_MEMORY_GOVERNANCE_MODEL.md)
-4. [docs/LITE_MEMORY_TRIGGER_MATRIX.md](/Volumes/ziel/Aionisgo/docs/LITE_MEMORY_TRIGGER_MATRIX.md)
-5. [docs/LITE_ANCHOR_SCHEMA.md](/Volumes/ziel/Aionisgo/docs/LITE_ANCHOR_SCHEMA.md)
-6. [docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
-7. [docs/LITE_FOUNDATION_MEMORY_V1_IMPLEMENTATION_PLAN.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_V1_IMPLEMENTATION_PLAN.md)
-8. [docs/LITE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md)
-9. [docs/LITE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md](/Volumes/ziel/Aionisgo/docs/LITE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md)
-10. [docs/LITE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
-11. [docs/LITE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md)
-12. [docs/adr/ADR-0001-lite-execution-memory-kernel.md](/Volumes/ziel/Aionisgo/docs/adr/ADR-0001-lite-execution-memory-kernel.md)
+1. [docs/LITE_ARCHITECTURE_AND_COMPLETION.md](docs/LITE_ARCHITECTURE_AND_COMPLETION.md)
+2. [docs/LITE_EXECUTION_MEMORY_STRATEGY.md](docs/LITE_EXECUTION_MEMORY_STRATEGY.md)
+3. [docs/LITE_MEMORY_GOVERNANCE_MODEL.md](docs/LITE_MEMORY_GOVERNANCE_MODEL.md)
+4. [docs/LITE_MEMORY_TRIGGER_MATRIX.md](docs/LITE_MEMORY_TRIGGER_MATRIX.md)
+5. [docs/LITE_ANCHOR_SCHEMA.md](docs/LITE_ANCHOR_SCHEMA.md)
+6. [docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md](docs/LITE_FOUNDATION_MEMORY_UPGRADE_ROADMAP.md)
+7. [docs/LITE_FOUNDATION_MEMORY_V1_IMPLEMENTATION_PLAN.md](docs/LITE_FOUNDATION_MEMORY_V1_IMPLEMENTATION_PLAN.md)
+8. [docs/LITE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md](docs/LITE_FOUNDATION_MEMORY_V2_IMPLEMENTATION_PLAN.md)
+9. [docs/LITE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md](docs/LITE_FOUNDATION_MEMORY_V3_IMPLEMENTATION_PLAN.md)
+10. [docs/LITE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md](docs/LITE_EXECUTION_MEMORY_CONTRACT_CLEANUP_PLAN.md)
+11. [docs/LITE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md](docs/LITE_EXECUTION_MEMORY_REDUNDANCY_AUDIT.md)
+12. [docs/adr/ADR-0001-lite-execution-memory-kernel.md](docs/adr/ADR-0001-lite-execution-memory-kernel.md)
 
 Current scope:
 
@@ -196,9 +196,9 @@ npm run smoke:lite:local-process
 
 Repository maintenance files:
 
-1. [CONTRIBUTING.md](/Volumes/ziel/Aionisgo/CONTRIBUTING.md)
-2. [SECURITY.md](/Volumes/ziel/Aionisgo/SECURITY.md)
-3. [NOTICE](/Volumes/ziel/Aionisgo/NOTICE)
+1. [CONTRIBUTING.md](CONTRIBUTING.md)
+2. [SECURITY.md](SECURITY.md)
+3. [NOTICE](NOTICE)
 
 Release-baseline checks are part of the standard Lite test suite.
 
