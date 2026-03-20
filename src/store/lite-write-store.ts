@@ -523,6 +523,87 @@ function decodeExecutionDecisionRow(row: LiteExecutionDecisionDbRow): LiteExecut
   };
 }
 
+type LiteSessionEventDbRow = {
+  id: string;
+  client_id: string | null;
+  type: string;
+  title: string | null;
+  text_summary: string | null;
+  slots_json: string;
+  memory_lane: "private" | "shared";
+  producer_agent_id: string | null;
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
+  embedding_status: string;
+  embedding_model: string | null;
+  raw_ref: string | null;
+  evidence_ref: string | null;
+  salience: number;
+  importance: number;
+  confidence: number;
+  created_at: string;
+  commit_id: string | null;
+  edge_weight: number;
+  edge_confidence: number;
+};
+
+function decodeSessionEventRow(row: LiteSessionEventDbRow): LiteSessionEventView {
+  return {
+    id: row.id,
+    client_id: row.client_id,
+    type: row.type,
+    title: row.title,
+    text_summary: row.text_summary,
+    slots: parseJsonObject(row.slots_json),
+    memory_lane: row.memory_lane,
+    producer_agent_id: row.producer_agent_id,
+    owner_agent_id: row.owner_agent_id,
+    owner_team_id: row.owner_team_id,
+    embedding_status: row.embedding_status,
+    embedding_model: row.embedding_model,
+    raw_ref: row.raw_ref,
+    evidence_ref: row.evidence_ref,
+    salience: row.salience,
+    importance: row.importance,
+    confidence: row.confidence,
+    last_activated: null,
+    created_at: row.created_at,
+    updated_at: row.created_at,
+    commit_id: row.commit_id,
+    edge_weight: row.edge_weight,
+    edge_confidence: row.edge_confidence,
+  };
+}
+
+type LiteSessionListDbRow = {
+  id: string;
+  client_id: string | null;
+  title: string | null;
+  text_summary: string | null;
+  memory_lane: "private" | "shared";
+  owner_agent_id: string | null;
+  owner_team_id: string | null;
+  created_at: string;
+  last_event_at: string | null;
+  event_count: number;
+};
+
+function decodeSessionListRow(row: LiteSessionListDbRow): LiteSessionListView {
+  return {
+    id: row.id,
+    client_id: row.client_id,
+    title: row.title,
+    text_summary: row.text_summary,
+    memory_lane: row.memory_lane,
+    owner_agent_id: row.owner_agent_id,
+    owner_team_id: row.owner_team_id,
+    created_at: row.created_at,
+    updated_at: row.created_at,
+    last_event_at: row.last_event_at,
+    event_count: Number(row.event_count ?? 0),
+  };
+}
+
 function nodeVisible(
   row: { memory_lane: "private" | "shared"; owner_agent_id: string | null; owner_team_id: string | null },
   consumerAgentId: string | null,
@@ -1542,60 +1623,14 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
            AND e.type = 'part_of'
            AND e.dst_id = ?
          ORDER BY n.created_at DESC, n.id DESC`,
-      ).all(args.scope, session.id) as Array<{
-        id: string;
-        client_id: string | null;
-        type: string;
-        title: string | null;
-        text_summary: string | null;
-        slots_json: string;
-        memory_lane: "private" | "shared";
-        producer_agent_id: string | null;
-        owner_agent_id: string | null;
-        owner_team_id: string | null;
-        embedding_status: string;
-        embedding_model: string | null;
-        raw_ref: string | null;
-        evidence_ref: string | null;
-        salience: number;
-        importance: number;
-        confidence: number;
-        created_at: string;
-        commit_id: string | null;
-        edge_weight: number;
-        edge_confidence: number;
-      }>;
+      ).all(args.scope, session.id) as LiteSessionEventDbRow[];
       const visible = rows.filter((row) => nodeVisible(row, args.consumerAgentId, args.consumerTeamId));
       const slice = visible.slice(args.offset, args.offset + args.limit + 1);
       const hasMore = slice.length > args.limit;
       const chosen = hasMore ? slice.slice(0, args.limit) : slice;
       return {
         session,
-        events: chosen.map((row) => ({
-          id: row.id,
-          client_id: row.client_id,
-          type: row.type,
-          title: row.title,
-          text_summary: row.text_summary,
-          slots: parseJsonObject(row.slots_json),
-          memory_lane: row.memory_lane,
-          producer_agent_id: row.producer_agent_id,
-          owner_agent_id: row.owner_agent_id,
-          owner_team_id: row.owner_team_id,
-          embedding_status: row.embedding_status,
-          embedding_model: row.embedding_model,
-          raw_ref: row.raw_ref,
-          evidence_ref: row.evidence_ref,
-          salience: row.salience,
-          importance: row.importance,
-          confidence: row.confidence,
-          last_activated: null,
-          created_at: row.created_at,
-          updated_at: row.created_at,
-          commit_id: row.commit_id,
-          edge_weight: row.edge_weight,
-          edge_confidence: row.edge_confidence,
-        })),
+        events: chosen.map(decodeSessionEventRow),
         has_more: hasMore,
       };
     },
@@ -1635,18 +1670,7 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
            s.owner_team_id,
            s.created_at
          ORDER BY COALESCE(MAX(e.created_at), s.created_at) DESC, s.id DESC`,
-      ).all(args.scope) as Array<{
-        id: string;
-        client_id: string | null;
-        title: string | null;
-        text_summary: string | null;
-        memory_lane: "private" | "shared";
-        owner_agent_id: string | null;
-        owner_team_id: string | null;
-        created_at: string;
-        last_event_at: string | null;
-        event_count: number;
-      }>;
+      ).all(args.scope) as LiteSessionListDbRow[];
       const visible = rows.filter((row) => {
         if (!nodeVisible(row, args.consumerAgentId, args.consumerTeamId)) return false;
         if (args.ownerAgentId && row.owner_agent_id !== args.ownerAgentId) return false;
@@ -1657,19 +1681,7 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
       const hasMore = slice.length > args.limit;
       const chosen = hasMore ? slice.slice(0, args.limit) : slice;
       return {
-        sessions: chosen.map((row) => ({
-          id: row.id,
-          client_id: row.client_id,
-          title: row.title,
-          text_summary: row.text_summary,
-          memory_lane: row.memory_lane,
-          owner_agent_id: row.owner_agent_id,
-          owner_team_id: row.owner_team_id,
-          created_at: row.created_at,
-          updated_at: row.created_at,
-          last_event_at: row.last_event_at,
-          event_count: Number(row.event_count ?? 0),
-        })),
+        sessions: chosen.map(decodeSessionListRow),
         has_more: hasMore,
       };
     },
