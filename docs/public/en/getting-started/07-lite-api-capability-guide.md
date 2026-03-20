@@ -14,6 +14,16 @@ Use it when you need the short answer to:
 
 For the internal source-of-truth matrix, see [Lite API Capability Matrix](/Volumes/ziel/Aionisgo/docs/LITE_API_CAPABILITY_MATRIX.md).
 
+If you need the short public-facing product narrative instead of the route summary, see [Lite Execution-Memory Beta Narrative](/public/en/getting-started/08-lite-execution-memory-beta-narrative).
+
+Named execution-memory loop:
+
+`Anchor-Guided Rehydration Loop`
+
+Definition:
+
+`stable execution -> workflow anchor -> recall -> runtime hint -> optional rehydration`
+
 ## Core Runtime
 
 Supported:
@@ -48,9 +58,27 @@ Lite also supports local sessions and packs:
 5. `POST /v1/memory/packs/export`
 6. `POST /v1/memory/packs/import`
 
+## Recommended Integration Pattern
+
+For new Lite integrations, the recommended read path is:
+
+1. read full workflow, pattern, and rehydration collections from `planner_packet.sections.*`
+2. read `workflow_signals` and `pattern_signals` directly as canonical signal surfaces
+3. read `planning_summary` or `assembly_summary` for compact planner-facing explanations
+4. read `execution_kernel.*_summary` for compact runtime state
+
+Recommended interpretation:
+
+1. top-level `recommended_workflows`, `candidate_workflows`, `candidate_patterns`, `trusted_patterns`, `contested_patterns`, and `rehydration_candidates` are still present in `v1`, but should be treated as convenience mirrors
+2. top-level `supporting_knowledge` remains available as a retained compatibility mirror
+3. `layered_context` should not be the primary execution-memory read path for a new integration
+
+If you need the more detailed integrator-oriented guide, see [Execution-Memory Integrator Guide](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md).
+
 ## Supported Replay And Playbook Surface
 
 Lite includes a real replay/playbook kernel.
+This is the producer side of the `Anchor-Guided Rehydration Loop`.
 
 Supported:
 
@@ -75,6 +103,8 @@ That does not mean full server governance is present. It means Lite keeps the lo
 
 ## Supported Handoff, Rules, And Tooling Surface
 
+This route group contains the runtime-facing rehydration tool alias and the local tool-feedback path that can distill reusable tool-selection patterns.
+
 Supported:
 
 1. `POST /v1/handoff/store`
@@ -86,7 +116,15 @@ Supported:
 7. `POST /v1/memory/tools/decision`
 8. `POST /v1/memory/tools/run`
 9. `POST /v1/memory/tools/runs/list`
-10. `POST /v1/memory/tools/feedback`
+10. `POST /v1/memory/tools/rehydrate_payload`
+11. `POST /v1/memory/tools/feedback`
+
+In practical terms:
+
+1. replay produces stable execution artifacts
+2. recall surfaces anchor hits
+3. runtime tools expose optional payload expansion
+4. this is the current Lite realization of the `Anchor-Guided Rehydration Loop`
 
 ## Supported Lite Automation Kernel
 

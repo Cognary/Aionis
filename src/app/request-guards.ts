@@ -26,7 +26,9 @@ export type IdentityRequestKind =
   | "rehydrate"
   | "activate"
   | "find"
+  | "execution_introspect"
   | "resolve"
+  | "rehydrate_payload"
   | "recall"
   | "recall_text"
   | "planning_context"
@@ -107,6 +109,7 @@ function isReplayReadIdentityKind(kind: IdentityRequestKind): boolean {
     || kind === "replay_playbook_repair_review"
     || kind === "replay_playbook_run"
     || kind === "replay_playbook_dispatch"
+    || kind === "execution_introspect"
   );
 }
 
@@ -296,7 +299,12 @@ export function createRequestGuards({
       obj.consumer_agent_id = env.LITE_LOCAL_ACTOR_ID;
     }
 
+    if (kind === "rehydrate_payload" && !obj.actor) {
+      obj.actor = env.LITE_LOCAL_ACTOR_ID;
+    }
+
     if (kind === "write" || isReplayWriteIdentityKind(kind)) {
+      if (!obj.actor) obj.actor = env.LITE_LOCAL_ACTOR_ID;
       if (!obj.memory_lane) obj.memory_lane = "private";
       if (!obj.producer_agent_id) obj.producer_agent_id = env.LITE_LOCAL_ACTOR_ID;
       if (!obj.owner_agent_id && !obj.owner_team_id) obj.owner_agent_id = env.LITE_LOCAL_ACTOR_ID;

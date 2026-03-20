@@ -18,10 +18,59 @@ type NodeRow = {
   salience: number;
 };
 
+function executionNativeRecord(n: NodeRow): Record<string, unknown> | null {
+  const value = n.slots?.execution_native_v1;
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function resolveExecutionKind(n: NodeRow): string | null {
+  const executionNative = executionNativeRecord(n);
+  return typeof executionNative?.execution_kind === "string" && executionNative.execution_kind.trim()
+    ? executionNative.execution_kind.trim()
+    : null;
+}
+
+function resolveAnchorKind(n: NodeRow): string | null {
+  const executionNative = executionNativeRecord(n);
+  const executionAnchorKind = typeof executionNative?.anchor_kind === "string" && executionNative.anchor_kind.trim()
+    ? executionNative.anchor_kind.trim()
+    : "";
+  if (executionAnchorKind) return executionAnchorKind;
+  const executionKind = resolveExecutionKind(n);
+  if (executionKind === "workflow_anchor") return "workflow";
+  if (executionKind === "pattern_anchor") return "pattern";
+  const anchorKind = typeof n.slots?.anchor_v1?.anchor_kind === "string" ? n.slots.anchor_v1.anchor_kind.trim() : "";
+  return anchorKind || null;
+}
+
+function resolveSummaryKind(n: NodeRow): string | null {
+  const executionSummaryKind = typeof n.slots?.execution_native_v1?.summary_kind === "string"
+    ? n.slots.execution_native_v1.summary_kind.trim()
+    : "";
+  if (executionSummaryKind) return executionSummaryKind;
+  const slotSummaryKind = typeof n.slots?.summary_kind === "string" ? n.slots.summary_kind.trim() : "";
+  return slotSummaryKind || null;
+}
+
 function resolveCompressionLayer(n: NodeRow): MemoryLayerId | null {
+  const executionLayer = typeof n.slots?.execution_native_v1?.compression_layer === "string"
+    ? n.slots.execution_native_v1.compression_layer.trim()
+    : "";
+  if (executionLayer === "L0" || executionLayer === "L1" || executionLayer === "L2" || executionLayer === "L3"
+    || executionLayer === "L4" || executionLayer === "L5") {
+    return executionLayer;
+  }
+  const anchorLevel = typeof n.slots?.execution_native_v1?.anchor_level === "string"
+    ? n.slots.execution_native_v1.anchor_level.trim()
+    : typeof n.slots?.anchor_v1?.anchor_level === "string"
+      ? n.slots.anchor_v1.anchor_level.trim()
+      : "";
+  if (anchorLevel === "L0" || anchorLevel === "L1" || anchorLevel === "L2" || anchorLevel === "L3" || anchorLevel === "L4" || anchorLevel === "L5") {
+    return anchorLevel;
+  }
   if (n.type === "event") return "L0";
   if (n.type === "evidence") {
-    if (n.slots?.summary_kind === "write_distillation_evidence") return "L1";
+    if (resolveSummaryKind(n) === "write_distillation_evidence") return "L1";
     return "L0";
   }
   if (n.type === "topic") return "L2";
@@ -33,8 +82,8 @@ function resolveCompressionLayer(n: NodeRow): MemoryLayerId | null {
       }
       return null;
     }
-    if (n.slots?.summary_kind === "write_distillation_fact") return "L1";
-    if (n.slots?.summary_kind === "compression_rollup") return "L3";
+    if (resolveSummaryKind(n) === "write_distillation_fact") return "L1";
+    if (resolveSummaryKind(n) === "compression_rollup") return "L3";
   }
   return null;
 }
@@ -54,7 +103,7 @@ type RuleDefRow = {
 
 export type ContextItem =
   | {
-      kind: "topic" | "concept";
+      kind: "topic" | "concept" | "procedure";
       node_id: string;
       uri?: string;
       title?: string;
@@ -64,6 +113,9 @@ export type ContextItem =
       salience?: number;
       lifecycle_state?: string | null;
       compression_layer?: string | null;
+      summary_kind?: string | null;
+      execution_kind?: string | null;
+      anchor_kind?: string | null;
     }
   | {
       kind: "entity";
@@ -76,6 +128,9 @@ export type ContextItem =
       salience?: number;
       lifecycle_state?: string | null;
       compression_layer?: string | null;
+      summary_kind?: string | null;
+      execution_kind?: string | null;
+      anchor_kind?: string | null;
     }
   | {
       kind: "event" | "evidence";
@@ -89,6 +144,9 @@ export type ContextItem =
       salience?: number;
       lifecycle_state?: string | null;
       compression_layer?: string | null;
+      summary_kind?: string | null;
+      execution_kind?: string | null;
+      anchor_kind?: string | null;
     }
   | {
       kind: "rule";
@@ -108,6 +166,9 @@ export type ContextItem =
       salience?: number;
       lifecycle_state?: string | null;
       compression_layer?: string | null;
+      summary_kind?: string | null;
+      execution_kind?: string | null;
+      anchor_kind?: string | null;
     };
 
 export type ContextBuildOptions = {
@@ -130,6 +191,10 @@ type ContextCitation = {
   tier?: string;
   salience?: number;
   lifecycle_state?: string | null;
+  compression_layer?: string | null;
+  summary_kind?: string | null;
+  execution_kind?: string | null;
+  anchor_kind?: string | null;
 };
 
 type SectionId = "topics" | "entities" | "events" | "rules";
@@ -270,16 +335,37 @@ function fmtJsonCompact(v: any): string {
 }
 
 function isCompressionConcept(n: NodeRow): boolean {
-  return n.type === "concept" && n.slots?.summary_kind === "compression_rollup";
+  return n.type === "concept" && resolveSummaryKind(n) === "compression_rollup";
 }
 
 function isSemanticAbstractionConcept(n: NodeRow): boolean {
-  return n.type === "concept" && n.slots?.summary_kind === "semantic_abstraction";
+  return n.type === "concept" && resolveSummaryKind(n) === "semantic_abstraction";
+}
+
+function isExecutionNativeWorkflowProcedure(n: NodeRow): boolean {
+  return n.type === "procedure"
+    && (resolveExecutionKind(n) === "workflow_anchor" || resolveAnchorKind(n) === "workflow");
 }
 
 function isSummaryFirstConcept(n: NodeRow, options?: ContextBuildOptions): boolean {
   if (isCompressionConcept(n)) return true;
   return options?.internal_allow_l4_preview === true && isSemanticAbstractionConcept(n);
+}
+
+function isSummaryFirstNode(n: NodeRow, options?: ContextBuildOptions): boolean {
+  return isSummaryFirstConcept(n, options) || isExecutionNativeWorkflowProcedure(n);
+}
+
+function sortTopicNodes(nodes: NodeRow[], options?: ContextBuildOptions): NodeRow[] {
+  return [...nodes].sort((a, b) => {
+    const aSummaryFirst = isSummaryFirstNode(a, options);
+    const bSummaryFirst = isSummaryFirstNode(b, options);
+    if (aSummaryFirst !== bSummaryFirst) return aSummaryFirst ? -1 : 1;
+    const aWorkflow = isExecutionNativeWorkflowProcedure(a);
+    const bWorkflow = isExecutionNativeWorkflowProcedure(b);
+    if (aWorkflow !== bWorkflow) return aWorkflow ? -1 : 1;
+    return 0;
+  });
 }
 
 export function estimateTokenCountFromText(text: string): number {
@@ -377,16 +463,23 @@ export function buildContext(
       tier: n.tier,
       salience: n.salience,
       lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
+      compression_layer: resolveCompressionLayer(n),
+      summary_kind: resolveSummaryKind(n),
+      execution_kind: resolveExecutionKind(n),
+      anchor_kind: resolveAnchorKind(n),
     });
   };
 
   const layerPolicy = options?.layer_policy ?? null;
-  const topics = pickTop(ranked, nodes, new Set(["topic", "concept"]), 4, layerPolicy, selectionCollector);
-  const hasSummaryFirstConcept = topics.some((n) => isSummaryFirstConcept(n, options));
+  const topics = sortTopicNodes(
+    pickTop(ranked, nodes, new Set(["topic", "concept", "procedure"]), 4, layerPolicy, selectionCollector),
+    options,
+  );
+  const hasSummaryFirstNode = topics.some((n) => isSummaryFirstNode(n, options));
   for (const n of topics) {
     const uri = buildNodeUri(n, options);
     items.push({
-      kind: n.type as "topic" | "concept",
+      kind: n.type as "topic" | "concept" | "procedure",
       node_id: n.id,
       ...(uri ? { uri } : {}),
       title: n.title ?? undefined,
@@ -396,6 +489,9 @@ export function buildContext(
       salience: n.salience,
       lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
       compression_layer: resolveCompressionLayer(n),
+      summary_kind: resolveSummaryKind(n),
+      execution_kind: resolveExecutionKind(n),
+      anchor_kind: resolveAnchorKind(n),
     });
     pushCitation(n);
   }
@@ -414,15 +510,18 @@ export function buildContext(
       salience: n.salience,
       lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
       compression_layer: resolveCompressionLayer(n),
+      summary_kind: resolveSummaryKind(n),
+      execution_kind: resolveExecutionKind(n),
+      anchor_kind: resolveAnchorKind(n),
     });
     pushCitation(n);
   }
 
-  const rawEvents = pickTop(ranked, nodes, new Set(["event", "evidence"]), hasSummaryFirstConcept ? 24 : 10, layerPolicy, selectionCollector);
+  const rawEvents = pickTop(ranked, nodes, new Set(["event", "evidence"]), hasSummaryFirstNode ? 24 : 10, layerPolicy, selectionCollector);
   const compressionCited = new Set<string>();
-  if (hasSummaryFirstConcept) {
+  if (hasSummaryFirstNode) {
     for (const n of topics) {
-      if (!isSummaryFirstConcept(n, options)) continue;
+      if (!isSummaryFirstNode(n, options)) continue;
       const refs = Array.isArray(n.slots?.citations) ? (n.slots.citations as any[]) : [];
       for (const c of refs) {
         const id =
@@ -438,7 +537,7 @@ export function buildContext(
       }
     }
   }
-  const eventBase = hasSummaryFirstConcept ? rawEvents.filter((n) => !compressionCited.has(n.id)).slice(0, 5) : rawEvents.slice(0, 10);
+  const eventBase = hasSummaryFirstNode ? rawEvents.filter((n) => !compressionCited.has(n.id)).slice(0, 5) : rawEvents.slice(0, 10);
   const events = compactMode ? eventBase.slice(0, policy.max_event_lines_compact) : eventBase;
   for (const n of events) {
     const uri = buildNodeUri(n, options);
@@ -454,6 +553,9 @@ export function buildContext(
       salience: n.salience,
       lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
       compression_layer: resolveCompressionLayer(n),
+      summary_kind: resolveSummaryKind(n),
+      execution_kind: resolveExecutionKind(n),
+      anchor_kind: resolveAnchorKind(n),
     });
     pushCitation(n);
   }
@@ -480,6 +582,9 @@ export function buildContext(
       salience: n.salience,
       lifecycle_state: String(n.slots?.lifecycle_state ?? "active"),
       compression_layer: resolveCompressionLayer(n),
+      summary_kind: resolveSummaryKind(n),
+      execution_kind: resolveExecutionKind(n),
+      anchor_kind: resolveAnchorKind(n),
     });
     pushCitation(n);
   }
@@ -490,7 +595,7 @@ export function buildContext(
       const summary = n.text_summary ? `: ${n.text_summary}` : "";
       if (isSummaryFirstConcept(n, options)) {
         const covered = Number(n.slots?.source_event_count ?? 0);
-        const summaryKind = typeof n.slots?.summary_kind === "string" ? n.slots.summary_kind : "summary";
+        const summaryKind = resolveSummaryKind(n) ?? "summary";
         addLine("topics", `- ${label}${summary} (node:${n.id}, ${summaryKind}, covers=${covered})`, 10);
         const refs = Array.isArray(n.slots?.citations) ? (n.slots.citations as any[]) : [];
         for (const c of refs.slice(0, compactMode ? policy.max_topic_evidence_lines : 3)) {
@@ -505,6 +610,17 @@ export function buildContext(
           if (!refNode) continue;
           addLine("topics", `  evidence_node=${refNode}`, 90);
         }
+      } else if (isExecutionNativeWorkflowProcedure(n)) {
+        const summaryKind = resolveSummaryKind(n) ?? "workflow_anchor";
+        const layer = resolveCompressionLayer(n) ?? "unknown";
+        const taskSignature = typeof executionNativeRecord(n)?.task_signature === "string"
+          ? executionNativeRecord(n)?.task_signature as string
+          : null;
+        addLine(
+          "topics",
+          `- ${label}${summary} (node:${n.id}, ${summaryKind}, level=${layer}${taskSignature ? `, task=${taskSignature}` : ""})`,
+          5,
+        );
       } else {
         addLine("topics", `- ${label}${summary} (node:${n.id})`, 10);
       }
@@ -525,7 +641,14 @@ export function buildContext(
       const refs: string[] = [];
       if (n.raw_ref) refs.push(`raw_ref=${n.raw_ref}`);
       if (n.evidence_ref) refs.push(`evidence_ref=${n.evidence_ref}`);
-      addLine("events", `- ${summary} (node:${n.id}${refs.length ? `, ${refs.join(", ")}` : ""})`, 70);
+      const summaryKind = resolveSummaryKind(n);
+      const executionKind = resolveExecutionKind(n);
+      const layer = resolveCompressionLayer(n);
+      addLine(
+        "events",
+        `- ${summary} (node:${n.id}${summaryKind ? `, ${summaryKind}` : ""}${executionKind ? `, ${executionKind}` : ""}${layer ? `, level=${layer}` : ""}${refs.length ? `, ${refs.join(", ")}` : ""})`,
+        70,
+      );
     }
   }
 

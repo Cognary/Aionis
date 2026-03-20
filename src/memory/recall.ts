@@ -16,6 +16,7 @@ import { sha256Hex } from "../util/crypto.js";
 import { badRequest } from "../util/http.js";
 import { resolveTenantScope } from "./tenant.js";
 import { resolveMemoryLayerPolicy } from "./layer-policy.js";
+import { buildRuntimeToolHintsFromAnchorNodes } from "./runtime-tool-hints.js";
 import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 import type { MemoryLayerId, MemoryLayerPolicy } from "./layer-policy.js";
 
@@ -62,6 +63,21 @@ function isDraftTopic(n: NodeRow): boolean {
 }
 
 function resolveCompressionLayer(n: NodeRow): MemoryLayerId | null {
+  const executionLayer = typeof n.slots?.execution_native_v1?.compression_layer === "string"
+    ? n.slots.execution_native_v1.compression_layer.trim()
+    : "";
+  if (executionLayer === "L0" || executionLayer === "L1" || executionLayer === "L2" || executionLayer === "L3"
+    || executionLayer === "L4" || executionLayer === "L5") {
+    return executionLayer;
+  }
+  const anchorLevel = typeof n.slots?.execution_native_v1?.anchor_level === "string"
+    ? n.slots.execution_native_v1.anchor_level.trim()
+    : typeof n.slots?.anchor_v1?.anchor_level === "string"
+      ? n.slots.anchor_v1.anchor_level.trim()
+      : "";
+  if (anchorLevel === "L0" || anchorLevel === "L1" || anchorLevel === "L2" || anchorLevel === "L3" || anchorLevel === "L4" || anchorLevel === "L5") {
+    return anchorLevel;
+  }
   if (n.type === "event") return "L0";
   if (n.type === "evidence") {
     if (n.slots?.summary_kind === "write_distillation_evidence") return "L1";
@@ -137,7 +153,425 @@ type EdgeDTO = {
   commit_uri?: string | null;
 };
 
+type ActionRecallWorkflow = {
+  anchor_id: string;
+  uri: string | null;
+  type: string;
+  title: string | null;
+  summary: string | null;
+  anchor_level: string;
+  promotion_state: "candidate" | "stable" | null;
+  source_kind: string | null;
+  promotion_origin: "replay_promote" | "replay_stable_normalization" | "replay_learning_episode" | "replay_learning_auto_promotion" | null;
+  required_observations: number | null;
+  observed_count: number | null;
+  promotion_ready: boolean;
+  workflow_signature: string | null;
+  last_transition: "candidate_observed" | "promoted_to_stable" | "normalized_latest_stable" | null;
+  last_transition_at: string | null;
+  rehydration_default_mode: "summary_only" | "partial" | "full" | null;
+  tool_set: string[];
+  maintenance_state: "observe" | "retain" | "review" | null;
+  offline_priority: "none" | "promote_candidate" | "review_counter_evidence" | "retain_trusted" | "retain_workflow" | null;
+  last_maintenance_at: string | null;
+  confidence: number | null;
+};
+
+type ActionRecallPattern = {
+  anchor_id: string;
+  uri: string | null;
+  type: string;
+  title: string | null;
+  summary: string | null;
+  anchor_level: string;
+  selected_tool: string | null;
+  tool_set: string[];
+  pattern_state: "provisional" | "stable";
+  credibility_state: "candidate" | "trusted" | "contested";
+  trusted: boolean;
+  distinct_run_count: number | null;
+  required_distinct_runs: number | null;
+  counter_evidence_open: boolean;
+  last_transition: string | null;
+  maintenance_state: "observe" | "retain" | "review" | null;
+  offline_priority: "none" | "promote_candidate" | "review_counter_evidence" | "retain_trusted" | null;
+  last_maintenance_at: string | null;
+  confidence: number | null;
+};
+
+type ActionRecallRehydrationCandidate = {
+  anchor_id: string;
+  anchor_uri: string;
+  anchor_kind: string;
+  anchor_level: string;
+  title: string | null;
+  summary: string | null;
+  mode: "summary_only" | "partial" | "full";
+  payload_cost_hint: "low" | "medium" | "high" | null;
+  recommended_when: string[];
+  trusted: boolean;
+  selected_tool: string | null;
+  example_call: string;
+};
+
+type ActionRecallSupportingKnowledge = {
+  kind: string;
+  node_id: string;
+  uri: string | null;
+  title: string | null;
+  summary: string | null;
+  compression_layer: string | null;
+  tier: string | null;
+  salience: number | null;
+};
+
+type ActionRecallPacket = {
+  packet_version: "action_recall_v1";
+  recommended_workflows: ActionRecallWorkflow[];
+  candidate_workflows: ActionRecallWorkflow[];
+  candidate_patterns: ActionRecallPattern[];
+  trusted_patterns: ActionRecallPattern[];
+  contested_patterns: ActionRecallPattern[];
+  rehydration_candidates: ActionRecallRehydrationCandidate[];
+  supporting_knowledge: ActionRecallSupportingKnowledge[];
+};
+
 const URI_NODE_TYPES = new Set<string>(AIONIS_URI_NODE_TYPES);
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function firstString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function firstFinite(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function mapExecutionKindToAnchorKind(executionKind: string | null): string | null {
+  if (executionKind === "workflow_anchor") return "workflow";
+  if (executionKind === "workflow_candidate") return "workflow";
+  if (executionKind === "pattern_anchor") return "pattern";
+  return null;
+}
+
+function executionNativeRecord(slots: Record<string, unknown> | null): Record<string, unknown> | null {
+  return asRecord(slots?.execution_native_v1);
+}
+
+function anchorRecord(slots: Record<string, unknown> | null): Record<string, unknown> | null {
+  return asRecord(slots?.anchor_v1);
+}
+
+function recallAnchorMeta(node: NodeRow): {
+  slots: Record<string, unknown> | null;
+  executionNative: Record<string, unknown> | null;
+  anchor: Record<string, unknown> | null;
+  anchorKind: string | null;
+  anchorLevel: string | null;
+  executionKind: string | null;
+  patternState: "provisional" | "stable";
+  credibilityState: "candidate" | "trusted" | "contested";
+  workflowPromotion: Record<string, unknown> | null;
+  promotion: Record<string, unknown> | null;
+  maintenance: Record<string, unknown> | null;
+  rehydration: Record<string, unknown> | null;
+  counterEvidenceOpen: boolean;
+  trusted: boolean;
+  selectedTool: string | null;
+} {
+  const slots = asRecord(node.slots);
+  const executionNative = executionNativeRecord(slots);
+  const anchor = anchorRecord(slots);
+  const anchorKind = firstString(executionNative?.anchor_kind)
+    ?? mapExecutionKindToAnchorKind(firstString(executionNative?.execution_kind))
+    ?? firstString(anchor?.anchor_kind);
+  const anchorLevel = firstString(executionNative?.anchor_level) ?? firstString(anchor?.anchor_level);
+  const executionKind = firstString(executionNative?.execution_kind);
+  const patternState = firstString(executionNative?.pattern_state ?? anchor?.pattern_state) === "stable" ? "stable" : "provisional";
+  const workflowPromotion = asRecord(executionNative?.workflow_promotion) ?? asRecord(anchor?.workflow_promotion);
+  const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor?.promotion);
+  const maintenance = asRecord(executionNative?.maintenance) ?? asRecord(anchor?.maintenance);
+  const rehydration = asRecord(executionNative?.rehydration) ?? asRecord(anchor?.rehydration);
+  const counterEvidenceOpen = promotion?.counter_evidence_open === true;
+  const credibilityStateRaw = firstString(executionNative?.credibility_state ?? anchor?.credibility_state ?? promotion?.credibility_state);
+  const credibilityState: "candidate" | "trusted" | "contested" =
+    credibilityStateRaw === "trusted" || credibilityStateRaw === "contested" || credibilityStateRaw === "candidate"
+      ? credibilityStateRaw
+      : counterEvidenceOpen
+        ? "contested"
+        : patternState === "stable"
+          ? "trusted"
+          : "candidate";
+  const trusted = anchorKind === "pattern" ? credibilityState === "trusted" : false;
+  const selectedTool = firstString(executionNative?.selected_tool ?? anchor?.selected_tool);
+  return {
+    slots,
+    executionNative,
+    anchor,
+    anchorKind,
+    anchorLevel,
+    executionKind,
+    patternState,
+    credibilityState,
+    workflowPromotion,
+    promotion,
+    maintenance,
+    rehydration,
+    counterEvidenceOpen,
+    trusted,
+    selectedTool,
+  };
+}
+
+function stringList(value: unknown, limit = 16): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const next = typeof item === "string" ? item.trim() : "";
+    if (!next || seen.has(next)) continue;
+    seen.add(next);
+    out.push(next);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function deriveWorkflowSourceKind(args: {
+  anchor: Record<string, unknown> | null;
+  workflowPromotion: Record<string, unknown> | null;
+  executionKind: string | null;
+}): string | null {
+  const explicitSourceKind = firstString(args.anchor?.source && asRecord(args.anchor.source)?.source_kind);
+  if (explicitSourceKind) return explicitSourceKind;
+  const promotionOrigin = firstString(args.workflowPromotion?.promotion_origin);
+  if (
+    promotionOrigin === "replay_promote"
+    || promotionOrigin === "replay_stable_normalization"
+    || promotionOrigin === "replay_learning_episode"
+    || promotionOrigin === "replay_learning_auto_promotion"
+    || args.executionKind === "workflow_candidate"
+    || args.executionKind === "workflow_anchor"
+  ) {
+    return "playbook";
+  }
+  return null;
+}
+
+function isWorkflowPromotionReady(workflowPromotion: Record<string, unknown> | null): boolean {
+  const promotionState = firstString(workflowPromotion?.promotion_state);
+  if (promotionState !== "candidate") return false;
+  const observedCount = firstFinite(workflowPromotion?.observed_count);
+  const requiredObservations = firstFinite(workflowPromotion?.required_observations);
+  return observedCount != null && requiredObservations != null && observedCount >= requiredObservations;
+}
+
+function buildActionRecallPacket(args: {
+  tenant_id: string;
+  scope: string;
+  nodes: NodeRow[];
+  runtimeToolHints: Array<Record<string, unknown>>;
+  contextItems: Array<Record<string, unknown>>;
+}): ActionRecallPacket {
+  const recommendedWorkflows: ActionRecallWorkflow[] = [];
+  const candidateWorkflows: ActionRecallWorkflow[] = [];
+  const deferredCandidateWorkflows: Array<{ entry: ActionRecallWorkflow; workflowSignature: string | null }> = [];
+  const candidatePatterns: ActionRecallPattern[] = [];
+  const trustedPatterns: ActionRecallPattern[] = [];
+  const contestedPatterns: ActionRecallPattern[] = [];
+  const supportingKnowledge: ActionRecallSupportingKnowledge[] = [];
+  const actionAnchorIds = new Set<string>();
+  const stableWorkflowSignatures = new Set<string>();
+
+  for (const node of args.nodes) {
+    const meta = recallAnchorMeta(node);
+    const anchor = meta.anchor;
+    const anchorKind = meta.anchorKind;
+    const anchorLevel = meta.anchorLevel;
+    if (!anchorKind || !anchorLevel) continue;
+    const uri = URI_NODE_TYPES.has(node.type)
+      ? buildAionisUri({ tenant_id: args.tenant_id, scope: args.scope, type: node.type, id: node.id })
+      : null;
+    actionAnchorIds.add(node.id);
+    if (anchorKind === "workflow") {
+      const workflowEntry: ActionRecallWorkflow = {
+        anchor_id: node.id,
+        uri,
+        type: node.type,
+        title: node.title ?? null,
+        summary: firstString(anchor?.summary) ?? node.text_summary ?? node.title ?? null,
+        anchor_level: anchorLevel,
+        promotion_state: firstString(meta.workflowPromotion?.promotion_state) as any,
+        source_kind: deriveWorkflowSourceKind({
+          anchor,
+          workflowPromotion: meta.workflowPromotion,
+          executionKind: meta.executionKind,
+        }),
+        promotion_origin: firstString(meta.workflowPromotion?.promotion_origin) as any,
+        required_observations: firstFinite(meta.workflowPromotion?.required_observations),
+        observed_count: firstFinite(meta.workflowPromotion?.observed_count),
+        promotion_ready: isWorkflowPromotionReady(meta.workflowPromotion),
+        workflow_signature: firstString(meta.executionNative?.workflow_signature ?? anchor?.workflow_signature),
+        last_transition: firstString(meta.workflowPromotion?.last_transition) as any,
+        last_transition_at: firstString(meta.workflowPromotion?.last_transition_at),
+        rehydration_default_mode: firstString(meta.rehydration?.default_mode) as any,
+        tool_set: stringList(anchor?.tool_set),
+        maintenance_state: firstString(meta.maintenance?.maintenance_state) as any,
+        offline_priority: firstString(meta.maintenance?.offline_priority) as any,
+        last_maintenance_at: firstString(meta.maintenance?.last_maintenance_at),
+        confidence: firstFinite(node.confidence),
+      };
+      if (meta.executionKind === "workflow_candidate" || firstString(meta.workflowPromotion?.promotion_state) === "candidate") {
+        deferredCandidateWorkflows.push({ entry: workflowEntry, workflowSignature: workflowEntry.workflow_signature });
+      } else {
+        recommendedWorkflows.push(workflowEntry);
+        if (workflowEntry.workflow_signature) stableWorkflowSignatures.add(workflowEntry.workflow_signature);
+      }
+      continue;
+    }
+    if (anchorKind === "pattern") {
+      const packetEntry: ActionRecallPattern = {
+        anchor_id: node.id,
+        uri,
+        type: node.type,
+        title: node.title ?? null,
+        summary: firstString(anchor?.summary) ?? node.text_summary ?? node.title ?? null,
+        anchor_level: anchorLevel,
+        selected_tool: meta.selectedTool,
+        tool_set: stringList(anchor?.tool_set),
+        pattern_state: meta.patternState,
+        credibility_state: meta.credibilityState,
+        trusted: meta.trusted,
+        distinct_run_count: firstFinite(meta.promotion?.distinct_run_count),
+        required_distinct_runs: firstFinite(meta.promotion?.required_distinct_runs),
+        counter_evidence_open: meta.counterEvidenceOpen,
+        last_transition: firstString(meta.promotion?.last_transition),
+        maintenance_state: firstString(meta.maintenance?.maintenance_state) as any,
+        offline_priority: firstString(meta.maintenance?.offline_priority) as any,
+        last_maintenance_at: firstString(meta.maintenance?.last_maintenance_at),
+        confidence: firstFinite(node.confidence),
+      };
+      if (meta.credibilityState === "trusted") trustedPatterns.push(packetEntry);
+      else if (meta.credibilityState === "contested") contestedPatterns.push(packetEntry);
+      else candidatePatterns.push(packetEntry);
+    }
+  }
+
+  for (const pending of deferredCandidateWorkflows) {
+    if (pending.workflowSignature && stableWorkflowSignatures.has(pending.workflowSignature)) continue;
+    candidateWorkflows.push(pending.entry);
+  }
+
+  const uriByAnchorId = new Map<string, string>();
+  const rehydrationCandidates: ActionRecallRehydrationCandidate[] = [];
+  for (const rawHint of args.runtimeToolHints.slice(0, 8)) {
+    const hint = asRecord(rawHint);
+    const anchor = asRecord(hint?.anchor);
+    const invocation = asRecord(hint?.invocation);
+    const anchorId = firstString(anchor?.id);
+    const anchorUri = firstString(invocation?.anchor_uri) ?? firstString(anchor?.uri);
+    const anchorKind = firstString(anchor?.anchor_kind);
+    const anchorLevel = firstString(anchor?.anchor_level);
+    const modeRaw = firstString(invocation?.mode);
+    const mode = modeRaw === "summary_only" || modeRaw === "full" || modeRaw === "partial" ? modeRaw : "partial";
+    const payloadCostHintRaw = firstString(hint?.payload_cost_hint);
+    const payloadCostHint = payloadCostHintRaw === "low" || payloadCostHintRaw === "medium" || payloadCostHintRaw === "high"
+      ? payloadCostHintRaw
+      : null;
+    if (!anchorId || !anchorUri || !anchorKind || !anchorLevel) continue;
+    uriByAnchorId.set(anchorId, anchorUri);
+    rehydrationCandidates.push({
+      anchor_id: anchorId,
+      anchor_uri: anchorUri,
+      anchor_kind: anchorKind,
+      anchor_level: anchorLevel,
+      title: firstString(anchor?.title),
+      summary: firstString(anchor?.summary),
+      mode,
+      payload_cost_hint: payloadCostHint,
+      recommended_when: stringList(hint?.recommended_when),
+      trusted: anchor?.trusted === true,
+      selected_tool: firstString(anchor?.selected_tool),
+      example_call: firstString(invocation?.example_call) ?? "",
+    });
+  }
+
+  for (const workflow of recommendedWorkflows) workflow.uri = uriByAnchorId.get(workflow.anchor_id) ?? workflow.uri;
+  for (const workflow of candidateWorkflows) workflow.uri = uriByAnchorId.get(workflow.anchor_id) ?? workflow.uri;
+  for (const pattern of candidatePatterns) pattern.uri = uriByAnchorId.get(pattern.anchor_id) ?? pattern.uri;
+  for (const pattern of trustedPatterns) pattern.uri = uriByAnchorId.get(pattern.anchor_id) ?? pattern.uri;
+  for (const pattern of contestedPatterns) pattern.uri = uriByAnchorId.get(pattern.anchor_id) ?? pattern.uri;
+
+  for (const rawItem of args.contextItems.slice(0, 32)) {
+    const item = asRecord(rawItem);
+    const nodeId = firstString(item?.node_id);
+    if (!nodeId || actionAnchorIds.has(nodeId)) continue;
+    supportingKnowledge.push({
+      kind: firstString(item?.kind) ?? "unknown",
+      node_id: nodeId,
+      uri: firstString(item?.uri),
+      title: firstString(item?.title),
+      summary: firstString(item?.summary),
+      compression_layer: firstString(item?.compression_layer),
+      tier: firstString(item?.tier),
+      salience: firstFinite(item?.salience),
+    });
+    if (supportingKnowledge.length >= 16) break;
+  }
+
+  return {
+    packet_version: "action_recall_v1",
+    recommended_workflows: recommendedWorkflows,
+    candidate_workflows: candidateWorkflows,
+    candidate_patterns: candidatePatterns,
+    trusted_patterns: trustedPatterns,
+    contested_patterns: contestedPatterns,
+    rehydration_candidates: rehydrationCandidates,
+    supporting_knowledge: supportingKnowledge,
+  };
+}
+
+function isActionRecallEndpoint(endpoint: "recall" | "recall_text" | "planning_context" | "context_assemble"): boolean {
+  return endpoint === "planning_context" || endpoint === "context_assemble";
+}
+
+function actionRecallPriority(node: NodeRow): number {
+  const meta = recallAnchorMeta(node);
+  if (!meta.anchorKind) {
+    if (node.type === "procedure") return 4;
+    if (node.type === "rule") return 8;
+    if (node.type === "concept" || node.type === "topic" || node.type === "entity") return 10;
+    return 12;
+  }
+  if (meta.anchorKind === "workflow") {
+    if (meta.executionKind === "workflow_candidate" || firstString(meta.workflowPromotion?.promotion_state) === "candidate") {
+      return isWorkflowPromotionReady(meta.workflowPromotion) ? 1 : 2;
+    }
+    return 0;
+  }
+  if (meta.anchorKind === "pattern") {
+    if (meta.patternState === "stable" && !meta.counterEvidenceOpen) return 3;
+    return 4;
+  }
+  if (meta.anchorKind === "decision") return 5;
+  if (meta.anchorKind === "execution") return 6;
+  return 7;
+}
+
+function prioritizeRankedForActionRecall(ranked: Array<{ id: string; activation: number; score: number }>, nodes: Map<string, NodeRow>) {
+  return [...ranked].sort((a, b) => {
+    const aNode = nodes.get(a.id);
+    const bNode = nodes.get(b.id);
+    const aPriority = aNode ? actionRecallPriority(aNode) : 99;
+    const bPriority = bNode ? actionRecallPriority(bNode) : 99;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    return b.score - a.score || a.id.localeCompare(b.id);
+  });
+}
 
 // Very small spreading-activation MVP: 1-2 iterations, bounded by the neighborhood we fetched.
 function spreadActivation(seeds: RecallCandidate[], nodes: Map<string, NodeRow>, edges: EdgeRow[], hops: number) {
@@ -324,6 +758,17 @@ export async function memoryRecallParsed(
           filtered_by_layer: {},
         },
       },
+      runtime_tool_hints: [],
+      action_recall_packet: {
+        packet_version: "action_recall_v1",
+        recommended_workflows: [],
+        candidate_workflows: [],
+        candidate_patterns: [],
+        trusted_patterns: [],
+        contested_patterns: [],
+        rehydration_candidates: [],
+        supporting_knowledge: [],
+      },
       ...(parsed.return_debug
         ? {
             debug: {
@@ -444,7 +889,10 @@ export async function memoryRecallParsed(
   const edgesForScoringReady = edgesForScoring.filter((e) => !notReadyIds.has(e.src_id) && !notReadyIds.has(e.dst_id));
 
   // Score via spreading activation.
-  const rankedAll = spreadActivation(filteredSeeds, nodeMapForScoring, edgesForScoringReady, parsed.neighborhood_hops);
+  const rankedAllBase = spreadActivation(filteredSeeds, nodeMapForScoring, edgesForScoringReady, parsed.neighborhood_hops);
+  const rankedAll = isActionRecallEndpoint(endpoint)
+    ? prioritizeRankedForActionRecall(rankedAllBase, filteredNodeMapAll)
+    : rankedAllBase;
   const ranked = rankedAll.slice(0, parsed.ranked_limit).map((r) => {
     const node = nodeMapAll.get(r.id);
     if (!node) return r;
@@ -459,7 +907,10 @@ export async function memoryRecallParsed(
   // Explainability: draft topics never affect scoring, but we may swap a few in so edges aren't "mysteriously missing".
   const seedSet = new Set(filteredSeedIds);
   const coreIds: string[] = [];
-  for (const id of filteredSeedIds) {
+  const prioritizedCoreIds = isActionRecallEndpoint(endpoint)
+    ? Array.from(new Set(rankedAll.map((entry) => entry.id).concat(filteredSeedIds)))
+    : filteredSeedIds;
+  for (const id of prioritizedCoreIds) {
     if (coreIds.length >= parsed.max_nodes) break;
     const n = filteredNodeMapAll.get(id);
     if (!n || n.embedding_status !== "ready") continue;
@@ -521,6 +972,11 @@ export async function memoryRecallParsed(
     .filter((e) => outIdSet.has(e.src_id) && outIdSet.has(e.dst_id))
     .sort((a, b) => (b.weight * b.confidence) - (a.weight * a.confidence))
     .slice(0, parsed.max_edges);
+  const runtimeToolHints = buildRuntimeToolHintsFromAnchorNodes({
+    tenant_id: tenancy.tenant_id,
+    scope: tenancy.scope,
+    nodes: outNodeRows,
+  });
 
   // Fetch rule defs for context building.
   const ruleIds = outNodeRows.filter((n) => n.type === "rule").map((n) => n.id);
@@ -553,6 +1009,13 @@ export async function memoryRecallParsed(
     retrieval_filtered_by_layer_policy_count: retrievalFilteredCount,
     retrieval_filtered_by_layer: retrievalFilteredByLayerOut,
   };
+  const actionRecallPacket = buildActionRecallPacket({
+    tenant_id: tenancy.tenant_id,
+    scope: tenancy.scope,
+    nodes: outNodeRows,
+    runtimeToolHints: runtimeToolHints as unknown as Array<Record<string, unknown>>,
+    contextItems: context_items as unknown as Array<Record<string, unknown>>,
+  });
 
   // DTO serialization (B): stable, minimal by default.
   const outNodes: NodeDTO[] = outNodeRows.map((n) => {
@@ -694,6 +1157,8 @@ export async function memoryRecallParsed(
         selection_policy: layerPolicy,
         selection_stats: selectionStatsOut,
       },
+      runtime_tool_hints: runtimeToolHints,
+      action_recall_packet: actionRecallPacket,
     ...(parsed.return_debug
       ? {
           debug: {

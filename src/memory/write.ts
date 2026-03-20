@@ -14,7 +14,7 @@ import {
   DeferredAssociativeLinkFollowupSchema,
   type AssociativeLinkTriggerOrigin,
 } from "./associative-linking-types.js";
-import { MemoryWriteRequest } from "./schemas.js";
+import { ExecutionNativeV1Schema, MemoryAnchorV1Schema, MemoryWriteRequest } from "./schemas.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { resolveTenantScope, toTenantScopeKey } from "./tenant.js";
 import { buildAionisUri } from "./uri.js";
@@ -202,6 +202,108 @@ function restoreStableSystemSlots(original: Record<string, unknown>, redacted: R
   return out;
 }
 
+function firstString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeExecutionNativeSignatureLabel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function extractCompactExecutionSignatureValue(value: string | null | undefined): string | null {
+  const normalized = firstString(value);
+  if (!normalized) return null;
+  const compact = normalized.match(/^([A-Za-z0-9._:/-]{1,256})(?:\s+.*)?$/);
+  return compact?.[1] ?? normalized;
+}
+
+function normalizeExecutionNativeSlots(
+  type: string,
+  slots: Record<string, unknown>,
+  title?: string | null,
+  textSummary?: string | null,
+): Record<string, unknown> {
+  const out = { ...slots };
+  const existingExecutionNative = out.execution_native_v1;
+  const existingParsed = ExecutionNativeV1Schema.safeParse(existingExecutionNative);
+  const anchorParsed = MemoryAnchorV1Schema.safeParse(out.anchor_v1);
+  const summaryKind = firstString(out.summary_kind);
+  const rawCompressionLayer = firstString(out.compression_layer);
+  const compressionLayer =
+    rawCompressionLayer === "L0" || rawCompressionLayer === "L1" || rawCompressionLayer === "L2"
+      || rawCompressionLayer === "L3" || rawCompressionLayer === "L4" || rawCompressionLayer === "L5"
+      ? rawCompressionLayer
+      : anchorParsed.success
+        ? anchorParsed.data.anchor_level
+        : undefined;
+
+  let executionNative: Record<string, unknown> | null = existingParsed.success ? { ...existingParsed.data } : null;
+  if (anchorParsed.success) {
+    const anchor = anchorParsed.data;
+    const executionKind =
+      anchor.anchor_kind === "workflow"
+        ? "workflow_anchor"
+        : anchor.anchor_kind === "pattern"
+          ? "pattern_anchor"
+          : "execution_native";
+    executionNative = {
+      ...(executionNative ?? {}),
+      schema_version: "execution_native_v1",
+      execution_kind: executionKind,
+      summary_kind: summaryKind ?? (executionKind === "workflow_anchor" ? "workflow_anchor" : executionKind === "pattern_anchor" ? "pattern_anchor" : null),
+      compression_layer: compressionLayer,
+      task_signature: anchor.task_signature,
+      ...(anchor.error_signature ? { error_signature: anchor.error_signature } : {}),
+      ...(anchor.workflow_signature ? { workflow_signature: anchor.workflow_signature } : {}),
+      anchor_kind: anchor.anchor_kind,
+      anchor_level: anchor.anchor_level,
+      ...(anchor.pattern_state ? { pattern_state: anchor.pattern_state } : {}),
+      ...(anchor.credibility_state ? { credibility_state: anchor.credibility_state } : {}),
+      ...(anchor.selected_tool !== undefined ? { selected_tool: anchor.selected_tool } : {}),
+      ...(anchor.workflow_promotion ? { workflow_promotion: anchor.workflow_promotion } : {}),
+      ...(anchor.promotion ? { promotion: anchor.promotion } : {}),
+      ...(anchor.maintenance ? { maintenance: anchor.maintenance } : {}),
+      ...(anchor.rehydration ? { rehydration: anchor.rehydration } : {}),
+    };
+  } else if (summaryKind === "write_distillation_evidence" || summaryKind === "write_distillation_fact") {
+    const normalizedTitle = normalizeExecutionNativeSignatureLabel(title ?? null);
+    const signatureValue = extractCompactExecutionSignatureValue(textSummary);
+    const derivedFactSignatures =
+      summaryKind === "write_distillation_fact" && signatureValue
+        ? {
+            ...(normalizedTitle === "task signature" ? { task_signature: signatureValue } : {}),
+            ...(normalizedTitle === "error signature" ? { error_signature: signatureValue } : {}),
+            ...(normalizedTitle === "workflow signature" ? { workflow_signature: signatureValue } : {}),
+          }
+        : {};
+    executionNative = {
+      ...(executionNative ?? {}),
+      schema_version: "execution_native_v1",
+      execution_kind: summaryKind === "write_distillation_evidence" ? "distilled_evidence" : "distilled_fact",
+      summary_kind: summaryKind,
+      compression_layer: compressionLayer ?? "L1",
+      ...derivedFactSignatures,
+    };
+  } else if (existingParsed.success) {
+    executionNative = {
+      ...existingParsed.data,
+      ...(compressionLayer ? { compression_layer: compressionLayer } : {}),
+      ...(summaryKind ? { summary_kind: summaryKind } : {}),
+    };
+  }
+
+  if (executionNative) {
+    const parsed = ExecutionNativeV1Schema.parse(executionNative);
+    out.execution_native_v1 = parsed;
+    if (!out.summary_kind && parsed.summary_kind) out.summary_kind = parsed.summary_kind;
+    if (!out.compression_layer && parsed.compression_layer) out.compression_layer = parsed.compression_layer;
+  }
+  return out;
+}
+
 function assertSingleScopeWrite(scope: string, scopePublic: string, nodes: PreparedNode[], edges: PreparedEdge[]): void {
   const crossScopeNode = nodes.find((n) => n.scope !== scope);
   if (crossScopeNode) {
@@ -329,6 +431,7 @@ export async function prepareMemoryWrite(
       slots = restoreStableSystemSlots(slots, (r.value ?? {}) as Record<string, unknown>);
       bump(r.counts);
     }
+    slots = normalizeExecutionNativeSlots(n.type, slots, title ?? null, text_summary ?? null);
 
     const lane = n.memory_lane ?? defaultLane;
     const producerAgentId = normalizeId(n.producer_agent_id) ?? defaultProducerAgentId;
@@ -389,6 +492,7 @@ export async function prepareMemoryWrite(
       fallback_owner_team_id: defaultOwnerTeamId,
     });
     for (const node of distilled.nodes) {
+      node.slots = normalizeExecutionNativeSlots(node.type, node.slots ?? {}, node.title ?? null, node.text_summary ?? null);
       const priorId = seenNodeIds.get(node.id);
       if (priorId) {
         badRequest("distillation_node_id_collision", "distillation generated duplicate node id within write batch", {

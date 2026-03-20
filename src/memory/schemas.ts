@@ -198,6 +198,342 @@ export type MemoryRecallInput = z.infer<typeof MemoryRecallRequest>;
 export type MemoryRecallTextInput = z.infer<typeof MemoryRecallTextRequest>;
 export type MemoryWriteInput = z.infer<typeof MemoryWriteRequest>;
 
+export const MemoryAnchorKind = z.enum(["execution", "workflow", "pattern", "decision"]);
+export const MemoryAnchorLevel = z.enum(["L1", "L2", "L3"]);
+export const MemoryPatternState = z.enum(["provisional", "stable"]);
+export const MemoryPatternCredibilityState = z.enum(["candidate", "trusted", "contested"]);
+export const MemoryPatternTransitionKind = z.enum([
+  "candidate_observed",
+  "promoted_to_trusted",
+  "counter_evidence_opened",
+  "revalidated_to_trusted",
+]);
+export const MemoryAnchorSourceKind = z.enum([
+  "replay_step",
+  "playbook",
+  "distilled_trace",
+  "tool_decision",
+  "workflow_cluster",
+]);
+export const MemoryAnchorRehydrationMode = z.enum(["summary_only", "partial", "full"]);
+export const MemoryAnchorPayloadCostHint = z.enum(["low", "medium", "high"]);
+export const MemoryAnchorOutcomeStatus = z.enum(["success", "failure", "partial", "mixed", "unknown"]);
+
+const MemoryAnchorStringList = z.array(z.string().min(1).max(256)).max(64);
+const MemoryAnchorIdList = z.array(z.string().min(1).max(256)).max(256);
+
+export const MemoryAnchorOutcomeSchema = z.object({
+  status: MemoryAnchorOutcomeStatus,
+  result_class: z.string().min(1).max(128).optional(),
+  success_score: z.number().min(0).max(1).optional(),
+});
+
+export const MemoryAnchorSourceSchema = z.object({
+  source_kind: MemoryAnchorSourceKind,
+  node_id: z.string().min(1).max(256).nullable().optional(),
+  decision_id: z.string().min(1).max(256).nullable().optional(),
+  run_id: z.string().min(1).max(256).nullable().optional(),
+  step_id: z.string().min(1).max(256).nullable().optional(),
+  playbook_id: z.string().min(1).max(256).nullable().optional(),
+  commit_id: z.string().min(1).max(256).nullable().optional(),
+});
+
+export const MemoryAnchorPayloadRefsSchema = z.object({
+  node_ids: MemoryAnchorIdList.default([]),
+  decision_ids: MemoryAnchorIdList.default([]),
+  run_ids: MemoryAnchorIdList.default([]),
+  step_ids: MemoryAnchorIdList.default([]),
+  commit_ids: MemoryAnchorIdList.default([]),
+});
+
+export const MemoryAnchorRehydrationHintSchema = z.object({
+  default_mode: MemoryAnchorRehydrationMode.default("summary_only"),
+  payload_cost_hint: MemoryAnchorPayloadCostHint.default("medium"),
+  recommended_when: MemoryAnchorStringList.default([]),
+});
+
+export const MemoryAnchorRecallFeaturesSchema = z.object({
+  error_tags: MemoryAnchorStringList.optional(),
+  tool_tags: MemoryAnchorStringList.optional(),
+  outcome_tags: MemoryAnchorStringList.optional(),
+  keywords: MemoryAnchorStringList.optional(),
+});
+
+export const MemoryAnchorMetricsSchema = z.object({
+  usage_count: z.number().int().min(0).default(0),
+  reuse_success_count: z.number().int().min(0).default(0),
+  reuse_failure_count: z.number().int().min(0).default(0),
+  distinct_run_count: z.number().int().min(0).default(0),
+  last_used_at: z.string().min(1).nullable().default(null),
+});
+
+export const MemoryAnchorMaintenanceState = z.enum(["observe", "retain", "review"]);
+export const MemoryAnchorMaintenancePriority = z.enum([
+  "none",
+  "promote_candidate",
+  "review_counter_evidence",
+  "retain_trusted",
+  "retain_workflow",
+]);
+
+export const MemoryAnchorMaintenanceSchema = z.object({
+  model: z.literal("lazy_online_v1").default("lazy_online_v1"),
+  maintenance_state: MemoryAnchorMaintenanceState,
+  offline_priority: MemoryAnchorMaintenancePriority.default("none"),
+  lazy_update_fields: MemoryAnchorStringList.default([
+    "usage_count",
+    "last_used_at",
+    "reuse_success_count",
+    "reuse_failure_count",
+  ]),
+  last_maintenance_at: z.string().min(1).nullable().default(null),
+});
+
+export const MemoryWorkflowPromotionState = z.enum(["candidate", "stable"]);
+export const MemoryWorkflowPromotionOrigin = z.enum(["replay_promote", "replay_stable_normalization", "replay_learning_episode", "replay_learning_auto_promotion"]);
+export const MemoryWorkflowTransitionKind = z.enum(["candidate_observed", "promoted_to_stable", "normalized_latest_stable"]);
+
+export const MemoryWorkflowPromotionSchema = z.object({
+  promotion_state: MemoryWorkflowPromotionState.default("stable"),
+  promotion_origin: MemoryWorkflowPromotionOrigin,
+  required_observations: z.number().int().min(2).max(32).default(2),
+  observed_count: z.number().int().min(0).default(0),
+  last_transition: MemoryWorkflowTransitionKind,
+  last_transition_at: z.string().min(1).nullable().default(null),
+  source_status: z.string().min(1).max(64).nullable().default(null),
+});
+
+export const MemoryPatternPromotionSchema = z.object({
+  required_distinct_runs: z.number().int().min(2).max(32).default(2),
+  distinct_run_count: z.number().int().min(0).default(0),
+  observed_run_ids: z.array(z.string().min(1).max(256)).max(16).default([]),
+  counter_evidence_count: z.number().int().min(0).default(0),
+  counter_evidence_open: z.boolean().default(false),
+  credibility_state: MemoryPatternCredibilityState.default("candidate"),
+  previous_credibility_state: MemoryPatternCredibilityState.nullable().default(null),
+  last_transition: MemoryPatternTransitionKind.nullable().default(null),
+  last_transition_at: z.string().min(1).nullable().default(null),
+  stable_at: z.string().min(1).nullable().default(null),
+  last_validated_at: z.string().min(1).nullable().default(null),
+  last_counter_evidence_at: z.string().min(1).nullable().default(null),
+});
+
+export const MemoryAnchorV1Schema = z.object({
+  anchor_kind: MemoryAnchorKind,
+  anchor_level: MemoryAnchorLevel,
+  pattern_state: MemoryPatternState.optional(),
+  credibility_state: MemoryPatternCredibilityState.optional(),
+  task_signature: z.string().min(1).max(256),
+  task_class: z.string().min(1).max(128).optional(),
+  error_signature: z.string().min(1).max(256).optional(),
+  workflow_signature: z.string().min(1).max(256).optional(),
+  summary: z.string().min(1).max(400),
+  tool_set: z.array(z.string().min(1).max(128)).max(64),
+  selected_tool: z.string().min(1).max(128).nullable().optional(),
+  key_steps: MemoryAnchorStringList.optional(),
+  outcome: MemoryAnchorOutcomeSchema,
+  source: MemoryAnchorSourceSchema,
+  payload_refs: MemoryAnchorPayloadRefsSchema,
+  rehydration: MemoryAnchorRehydrationHintSchema.optional(),
+  recall_features: MemoryAnchorRecallFeaturesSchema.optional(),
+  metrics: MemoryAnchorMetricsSchema.optional(),
+  maintenance: MemoryAnchorMaintenanceSchema.optional(),
+  workflow_promotion: MemoryWorkflowPromotionSchema.optional(),
+  promotion: MemoryPatternPromotionSchema.optional(),
+  schema_version: z.literal("anchor_v1"),
+});
+
+export type MemoryAnchorV1 = z.infer<typeof MemoryAnchorV1Schema>;
+
+export const ExecutionNativeKind = z.enum([
+  "distilled_evidence",
+  "distilled_fact",
+  "workflow_candidate",
+  "workflow_anchor",
+  "pattern_anchor",
+  "execution_native",
+]);
+
+export const ExecutionNativeV1Schema = z.object({
+  schema_version: z.literal("execution_native_v1"),
+  execution_kind: ExecutionNativeKind,
+  summary_kind: z.string().min(1).max(128).nullable().optional(),
+  compression_layer: MemoryLayerId.optional(),
+  task_signature: z.string().min(1).max(256).optional(),
+  error_signature: z.string().min(1).max(256).optional(),
+  workflow_signature: z.string().min(1).max(256).optional(),
+  anchor_kind: MemoryAnchorKind.optional(),
+  anchor_level: MemoryAnchorLevel.optional(),
+  pattern_state: MemoryPatternState.optional(),
+  credibility_state: MemoryPatternCredibilityState.optional(),
+  selected_tool: z.string().min(1).max(128).nullable().optional(),
+  workflow_promotion: MemoryWorkflowPromotionSchema.optional(),
+  promotion: MemoryPatternPromotionSchema.optional(),
+  maintenance: MemoryAnchorMaintenanceSchema.optional(),
+  rehydration: MemoryAnchorRehydrationHintSchema.optional(),
+});
+
+export type ExecutionNativeV1 = z.infer<typeof ExecutionNativeV1Schema>;
+
+export const MemoryGovernedOperation = z.enum([
+  "promote_memory",
+  "compress_memory",
+  "form_pattern",
+  "derive_policy_hint",
+  "rehydrate_payload",
+]);
+
+export type MemoryGovernedOperationName = z.infer<typeof MemoryGovernedOperation>;
+
+export const MemoryAdjudicationDisposition = z.enum(["recommend", "reject", "insufficient_evidence"]);
+export const MemoryAdjudicationTargetKind = z.enum(["event", "execution", "workflow", "pattern", "decision", "policy_hint", "none"]);
+export const MemoryAdjudicationStrategicValue = z.enum(["low", "medium", "high"]);
+
+export const MemoryAdjudicationProposalBaseSchema = z.object({
+  disposition: MemoryAdjudicationDisposition.default("recommend"),
+  target_kind: MemoryAdjudicationTargetKind.default("none"),
+  target_level: MemoryAnchorLevel.optional(),
+  reason: z.string().min(1).max(2000),
+  confidence: z.number().min(0).max(1),
+  strategic_value: MemoryAdjudicationStrategicValue.optional(),
+  keep_details: MemoryAnchorStringList.optional(),
+  drop_details: MemoryAnchorStringList.optional(),
+  related_memory_ids: MemoryAnchorIdList.optional(),
+  related_decision_ids: MemoryAnchorIdList.optional(),
+  expected_task_signature: z.string().min(1).max(256).optional(),
+  expected_error_signature: z.string().min(1).max(256).optional(),
+  notes: z.record(z.unknown()).optional(),
+});
+
+function addTargetLevelRequirement<T extends z.ZodTypeAny>(schema: T) {
+  return schema.superRefine((value: any, ctx) => {
+    if (value.disposition === "recommend" && value.target_kind !== "none" && !value.target_level
+      && (value.target_kind === "execution" || value.target_kind === "workflow" || value.target_kind === "pattern")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "target_level is required when recommending execution/workflow/pattern memory",
+        path: ["target_level"],
+      });
+    }
+  });
+}
+
+export const MemoryPromoteAdjudicationSchema = addTargetLevelRequirement(
+  MemoryAdjudicationProposalBaseSchema.extend({
+    operation: z.literal("promote_memory"),
+    target_kind: z.enum(["execution", "workflow", "pattern", "decision", "none"]).default("none"),
+  }),
+);
+
+export const MemoryCompressAdjudicationSchema = addTargetLevelRequirement(
+  MemoryAdjudicationProposalBaseSchema.extend({
+    operation: z.literal("compress_memory"),
+    target_kind: z.enum(["event", "execution", "workflow", "pattern", "decision", "none"]).default("none"),
+  }),
+);
+
+export const MemoryFormPatternAdjudicationSchema = addTargetLevelRequirement(
+  MemoryAdjudicationProposalBaseSchema.extend({
+    operation: z.literal("form_pattern"),
+    target_kind: z.enum(["pattern", "none"]).default("none"),
+  }),
+);
+
+export const MemoryPolicyHintAdjudicationSchema = MemoryAdjudicationProposalBaseSchema.extend({
+  operation: z.literal("derive_policy_hint"),
+  target_kind: z.enum(["policy_hint", "none"]).default("none"),
+});
+
+export const MemoryPayloadRehydrateAdjudicationSchema = MemoryAdjudicationProposalBaseSchema.extend({
+  operation: z.literal("rehydrate_payload"),
+  target_kind: z.enum(["none", "decision", "workflow", "execution"]).default("none"),
+});
+
+export const MemoryAdjudicationProposalSchema = z.union([
+  MemoryPromoteAdjudicationSchema,
+  MemoryCompressAdjudicationSchema,
+  MemoryFormPatternAdjudicationSchema,
+  MemoryPolicyHintAdjudicationSchema,
+  MemoryPayloadRehydrateAdjudicationSchema,
+]);
+
+export type MemoryAdjudicationProposal = z.infer<typeof MemoryAdjudicationProposalSchema>;
+
+export const MemoryAdmissibilityReasonCode = z.enum([
+  "budget_limit",
+  "policy_restricted",
+  "confidence_too_low",
+  "threshold_not_met",
+  "schema_invalid",
+  "write_scope_unsafe",
+  "irreversible_action_denied",
+]);
+
+export const MemoryAdmissibilityResultSchema = z.object({
+  operation: MemoryGovernedOperation,
+  admissible: z.boolean(),
+  requires_manual_review: z.boolean().default(false),
+  accepted_mutation_count: z.number().int().min(0).default(0),
+  reason_codes: z.array(MemoryAdmissibilityReasonCode).max(16).default([]),
+  notes: z.record(z.unknown()).optional(),
+});
+
+export type MemoryAdmissibilityResult = z.infer<typeof MemoryAdmissibilityResultSchema>;
+
+const MemoryGovernedMutationBase = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  input_text: z.string().min(1).optional(),
+  input_sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+});
+
+export const MemoryPromoteRequest = MemoryGovernedMutationBase.extend({
+  candidate_node_ids: MemoryAnchorIdList.min(1).max(200),
+  target_kind: z.enum(["execution", "workflow", "pattern", "decision"]),
+  target_level: MemoryAnchorLevel,
+  write_anchor: z.boolean().default(true),
+  adjudication: MemoryPromoteAdjudicationSchema.optional(),
+}).refine((v) => !!v.input_text || !!v.input_sha256, { message: "must set input_text or input_sha256" });
+
+export type MemoryPromoteInput = z.infer<typeof MemoryPromoteRequest>;
+
+export const MemoryCompressRequest = MemoryGovernedMutationBase.extend({
+  node_ids: MemoryAnchorIdList.min(1).max(200),
+  compression_mode: z.enum(["summarize", "drop_redundant_details", "anchor_only"]).default("summarize"),
+  preserve_anchor: z.boolean().default(true),
+  adjudication: MemoryCompressAdjudicationSchema.optional(),
+}).refine((v) => !!v.input_text || !!v.input_sha256, { message: "must set input_text or input_sha256" });
+
+export type MemoryCompressInput = z.infer<typeof MemoryCompressRequest>;
+
+export const MemoryFormPatternRequest = MemoryGovernedMutationBase.extend({
+  source_node_ids: MemoryAnchorIdList.min(2).max(100),
+  task_signature: z.string().min(1).max(256).optional(),
+  error_signature: z.string().min(1).max(256).optional(),
+  workflow_signature: z.string().min(1).max(256).optional(),
+  target_level: z.literal("L3").default("L3"),
+  adjudication: MemoryFormPatternAdjudicationSchema.optional(),
+}).refine((v) => !!v.input_text || !!v.input_sha256, { message: "must set input_text or input_sha256" });
+
+export type MemoryFormPatternInput = z.infer<typeof MemoryFormPatternRequest>;
+
+export const MemoryPayloadRehydrateToolRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  anchor_id: z.string().min(1).max(256).optional(),
+  anchor_uri: z.string().min(1).max(512).optional(),
+  mode: MemoryAnchorRehydrationMode.default("partial"),
+  include_linked_decisions: z.boolean().default(true),
+  reason: z.string().min(1).max(1000).optional(),
+  adjudication: MemoryPayloadRehydrateAdjudicationSchema.optional(),
+}).refine((v) => !!v.anchor_id || !!v.anchor_uri, {
+  message: "must set anchor_id or anchor_uri",
+});
+
+export type MemoryPayloadRehydrateToolInput = z.infer<typeof MemoryPayloadRehydrateToolRequest>;
+
 export const ContextLayerName = z.enum(["facts", "episodes", "rules", "static", "decisions", "tools", "citations"]);
 export const MemoryTier = z.enum(["hot", "warm", "cold", "archive"]);
 
@@ -329,6 +665,357 @@ export const ContextAssembleRequest = z.object({
 });
 
 export type ContextAssembleInput = z.infer<typeof ContextAssembleRequest>;
+
+const PlannerPacketEntrySchema = z.object({}).passthrough();
+
+export const ExecutionMemoryIntrospectionRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  consumer_agent_id: z.string().min(1).optional(),
+  consumer_team_id: z.string().min(1).optional(),
+  limit: z.number().int().positive().max(50).default(8),
+});
+
+export type ExecutionMemoryIntrospectionInput = z.infer<typeof ExecutionMemoryIntrospectionRequest>;
+
+export const PatternSignalSummarySchema = z.object({
+  candidate_pattern_count: z.number().int().min(0),
+  candidate_pattern_tools: z.array(z.string()),
+  trusted_pattern_count: z.number().int().min(0),
+  contested_pattern_count: z.number().int().min(0),
+  trusted_pattern_tools: z.array(z.string()),
+  contested_pattern_tools: z.array(z.string()),
+});
+
+export type PatternSignalSummary = z.infer<typeof PatternSignalSummarySchema>;
+
+export const WorkflowSignalSummarySchema = z.object({
+  stable_workflow_count: z.number().int().min(0),
+  promotion_ready_workflow_count: z.number().int().min(0),
+  observing_workflow_count: z.number().int().min(0),
+  stable_workflow_titles: z.array(z.string()),
+  promotion_ready_workflow_titles: z.array(z.string()),
+  observing_workflow_titles: z.array(z.string()),
+});
+
+export type WorkflowSignalSummary = z.infer<typeof WorkflowSignalSummarySchema>;
+
+export const PatternLifecycleSummarySchema = z.object({
+  candidate_count: z.number().int().min(0),
+  trusted_count: z.number().int().min(0),
+  contested_count: z.number().int().min(0),
+  near_promotion_count: z.number().int().min(0),
+  counter_evidence_open_count: z.number().int().min(0),
+  transition_counts: z.object({
+    candidate_observed: z.number().int().min(0),
+    promoted_to_trusted: z.number().int().min(0),
+    counter_evidence_opened: z.number().int().min(0),
+    revalidated_to_trusted: z.number().int().min(0),
+  }),
+});
+
+export type PatternLifecycleSummary = z.infer<typeof PatternLifecycleSummarySchema>;
+
+export const PatternMaintenanceSummarySchema = z.object({
+  model: z.literal("lazy_online_v1"),
+  observe_count: z.number().int().min(0),
+  retain_count: z.number().int().min(0),
+  review_count: z.number().int().min(0),
+  promote_candidate_count: z.number().int().min(0),
+  review_counter_evidence_count: z.number().int().min(0),
+  retain_trusted_count: z.number().int().min(0),
+});
+
+export type PatternMaintenanceSummary = z.infer<typeof PatternMaintenanceSummarySchema>;
+
+export const WorkflowLifecycleSummarySchema = z.object({
+  candidate_count: z.number().int().min(0),
+  stable_count: z.number().int().min(0),
+  replay_source_count: z.number().int().min(0),
+  rehydration_ready_count: z.number().int().min(0),
+  promotion_ready_count: z.number().int().min(0),
+  transition_counts: z.object({
+    candidate_observed: z.number().int().min(0),
+    promoted_to_stable: z.number().int().min(0),
+    normalized_latest_stable: z.number().int().min(0),
+  }),
+});
+
+export type WorkflowLifecycleSummary = z.infer<typeof WorkflowLifecycleSummarySchema>;
+
+export const WorkflowMaintenanceSummarySchema = z.object({
+  model: z.literal("lazy_online_v1"),
+  observe_count: z.number().int().min(0),
+  retain_count: z.number().int().min(0),
+  promote_candidate_count: z.number().int().min(0),
+  retain_workflow_count: z.number().int().min(0),
+});
+
+export type WorkflowMaintenanceSummary = z.infer<typeof WorkflowMaintenanceSummarySchema>;
+
+export const ActionPacketSummarySchema = z.object({
+  recommended_workflow_count: z.number().int().min(0),
+  candidate_workflow_count: z.number().int().min(0),
+  candidate_pattern_count: z.number().int().min(0),
+  trusted_pattern_count: z.number().int().min(0),
+  contested_pattern_count: z.number().int().min(0),
+  rehydration_candidate_count: z.number().int().min(0),
+  supporting_knowledge_count: z.number().int().min(0),
+  workflow_anchor_ids: z.array(z.string()),
+  candidate_workflow_anchor_ids: z.array(z.string()),
+  candidate_pattern_anchor_ids: z.array(z.string()),
+  trusted_pattern_anchor_ids: z.array(z.string()),
+  contested_pattern_anchor_ids: z.array(z.string()),
+  rehydration_anchor_ids: z.array(z.string()),
+});
+
+export type ActionPacketSummary = z.infer<typeof ActionPacketSummarySchema>;
+
+export const PlannerPacketTextSurfaceSchema = z.object({
+  packet_version: z.literal("planner_packet_v1"),
+  sections: z.object({
+    recommended_workflows: z.array(z.string()),
+    candidate_workflows: z.array(z.string()),
+    candidate_patterns: z.array(z.string()),
+    trusted_patterns: z.array(z.string()),
+    contested_patterns: z.array(z.string()),
+    rehydration_candidates: z.array(z.string()),
+    supporting_knowledge: z.array(z.string()),
+  }),
+  merged_text: z.string(),
+});
+
+export type PlannerPacketTextSurface = z.infer<typeof PlannerPacketTextSurfaceSchema>;
+
+export const ExecutionMemoryDemoSurfaceSchema = z.object({
+  surface_version: z.literal("execution_memory_demo_v1"),
+  headline: z.string(),
+  sections: z.object({
+    workflows: z.array(z.string()),
+    patterns: z.array(z.string()),
+    maintenance: z.array(z.string()),
+  }),
+  merged_text: z.string(),
+});
+
+export type ExecutionMemoryDemoSurface = z.infer<typeof ExecutionMemoryDemoSurfaceSchema>;
+
+export const ExecutionKernelPacketSummarySchema = z.object({
+  packet_source_mode: z.string(),
+  state_first_assembly: z.boolean(),
+  execution_packet_v1_present: z.boolean(),
+  execution_state_v1_present: z.boolean(),
+  pattern_signal_summary: PatternSignalSummarySchema,
+  workflow_signal_summary: WorkflowSignalSummarySchema,
+  workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
+  workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  pattern_lifecycle_summary: PatternLifecycleSummarySchema,
+  pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+  action_packet_summary: ActionPacketSummarySchema,
+});
+
+export type ExecutionKernelPacketSummary = z.infer<typeof ExecutionKernelPacketSummarySchema>;
+
+export const ExecutionMemoryIntrospectionResponseSchema = z.object({
+  summary_version: z.literal("execution_memory_introspection_v1"),
+  tenant_id: z.string(),
+  scope: z.string(),
+  inventory: z.object({
+    raw_workflow_anchor_count: z.number().int().min(0),
+    raw_workflow_candidate_count: z.number().int().min(0),
+    suppressed_candidate_workflow_count: z.number().int().min(0),
+    raw_pattern_anchor_count: z.number().int().min(0),
+  }),
+  demo_surface: ExecutionMemoryDemoSurfaceSchema,
+  recommended_workflows: z.array(PlannerPacketEntrySchema),
+  candidate_workflows: z.array(PlannerPacketEntrySchema),
+  candidate_patterns: z.array(PlannerPacketEntrySchema),
+  trusted_patterns: z.array(PlannerPacketEntrySchema),
+  contested_patterns: z.array(PlannerPacketEntrySchema),
+  rehydration_candidates: z.array(PlannerPacketEntrySchema),
+  pattern_signals: z.array(PlannerPacketEntrySchema),
+  workflow_signals: z.array(PlannerPacketEntrySchema),
+  action_packet_summary: ActionPacketSummarySchema,
+  pattern_signal_summary: PatternSignalSummarySchema,
+  workflow_signal_summary: WorkflowSignalSummarySchema,
+  workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
+  workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  pattern_lifecycle_summary: PatternLifecycleSummarySchema,
+  pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+});
+
+export type ExecutionMemoryIntrospectionResponse = z.infer<typeof ExecutionMemoryIntrospectionResponseSchema>;
+
+export const PlanningSummaryContractSchema = z.object({
+  summary_version: z.literal("planning_summary_v1"),
+  planner_explanation: z.string().nullable(),
+  workflow_signal_summary: WorkflowSignalSummarySchema,
+  action_packet_summary: ActionPacketSummarySchema,
+  workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
+  workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  pattern_lifecycle_summary: PatternLifecycleSummarySchema,
+  pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+  trusted_pattern_count: z.number().int().min(0),
+  contested_pattern_count: z.number().int().min(0),
+  trusted_pattern_tools: z.array(z.string()),
+  contested_pattern_tools: z.array(z.string()),
+}).passthrough();
+
+export type PlanningSummaryContract = z.infer<typeof PlanningSummaryContractSchema>;
+
+export const AssemblySummaryContractSchema = z.object({
+  summary_version: z.literal("assembly_summary_v1"),
+  planner_explanation: z.string().nullable(),
+  workflow_signal_summary: WorkflowSignalSummarySchema,
+  action_packet_summary: ActionPacketSummarySchema,
+  workflow_lifecycle_summary: WorkflowLifecycleSummarySchema,
+  workflow_maintenance_summary: WorkflowMaintenanceSummarySchema,
+  pattern_lifecycle_summary: PatternLifecycleSummarySchema,
+  pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+  trusted_pattern_count: z.number().int().min(0),
+  contested_pattern_count: z.number().int().min(0),
+  trusted_pattern_tools: z.array(z.string()),
+  contested_pattern_tools: z.array(z.string()),
+}).passthrough();
+
+export type AssemblySummaryContract = z.infer<typeof AssemblySummaryContractSchema>;
+
+const PlannerPacketRouteContractBaseSchema = z.object({
+  planner_packet: PlannerPacketTextSurfaceSchema,
+  action_recall_packet: z.object({}).passthrough().optional(),
+  recommended_workflows: z.array(PlannerPacketEntrySchema),
+  candidate_workflows: z.array(PlannerPacketEntrySchema),
+  candidate_patterns: z.array(PlannerPacketEntrySchema),
+  trusted_patterns: z.array(PlannerPacketEntrySchema),
+  contested_patterns: z.array(PlannerPacketEntrySchema),
+  rehydration_candidates: z.array(PlannerPacketEntrySchema),
+  supporting_knowledge: z.array(PlannerPacketEntrySchema),
+  pattern_signals: z.array(PlannerPacketEntrySchema),
+  workflow_signals: z.array(PlannerPacketEntrySchema),
+  execution_kernel: ExecutionKernelPacketSummarySchema,
+}).passthrough();
+
+export const PlanningContextRouteContractSchema = PlannerPacketRouteContractBaseSchema.extend({
+  planning_summary: PlanningSummaryContractSchema,
+});
+
+export type PlanningContextRouteContract = z.infer<typeof PlanningContextRouteContractSchema>;
+
+export const ContextAssembleRouteContractSchema = PlannerPacketRouteContractBaseSchema.extend({
+  assembly_summary: AssemblySummaryContractSchema,
+});
+
+export type ContextAssembleRouteContract = z.infer<typeof ContextAssembleRouteContractSchema>;
+
+export const DecisionPatternSummaryContractSchema = z.object({
+  used_trusted_pattern_anchor_ids: z.array(z.string()),
+  used_trusted_pattern_tools: z.array(z.string()),
+  skipped_contested_pattern_anchor_ids: z.array(z.string()),
+  skipped_contested_pattern_tools: z.array(z.string()),
+});
+
+export type DecisionPatternSummaryContract = z.infer<typeof DecisionPatternSummaryContractSchema>;
+
+export const PatternMatchAnchorContractSchema = z.object({
+  node_id: z.string(),
+  selected_tool: z.string().nullable().optional(),
+  pattern_state: z.string().nullable().optional(),
+  credibility_state: z.string().nullable().optional(),
+  trusted: z.boolean().optional(),
+  counter_evidence_open: z.boolean().optional(),
+  last_transition: z.string().nullable().optional(),
+  maintenance_state: z.string().nullable().optional(),
+  offline_priority: z.string().nullable().optional(),
+  distinct_run_count: z.number().nullable().optional(),
+  required_distinct_runs: z.number().nullable().optional(),
+  similarity: z.number().nullable().optional(),
+  confidence: z.number().nullable().optional(),
+  title: z.string().nullable().optional(),
+  summary: z.string().nullable().optional(),
+}).passthrough();
+
+export type PatternMatchAnchorContract = z.infer<typeof PatternMatchAnchorContractSchema>;
+
+export const ToolsSelectionSummaryContractSchema = z.object({
+  summary_version: z.literal("tools_selection_summary_v1"),
+  selected_tool: z.string().nullable(),
+  trusted_pattern_count: z.number().int().min(0),
+  contested_pattern_count: z.number().int().min(0),
+  used_trusted_pattern_tools: z.array(z.string()),
+  skipped_contested_pattern_tools: z.array(z.string()),
+  provenance_explanation: z.string().nullable(),
+  pattern_lifecycle_summary: PatternLifecycleSummarySchema,
+  pattern_maintenance_summary: PatternMaintenanceSummarySchema,
+}).passthrough();
+
+export type ToolsSelectionSummaryContract = z.infer<typeof ToolsSelectionSummaryContractSchema>;
+
+export const ToolsSelectRouteContractSchema = z.object({
+  tenant_id: z.string(),
+  scope: z.string(),
+  candidates: z.array(z.string()),
+  selection: z.object({
+    selected: z.string().nullable(),
+    ordered: z.array(z.string()),
+    preferred: z.array(z.string()),
+    allowed: z.array(z.string()),
+  }).passthrough(),
+  execution_kernel: z.object({}).passthrough(),
+  rules: z.object({
+    considered: z.number().int().min(0),
+    matched: z.number().int().min(0),
+  }).passthrough(),
+  pattern_matches: z.object({
+    matched: z.number().int().min(0),
+    trusted: z.number().int().min(0),
+    preferred_tools: z.array(z.string()),
+    anchors: z.array(PatternMatchAnchorContractSchema),
+  }).passthrough(),
+  decision: z.object({
+    decision_id: z.string(),
+    decision_uri: z.string(),
+    run_id: z.string().nullable(),
+    selected_tool: z.string().nullable(),
+    source_rule_ids: z.array(z.string()),
+    pattern_summary: DecisionPatternSummaryContractSchema,
+  }).passthrough(),
+  selection_summary: ToolsSelectionSummaryContractSchema,
+}).passthrough();
+
+export type ToolsSelectRouteContract = z.infer<typeof ToolsSelectRouteContractSchema>;
+
+export const ReplayLearningProjectionResultContractSchema = z.object({
+  triggered: z.boolean(),
+  delivery: z.enum(["async_outbox", "sync_inline"]),
+  status: z.enum(["queued", "applied", "skipped", "failed"]),
+  reason: z.string().nullable().optional(),
+  job_key: z.string().nullable().optional(),
+  generated_rule_node_id: z.string().nullable().optional(),
+  generated_episode_node_id: z.string().nullable().optional(),
+}).passthrough();
+
+export type ReplayLearningProjectionResultContract = z.infer<typeof ReplayLearningProjectionResultContractSchema>;
+
+export const ReplayPlaybookRepairReviewResponseSchema = z.object({
+  tenant_id: z.string(),
+  scope: z.string(),
+  playbook_id: z.string(),
+  reviewed_version: z.number().int().min(1),
+  to_version: z.number().int().min(1),
+  action: z.enum(["approve", "reject"]),
+  status: z.enum(["draft", "shadow", "active", "disabled"]),
+  review_state: z.enum(["approved", "rejected"]),
+  shadow_validation: z.unknown().nullable().optional(),
+  auto_promotion: z.unknown().nullable().optional(),
+  playbook_node_id: z.string().nullable(),
+  playbook_uri: z.string().nullable(),
+  commit_id: z.string().nullable(),
+  commit_uri: z.string().nullable(),
+  commit_hash: z.string().nullable(),
+  learning_projection_result: ReplayLearningProjectionResultContractSchema.nullable().optional(),
+}).passthrough();
+
+export type ReplayPlaybookRepairReviewResponse = z.infer<typeof ReplayPlaybookRepairReviewResponseSchema>;
 
 export const MemoryFindRequest = z.object({
   tenant_id: z.string().min(1).optional(),
@@ -1000,12 +1687,12 @@ export const ReplayPlaybookRepairRequest = z.object({
 export type ReplayPlaybookRepairInput = z.infer<typeof ReplayPlaybookRepairRequest>;
 
 export const ReplayLearningProjectionRequest = z.object({
-  enabled: z.boolean().default(false),
-  mode: z.enum(["rule_and_episode", "episode_only"]).default("rule_and_episode"),
-  delivery: z.enum(["async_outbox", "sync_inline"]).default("async_outbox"),
-  target_rule_state: z.enum(["draft", "shadow"]).default("draft"),
-  min_total_steps: z.number().int().min(0).max(500).default(1),
-  min_success_ratio: z.number().min(0).max(1).default(1),
+  enabled: z.boolean().optional(),
+  mode: z.enum(["rule_and_episode", "episode_only"]).optional(),
+  delivery: z.enum(["async_outbox", "sync_inline"]).optional(),
+  target_rule_state: z.enum(["draft", "shadow"]).optional(),
+  min_total_steps: z.number().int().min(0).max(500).optional(),
+  min_success_ratio: z.number().min(0).max(1).optional(),
 });
 
 export type ReplayLearningProjectionInput = z.infer<typeof ReplayLearningProjectionRequest>;

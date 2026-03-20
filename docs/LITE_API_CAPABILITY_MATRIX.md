@@ -4,6 +4,22 @@ Last reviewed: 2026-03-20
 
 This document records the current public API surface of the standalone `Aionis Lite` repository.
 
+Named execution-memory mainline:
+
+`Anchor-Guided Rehydration Loop`
+
+Definition:
+
+`stable execution -> workflow anchor -> recall -> runtime hint -> optional rehydration`
+
+Named execution-policy loop:
+
+`Execution Policy Learning Loop`
+
+Definition:
+
+`feedback -> pattern -> recall -> selector reuse`
+
 It is intentionally stricter than the full runtime. When a surface is not part of Lite, the host should either:
 
 1. not register it at all, or
@@ -14,6 +30,12 @@ Primary routing sources:
 1. `src/host/http-host.ts`
 2. `src/host/lite-edition.ts`
 3. `src/routes/*.ts`
+
+Related packet/provenance reference:
+
+1. [docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_PLANNER_PACKET_AND_PROVENANCE_CONTRACT.md)
+2. [docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_NATIVE_ROUTE_CONTRACT.md)
+3. [docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](/Volumes/ziel/Aionisgo/docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
 
 ## Status Legend
 
@@ -56,8 +78,35 @@ This is one of Lite's `Supported (Subset)` surfaces. The following routes are pr
 | `POST` | `/v1/memory/packs/import` | Supported | Local pack import; no admin token required in Lite. |
 | `POST` | `/v1/memory/find` | Supported | Local graph/search lookup. |
 | `POST` | `/v1/memory/resolve` | Supported | Local node resolution. |
+| `POST` | `/v1/memory/execution/introspect` | Supported | Demo/introspection surface for execution memory. Aggregates workflow/pattern signals, maintenance summaries, and demo-ready text in one local response. |
+| `POST` | `/v1/memory/anchors/rehydrate_payload` | Supported | Anchor-linked payload rehydration by id or URI. In Lite, omitted `actor` defaults to the local actor identity, so private local anchors remain directly rehydratable through the normal single-user path. |
 
 ## Recall And Context Runtime
+
+This route group is one half of the `Anchor-Guided Rehydration Loop`.
+It serves the `recall -> runtime hint` portion of the loop.
+
+Planner-packet contract:
+
+1. `planning_context` and `context_assemble` now expose a stable `planner_packet`
+2. the packet sections are:
+   1. `recommended_workflows`
+   2. `candidate_workflows`
+   2. `trusted_patterns`
+   3. `contested_patterns`
+   4. `rehydration_candidates`
+   5. `supporting_knowledge`
+3. both routes also expose the same sections as top-level response arrays
+4. both routes also expose top-level `pattern_signals` and `workflow_signals`
+5. `planning_summary` and `execution_kernel` expose `action_packet_summary`, and `execution_kernel` also exposes `pattern_signal_summary` and `workflow_signal_summary`
+6. `planner_explanation` now follows packet order and explains workflow guidance, pattern trust, rehydration availability, and supporting knowledge append behavior
+7. lower-level `context.items` and `citations` may now expose `summary_kind`, `execution_kind`, `anchor_kind`, and `compression_layer` so planner-facing consumers can distinguish action memory from supporting knowledge without re-parsing raw slots
+
+Recommended integrator read path:
+
+1. prefer `planner_packet.sections.*` for full workflow/pattern/rehydration collections
+2. read `workflow_signals` and `pattern_signals` directly as canonical signal surfaces
+3. treat the top-level packet arrays as `v1` convenience mirrors
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
@@ -68,6 +117,15 @@ This is one of Lite's `Supported (Subset)` surfaces. The following routes are pr
 
 ## Feedback, Rules, And Tool Selection
 
+The tooling surface now also supports the `Execution Policy Learning Loop`, the local tool-memory loop that grows pattern anchors from validated tool outcomes.
+
+Selector rule:
+
+1. explicit rule/policy `tool.prefer` stays ahead of recalled trusted patterns
+2. trusted patterns can still refine ordering after explicit preference, but they do not override explicit operator or rule intent
+3. `selection_summary.provenance_explanation` now uses the same trust language family as `planner_explanation`
+4. the selection surface can therefore explicitly say whether a trusted pattern supported the selected tool, was available but not used, or was visible but not trusted
+
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
 | `POST` | `/v1/memory/feedback` | Supported | Local rule-feedback write path. |
@@ -77,11 +135,18 @@ This is one of Lite's `Supported (Subset)` surfaces. The following routes are pr
 | `POST` | `/v1/memory/tools/decision` | Supported | Fetch a tool decision. |
 | `POST` | `/v1/memory/tools/run` | Supported | Fetch one tool run lifecycle. |
 | `POST` | `/v1/memory/tools/runs/list` | Supported | List tool runs. |
-| `POST` | `/v1/memory/tools/feedback` | Supported | Store tool-selection feedback. |
+| `POST` | `/v1/memory/tools/rehydrate_payload` | Supported | Runtime-friendly tool alias for anchor payload rehydration inside the `Anchor-Guided Rehydration Loop`. The normal Lite path inherits the default local actor, so planner/runtime hints can call it without restating identity. |
+| `POST` | `/v1/memory/tools/feedback` | Supported | Store tool-selection feedback and distill validated tool outcomes into local pattern anchors. |
 
 ## Replay And Playbook Core
 
 The replay kernel is present in Lite and is one of the major product subsystems.
+It is also the producer side of the `Anchor-Guided Rehydration Loop`, where stable executions become workflow anchors.
+
+Producer rule:
+
+1. newly promoted stable playbooks are written as workflow anchors
+2. if the latest playbook is already `shadow` or `active`, Lite normalizes that same latest node into a workflow anchor instead of leaving pre-anchor stable versions behind
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |

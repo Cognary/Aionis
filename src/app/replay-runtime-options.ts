@@ -156,6 +156,8 @@ export function createReplayRuntimeOptionBuilders(args: {
     enforceSandboxTenantBudget,
   } = args;
   const writeEmbedder = embeddingSurfacePolicy?.providerFor("write_auto_embed", embedder) ?? embedder;
+  const replayLearningProjectionDefaultDelivery =
+    env.AIONIS_EDITION === "lite" ? "sync_inline" : env.REPLAY_LEARNING_PROJECTION_DELIVERY;
 
   function buildReplayRepairReviewOptions() {
     return {
@@ -188,7 +190,7 @@ export function createReplayRuntimeOptionBuilders(args: {
       learningProjectionDefaults: buildReplayLearningProjectionDefaults({
         enabled: env.REPLAY_LEARNING_PROJECTION_ENABLED,
         mode: env.REPLAY_LEARNING_PROJECTION_MODE,
-        delivery: env.REPLAY_LEARNING_PROJECTION_DELIVERY,
+        delivery: replayLearningProjectionDefaultDelivery,
         targetRuleState: env.REPLAY_LEARNING_TARGET_RULE_STATE,
         minTotalSteps: env.REPLAY_LEARNING_MIN_TOTAL_STEPS,
         minSuccessRatio: env.REPLAY_LEARNING_MIN_SUCCESS_RATIO,

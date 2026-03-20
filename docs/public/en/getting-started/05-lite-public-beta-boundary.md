@@ -10,6 +10,10 @@ Read this before treating Lite as your default deployment profile.
 
 For a shorter operator-facing capability summary, see [Lite API Capability Guide](/public/en/getting-started/07-lite-api-capability-guide).
 
+For a shorter public-facing release/demo narrative, see [Lite Execution-Memory Beta Narrative](/public/en/getting-started/08-lite-execution-memory-beta-narrative).
+
+If you need the step-by-step demo script, see [Lite Execution-Memory Demo Walkthrough](/public/en/getting-started/09-lite-execution-memory-demo-walkthrough).
+
 ## Positioning
 
 Aionis Lite public beta is:
@@ -17,12 +21,21 @@ Aionis Lite public beta is:
 1. a single-user local runtime
 2. a SQLite-backed edition of the Aionis kernel
 3. the fastest path to local memory, replay, and context workflows
+4. the first Lite release line that exposes the `Anchor-Guided Rehydration Loop`
 
 Aionis Lite public beta is not:
 
 1. a production replacement for Server
 2. a multi-user team control plane
 3. a promise of Server parity
+
+Named execution-memory loop:
+
+`Anchor-Guided Rehydration Loop`
+
+Definition:
+
+`stable execution -> workflow anchor -> recall -> runtime hint -> optional rehydration`
 
 ## Supported In Lite Public Beta
 
@@ -54,12 +67,18 @@ The current supported Lite beta surface is:
 11. graph inspection:
    - `find`
    - `resolve(node|edge|commit|decision)`
+   - `anchors/rehydrate_payload`
 12. policy loop:
    - `rules/evaluate`
    - `tools/select`
    - `tools/decision`
    - `tools/run`
+   - `tools/rehydrate_payload`
    - `tools/feedback`
+
+This means Lite already exposes the main runtime surfaces behind the `Anchor-Guided Rehydration Loop`.
+Replay and playbook promotion produce the stable execution side.
+Recall and tool rehydration routes expose the later recall, hint, and optional payload-expansion side.
 
 Additional constraints:
 

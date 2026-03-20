@@ -4,13 +4,15 @@ import type { Env } from "../config.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { memoryFindLite } from "../memory/find.js";
+import { buildExecutionMemoryIntrospectionLite } from "../memory/execution-introspection.js";
 import { exportMemoryPack, importMemoryPack } from "../memory/packs.js";
+import { rehydrateAnchorPayloadLite } from "../memory/rehydrate-anchor.js";
 import { memoryResolveLite } from "../memory/resolve.js";
 import { createSession, listSessions, listSessionEvents, writeSessionEvent } from "../memory/sessions.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 
-type MemoryAccessRequestKind = "write" | "find" | "resolve";
+type MemoryAccessRequestKind = "write" | "find" | "resolve" | "rehydrate_payload" | "execution_introspect";
 type MemoryAccessInflightKind = "write" | "recall";
 
 type MemoryAccessRequest = FastifyRequest<{ Body: unknown; Querystring: Record<string, unknown>; Params: Record<string, unknown> }>;
@@ -223,9 +225,32 @@ export function registerMemoryAccessRoutes(args: RegisterMemoryAccessRoutesArgs)
 
   registerMemoryAccessRoute({
     method: "post",
+    path: "/v1/memory/execution/introspect",
+    requestKind: "execution_introspect",
+    inflightKind: "recall",
+    execute: (body) =>
+      buildExecutionMemoryIntrospectionLite(
+        liteWriteStore,
+        body,
+        env.MEMORY_SCOPE,
+        env.MEMORY_TENANT_ID,
+        env.LITE_LOCAL_ACTOR_ID,
+      ),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
     path: "/v1/memory/resolve",
     requestKind: "resolve",
     inflightKind: "recall",
     execute: (body) => memoryResolveLite(liteWriteStore, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID),
+  });
+
+  registerMemoryAccessRoute({
+    method: "post",
+    path: "/v1/memory/anchors/rehydrate_payload",
+    requestKind: "rehydrate_payload",
+    inflightKind: "recall",
+    execute: (body) => rehydrateAnchorPayloadLite(liteWriteStore, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, env.LITE_LOCAL_ACTOR_ID),
   });
 }

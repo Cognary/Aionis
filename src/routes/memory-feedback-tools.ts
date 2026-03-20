@@ -1,14 +1,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type { Env } from "../config.js";
+import type { EmbeddingProvider } from "../embeddings/types.js";
 import { ruleFeedback } from "../memory/feedback.js";
 import { updateRuleState } from "../memory/rules.js";
 import { evaluateRules } from "../memory/rules-evaluate.js";
+import { rehydrateAnchorPayloadLite } from "../memory/rehydrate-anchor.js";
 import { selectTools } from "../memory/tools-select.js";
 import { getToolsDecisionById } from "../memory/tools-decision.js";
 import { getToolsRunLifecycle, listToolsRuns } from "../memory/tools-run.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 
@@ -19,7 +22,8 @@ type MemoryFeedbackToolKind =
   | "tools_select"
   | "tools_decision"
   | "tools_run"
-  | "tools_feedback";
+  | "tools_feedback"
+  | "rehydrate_payload";
 type MemoryFeedbackInflightKind = "write" | "recall";
 
 type MemoryFeedbackToolRequest = FastifyRequest<{ Body: unknown }>;
@@ -32,6 +36,7 @@ type LiteFeedbackStoreLike =
   & NonNullable<NonNullable<Parameters<typeof getToolsRunLifecycle>[4]>["liteWriteStore"]>
   & NonNullable<NonNullable<Parameters<typeof listToolsRuns>[4]>["liteWriteStore"]>
   & NonNullable<NonNullable<Parameters<typeof toolSelectionFeedback>[4]>["liteWriteStore"]>
+  & Parameters<typeof rehydrateAnchorPayloadLite>[0]
   & {
     withTx: <T>(fn: () => Promise<T>) => Promise<T>;
   };
@@ -39,7 +44,9 @@ type LiteFeedbackStoreLike =
 type RegisterMemoryFeedbackToolRoutesArgs = {
   app: FastifyInstance;
   env: Env;
+  embedder: EmbeddingProvider | null;
   embeddedRuntime: EmbeddedMemoryRuntime | null;
+  liteRecallAccess: RecallStoreAccess;
   liteWriteStore: LiteFeedbackStoreLike;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
@@ -58,7 +65,9 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
   const {
     app,
     env,
+    embedder,
     embeddedRuntime,
+    liteRecallAccess,
     liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,
@@ -175,6 +184,8 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
         executeLite: (liteStore) =>
           selectTools(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
             embeddedRuntime,
+            recallAccess: liteRecallAccess,
+            embedder,
             liteWriteStore: liteStore,
           }),
       }),
@@ -227,10 +238,21 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
             toolSelectionFeedback(null, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, {
               maxTextLen: env.MAX_TEXT_LEN,
               piiRedaction: env.PII_REDACTION,
+              embedder,
               embeddedRuntime,
               liteWriteStore: liteStore,
             }),
           ),
+      }),
+  });
+  registerFeedbackPostRoute({
+    path: "/v1/memory/tools/rehydrate_payload",
+    requestKind: "rehydrate_payload",
+    inflightKind: "recall",
+    execute: (body) =>
+      executeFeedbackReadOperation({
+        executeLite: (liteStore) =>
+          rehydrateAnchorPayloadLite(liteStore, body, env.MEMORY_SCOPE, env.MEMORY_TENANT_ID, env.LITE_LOCAL_ACTOR_ID),
       }),
   });
 }

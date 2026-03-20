@@ -299,6 +299,7 @@ export type RegisterApplicationRoutesArgs = {
   writeStoreCapabilities: {
     shadow_mirror_v2: boolean;
   };
+  requireAdminToken: (req: FastifyRequest) => void;
   requireStoreFeatureCapability: (...args: any[]) => void;
   requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
   withIdentityFromRequest: (
@@ -506,7 +507,9 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
   registerMemoryFeedbackToolRoutes({
     app,
     env,
+    embedder,
     embeddedRuntime,
+    liteRecallAccess,
     liteWriteStore,
     requireMemoryPrincipal,
     withIdentityFromRequest,

@@ -95,7 +95,7 @@ function sourceTextFromNode(node: DistillablePreparedNode): string | null {
 
 function splitSentences(input: string): string[] {
   return String(input || "")
-    .split(/(?:\r?\n+|(?<=[.!?;])\s+)/)
+    .split(/(?:\r?\n+|(?<=[.!?;])\s+|(?<=\S)\s+(?=(?:Task Signature|Error Signature|Workflow Signature):\s+))/)
     .map((part) => normalizeSnippet(part, 400))
     .filter(Boolean);
 }

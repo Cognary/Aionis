@@ -167,6 +167,42 @@ function resolveRecallStoreCapabilities(partial?: Partial<RecallStoreCapabilitie
   };
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function firstString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function clampSimilarity(value: number): number {
+  return Math.max(-1, Math.min(1, value));
+}
+
+export function adjustRecallCandidateSimilarityForTrust(args: {
+  type: string;
+  slots: unknown;
+  similarity: number;
+}): number {
+  const slots = asRecord(args.slots);
+  const executionNative = asRecord(slots?.execution_native_v1);
+  const anchor = asRecord(slots?.anchor_v1);
+  const anchorKind = firstString(executionNative?.anchor_kind)
+    ?? (firstString(executionNative?.execution_kind) === "pattern_anchor" ? "pattern" : null)
+    ?? firstString(anchor?.anchor_kind);
+  if (anchorKind !== "pattern") return args.similarity;
+  const patternState = firstString(executionNative?.pattern_state ?? anchor?.pattern_state) === "stable" ? "stable" : "provisional";
+  const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor?.promotion);
+  const counterEvidenceOpen = promotion?.counter_evidence_open === true;
+  if (counterEvidenceOpen) {
+    return clampSimilarity(args.similarity - 0.12);
+  }
+  if (patternState === "stable") {
+    return clampSimilarity(args.similarity + 0.08);
+  }
+  return clampSimilarity(args.similarity - 0.05);
+}
+
 export function createPostgresRecallStoreAccess(
   client: pg.PoolClient,
   opts: CreatePostgresRecallStoreAccessOptions = {},
@@ -176,7 +212,7 @@ export function createPostgresRecallStoreAccess(
     capability_version: RECALL_STORE_ACCESS_CAPABILITY_VERSION,
     capabilities,
     async stage1CandidatesAnn(params: RecallStage1Params): Promise<RecallCandidate[]> {
-      const out = await client.query<RecallCandidate>(
+      const out = await client.query<RecallCandidate & { slots: Record<string, unknown> | null; distance: number }>(
         `
         WITH knn AS (
           -- Performance-first: do ANN kNN on the broadest safe subset to encourage HNSW usage,
@@ -187,6 +223,7 @@ export function createPostgresRecallStoreAccess(
             n.title,
             n.text_summary,
             n.tier::text AS tier,
+            n.slots,
             n.salience,
             n.confidence,
             (n.embedding <=> $1::vector(1536)) AS distance
@@ -209,11 +246,13 @@ export function createPostgresRecallStoreAccess(
           k.title,
           k.text_summary,
           k.tier,
+          k.slots,
           k.salience,
           k.confidence,
+          k.distance,
           1.0 - k.distance AS similarity
         FROM knn k
-        WHERE k.type IN ('event', 'topic', 'concept', 'entity', 'rule')
+        WHERE k.type IN ('event', 'topic', 'concept', 'entity', 'rule', 'procedure')
           AND (
             k.type NOT IN ('event', 'evidence')
             OR NOT EXISTS (
@@ -243,16 +282,51 @@ export function createPostgresRecallStoreAccess(
                 AND d.state IN ('shadow', 'active')
             )
           )
-        ORDER BY k.distance ASC
-        LIMIT $4
+          AND (
+            k.type <> 'procedure'
+            OR EXISTS (
+              SELECT 1
+              FROM memory_nodes p
+              WHERE p.id = k.id
+                AND (
+                  jsonb_typeof(p.slots->'anchor_v1') = 'object'
+                  OR (
+                    jsonb_typeof(p.slots->'execution_native_v1') = 'object'
+                    AND p.slots->'execution_native_v1'->>'execution_kind' = 'workflow_anchor'
+                  )
+                )
+            )
+          )
         `,
         stage1QueryParams(params),
       );
-      return out.rows;
+      return out.rows
+        .map((row) => ({
+          id: row.id,
+          type: row.type,
+          title: row.title,
+          text_summary: row.text_summary,
+          tier: row.tier,
+          salience: row.salience,
+          confidence: row.confidence,
+          similarity: adjustRecallCandidateSimilarityForTrust({
+            type: row.type,
+            slots: row.slots,
+            similarity: row.similarity,
+          }),
+          distance: row.distance,
+        }))
+        .sort((a, b) =>
+          b.similarity - a.similarity
+          || a.distance - b.distance
+          || b.confidence - a.confidence
+          || a.id.localeCompare(b.id))
+        .slice(0, params.limit)
+        .map(({ distance: _distance, ...candidate }) => candidate);
     },
 
     async stage1CandidatesExactFallback(params: RecallStage1Params): Promise<RecallCandidate[]> {
-      const out = await client.query<RecallCandidate>(
+      const out = await client.query<RecallCandidate & { slots: Record<string, unknown> | null; distance: number }>(
         `
         WITH ranked AS (
           -- Exact fallback: compute distance first and order by derived scalar distance.
@@ -263,6 +337,7 @@ export function createPostgresRecallStoreAccess(
             n.title,
             n.text_summary,
             n.tier::text AS tier,
+            n.slots,
             n.salience,
             n.confidence,
             ((n.embedding <=> $1::vector(1536))::double precision + 0.0) AS distance
@@ -289,11 +364,13 @@ export function createPostgresRecallStoreAccess(
           k.title,
           k.text_summary,
           k.tier,
+          k.slots,
           k.salience,
           k.confidence,
+          k.distance,
           1.0 - k.distance AS similarity
         FROM knn k
-        WHERE k.type IN ('event', 'topic', 'concept', 'entity', 'rule')
+        WHERE k.type IN ('event', 'topic', 'concept', 'entity', 'rule', 'procedure')
           AND (
             k.type NOT IN ('event', 'evidence')
             OR NOT EXISTS (
@@ -323,12 +400,47 @@ export function createPostgresRecallStoreAccess(
                 AND d.state IN ('shadow', 'active')
             )
           )
-        ORDER BY k.distance ASC
-        LIMIT $4
+          AND (
+            k.type <> 'procedure'
+            OR EXISTS (
+              SELECT 1
+              FROM memory_nodes p
+              WHERE p.id = k.id
+                AND (
+                  jsonb_typeof(p.slots->'anchor_v1') = 'object'
+                  OR (
+                    jsonb_typeof(p.slots->'execution_native_v1') = 'object'
+                    AND p.slots->'execution_native_v1'->>'execution_kind' = 'workflow_anchor'
+                  )
+                )
+            )
+          )
         `,
         stage1QueryParams(params),
       );
-      return out.rows;
+      return out.rows
+        .map((row) => ({
+          id: row.id,
+          type: row.type,
+          title: row.title,
+          text_summary: row.text_summary,
+          tier: row.tier,
+          salience: row.salience,
+          confidence: row.confidence,
+          similarity: adjustRecallCandidateSimilarityForTrust({
+            type: row.type,
+            slots: row.slots,
+            similarity: row.similarity,
+          }),
+          distance: row.distance,
+        }))
+        .sort((a, b) =>
+          b.similarity - a.similarity
+          || a.distance - b.distance
+          || b.confidence - a.confidence
+          || a.id.localeCompare(b.id))
+        .slice(0, params.limit)
+        .map(({ distance: _distance, ...candidate }) => candidate);
     },
 
     async stage2Edges(params: RecallStage2EdgesParams): Promise<RecallEdgeRow[]> {

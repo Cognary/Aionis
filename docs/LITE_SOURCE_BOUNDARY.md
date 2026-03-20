@@ -9,6 +9,7 @@ Current source boundary:
 - `src/app/runtime-services.ts` is narrowed to Lite-owned store/runtime wiring only.
 - `src/app/request-guards.ts` is narrowed to local-only identity and rate-limit guards.
 - `src/routes/memory-access.ts` is narrowed to Lite SQLite access only.
+- `src/routes/memory-access.ts` also exposes Lite-only anchor payload rehydration without restoring server lifecycle routes.
 - `src/routes/memory-feedback-tools.ts` is narrowed to Lite SQLite feedback/rules/tools access only.
 - `src/routes/handoff.ts` is narrowed to Lite SQLite handoff store/recover only.
 - `src/routes/memory-recall.ts` is narrowed to direct Lite recall access plus Lite rule evaluation.
@@ -38,6 +39,7 @@ Lite-local automation kernel currently supports:
 
 Still unsupported in Lite:
 - archive rehydrate and node activation lifecycle routes
+- server-style archive lifecycle orchestration remains unsupported even though Lite may rehydrate anchor-linked payloads locally
 - reviewer workflows
 - promotion/control-plane flows
 - server alerting and admin automation surfaces

@@ -8,7 +8,7 @@ export type SqliteStatement = {
 
 export type SqliteDatabase = {
   exec(sql: string): unknown;
-  prepare(sql: string): SqliteStatement;
+  prepare<T = any>(sql: string): SqliteStatement;
   close(): void;
 };
 

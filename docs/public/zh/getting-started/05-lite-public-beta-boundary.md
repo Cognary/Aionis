@@ -10,6 +10,10 @@ title: "Lite Public Beta 边界"
 
 如果你想先看一版更短的 operator 视角能力总结，直接看 [Lite API 能力指南](/public/zh/getting-started/07-lite-api-capability-guide)。
 
+如果你想先看一版更适合发布说明或 demo 开场的对外短叙事，直接看 [Lite Execution-Memory Beta Narrative](/public/zh/getting-started/08-lite-execution-memory-beta-narrative)。
+
+如果你需要一步一步照着讲的 demo 脚本，直接看 [Lite Execution-Memory Demo Walkthrough](/public/zh/getting-started/09-lite-execution-memory-demo-walkthrough)。
+
 ## 定位
 
 Aionis Lite public beta 是：
@@ -17,12 +21,21 @@ Aionis Lite public beta 是：
 1. 单用户、本地运行时
 2. SQLite-backed 的 Aionis kernel edition
 3. 本地体验 memory、replay、context 工作流的最快路径
+4. 第一条已经明确暴露 `Anchor-Guided Rehydration Loop` 的 Lite 发布线
 
 Aionis Lite public beta 不是：
 
 1. Server 的生产替代品
 2. 多用户团队 control plane
 3. 对 Server parity 的承诺
+
+命名后的执行记忆主链：
+
+`Anchor-Guided Rehydration Loop`
+
+定义：
+
+`stable execution -> workflow anchor -> recall -> runtime hint -> optional rehydration`
 
 ## Lite Public Beta 当前支持
 
@@ -54,12 +67,18 @@ Aionis Lite public beta 不是：
 11. graph inspection：
    - `find`
    - `resolve(node|edge|commit|decision)`
+   - `anchors/rehydrate_payload`
 12. policy loop：
    - `rules/evaluate`
    - `tools/select`
    - `tools/decision`
    - `tools/run`
+   - `tools/rehydrate_payload`
    - `tools/feedback`
+
+这意味着 Lite 已经暴露出 `Anchor-Guided Rehydration Loop` 的主链路由面。
+replay / playbook promotion 对应稳定执行产物一侧。
+recall 与 `rehydrate_payload` 对应后续的 recall、runtime hint 与按需展开一侧。
 
 补充约束：
 

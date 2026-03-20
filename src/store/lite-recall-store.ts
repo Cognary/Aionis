@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { toVectorLiteral } from "../util/pgvector.js";
+import { RECALL_STORE_ACCESS_CAPABILITY_VERSION, adjustRecallCandidateSimilarityForTrust } from "./recall-access.js";
 import type {
   RecallAuditInsertParams,
   RecallCandidate,
@@ -14,7 +15,6 @@ import type {
   RecallStoreAccess,
   RecallStoreCapabilities,
 } from "./recall-access.js";
-import { RECALL_STORE_ACCESS_CAPABILITY_VERSION } from "./recall-access.js";
 import { createSqliteDatabase } from "./sqlite-compat.js";
 
 type LiteRecallNodeRow = {
@@ -116,6 +116,17 @@ function parseEmbedding(raw: string | null | undefined): number[] | null {
   const numbers = parsed.map((v) => Number(v));
   if (numbers.some((v) => !Number.isFinite(v))) return null;
   return numbers;
+}
+
+function hasExecutionNativeWorkflowAnchor(slots: Record<string, unknown>): boolean {
+  const executionNative = parseJsonExecutionNative(slots);
+  return executionNative?.execution_kind === "workflow_anchor";
+}
+
+function parseJsonExecutionNative(slots: Record<string, unknown>): { execution_kind?: string } | null {
+  const executionNative = slots.execution_native_v1;
+  if (!executionNative || typeof executionNative !== "object" || Array.isArray(executionNative)) return null;
+  return executionNative as { execution_kind?: string };
 }
 
 function cosineDistance(a: number[], b: number[]): number {
@@ -266,11 +277,15 @@ export function createLiteRecallStore(
 
     ranked.sort((a, b) => a.distance - b.distance || a.row.id.localeCompare(b.row.id));
     const knn = ranked.slice(0, Math.max(0, params.oversample));
-    const out: RecallCandidate[] = [];
+    const out: Array<RecallCandidate & { distance: number }> = [];
     for (const item of knn) {
       const row = item.row;
-      if (!["event", "topic", "concept", "entity", "rule"].includes(row.type)) continue;
       const slots = parseJsonObject(row.slots_json);
+      const hasAnchorPayload =
+        !!slots.anchor_v1 && typeof slots.anchor_v1 === "object" && !Array.isArray(slots.anchor_v1);
+      const hasExecutionWorkflowAnchor = hasExecutionNativeWorkflowAnchor(slots);
+      if (!["event", "topic", "concept", "entity", "rule", "procedure"].includes(row.type)) continue;
+      if (row.type === "procedure" && !hasAnchorPayload && !hasExecutionWorkflowAnchor) continue;
       if ((row.type === "event" || row.type === "evidence")
         && String(slots.replay_learning_episode ?? "false") === "true"
         && String(slots.lifecycle_state ?? "active") === "archived") {
@@ -296,11 +311,22 @@ export function createLiteRecallStore(
         tier: row.tier,
         salience: row.salience,
         confidence: row.confidence,
-        similarity: 1 - item.distance,
+        similarity: adjustRecallCandidateSimilarityForTrust({
+          type: row.type,
+          slots,
+          similarity: 1 - item.distance,
+        }),
+        distance: item.distance,
       });
-      if (out.length >= params.limit) break;
     }
-    return out;
+    return out
+      .sort((a, b) =>
+        b.similarity - a.similarity
+        || a.distance - b.distance
+        || b.confidence - a.confidence
+        || a.id.localeCompare(b.id))
+      .slice(0, params.limit)
+      .map(({ distance: _distance, ...candidate }) => candidate);
   };
 
   return {

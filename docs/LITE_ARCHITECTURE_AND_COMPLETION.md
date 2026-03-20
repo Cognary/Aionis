@@ -210,6 +210,7 @@ Current architectural reality:
 2. playbook execution is real, not stubbed
 3. governed replay exists in Lite, but only through the Lite-local path
 4. replay repair review policy in Lite is narrowed to global-plus-endpoint overlays only
+5. stable workflow anchor production is now consistent for both newly promoted stable playbooks and already-stable latest playbooks
 
 ## Automation Kernel
 
@@ -280,6 +281,30 @@ Current caveat:
 1. the default executor is intentionally `mock`
 2. the route surface is real and persistent, but default sandbox execution is still optimized for local validation rather than hardened production execution
 3. the current local-process preset is intentionally narrow and only allows `echo` by default
+
+## Execution Memory Runtime Notes
+
+Two runtime semantics are now important enough to treat as architectural behavior rather than implementation detail.
+
+### 1. Rehydration Identity
+
+`rehydrate_payload` follows the Lite single-user identity model.
+
+In practical terms:
+
+1. the normal Lite path inherits `LITE_LOCAL_ACTOR_ID`
+2. private local anchors remain rehydratable through the standard route and tool surfaces
+3. runtime hints do not need to restate actor to remain correct in the default local case
+
+### 2. Policy Reuse Precedence
+
+The `Execution Policy Learning Loop` does not override explicit operator or rule policy.
+
+In practical terms:
+
+1. recalled trusted patterns may shape tool ordering
+2. explicit `tool.prefer` remains higher priority
+3. selector reuse is memory-guided policy learning, not silent policy replacement
 
 ## Shared-Core Boundary
 

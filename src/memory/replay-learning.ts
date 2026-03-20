@@ -2,9 +2,12 @@ import stableStringify from "fast-json-stable-stringify";
 import type pg from "pg";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
-import { createPostgresWriteStoreAccess } from "../store/write-access.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
+import { createPostgresWriteStoreAccess, type WriteStoreAccess } from "../store/write-access.js";
 import { sha256Hex } from "../util/crypto.js";
 import { HttpError } from "../util/http.js";
+import { stableUuid } from "../util/uuid.js";
+import { MemoryAnchorV1Schema } from "./schemas.js";
 import { updateRuleState } from "./rules.js";
 import { buildAionisUri } from "./uri.js";
 import { applyMemoryWrite, prepareMemoryWrite } from "./write.js";
@@ -41,6 +44,8 @@ export type ReplayLearningProjectionResult = {
   generated_rule_uri?: string;
   generated_episode_node_id?: string;
   generated_episode_uri?: string;
+  generated_workflow_node_id?: string;
+  generated_workflow_uri?: string;
   rule_state?: "draft" | "shadow";
   commit_id?: string;
   commit_uri?: string;
@@ -65,6 +70,15 @@ export type ReplayLearningProjectionSource = {
   };
 };
 
+export type ReplayLearningProjectionArtifacts = {
+  ruleClientId: string;
+  episodeClientId: string;
+  workflowClientId: string;
+  nodes: Array<Record<string, unknown>>;
+  edges: Array<Record<string, unknown>>;
+  shouldPromoteStableWorkflow: boolean;
+};
+
 type ReplayLearningWriteOptions = {
   defaultScope: string;
   defaultTenantId: string;
@@ -76,6 +90,7 @@ type ReplayLearningWriteOptions = {
   writeAccessShadowMirrorV2: boolean;
   embedder: EmbeddingProvider | null;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
+  writeAccess?: WriteStoreAccess | null;
 };
 
 export type ReplayLearningProjectionPayload = {
@@ -100,6 +115,25 @@ type ExistingReplayLearningRule = {
 type ExistingReplayLearningEpisode = {
   node_id: string;
 };
+
+const REPLAY_LEARNING_WORKFLOW_REQUIRED_OBSERVATIONS = 2;
+
+function asLiteReplayLearningStore(writeAccess?: WriteStoreAccess | null): LiteWriteStore | null {
+  if (
+    !writeAccess
+    || typeof (writeAccess as LiteWriteStore).findNodes !== "function"
+    || typeof (writeAccess as LiteWriteStore).getRuleDef !== "function"
+    || typeof (writeAccess as LiteWriteStore).insertOutboxEvent !== "function"
+    || typeof (writeAccess as LiteWriteStore).updateNodeAnchorState !== "function"
+  ) {
+    return null;
+  }
+  return writeAccess as LiteWriteStore;
+}
+
+function stableNodeIdFromClientId(scope: string, clientId: string): string {
+  return stableUuid(`${scope}:node:${clientId.trim()}`);
+}
 
 function asObject(v: unknown): Record<string, unknown> | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
@@ -145,6 +179,329 @@ function derivePreferredTools(slots: Record<string, unknown>, maxTools: number):
   return uniqueStrings(toolNames, Math.max(1, maxTools));
 }
 
+function deriveReplayLearningWorkflowSignature(playbookId: string, slots: Record<string, unknown>): string {
+  const steps = Array.isArray(slots.steps_template)
+    ? slots.steps_template.map((step) => {
+        const obj = asObject(step) ?? {};
+        return {
+          tool_name: toStringOrNull(obj.tool_name),
+          safety_level: toStringOrNull(obj.safety_level),
+          preconditions: Array.isArray(obj.preconditions) ? obj.preconditions.length : 0,
+          postconditions: Array.isArray(obj.postconditions) ? obj.postconditions.length : 0,
+        };
+      })
+    : [];
+  return `replay_learning_workflow:${sha256Hex(stableStringify({ playbook_id: playbookId, steps })).slice(0, 24)}`;
+}
+
+function deriveReplayLearningKeySteps(slots: Record<string, unknown>): string[] {
+  const stepsTemplate = Array.isArray(slots.steps_template) ? slots.steps_template : [];
+  return stepsTemplate
+    .map((step) => {
+      const obj = asObject(step) ?? {};
+      const stepIndex = Number(obj.step_index ?? 0) || null;
+      const toolName = toStringOrNull(obj.tool_name);
+      if (!toolName) return null;
+      return stepIndex != null ? `step_${stepIndex}:${toolName}` : toolName;
+    })
+    .filter((value): value is string => !!value)
+    .slice(0, 12);
+}
+
+function buildReplayLearningStableWorkflowAnchor(args: {
+  scopeKey: string;
+  clientId: string;
+  playbookId: string;
+  playbookTitle: string | null;
+  playbookSummary: string | null;
+  playbookSlots: Record<string, unknown>;
+  sourceNodeId: string;
+  sourceCommitId: string | null;
+  workflowSignature: string;
+  observedCount: number;
+  episodeNodeId: string | null;
+  promotedAt: string;
+}) {
+  const toolSet = derivePreferredTools(args.playbookSlots, 64);
+  const sourceRunId = toStringOrNull(args.playbookSlots.source_run_id);
+  const createdFromRunIds = Array.isArray(args.playbookSlots.created_from_run_ids)
+    ? args.playbookSlots.created_from_run_ids.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  const summary =
+    args.playbookSummary
+    ?? args.playbookTitle
+    ?? `Replay learned workflow for playbook ${args.playbookId}`;
+  const payloadCostHint: "low" | "medium" | "high" =
+    toolSet.length <= 2 ? "low" : toolSet.length <= 5 ? "medium" : "high";
+  const anchorNodeId = stableNodeIdFromClientId(args.scopeKey, args.clientId);
+  return MemoryAnchorV1Schema.parse({
+    anchor_kind: "workflow",
+    anchor_level: "L2",
+    task_signature: `replay_playbook:${args.playbookId}`,
+    task_class: "replay_learning",
+    workflow_signature: args.workflowSignature,
+    summary,
+    tool_set: toolSet,
+    key_steps: deriveReplayLearningKeySteps(args.playbookSlots),
+    outcome: {
+      status: "success",
+      result_class: "replay_learning_stable",
+      success_score: 0.9,
+    },
+    source: {
+      source_kind: "playbook",
+      node_id: anchorNodeId,
+      run_id: sourceRunId,
+      playbook_id: args.playbookId,
+      commit_id: args.sourceCommitId,
+    },
+    payload_refs: {
+      node_ids: [args.sourceNodeId, args.episodeNodeId].filter((value): value is string => !!value),
+      decision_ids: [],
+      run_ids: sourceRunId ? [sourceRunId, ...createdFromRunIds.filter((runId) => runId !== sourceRunId)] : createdFromRunIds,
+      step_ids: [],
+      commit_ids: [args.sourceCommitId].filter((value): value is string => !!value),
+    },
+    rehydration: {
+      default_mode: "partial",
+      payload_cost_hint: payloadCostHint,
+      recommended_when: [
+        "workflow_summary_is_not_enough",
+        "need_exact_replay_learning_episode_context",
+        "irreversible_action_requires_exact_sequence",
+      ],
+    },
+    recall_features: {
+      tool_tags: toolSet,
+      outcome_tags: ["replay_learning", "stable"],
+      keywords: [args.playbookTitle, summary, args.playbookId].filter((value): value is string => !!value).slice(0, 8),
+    },
+    metrics: {
+      usage_count: 0,
+      reuse_success_count: 0,
+      reuse_failure_count: 0,
+      last_used_at: null,
+    },
+    maintenance: {
+      model: "lazy_online_v1",
+      maintenance_state: "retain",
+      offline_priority: "retain_workflow",
+      lazy_update_fields: ["usage_count", "last_used_at"],
+      last_maintenance_at: args.promotedAt,
+    },
+    workflow_promotion: {
+      promotion_state: "stable",
+      promotion_origin: "replay_learning_auto_promotion",
+      required_observations: REPLAY_LEARNING_WORKFLOW_REQUIRED_OBSERVATIONS,
+      observed_count: args.observedCount,
+      last_transition: "promoted_to_stable",
+      last_transition_at: args.promotedAt,
+      source_status: null,
+    },
+    schema_version: "anchor_v1",
+  });
+}
+
+export function buildReplayLearningProjectionArtifacts(args: {
+  source: ReplayLearningProjectionSource;
+  matcherFingerprint: string;
+  policyFingerprint: string;
+  duplicateRuleNodeId: string | null;
+  workflowSignature: string;
+  preferTools: string[];
+  shouldCreateRule: boolean;
+  shouldCreateEpisode: boolean;
+  shouldPromoteStableWorkflow: boolean;
+  observedWorkflowCount: number;
+  projectedAt: string;
+  ttlExpiresAt: string;
+}): ReplayLearningProjectionArtifacts {
+  const ruleClientId = `replay:learning:rule:${args.source.playbook_id}:${args.matcherFingerprint}:${args.policyFingerprint}`;
+  const episodeClientId = `replay:learning:episode:${args.source.playbook_id}:v${args.source.playbook_version}`;
+  const workflowClientId = `replay:learning:workflow:${args.source.playbook_id}:${args.workflowSignature}`;
+  const nodes: Array<Record<string, unknown>> = [];
+  const edges: Array<Record<string, unknown>> = [];
+
+  if (args.shouldCreateRule) {
+    nodes.push({
+      client_id: ruleClientId,
+      type: "rule",
+      title: args.source.playbook_title ? `Replay Rule: ${args.source.playbook_title}` : `Replay Rule ${args.source.playbook_id.slice(0, 8)}`,
+      text_summary: `Generated from replay playbook ${args.source.playbook_id} v${args.source.playbook_version}`,
+      slots: {
+        if: asObject(args.source.playbook_slots.matchers) ?? {},
+        then: {
+          tool: {
+            prefer: args.preferTools,
+          },
+          extensions: {
+            replay: {
+              source: "replay_learning_v1",
+              playbook_id: args.source.playbook_id,
+              playbook_version: args.source.playbook_version,
+            },
+          },
+        },
+        exceptions: [],
+        rule_scope: "global",
+        replay_learning: {
+          generated_by: "replay_learning_v1",
+          source_playbook_id: args.source.playbook_id,
+          source_playbook_version: args.source.playbook_version,
+          source_playbook_node_id: args.source.playbook_node_id,
+          matcher_fingerprint: args.matcherFingerprint,
+          policy_fingerprint: args.policyFingerprint,
+          projected_at: args.projectedAt,
+        },
+      },
+    });
+    edges.push({
+      type: "derived_from",
+      src: { client_id: ruleClientId },
+      dst: { id: args.source.playbook_node_id },
+    });
+  }
+
+  if (args.shouldCreateEpisode) {
+    nodes.push({
+      client_id: episodeClientId,
+      type: "event",
+      title: args.source.playbook_title ? `Replay Episode: ${args.source.playbook_title}` : `Replay Episode ${args.source.playbook_id.slice(0, 8)}`,
+      text_summary:
+        args.source.playbook_summary
+        ?? `Replay repair learning episode for playbook ${args.source.playbook_id} v${args.source.playbook_version}`,
+      slots: {
+        replay_learning_episode: true,
+        summary_kind: args.shouldPromoteStableWorkflow ? "replay_learning_episode" : "workflow_candidate",
+        compression_layer: "L1",
+        lifecycle_state: "active",
+        ttl_expires_at: args.ttlExpiresAt,
+        archive_candidate: true,
+        ...(!args.shouldPromoteStableWorkflow
+          ? {
+              execution_native_v1: {
+                schema_version: "execution_native_v1",
+                execution_kind: "workflow_candidate",
+                summary_kind: "workflow_candidate",
+                compression_layer: "L1",
+                task_signature: `replay_playbook:${args.source.playbook_id}`,
+                workflow_signature: args.workflowSignature,
+                anchor_kind: "workflow",
+                anchor_level: "L1",
+                workflow_promotion: {
+                  promotion_state: "candidate",
+                  promotion_origin: "replay_learning_episode",
+                  required_observations: REPLAY_LEARNING_WORKFLOW_REQUIRED_OBSERVATIONS,
+                  observed_count: args.observedWorkflowCount,
+                  last_transition: "candidate_observed",
+                  last_transition_at: args.projectedAt,
+                  source_status: null,
+                },
+                maintenance: {
+                  model: "lazy_online_v1",
+                  maintenance_state: "observe",
+                  offline_priority: "promote_candidate",
+                  lazy_update_fields: ["usage_count", "last_used_at"],
+                  last_maintenance_at: args.projectedAt,
+                },
+              },
+            }
+          : {}),
+        ...(args.duplicateRuleNodeId ? { source_rule_node_id: args.duplicateRuleNodeId } : {}),
+        replay_learning: {
+          generated_by: "replay_learning_v1",
+          source_playbook_id: args.source.playbook_id,
+          source_playbook_version: args.source.playbook_version,
+          source_playbook_node_id: args.source.playbook_node_id,
+          source_commit_id: args.source.source_commit_id,
+          ...(args.duplicateRuleNodeId ? { source_rule_node_id: args.duplicateRuleNodeId } : {}),
+          matcher_fingerprint: args.matcherFingerprint,
+          policy_fingerprint: args.policyFingerprint,
+          projected_at: args.projectedAt,
+        },
+      },
+    });
+    edges.push({
+      type: "derived_from",
+      src: { client_id: episodeClientId },
+      dst: { id: args.source.playbook_node_id },
+    });
+  }
+
+  if (args.shouldPromoteStableWorkflow) {
+    const episodeNodeId = args.shouldCreateEpisode ? stableNodeIdFromClientId(args.source.scope_key, episodeClientId) : null;
+    const workflowAnchor = buildReplayLearningStableWorkflowAnchor({
+      scopeKey: args.source.scope_key,
+      clientId: workflowClientId,
+      playbookId: args.source.playbook_id,
+      playbookTitle: args.source.playbook_title,
+      playbookSummary: args.source.playbook_summary,
+      playbookSlots: args.source.playbook_slots,
+      sourceNodeId: args.source.playbook_node_id,
+      sourceCommitId: args.source.source_commit_id,
+      workflowSignature: args.workflowSignature,
+      observedCount: args.observedWorkflowCount,
+      episodeNodeId,
+      promotedAt: args.projectedAt,
+    });
+    nodes.push({
+      client_id: workflowClientId,
+      type: "procedure",
+      title: args.source.playbook_title ? `Replay Learned Workflow: ${args.source.playbook_title}` : `Replay Learned Workflow ${args.source.playbook_id.slice(0, 8)}`,
+      text_summary: workflowAnchor.summary,
+      slots: {
+        summary_kind: "workflow_anchor",
+        compression_layer: "L2",
+        anchor_v1: workflowAnchor,
+        execution_native_v1: {
+          schema_version: "execution_native_v1",
+          execution_kind: "workflow_anchor",
+          summary_kind: "workflow_anchor",
+          compression_layer: "L2",
+          task_signature: workflowAnchor.task_signature,
+          workflow_signature: workflowAnchor.workflow_signature,
+          anchor_kind: "workflow",
+          anchor_level: "L2",
+          workflow_promotion: workflowAnchor.workflow_promotion,
+          maintenance: workflowAnchor.maintenance,
+          rehydration: workflowAnchor.rehydration,
+        },
+        replay_learning: {
+          generated_by: "replay_learning_v1",
+          source_playbook_id: args.source.playbook_id,
+          promoted_from_playbook_version: args.source.playbook_version,
+          source_playbook_node_id: args.source.playbook_node_id,
+          source_commit_id: args.source.source_commit_id,
+          workflow_signature: args.workflowSignature,
+          observed_count: args.observedWorkflowCount,
+          promoted_at: args.projectedAt,
+        },
+      },
+    });
+    edges.push({
+      type: "derived_from",
+      src: { client_id: workflowClientId },
+      dst: { id: args.source.playbook_node_id },
+    });
+    if (args.shouldCreateEpisode) {
+      edges.push({
+        type: "derived_from",
+        src: { client_id: workflowClientId },
+        dst: { client_id: episodeClientId },
+      });
+    }
+  }
+
+  return {
+    ruleClientId,
+    episodeClientId,
+    workflowClientId,
+    nodes,
+    edges,
+    shouldPromoteStableWorkflow: args.shouldPromoteStableWorkflow,
+  };
+}
+
 function parseTotalSteps(slots: Record<string, unknown>, sourceMetrics?: { total_steps?: number }): number {
   const fromMetrics = Number(sourceMetrics?.total_steps ?? NaN);
   if (Number.isFinite(fromMetrics)) return Math.max(0, Math.trunc(fromMetrics));
@@ -166,7 +523,40 @@ async function listExistingReplayLearningRules(
   client: pg.PoolClient,
   scope: string,
   playbookId: string,
+  writeAccess?: WriteStoreAccess | null,
+  consumerAgentId?: string | null,
+  consumerTeamId?: string | null,
 ): Promise<ExistingReplayLearningRule[]> {
+  const liteWriteStore = asLiteReplayLearningStore(writeAccess);
+  if (liteWriteStore) {
+    const { rows } = await liteWriteStore.findNodes({
+      scope,
+      type: "rule",
+      slotsContains: {
+        replay_learning: {
+          generated_by: "replay_learning_v1",
+          source_playbook_id: playbookId,
+        },
+      },
+      consumerAgentId: consumerAgentId ?? null,
+      consumerTeamId: consumerTeamId ?? null,
+      limit: 200,
+      offset: 0,
+    });
+    const out: ExistingReplayLearningRule[] = [];
+    for (const row of rows) {
+      const slots = asObject(row.slots) ?? {};
+      const replayLearning = asObject(slots.replay_learning) ?? {};
+      const ruleDef = await liteWriteStore.getRuleDef(scope, row.id);
+      out.push({
+        rule_node_id: row.id,
+        matcher_fingerprint: toStringOrNull(replayLearning.matcher_fingerprint),
+        policy_fingerprint: toStringOrNull(replayLearning.policy_fingerprint),
+        state: ruleDef?.state ?? null,
+      });
+    }
+    return out;
+  }
   const out = await client.query<{
     rule_node_id: string;
     matcher_fingerprint: string | null;
@@ -205,7 +595,30 @@ async function findExistingReplayLearningEpisode(
   scope: string,
   playbookId: string,
   playbookVersion: number,
+  writeAccess?: WriteStoreAccess | null,
+  consumerAgentId?: string | null,
+  consumerTeamId?: string | null,
 ): Promise<ExistingReplayLearningEpisode | null> {
+  const liteWriteStore = asLiteReplayLearningStore(writeAccess);
+  if (liteWriteStore) {
+    const { rows } = await liteWriteStore.findNodes({
+      scope,
+      type: "event",
+      slotsContains: {
+        replay_learning_episode: true,
+        replay_learning: {
+          source_playbook_id: playbookId,
+          source_playbook_version: playbookVersion,
+        },
+      },
+      consumerAgentId: consumerAgentId ?? null,
+      consumerTeamId: consumerTeamId ?? null,
+      limit: 1,
+      offset: 0,
+    });
+    const row = rows[0];
+    return row ? { node_id: row.id } : null;
+  }
   const out = await client.query<{ node_id: string }>(
     `
     SELECT n.id::text AS node_id
@@ -222,6 +635,62 @@ async function findExistingReplayLearningEpisode(
   );
   if ((out.rowCount ?? 0) < 1) return null;
   return { node_id: out.rows[0].node_id };
+}
+
+async function countReplayLearningWorkflowObservations(
+  client: pg.PoolClient,
+  scope: string,
+  playbookId: string,
+  workflowSignature: string,
+  writeAccess?: WriteStoreAccess | null,
+  consumerAgentId?: string | null,
+  consumerTeamId?: string | null,
+): Promise<number> {
+  const liteWriteStore = asLiteReplayLearningStore(writeAccess);
+  if (liteWriteStore) {
+    const { rows } = await liteWriteStore.findNodes({
+      scope,
+      type: "event",
+      slotsContains: {
+        replay_learning_episode: true,
+        replay_learning: {
+          source_playbook_id: playbookId,
+        },
+      },
+      consumerAgentId: consumerAgentId ?? null,
+      consumerTeamId: consumerTeamId ?? null,
+      limit: 200,
+      offset: 0,
+    });
+    const observedVersions = new Set<string>();
+    for (const row of rows) {
+      const slots = asObject(row.slots) ?? {};
+      const executionNative = asObject(slots.execution_native_v1) ?? {};
+      const replayLearning = asObject(slots.replay_learning) ?? {};
+      if (toStringOrNull(executionNative.workflow_signature) !== workflowSignature) continue;
+      const versionValue = replayLearning.source_playbook_version;
+      const versionKey = typeof versionValue === "number"
+        ? String(Math.trunc(versionValue))
+        : toStringOrNull(versionValue);
+      if (versionKey) observedVersions.add(versionKey);
+    }
+    return observedVersions.size;
+  }
+  const out = await client.query<{ observed_count: string | number | null }>(
+    `
+    SELECT COUNT(DISTINCT nullif(trim(coalesce(n.slots->'replay_learning'->>'source_playbook_version', '')), ''))::text AS observed_count
+    FROM memory_nodes n
+    WHERE n.scope = $1
+      AND n.type = 'event'::memory_node_type
+      AND coalesce(n.slots->>'replay_learning_episode', '') = 'true'
+      AND coalesce(n.slots->'replay_learning'->>'source_playbook_id', '') = $2
+      AND coalesce(n.slots->'execution_native_v1'->>'workflow_signature', '') = $3
+    `,
+    [scope, playbookId, workflowSignature],
+  );
+  const raw = Number(out.rows[0]?.observed_count ?? 0);
+  if (!Number.isFinite(raw)) return 0;
+  return Math.max(0, Math.trunc(raw));
 }
 
 export function classifyReplayLearningProjectionError(err: unknown): {
@@ -257,6 +726,7 @@ export async function enqueueReplayLearningProjectionOutbox(
     scopeKey: string;
     commitId: string;
     payload: ReplayLearningProjectionPayload;
+    writeAccess?: WriteStoreAccess | null;
   },
 ): Promise<{ job_key: string }> {
   const payloadJson = stableStringify(input.payload);
@@ -272,12 +742,23 @@ export async function enqueueReplayLearningProjectionOutbox(
       payload_sha256: payloadSha,
     }),
   );
-  await client.query(
-    `INSERT INTO memory_outbox (scope, commit_id, event_type, job_key, payload_sha256, payload)
-     VALUES ($1, $2, 'replay_learning_projection', $3, $4, $5::jsonb)
-     ON CONFLICT (scope, event_type, job_key) DO NOTHING`,
-    [input.scopeKey, input.commitId, jobKey, payloadSha, payloadJson],
-  );
+  if (input.writeAccess) {
+    await input.writeAccess.insertOutboxEvent({
+      scope: input.scopeKey,
+      commitId: input.commitId,
+      eventType: "replay_learning_projection",
+      jobKey,
+      payloadSha256: payloadSha,
+      payloadJson,
+    });
+  } else {
+    await client.query(
+      `INSERT INTO memory_outbox (scope, commit_id, event_type, job_key, payload_sha256, payload)
+       VALUES ($1, $2, 'replay_learning_projection', $3, $4, $5::jsonb)
+       ON CONFLICT (scope, event_type, job_key) DO NOTHING`,
+      [input.scopeKey, input.commitId, jobKey, payloadSha, payloadJson],
+    );
+  }
   return { job_key: jobKey };
 }
 
@@ -286,12 +767,39 @@ async function loadReplayPlaybookNode(
   scopeKey: string,
   playbookId: string,
   version: number,
+  writeAccess?: WriteStoreAccess | null,
+  consumerAgentId?: string | null,
+  consumerTeamId?: string | null,
 ): Promise<{
   playbook_node_id: string;
   title: string | null;
   text_summary: string | null;
   slots: Record<string, unknown>;
 } | null> {
+  const liteWriteStore = asLiteReplayLearningStore(writeAccess);
+  if (liteWriteStore) {
+    const { rows } = await liteWriteStore.findNodes({
+      scope: scopeKey,
+      type: "procedure",
+      slotsContains: {
+        replay_kind: "playbook",
+        playbook_id: playbookId,
+        version,
+      },
+      consumerAgentId: consumerAgentId ?? null,
+      consumerTeamId: consumerTeamId ?? null,
+      limit: 1,
+      offset: 0,
+    });
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      playbook_node_id: row.id,
+      title: row.title,
+      text_summary: row.text_summary,
+      slots: asObject(row.slots) ?? {},
+    };
+  }
   const out = await client.query<{
     playbook_node_id: string;
     title: string | null;
@@ -346,7 +854,15 @@ export async function applyReplayLearningProjectionFromPayload(
       );
     }
   }
-  const loaded = await loadReplayPlaybookNode(client, payload.scope_key, payload.playbook_id, payload.playbook_version);
+  const loaded = await loadReplayPlaybookNode(
+    client,
+    payload.scope_key,
+    payload.playbook_id,
+    payload.playbook_version,
+    writeOpts.writeAccess,
+    payload.actor,
+    null,
+  );
   if (!loaded) {
     throw new HttpError(
       404,
@@ -414,6 +930,7 @@ export async function applyReplayLearningProjection(
   }
 
   const warnings: ReplayLearningWarning[] = [];
+  const workflowSignature = deriveReplayLearningWorkflowSignature(source.playbook_id, source.playbook_slots);
   const matchers = asObject(source.playbook_slots.matchers) ?? {};
   const matcherJson = stableStringify(matchers);
   if (Buffer.byteLength(matcherJson, "utf8") > config.max_matcher_bytes) {
@@ -438,7 +955,15 @@ export async function applyReplayLearningProjection(
     },
   };
   const policyFingerprint = fingerprintJson(thenPatch);
-  const existingRulesByScope = await listExistingReplayLearningRules(client, source.scope_key, source.playbook_id);
+  const liteWriteStore = asLiteReplayLearningStore(writeOpts.writeAccess);
+  const existingRulesByScope = await listExistingReplayLearningRules(
+    client,
+    source.scope_key,
+    source.playbook_id,
+    writeOpts.writeAccess,
+    source.actor,
+    null,
+  );
   const duplicateRule = existingRulesByScope.find(
     (r) => r.matcher_fingerprint === matcherFingerprint && r.policy_fingerprint === policyFingerprint,
   );
@@ -466,6 +991,9 @@ export async function applyReplayLearningProjection(
     source.scope_key,
     source.playbook_id,
     source.playbook_version,
+    writeOpts.writeAccess,
+    source.actor,
+    null,
   );
 
   const shouldCreateRule = config.mode === "rule_and_episode" && !duplicateRule && preferTools.length > 0;
@@ -479,81 +1007,42 @@ export async function applyReplayLearningProjection(
 
   let generatedRuleNodeId: string | undefined;
   let generatedEpisodeNodeId: string | undefined;
+  let generatedWorkflowNodeId: string | undefined;
   let commitId: string | undefined;
   let commitUri: string | undefined;
+  const observedWorkflowCountBeforeWrite = await countReplayLearningWorkflowObservations(
+    client,
+    source.scope_key,
+    source.playbook_id,
+    workflowSignature,
+    writeOpts.writeAccess,
+    source.actor,
+    null,
+  );
+  const observedWorkflowCount = observedWorkflowCountBeforeWrite + (shouldCreateEpisode ? 1 : 0);
+  const shouldPromoteStableWorkflow =
+    shouldCreateEpisode && observedWorkflowCount >= REPLAY_LEARNING_WORKFLOW_REQUIRED_OBSERVATIONS;
 
   if (duplicateRule) generatedRuleNodeId = duplicateRule.rule_node_id;
   if (existingEpisode) generatedEpisodeNodeId = existingEpisode.node_id;
 
-  const ruleClientId = `replay:learning:rule:${source.playbook_id}:${matcherFingerprint}:${policyFingerprint}`;
-  const episodeClientId = `replay:learning:episode:${source.playbook_id}:v${source.playbook_version}`;
-  const nodes: any[] = [];
-  const edges: any[] = [];
   const ttlExpiresAt = new Date(Date.now() + clampInt(config.episode_ttl_days, 1, 3650) * 24 * 3600 * 1000).toISOString();
-
-  if (shouldCreateRule) {
-    nodes.push({
-      client_id: ruleClientId,
-      type: "rule",
-      title: source.playbook_title ? `Replay Rule: ${source.playbook_title}` : `Replay Rule ${source.playbook_id.slice(0, 8)}`,
-      text_summary: `Generated from replay playbook ${source.playbook_id} v${source.playbook_version}`,
-      slots: {
-        if: matchers,
-        then: thenPatch,
-        exceptions: [],
-        rule_scope: "global",
-        replay_learning: {
-          generated_by: "replay_learning_v1",
-          source_playbook_id: source.playbook_id,
-          source_playbook_version: source.playbook_version,
-          source_playbook_node_id: source.playbook_node_id,
-          matcher_fingerprint: matcherFingerprint,
-          policy_fingerprint: policyFingerprint,
-          projected_at: new Date().toISOString(),
-        },
-      },
-    });
-    edges.push({
-      type: "derived_from",
-      src: { client_id: ruleClientId },
-      dst: { id: source.playbook_node_id },
-    });
-  }
-
-  if (shouldCreateEpisode) {
-    const knownSourceRuleNodeId = duplicateRule?.rule_node_id ?? null;
-    nodes.push({
-      client_id: episodeClientId,
-      type: "event",
-      title: source.playbook_title ? `Replay Episode: ${source.playbook_title}` : `Replay Episode ${source.playbook_id.slice(0, 8)}`,
-      text_summary:
-        source.playbook_summary
-        ?? `Replay repair learning episode for playbook ${source.playbook_id} v${source.playbook_version}`,
-      slots: {
-        replay_learning_episode: true,
-        lifecycle_state: "active",
-        ttl_expires_at: ttlExpiresAt,
-        archive_candidate: true,
-        ...(knownSourceRuleNodeId ? { source_rule_node_id: knownSourceRuleNodeId } : {}),
-        replay_learning: {
-          generated_by: "replay_learning_v1",
-          source_playbook_id: source.playbook_id,
-          source_playbook_version: source.playbook_version,
-          source_playbook_node_id: source.playbook_node_id,
-          source_commit_id: source.source_commit_id,
-          ...(knownSourceRuleNodeId ? { source_rule_node_id: knownSourceRuleNodeId } : {}),
-          matcher_fingerprint: matcherFingerprint,
-          policy_fingerprint: policyFingerprint,
-          projected_at: new Date().toISOString(),
-        },
-      },
-    });
-    edges.push({
-      type: "derived_from",
-      src: { client_id: episodeClientId },
-      dst: { id: source.playbook_node_id },
-    });
-  }
+  const projectedAt = new Date().toISOString();
+  const plan = buildReplayLearningProjectionArtifacts({
+    source,
+    matcherFingerprint,
+    policyFingerprint,
+    duplicateRuleNodeId: duplicateRule?.rule_node_id ?? null,
+    workflowSignature,
+    preferTools,
+    shouldCreateRule,
+    shouldCreateEpisode,
+    shouldPromoteStableWorkflow,
+    observedWorkflowCount,
+    projectedAt,
+    ttlExpiresAt,
+  });
+  const { ruleClientId, episodeClientId, workflowClientId, nodes, edges } = plan;
 
   if (nodes.length > 0) {
     const writeReq = {
@@ -562,6 +1051,9 @@ export async function applyReplayLearningProjection(
       actor: source.actor || "replay_learning_projection",
       input_text: `replay learning projection for ${source.playbook_id} v${source.playbook_version}`,
       auto_embed: false,
+      memory_lane: "private" as const,
+      producer_agent_id: source.actor || "replay_learning_projection",
+      owner_agent_id: source.actor || "replay_learning_projection",
       nodes,
       edges,
     };
@@ -582,15 +1074,17 @@ export async function applyReplayLearningProjection(
       allowCrossScopeEdges: writeOpts.allowCrossScopeEdges,
       shadowDualWriteEnabled: writeOpts.shadowDualWriteEnabled,
       shadowDualWriteStrict: writeOpts.shadowDualWriteStrict,
-      write_access: createPostgresWriteStoreAccess(client, {
+      write_access: writeOpts.writeAccess ?? createPostgresWriteStoreAccess(client, {
         capabilities: { shadow_mirror_v2: writeOpts.writeAccessShadowMirrorV2 },
       }),
     });
     if (writeOpts.embeddedRuntime) await writeOpts.embeddedRuntime.applyWrite(prepared as any, out as any);
     const createdRule = out.nodes.find((n) => n.client_id === ruleClientId);
     const createdEpisode = out.nodes.find((n) => n.client_id === episodeClientId);
+    const createdWorkflow = out.nodes.find((n) => n.client_id === workflowClientId);
     if (createdRule) generatedRuleNodeId = createdRule.id;
     if (createdEpisode) generatedEpisodeNodeId = createdEpisode.id;
+    if (createdWorkflow) generatedWorkflowNodeId = createdWorkflow.id;
     commitId = out.commit_id;
     commitUri = out.commit_uri ?? buildAionisUri({ tenant_id: source.tenant_id, scope: source.scope, type: "commit", id: out.commit_id });
   }
@@ -609,7 +1103,7 @@ export async function applyReplayLearningProjection(
       },
       writeOpts.defaultScope,
       writeOpts.defaultTenantId,
-      { embeddedRuntime: writeOpts.embeddedRuntime },
+      { embeddedRuntime: writeOpts.embeddedRuntime, liteWriteStore },
     );
     finalRuleState = "shadow";
     commitId = stateOut.commit_id;
@@ -617,25 +1111,55 @@ export async function applyReplayLearningProjection(
   }
 
   if (generatedRuleNodeId && generatedEpisodeNodeId) {
-    await client.query(
-      `
-      UPDATE memory_nodes n
-      SET slots =
-        jsonb_set(
+    if (liteWriteStore) {
+      const episodeNode = await liteWriteStore.resolveNode({
+        scope: source.scope_key,
+        id: generatedEpisodeNodeId,
+        type: "event",
+        consumerAgentId: source.actor,
+        consumerTeamId: null,
+      });
+      if (episodeNode) {
+        const nextSlots = {
+          ...(asObject(episodeNode.slots) ?? {}),
+          source_rule_node_id: generatedRuleNodeId,
+          replay_learning: {
+            ...(asObject(asObject(episodeNode.slots)?.replay_learning) ?? {}),
+            source_rule_node_id: generatedRuleNodeId,
+          },
+        };
+        await liteWriteStore.updateNodeAnchorState({
+          scope: source.scope_key,
+          id: generatedEpisodeNodeId,
+          slots: nextSlots,
+          textSummary: episodeNode.text_summary,
+          salience: episodeNode.salience,
+          importance: episodeNode.importance,
+          confidence: episodeNode.confidence,
+          commitId: commitId ?? null,
+        });
+      }
+    } else {
+      await client.query(
+        `
+        UPDATE memory_nodes n
+        SET slots =
           jsonb_set(
-            coalesce(n.slots, '{}'::jsonb),
-            '{source_rule_node_id}',
+            jsonb_set(
+              coalesce(n.slots, '{}'::jsonb),
+              '{source_rule_node_id}',
+              to_jsonb($2::text),
+              true
+            ),
+            '{replay_learning,source_rule_node_id}',
             to_jsonb($2::text),
             true
-          ),
-          '{replay_learning,source_rule_node_id}',
-          to_jsonb($2::text),
-          true
-        )
-      WHERE n.id = $1::uuid
-      `,
-      [generatedEpisodeNodeId, generatedRuleNodeId],
-    );
+          )
+        WHERE n.id = $1::uuid
+        `,
+        [generatedEpisodeNodeId, generatedRuleNodeId],
+      );
+    }
   }
 
   const ruleUri =
@@ -646,8 +1170,12 @@ export async function applyReplayLearningProjection(
     generatedEpisodeNodeId != null
       ? buildAionisUri({ tenant_id: source.tenant_id, scope: source.scope, type: "event", id: generatedEpisodeNodeId })
       : undefined;
+  const workflowUri =
+    generatedWorkflowNodeId != null
+      ? buildAionisUri({ tenant_id: source.tenant_id, scope: source.scope, type: "procedure", id: generatedWorkflowNodeId })
+      : undefined;
 
-  if (!generatedRuleNodeId && !generatedEpisodeNodeId) {
+  if (!generatedRuleNodeId && !generatedEpisodeNodeId && !generatedWorkflowNodeId) {
     return {
       triggered: true,
       delivery: config.delivery,
@@ -665,6 +1193,8 @@ export async function applyReplayLearningProjection(
     generated_rule_uri: ruleUri,
     generated_episode_node_id: generatedEpisodeNodeId,
     generated_episode_uri: episodeUri,
+    generated_workflow_node_id: generatedWorkflowNodeId,
+    generated_workflow_uri: workflowUri,
     rule_state: generatedRuleNodeId ? normalizeRuleState(finalRuleState) : undefined,
     commit_id: commitId,
     commit_uri: commitUri,

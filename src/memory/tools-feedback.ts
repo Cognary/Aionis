@@ -15,6 +15,7 @@ import { ToolsFeedbackRequest } from "./schemas.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
+import { writeToolsDecisionPatternAnchor } from "./tools-pattern-anchor.js";
 import type {
   EmbeddedExecutionDecisionView,
   EmbeddedMemoryRuntime,
@@ -22,19 +23,24 @@ import type {
   EmbeddedRuleFeedbackSyncInput,
 } from "../store/embedded-memory-runtime.js";
 import type { LiteRuleCandidateRow, LiteWriteStore } from "../store/lite-write-store.js";
+import type { EmbeddingProvider } from "../embeddings/types.js";
+import type { WriteStoreAccess } from "../store/write-access.js";
 
 type FeedbackOptions = {
   maxTextLen: number;
   piiRedaction: boolean;
+  embedder?: EmbeddingProvider | null;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
   liteWriteStore?: Pick<
     LiteWriteStore,
     | "findExecutionDecisionForFeedback"
     | "getExecutionDecision"
     | "insertExecutionDecision"
+    | "findNodes"
     | "latestCommit"
     | "insertCommit"
     | "insertRuleFeedback"
+    | "updateNodeAnchorState"
     | "updateExecutionDecisionLink"
     | "updateRuleFeedbackAggregates"
     | "listRuleCandidates"
@@ -50,6 +56,7 @@ type DecisionRow = {
   context_sha256: string;
   policy_sha256: string;
   created_at: string;
+  commit_id: string | null;
 };
 
 type RuleDefSyncRow = EmbeddedRuleDefSyncInput;
@@ -75,6 +82,7 @@ function toDecisionRow(row: EmbeddedExecutionDecisionView): DecisionRow {
     context_sha256: row.context_sha256,
     policy_sha256: row.policy_sha256,
     created_at: row.created_at,
+    commit_id: row.commit_id ?? null,
   };
 }
 
@@ -89,7 +97,8 @@ async function findDecisionById(client: pg.PoolClient, scope: string, decisionId
       candidates_json,
       context_sha256,
       policy_sha256,
-      created_at::text AS created_at
+      created_at::text AS created_at,
+      commit_id::text AS commit_id
     FROM memory_execution_decisions
     WHERE scope = $1
       AND id = $2
@@ -119,7 +128,8 @@ async function inferDecision(
         candidates_json,
         context_sha256,
         policy_sha256,
-        created_at::text AS created_at
+        created_at::text AS created_at,
+        commit_id::text AS commit_id
       FROM memory_execution_decisions
       WHERE scope = $1
         AND decision_kind = 'tools_select'
@@ -145,7 +155,8 @@ async function inferDecision(
       candidates_json,
       context_sha256,
       policy_sha256,
-      created_at::text AS created_at
+      created_at::text AS created_at,
+      commit_id::text AS commit_id
     FROM memory_execution_decisions
     WHERE scope = $1
       AND decision_kind = 'tools_select'
@@ -187,7 +198,8 @@ async function createDecisionFromFeedback(
       candidates_json,
       context_sha256,
       policy_sha256,
-      created_at::text AS created_at
+      created_at::text AS created_at,
+      commit_id::text AS commit_id
     `,
     [
       decisionId,
@@ -330,6 +342,18 @@ export async function toolSelectionFeedback(
   const contextSha256 = hashExecutionContext(parsed.context);
   const policySha256 = hashPolicy((rules.applied as any)?.policy ?? {});
   const candidatesJson = JSON.stringify(normalizedCandidates);
+  let patternAnchor: {
+    node_id: string;
+    node_uri: string;
+    client_id: string;
+    pattern_signature: string;
+    anchor_kind: "pattern";
+    anchor_level: "L3";
+    pattern_state: "provisional" | "stable";
+    credibility_state: "candidate" | "trusted" | "contested";
+    maintenance?: Record<string, unknown>;
+    promotion?: Record<string, unknown>;
+  } | null = null;
 
   if (opts.liteWriteStore) {
     let decision = linkedDecisionId
@@ -456,6 +480,52 @@ export async function toolSelectionFeedback(
       await opts.embeddedRuntime.syncRuleDefs(embeddedRows);
     }
 
+    if (parsed.outcome === "positive" || parsed.outcome === "negative") {
+      const anchorOut = await writeToolsDecisionPatternAnchor(null, {
+        tenant_id: tenancy.tenant_id,
+        scope: tenancy.scope,
+        actor,
+        input_text: redactedInput ?? null,
+        input_sha256: inputSha,
+        note: note ?? null,
+        context: parsed.context,
+        selected_tool: selectedTool,
+        candidates: normalizedCandidates,
+        source_rule_ids: uniq,
+        decision: decision!,
+        feedback_commit_id: commit_id,
+        feedback_outcome: parsed.outcome,
+      }, {
+        defaultScope,
+        defaultTenantId,
+        maxTextLen: opts.maxTextLen,
+        piiRedaction: opts.piiRedaction,
+        embedder: opts.embedder ?? null,
+        embeddedRuntime: opts.embeddedRuntime ?? null,
+        writeAccess: opts.liteWriteStore as unknown as WriteStoreAccess,
+        liteWriteStore: opts.liteWriteStore ?? null,
+      });
+      if (anchorOut) {
+        patternAnchor = {
+          node_id: anchorOut.node_id,
+          node_uri: buildAionisUri({
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            type: "concept",
+            id: anchorOut.node_id,
+          }),
+          client_id: anchorOut.client_id,
+          pattern_signature: anchorOut.pattern_signature,
+          anchor_kind: "pattern",
+          anchor_level: "L3",
+          pattern_state: anchorOut.anchor.pattern_state ?? "provisional",
+          credibility_state: anchorOut.anchor.credibility_state ?? "candidate",
+          maintenance: anchorOut.anchor.maintenance ?? undefined,
+          promotion: anchorOut.anchor.promotion ?? undefined,
+        };
+      }
+    }
+
     return {
       ok: true,
       scope: tenancy.scope,
@@ -479,6 +549,7 @@ export async function toolSelectionFeedback(
       }),
       decision_link_mode,
       decision_policy_sha256: decision!.policy_sha256,
+      pattern_anchor: patternAnchor,
     };
   }
 
@@ -738,6 +809,51 @@ export async function toolSelectionFeedback(
     await opts.embeddedRuntime.syncRuleDefs(ruleDefRes.rows);
   }
 
+  if (parsed.outcome === "positive" || parsed.outcome === "negative") {
+    const anchorOut = await writeToolsDecisionPatternAnchor(client, {
+      tenant_id: tenancy.tenant_id,
+      scope: tenancy.scope,
+      actor,
+      input_text: redactedInput ?? null,
+      input_sha256: inputSha,
+      note: note ?? null,
+      context: parsed.context,
+      selected_tool: selectedTool,
+      candidates: normalizedCandidates,
+      source_rule_ids: uniq,
+      decision: decision!,
+      feedback_commit_id: commit_id,
+      feedback_outcome: parsed.outcome,
+    }, {
+      defaultScope,
+      defaultTenantId,
+      maxTextLen: opts.maxTextLen,
+      piiRedaction: opts.piiRedaction,
+      embedder: opts.embedder ?? null,
+      embeddedRuntime: opts.embeddedRuntime ?? null,
+      liteWriteStore: null,
+    });
+    if (anchorOut) {
+      patternAnchor = {
+        node_id: anchorOut.node_id,
+        node_uri: buildAionisUri({
+          tenant_id: tenancy.tenant_id,
+          scope: tenancy.scope,
+          type: "concept",
+          id: anchorOut.node_id,
+        }),
+        client_id: anchorOut.client_id,
+        pattern_signature: anchorOut.pattern_signature,
+        anchor_kind: "pattern",
+        anchor_level: "L3",
+        pattern_state: anchorOut.anchor.pattern_state ?? "provisional",
+        credibility_state: anchorOut.anchor.credibility_state ?? "candidate",
+        maintenance: anchorOut.anchor.maintenance ?? undefined,
+        promotion: anchorOut.anchor.promotion ?? undefined,
+      };
+    }
+  }
+
   return {
     ok: true,
     scope: tenancy.scope,
@@ -761,5 +877,6 @@ export async function toolSelectionFeedback(
     }),
     decision_link_mode,
     decision_policy_sha256: decision!.policy_sha256,
+    pattern_anchor: patternAnchor,
   };
 }

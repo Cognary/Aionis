@@ -1609,7 +1609,10 @@ export class EmbeddedMemoryRuntime {
     const out: RecallCandidate[] = [];
     for (const item of knn) {
       const n = item.n;
-      if (!["event", "topic", "concept", "entity", "rule"].includes(n.type)) continue;
+      const hasAnchorPayload =
+        !!n.slots?.anchor_v1 && typeof n.slots.anchor_v1 === "object" && !Array.isArray(n.slots.anchor_v1);
+      if (!["event", "topic", "concept", "entity", "rule", "procedure"].includes(n.type)) continue;
+      if (n.type === "procedure" && !hasAnchorPayload) continue;
       if ((n.type === "event" || n.type === "evidence")
         && String(n.slots?.["replay_learning_episode"] ?? "false") === "true"
         && String(n.slots?.["lifecycle_state"] ?? "active") === "archived") {

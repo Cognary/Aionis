@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type pg from "pg";
+import type { EmbeddingProvider } from "../embeddings/types.js";
 import {
   hashExecutionContext,
   hashPolicy,
@@ -26,6 +27,7 @@ import {
   DEFAULT_TOOL_REGISTRY_INDEX,
   mapCandidatesToFamilies,
 } from "./tool-registry.js";
+import type { RecallStoreAccess, RecallNodeRow } from "../store/recall-access.js";
 
 function inferBroadToolKind(name: string): "scan" | "test" | null {
   const lowered = name.toLowerCase();
@@ -86,6 +88,191 @@ function mergeExecutionContinuityContext(
     context.execution_evidence = sideOutputs.executionEvidence;
   }
   return { context, sideOutputs };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function firstString(values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+function uniqueStrings(values: Array<string | null | undefined>, limit = 16): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const trimmed = typeof value === "string" ? value.trim() : "";
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function prioritizeExplicitPreferred(candidates: string[], preferred: string[]): string[] {
+  if (preferred.length === 0) return [...candidates];
+  const preferredSet = new Set(preferred);
+  const head = preferred.filter((tool) => candidates.includes(tool));
+  const tail = candidates.filter((tool) => !preferredSet.has(tool));
+  return head.concat(tail);
+}
+
+function uniqueSelectedTools(patterns: Array<{ selected_tool: string }>, limit = 16): string[] {
+  return uniqueStrings(patterns.map((pattern) => pattern.selected_tool), limit);
+}
+
+function contextConsumerAgentId(context: unknown): string | null {
+  const ctx = asRecord(context);
+  const agent = asRecord(ctx?.agent);
+  return firstString([ctx?.agent_id, agent?.id]);
+}
+
+function contextConsumerTeamId(context: unknown): string | null {
+  const ctx = asRecord(context);
+  const agent = asRecord(ctx?.agent);
+  return firstString([ctx?.team_id, agent?.team_id]);
+}
+
+function buildToolsPatternQueryText(context: unknown, candidates: string[]): string {
+  const ctx = asRecord(context);
+  const task = asRecord(ctx?.task);
+  const error = asRecord(ctx?.error);
+  const cue = firstString([
+    ctx?.task_signature,
+    task?.signature,
+    ctx?.goal,
+    task?.goal,
+    ctx?.objective,
+    task?.objective,
+    ctx?.task_kind,
+    error?.signature,
+    error?.code,
+  ]);
+  return [
+    "tools_select_pattern",
+    cue ? `task=${cue}` : null,
+    `candidates=${candidates.join(" ")}`,
+  ].filter(Boolean).join("\n");
+}
+
+type RecalledToolPattern = {
+  node_id: string;
+  title: string | null;
+  summary: string | null;
+  selected_tool: string;
+  tool_set: string[];
+  pattern_state: "provisional" | "stable";
+  credibility_state: "candidate" | "trusted" | "contested";
+  trusted: boolean;
+  counter_evidence_open: boolean;
+  last_transition: string | null;
+  maintenance_state: "observe" | "retain" | "review" | null;
+  offline_priority: "none" | "promote_candidate" | "review_counter_evidence" | "retain_trusted" | null;
+  distinct_run_count: number;
+  required_distinct_runs: number;
+  confidence: number;
+  similarity: number;
+};
+
+async function recallToolSelectionPatterns(args: {
+  recallAccess: RecallStoreAccess;
+  embedder: EmbeddingProvider;
+  context: unknown;
+  candidates: string[];
+  scope: string;
+}): Promise<RecalledToolPattern[]> {
+  const queryText = buildToolsPatternQueryText(args.context, args.candidates);
+  const [queryEmbedding] = await args.embedder.embed([queryText]);
+  const consumerAgentId = contextConsumerAgentId(args.context);
+  const consumerTeamId = contextConsumerTeamId(args.context);
+  const ann = await args.recallAccess.stage1CandidatesAnn({
+    queryEmbedding,
+    scope: args.scope,
+    oversample: 24,
+    limit: 6,
+    consumerAgentId,
+    consumerTeamId,
+  });
+  const seeds = ann.length > 0
+    ? ann
+    : await args.recallAccess.stage1CandidatesExactFallback({
+        queryEmbedding,
+        scope: args.scope,
+        oversample: 24,
+        limit: 6,
+        consumerAgentId,
+        consumerTeamId,
+      });
+  const candidateMap = new Map(seeds.map((seed) => [seed.id, seed]));
+  if (candidateMap.size === 0) return [];
+  const rows = await args.recallAccess.stage2Nodes({
+    scope: args.scope,
+    nodeIds: Array.from(candidateMap.keys()),
+    consumerAgentId,
+    consumerTeamId,
+    includeSlots: true,
+  });
+  const out: RecalledToolPattern[] = [];
+  const candidateSet = new Set(args.candidates);
+  for (const row of rows) {
+    if (row.type !== "concept") continue;
+    const slots = asRecord(row.slots);
+    const executionNative = asRecord(slots?.execution_native_v1);
+    const anchor = asRecord(slots?.anchor_v1);
+    if (!anchor) continue;
+    const anchorKind = firstString([executionNative?.anchor_kind, anchor.anchor_kind]);
+    const anchorLevel = firstString([executionNative?.anchor_level, anchor.anchor_level]);
+    const selectedTool = firstString([executionNative?.selected_tool, anchor.selected_tool]);
+    const patternState = firstString([executionNative?.pattern_state, anchor.pattern_state]) === "stable" ? "stable" : "provisional";
+    const toolSet = uniqueStrings(Array.isArray(anchor.tool_set) ? (anchor.tool_set as Array<string | null | undefined>) : []);
+    const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor.promotion);
+    const maintenance = asRecord(executionNative?.maintenance) ?? asRecord(anchor.maintenance);
+    const metrics = asRecord(anchor.metrics);
+    const distinctRunCount = Number(promotion?.distinct_run_count ?? metrics?.distinct_run_count ?? 0);
+    const requiredDistinctRuns = Math.max(2, Number(promotion?.required_distinct_runs ?? 2));
+    const counterEvidenceOpen = promotion?.counter_evidence_open === true;
+    const credibilityStateRaw = firstString([executionNative?.credibility_state, anchor.credibility_state, promotion?.credibility_state]);
+    const credibilityState: "candidate" | "trusted" | "contested" =
+      credibilityStateRaw === "trusted" || credibilityStateRaw === "contested" || credibilityStateRaw === "candidate"
+        ? credibilityStateRaw
+        : counterEvidenceOpen
+          ? "contested"
+          : patternState === "stable"
+            ? "trusted"
+            : "candidate";
+    if (anchorKind !== "pattern" || anchorLevel !== "L3" || !selectedTool || !candidateSet.has(selectedTool)) continue;
+    const seed = candidateMap.get(row.id);
+    out.push({
+      node_id: row.id,
+      title: row.title,
+      summary: row.text_summary,
+      selected_tool: selectedTool,
+      tool_set: toolSet,
+      pattern_state: patternState,
+      credibility_state: credibilityState,
+      trusted: credibilityState === "trusted",
+      counter_evidence_open: counterEvidenceOpen,
+      last_transition: firstString([promotion?.last_transition]),
+      maintenance_state: firstString([maintenance?.maintenance_state]) as any,
+      offline_priority: firstString([maintenance?.offline_priority]) as any,
+      distinct_run_count: Number.isFinite(distinctRunCount) ? distinctRunCount : 0,
+      required_distinct_runs: requiredDistinctRuns,
+      confidence: Number(row.confidence ?? 0),
+      similarity: Number(seed?.similarity ?? 0),
+    });
+  }
+  return out.sort((a, b) =>
+    Number(b.trusted) - Number(a.trusted)
+    || b.similarity - a.similarity
+    || b.confidence - a.confidence
+    || a.node_id.localeCompare(b.node_id));
 }
 
 export function resolveExecutionKernelInputs(
@@ -179,6 +366,8 @@ export async function selectTools(
   opts: {
     embeddedRuntime?: EmbeddedMemoryRuntime | null;
     liteWriteStore?: Pick<LiteWriteStore, "insertExecutionDecision" | "listRuleCandidates"> | null;
+    recallAccess?: RecallStoreAccess | null;
+    embedder?: EmbeddingProvider | null;
   } = {},
 ) {
   const parsed = ToolsSelectRequest.parse(body);
@@ -211,10 +400,26 @@ export async function selectTools(
     liteWriteStore: opts.liteWriteStore ?? null,
   });
 
+  const recalledPatterns =
+    opts.recallAccess && opts.embedder && filteredCandidates.length > 0
+      ? await recallToolSelectionPatterns({
+          recallAccess: opts.recallAccess,
+          embedder: opts.embedder,
+          context: evaluationContext,
+          candidates: filteredCandidates,
+          scope: tenancy.scope_key,
+        })
+      : [];
+  const trustedPatterns = recalledPatterns.filter((pattern) => pattern.trusted);
+  const contestedPatterns = recalledPatterns.filter((pattern) => !pattern.trusted);
+  const patternPreferred = uniqueStrings(trustedPatterns.map((pattern) => pattern.selected_tool), filteredCandidates.length);
+
   const explicitPreferred = Array.isArray((rules.applied as any)?.policy?.tool?.prefer)
     ? ((rules.applied as any).policy.tool.prefer as string[])
     : [];
-  const recommendedOrderedCandidates = applyFamilyAwareOrdering(filteredCandidates, candidateFamilies, explicitPreferred);
+  const mergedPreferred = uniqueStrings([...explicitPreferred, ...patternPreferred], filteredCandidates.length);
+  const preferredOrderedCandidates = prioritizeExplicitPreferred(filteredCandidates, mergedPreferred);
+  const recommendedOrderedCandidates = applyFamilyAwareOrdering(preferredOrderedCandidates, candidateFamilies, mergedPreferred);
   const orderedCandidates = parsed.reorder_candidates ? recommendedOrderedCandidates : filteredCandidates;
 
   const selection = applyToolPolicy(orderedCandidates, rules.applied.policy, { strict: parsed.strict });
@@ -238,6 +443,10 @@ export async function selectTools(
   const decision_id = randomUUID();
   const context_sha256 = hashExecutionContext(evaluationContext);
   const policy_sha256 = hashPolicy((rules.applied as any)?.policy ?? {});
+  const selectedTool = selection.selected ?? null;
+  const usedTrustedPatterns = selectedTool
+    ? trustedPatterns.filter((pattern) => pattern.selected_tool === selectedTool)
+    : [];
   const decisionMetadata = {
     strict: parsed.strict,
     include_shadow: parsed.include_shadow,
@@ -253,6 +462,13 @@ export async function selectTools(
     execution_artifacts_count: sideOutputs.executionArtifacts.length,
     execution_evidence_count: sideOutputs.executionEvidence.length,
     candidate_families: candidateFamilies,
+    pattern_preferred_tools: patternPreferred,
+    matched_pattern_anchor_ids: recalledPatterns.map((pattern) => pattern.node_id),
+    matched_stable_pattern_anchor_ids: trustedPatterns.map((pattern) => pattern.node_id),
+    used_trusted_pattern_anchor_ids: usedTrustedPatterns.map((pattern) => pattern.node_id),
+    used_trusted_pattern_tools: uniqueSelectedTools(usedTrustedPatterns),
+    skipped_contested_pattern_anchor_ids: contestedPatterns.map((pattern) => pattern.node_id),
+    skipped_contested_pattern_tools: uniqueSelectedTools(contestedPatterns),
     ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
   };
   const decisionRes: { id: string; created_at: string } = opts.liteWriteStore
@@ -310,6 +526,13 @@ export async function selectTools(
           reorder_candidates: parsed.reorder_candidates,
           matched_rules: rules.matched,
           tool_conflicts_summary,
+          pattern_preferred_tools: patternPreferred,
+          matched_pattern_anchor_ids: recalledPatterns.map((pattern) => pattern.node_id),
+          matched_stable_pattern_anchor_ids: trustedPatterns.map((pattern) => pattern.node_id),
+          used_trusted_pattern_anchor_ids: usedTrustedPatterns.map((pattern) => pattern.node_id),
+          used_trusted_pattern_tools: uniqueSelectedTools(usedTrustedPatterns),
+          skipped_contested_pattern_anchor_ids: contestedPatterns.map((pattern) => pattern.node_id),
+          skipped_contested_pattern_tools: uniqueSelectedTools(contestedPatterns),
           ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
         },
         created_at: decision_created_at,
@@ -347,6 +570,28 @@ export async function selectTools(
       ...(parsed.include_shadow ? { shadow_selection } : {}),
       ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
     },
+    pattern_matches: {
+      matched: recalledPatterns.length,
+      trusted: trustedPatterns.length,
+      preferred_tools: patternPreferred,
+      anchors: recalledPatterns.map((pattern) => ({
+        node_id: pattern.node_id,
+        selected_tool: pattern.selected_tool,
+        pattern_state: pattern.pattern_state,
+        credibility_state: pattern.credibility_state,
+        trusted: pattern.trusted,
+        counter_evidence_open: pattern.counter_evidence_open,
+        last_transition: pattern.last_transition,
+        maintenance_state: pattern.maintenance_state,
+        offline_priority: pattern.offline_priority,
+        distinct_run_count: pattern.distinct_run_count,
+        required_distinct_runs: pattern.required_distinct_runs,
+        similarity: pattern.similarity,
+        confidence: pattern.confidence,
+        title: pattern.title,
+        summary: pattern.summary,
+      })),
+    },
     decision: {
       decision_id,
       decision_uri: buildAionisUri({
@@ -360,6 +605,12 @@ export async function selectTools(
       policy_sha256,
       source_rule_ids,
       created_at: decision_created_at,
+      pattern_summary: {
+        used_trusted_pattern_anchor_ids: usedTrustedPatterns.map((pattern) => pattern.node_id),
+        used_trusted_pattern_tools: uniqueSelectedTools(usedTrustedPatterns),
+        skipped_contested_pattern_anchor_ids: contestedPatterns.map((pattern) => pattern.node_id),
+        skipped_contested_pattern_tools: uniqueSelectedTools(contestedPatterns),
+      },
     },
   };
   return {
@@ -367,6 +618,7 @@ export async function selectTools(
     selection_summary: buildToolsSelectionSummary({
       selection: response.selection,
       rules: response.rules,
+      pattern_matches: response.pattern_matches,
       source_rule_ids,
     }),
   };

@@ -2,7 +2,18 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import { buildRecallObservability, collectRecallTrajectoryUriLinks } from "../app/recall-observability.js";
 import { applyContextOptimizationProfile } from "../app/context-optimization-profile.js";
-import { buildAssemblySummary, buildPlanningSummary } from "../app/planning-summary.js";
+import {
+  buildAssemblySummary,
+  buildExecutionMemorySummaryBundle,
+  buildPlanningSummary,
+  summarizeActionRecallPacketSurface,
+  summarizeWorkflowSignalSurface,
+  summarizeWorkflowLifecycleSurface,
+  summarizeWorkflowMaintenanceSurface,
+  summarizePatternLifecycleSurface,
+  summarizePatternMaintenanceSurface,
+  summarizePatternSignalSurface,
+} from "../app/planning-summary.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { buildLayeredContextCostSignals } from "../memory/cost-signals.js";
@@ -17,7 +28,7 @@ import {
 import { evaluateRules } from "../memory/rules-evaluate.js";
 import { selectTools } from "../memory/tools-select.js";
 import { estimateTokenCountFromText } from "../memory/context.js";
-import { assembleLayeredContext } from "../memory/context-orchestrator.js";
+import { assembleLayeredContext, extractPlannerPacketSurface } from "../memory/context-orchestrator.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
@@ -352,12 +363,37 @@ function buildExecutionKernelResponse(
     execution_packet_v1?: ExecutionPacketV1;
     execution_state_v1?: ExecutionStateV1;
   },
+  plannerSurface?: {
+    action_recall_packet?: unknown;
+    candidate_workflows?: unknown;
+    pattern_signals?: unknown;
+    workflow_signals?: unknown;
+    recommended_workflows?: unknown;
+  },
 ) {
+  const summaryBundle = buildExecutionMemorySummaryBundle(plannerSurface ?? {});
   return {
     packet_source_mode: sourceMode,
     state_first_assembly: sourceMode === "state_first",
     execution_packet_v1_present: !!parsed.execution_packet_v1,
     execution_state_v1_present: !!parsed.execution_state_v1,
+    ...summaryBundle,
+  };
+}
+
+function buildPlannerPacketResponseSurface(plannerSurface: ReturnType<typeof extractPlannerPacketSurface>) {
+  return {
+    planner_packet: plannerSurface.planner_packet,
+    action_recall_packet: plannerSurface.action_recall_packet,
+    recommended_workflows: plannerSurface.recommended_workflows,
+    candidate_workflows: plannerSurface.candidate_workflows,
+    candidate_patterns: plannerSurface.candidate_patterns,
+    trusted_patterns: plannerSurface.trusted_patterns,
+    contested_patterns: plannerSurface.contested_patterns,
+    rehydration_candidates: plannerSurface.rehydration_candidates,
+    supporting_knowledge: plannerSurface.supporting_knowledge,
+    pattern_signals: plannerSurface.pattern_signals,
+    workflow_signals: plannerSurface.workflow_signals,
   };
 }
 
@@ -904,6 +940,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
       env.MEMORY_TENANT_ID,
       {
         embeddedRuntime,
+        recallAccess: liteRecallAccess,
+        embedder,
         liteWriteStore,
       },
     );
@@ -1481,11 +1519,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
       costSignals,
       selectionPolicy: recallOut?.context?.selection_policy ?? null,
     });
+    const plannerSurface = extractPlannerPacketSurface({ layeredContext, recall: recallOut });
 
     return reply.code(200).send({
       tenant_id: tenantIdOut,
       scope: recallOut.scope,
-      execution_kernel: buildExecutionKernelResponse(executionKernel.source_mode, parsed),
+      execution_kernel: buildExecutionKernelResponse(executionKernel.source_mode, parsed, plannerSurface),
       query: { text: q, embedding_provider: surfaceEmbedder.name },
       recall: {
         ...recallOut,
@@ -1494,6 +1533,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
       },
       rules: out.rules,
       tools: out.tools ?? undefined,
+      runtime_tool_hints: Array.isArray(recallOut.runtime_tool_hints) ? recallOut.runtime_tool_hints : [],
+      ...buildPlannerPacketResponseSurface(plannerSurface),
       planning_summary: planningSummary,
       layered_context: layeredContext,
       cost_signals: costSignals,
@@ -1723,11 +1764,12 @@ export function registerMemoryContextRuntimeRoutes(args: {
       },
       "memory context_assemble",
     );
+    const plannerSurface = extractPlannerPacketSurface({ layeredContext, recall: recallOut });
 
     return reply.code(200).send({
       tenant_id: tenantIdOut,
       scope: recallOut.scope,
-      execution_kernel: buildExecutionKernelResponse(executionKernel.source_mode, parsed),
+      execution_kernel: buildExecutionKernelResponse(executionKernel.source_mode, parsed, plannerSurface),
       query: { text: q, embedding_provider: surfaceEmbedder.name },
       recall: {
         ...recallOut,
@@ -1736,6 +1778,8 @@ export function registerMemoryContextRuntimeRoutes(args: {
       },
       rules: out.rules ?? undefined,
       tools: out.tools ?? undefined,
+      runtime_tool_hints: Array.isArray(recallOut.runtime_tool_hints) ? recallOut.runtime_tool_hints : [],
+      ...buildPlannerPacketResponseSurface(plannerSurface),
       assembly_summary: assemblySummary,
       layered_context: layeredContext,
       cost_signals: costSignals,

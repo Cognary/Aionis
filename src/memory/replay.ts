@@ -6,6 +6,7 @@ import type pg from "pg";
 import type { EmbeddingProvider } from "../embeddings/types.js";
 import { assertEmbeddingSurfaceForbidden } from "../embeddings/surface-policy.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
+import type { LiteFindNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
 import {
   createPostgresReplayStoreAccess,
   type ReplayNodeRow,
@@ -13,8 +14,11 @@ import {
   type ReplayStoreAccess,
 } from "../store/replay-access.js";
 import type { WriteStoreAccess } from "../store/write-access.js";
+import type { ReplayMirrorNodeRecord } from "./replay-write.js";
 import { sha256Hex } from "../util/crypto.js";
 import { HttpError } from "../util/http.js";
+import { stableUuid } from "../util/uuid.js";
+import stableStringify from "fast-json-stable-stringify";
 import {
   applyReplayLearningProjection,
   enqueueReplayLearningProjectionOutbox,
@@ -36,6 +40,7 @@ import {
   ReplayRunStartRequest,
   ReplayStepAfterRequest,
   ReplayStepBeforeRequest,
+  MemoryAnchorV1Schema,
   type ReplayPlaybookDispatchInput,
   type ReplayPlaybookCandidateInput,
   type ReplayPlaybookCompileInput,
@@ -209,6 +214,10 @@ function playbookClientId(playbookId: string, version: number): string {
   return `replay:playbook:${playbookId}:v${version}`;
 }
 
+function replayWriteNodeId(scopeKey: string, clientId: string): string {
+  return stableUuid(`${scopeKey}:node:${clientId.trim()}`);
+}
+
 function parseRunStartInput(body: unknown): ReplayRunStartInput {
   return ReplayRunStartRequest.parse(body);
 }
@@ -328,6 +337,343 @@ function estimateTokenCountFromUnknown(v: unknown): number {
   }
   if (!text) return 0;
   return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function isStableReplayPlaybookStatus(status: string | null | undefined): status is "shadow" | "active" {
+  return status === "shadow" || status === "active";
+}
+
+function requireLiteReplayWriteStore(writeAccess?: WriteStoreAccess | null): LiteWriteStore {
+  if (
+    !writeAccess
+    || typeof (writeAccess as LiteWriteStore).findNodes !== "function"
+    || typeof (writeAccess as LiteWriteStore).updateNodeAnchorState !== "function"
+    || typeof (writeAccess as LiteWriteStore).setNodeEmbeddingReady !== "function"
+  ) {
+    throw new Error("aionis-lite replay promotion requires lite write-store anchor mutation support");
+  }
+  return writeAccess as LiteWriteStore;
+}
+
+function buildReplayMirrorRecordFromLiteNode(args: {
+  scopeKey: string;
+  playbookId: string;
+  node: LiteFindNodeRow;
+}): ReplayMirrorNodeRecord {
+  const slots = asObject(args.node.slots) ?? {};
+  return {
+    node_id: args.node.id,
+    scope: args.scopeKey,
+    replay_kind: "playbook",
+    run_id: toStringOrNull(slots.source_run_id),
+    step_id: null,
+    step_index: null,
+    playbook_id: args.playbookId,
+    version_num: Number(slots.version ?? 0) || null,
+    playbook_status: toStringOrNull(slots.status),
+    node_type: args.node.type,
+    title: args.node.title,
+    text_summary: args.node.text_summary,
+    slots_json: JSON.stringify(slots),
+    memory_lane: args.node.memory_lane,
+    producer_agent_id: args.node.producer_agent_id,
+    owner_agent_id: args.node.owner_agent_id,
+    owner_team_id: args.node.owner_team_id,
+    created_at: args.node.created_at,
+    updated_at: args.node.updated_at,
+    commit_id: args.node.commit_id,
+  };
+}
+
+function distinctToolNamesFromSteps(stepsRaw: unknown): string[] {
+  if (!Array.isArray(stepsRaw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const step of stepsRaw) {
+    const toolName = toStringOrNull(asObject(step)?.tool_name);
+    if (!toolName || seen.has(toolName)) continue;
+    seen.add(toolName);
+    out.push(toolName);
+  }
+  return out;
+}
+
+function deriveReplayWorkflowSignature(playbookId: string, stepsRaw: unknown): string {
+  const steps = Array.isArray(stepsRaw)
+    ? stepsRaw.map((step) => {
+        const obj = asObject(step) ?? {};
+        return {
+          tool_name: toStringOrNull(obj.tool_name),
+          safety_level: toStringOrNull(obj.safety_level),
+          preconditions: Array.isArray(obj.preconditions) ? obj.preconditions.length : 0,
+          postconditions: Array.isArray(obj.postconditions) ? obj.postconditions.length : 0,
+        };
+      })
+    : [];
+  return `replay_workflow:${sha256Hex(JSON.stringify({ playbook_id: playbookId, steps })).slice(0, 24)}`;
+}
+
+function buildReplayPlaybookAnchor(args: {
+  scopeKey: string;
+  playbookId: string;
+  version: number;
+  status: "shadow" | "active";
+  promotionOrigin: "replay_promote" | "replay_stable_normalization";
+  title: string | null;
+  textSummary: string | null;
+  clientId: string;
+  commitId: string | null;
+  sourceNodeId: string | null;
+  sourceCommitId: string | null;
+  slots: Record<string, unknown>;
+}) {
+  const sourceRunId = toStringOrNull(args.slots.source_run_id);
+  const createdFromRunIds = Array.isArray(args.slots.created_from_run_ids)
+    ? args.slots.created_from_run_ids.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  const stepsTemplate = Array.isArray(args.slots.steps_template) ? args.slots.steps_template : [];
+  const toolSet = distinctToolNamesFromSteps(stepsTemplate);
+  const keySteps = stepsTemplate
+    .map((step) => {
+      const obj = asObject(step) ?? {};
+      const stepIndex = Number(obj.step_index ?? 0) || null;
+      const toolName = toStringOrNull(obj.tool_name);
+      if (!toolName) return null;
+      return stepIndex != null ? `step_${stepIndex}:${toolName}` : toolName;
+    })
+    .filter((value): value is string => !!value)
+    .slice(0, 12);
+  const sourceRunStatus = toStringOrNull(asObject(args.slots.compile_summary)?.source_run_status);
+  const stepsTotal = stepsTemplate.length;
+  const anchorNodeId = replayWriteNodeId(args.scopeKey, args.clientId);
+  const summary = args.textSummary ?? args.title ?? `Replay playbook ${args.playbookId}`;
+  const payloadCostHint: "low" | "medium" | "high" =
+    stepsTotal <= 4 ? "low" : stepsTotal <= 10 ? "medium" : "high";
+  return MemoryAnchorV1Schema.parse({
+    anchor_kind: "workflow",
+    anchor_level: "L2",
+    task_signature: `replay_playbook:${args.playbookId}`,
+    task_class: "replay_playbook",
+    workflow_signature: deriveReplayWorkflowSignature(args.playbookId, stepsTemplate),
+    summary,
+    tool_set: toolSet,
+    key_steps: keySteps,
+    outcome: {
+      status: "success",
+      result_class: args.status,
+      success_score: args.status === "active" ? 0.95 : 0.85,
+    },
+    source: {
+      source_kind: "playbook",
+      node_id: anchorNodeId,
+      run_id: sourceRunId,
+      playbook_id: args.playbookId,
+      commit_id: args.commitId ?? args.sourceCommitId ?? null,
+    },
+    payload_refs: {
+      node_ids: args.sourceNodeId ? [args.sourceNodeId] : [],
+      decision_ids: [],
+      run_ids: sourceRunId ? [sourceRunId, ...createdFromRunIds.filter((runId) => runId !== sourceRunId)] : createdFromRunIds,
+      step_ids: [],
+      commit_ids: [args.sourceCommitId, args.commitId].filter((value): value is string => !!value),
+    },
+    rehydration: {
+      default_mode: "partial",
+      payload_cost_hint: payloadCostHint,
+      recommended_when: [
+        "need_exact_steps_template",
+        "workflow_summary_is_not_enough",
+        "irreversible_action_requires_exact_sequence",
+      ],
+    },
+    recall_features: {
+      tool_tags: toolSet,
+      outcome_tags: [args.status, sourceRunStatus ?? "unknown"],
+      keywords: [args.title, summary, args.playbookId].filter((value): value is string => !!value).slice(0, 8),
+    },
+    metrics: {
+      usage_count: 0,
+      reuse_success_count: 0,
+      reuse_failure_count: 0,
+      last_used_at: null,
+    },
+    maintenance: {
+      model: "lazy_online_v1",
+      maintenance_state: "retain",
+      offline_priority: "retain_workflow",
+      lazy_update_fields: ["usage_count", "last_used_at"],
+      last_maintenance_at: new Date().toISOString(),
+    },
+    workflow_promotion: {
+      promotion_state: "stable",
+      promotion_origin: args.promotionOrigin,
+      last_transition: args.promotionOrigin === "replay_stable_normalization" ? "normalized_latest_stable" : "promoted_to_stable",
+      last_transition_at: new Date().toISOString(),
+      source_status: args.status,
+    },
+    schema_version: "anchor_v1",
+  });
+}
+
+async function buildStablePlaybookNodeFields(args: {
+  embedder: EmbeddingProvider | null;
+  scopeKey: string;
+  playbookId: string;
+  version: number;
+  status: string;
+  promotionOrigin: "replay_promote" | "replay_stable_normalization";
+  title: string;
+  textSummary: string;
+  clientId: string;
+  commitId: string | null;
+  sourceNodeId: string | null;
+  sourceCommitId: string | null;
+  slots: Record<string, unknown>;
+}) {
+  if (!isStableReplayPlaybookStatus(args.status)) {
+    return {
+      slots: args.slots,
+    };
+  }
+  const anchor = buildReplayPlaybookAnchor({
+    scopeKey: args.scopeKey,
+    playbookId: args.playbookId,
+    version: args.version,
+    status: args.status,
+    promotionOrigin: args.promotionOrigin,
+    title: args.title,
+    textSummary: args.textSummary,
+    clientId: args.clientId,
+    commitId: args.commitId,
+    sourceNodeId: args.sourceNodeId,
+    sourceCommitId: args.sourceCommitId,
+    slots: args.slots,
+  });
+  const slots = {
+    ...args.slots,
+    summary_kind: "workflow_anchor",
+    compression_layer: "L2",
+    anchor_v1: anchor,
+  };
+  const embedText = `${args.title}\n${anchor.summary}\n${anchor.tool_set.join(" ")}\n${anchor.task_signature}`;
+  if (!args.embedder) {
+    return { slots };
+  }
+  const vectors = await args.embedder.embed([embedText]);
+  return {
+    slots,
+    embedding: vectors[0],
+    embedding_model: args.embedder.name,
+  };
+}
+
+async function ensureStablePlaybookAnchorOnLatestNode(args: {
+  opts: ReplayWriteOptions;
+  tenancy: { tenant_id: string; scope: string; scope_key: string };
+  visibility: ReplayVisibilityArgs;
+  playbookId: string;
+  latest: ReplayNodeRow & { version_num: number; playbook_status: string | null };
+}) {
+  if (!isStableReplayPlaybookStatus(args.latest.playbook_status)) {
+    return null;
+  }
+
+  const liteWriteStore = requireLiteReplayWriteStore(args.opts.writeAccess);
+  const { rows } = await liteWriteStore.findNodes({
+    scope: args.tenancy.scope_key,
+    id: args.latest.id,
+    consumerAgentId: args.visibility.consumerAgentId,
+    consumerTeamId: args.visibility.consumerTeamId,
+    limit: 1,
+    offset: 0,
+  });
+  const latestNode = rows[0] ?? null;
+  if (!latestNode) {
+    throw new HttpError(404, "replay_playbook_not_found", "latest playbook node was not found in this scope/visibility", {
+      playbook_id: args.playbookId,
+      playbook_node_id: args.latest.id,
+      scope: args.tenancy.scope,
+      tenant_id: args.tenancy.tenant_id,
+    });
+  }
+
+  const desiredTitle = latestNode.title ?? `replay_playbook_${args.playbookId.slice(0, 8)}`;
+  const desiredTextSummary = latestNode.text_summary ?? `Replay playbook ${args.playbookId}`;
+  const desiredNodeFields = await buildStablePlaybookNodeFields({
+    embedder: args.opts.embedder,
+    scopeKey: args.tenancy.scope_key,
+    playbookId: args.playbookId,
+    version: args.latest.version_num,
+    status: args.latest.playbook_status,
+    promotionOrigin: "replay_stable_normalization",
+    title: desiredTitle,
+    textSummary: desiredTextSummary,
+    clientId: playbookClientId(args.playbookId, args.latest.version_num),
+    commitId: latestNode.commit_id ?? null,
+    sourceNodeId: args.latest.id,
+    sourceCommitId: latestNode.commit_id ?? null,
+    slots: asObject(latestNode.slots) ?? {},
+  });
+
+  const slotsUnchanged = stableStringify(latestNode.slots ?? {}) === stableStringify(desiredNodeFields.slots);
+  const textSummaryUnchanged = (latestNode.text_summary ?? null) === desiredTextSummary;
+  if (slotsUnchanged && textSummaryUnchanged) {
+    return {
+      mutated: false as const,
+      node: latestNode,
+    };
+  }
+
+  const updatedNode = await liteWriteStore.updateNodeAnchorState({
+    scope: args.tenancy.scope_key,
+    id: latestNode.id,
+    slots: desiredNodeFields.slots,
+    textSummary: desiredTextSummary,
+    salience: latestNode.salience,
+    importance: latestNode.importance,
+    confidence: latestNode.confidence,
+    commitId: latestNode.commit_id ?? null,
+  });
+  if (!updatedNode) {
+    throw new HttpError(404, "replay_playbook_not_found", "latest playbook node disappeared during anchor normalization", {
+      playbook_id: args.playbookId,
+      playbook_node_id: latestNode.id,
+      scope: args.tenancy.scope,
+      tenant_id: args.tenancy.tenant_id,
+    });
+  }
+
+  if (desiredNodeFields.embedding && desiredNodeFields.embedding_model) {
+    await liteWriteStore.setNodeEmbeddingReady({
+      scope: args.tenancy.scope_key,
+      id: updatedNode.id,
+      embedding: desiredNodeFields.embedding,
+      embeddingModel: desiredNodeFields.embedding_model,
+    });
+  }
+
+  if (args.opts.replayMirror) {
+    await args.opts.replayMirror.upsertReplayNodes([
+      buildReplayMirrorRecordFromLiteNode({
+        scopeKey: args.tenancy.scope_key,
+        playbookId: args.playbookId,
+        node: {
+          ...updatedNode,
+          text_summary: desiredTextSummary,
+          slots: desiredNodeFields.slots,
+        },
+      }),
+    ]);
+  }
+
+  return {
+    mutated: true as const,
+    node: {
+      ...updatedNode,
+      text_summary: desiredTextSummary,
+      slots: desiredNodeFields.slots,
+    },
+  };
 }
 
 function replayKindOf(row: ReplayNodeRow): string {
@@ -586,6 +932,17 @@ function clampInt(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.trunc(value)));
 }
 
+function asLiteReplayWriteStore(writeAccess?: WriteStoreAccess | null): LiteWriteStore | null {
+  if (
+    !writeAccess
+    || typeof (writeAccess as LiteWriteStore).withTx !== "function"
+    || typeof (writeAccess as LiteWriteStore).findNodes !== "function"
+  ) {
+    return null;
+  }
+  return writeAccess as LiteWriteStore;
+}
+
 function resolveReplayLearningProjectionConfig(
   requestObj: Record<string, unknown> | null,
   defaults: ReplayLearningProjectionResolvedConfig | undefined,
@@ -606,9 +963,24 @@ function resolveReplayLearningProjectionConfig(
   const stateRaw = toStringOrNull(requestObj?.target_rule_state);
   return {
     enabled: requestObj?.enabled === undefined ? base.enabled : requestObj.enabled === true,
-    mode: modeRaw === "episode_only" ? "episode_only" : "rule_and_episode",
-    delivery: deliveryRaw === "sync_inline" ? "sync_inline" : "async_outbox",
-    target_rule_state: stateRaw === "shadow" ? "shadow" : "draft",
+    mode:
+      modeRaw == null
+        ? base.mode
+        : modeRaw === "episode_only"
+          ? "episode_only"
+          : "rule_and_episode",
+    delivery:
+      deliveryRaw == null
+        ? base.delivery
+        : deliveryRaw === "sync_inline"
+          ? "sync_inline"
+          : "async_outbox",
+    target_rule_state:
+      stateRaw == null
+        ? base.target_rule_state
+        : stateRaw === "shadow"
+          ? "shadow"
+          : "draft",
     min_total_steps: clampInt(Number(requestObj?.min_total_steps ?? base.min_total_steps), 0, 500),
     min_success_ratio: Math.max(0, Math.min(1, Number(requestObj?.min_success_ratio ?? base.min_success_ratio))),
     max_matcher_bytes: clampInt(Number(base.max_matcher_bytes), 1, 1024 * 1024),
@@ -3196,6 +3568,13 @@ export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown
   const sourceSlots = asObject(source.slots) ?? {};
   const targetStatus = parsed.target_status;
   if ((source.playbook_status ?? "draft") === targetStatus && source === latest) {
+    const normalizedStable = await ensureStablePlaybookAnchorOnLatestNode({
+      opts,
+      tenancy,
+      visibility,
+      playbookId: parsed.playbook_id,
+      latest,
+    });
     return {
       tenant_id: tenancy.tenant_id,
       scope: tenancy.scope,
@@ -3203,13 +3582,14 @@ export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown
       from_version: source.version_num,
       to_version: latest.version_num,
       status: latest.playbook_status ?? "draft",
-      unchanged: true,
-      reason: "already_target_status_on_latest",
+      unchanged: !normalizedStable?.mutated,
+      reason: normalizedStable?.mutated ? "normalized_latest_stable_anchor" : "already_target_status_on_latest",
+      playbook_node_id: normalizedStable?.node.id ?? source.id,
       playbook_uri: buildAionisUri({
         tenant_id: tenancy.tenant_id,
         scope: tenancy.scope,
         type: source.type,
-        id: source.id,
+        id: normalizedStable?.node.id ?? source.id,
       }),
     };
   }
@@ -3217,6 +3597,34 @@ export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown
   const nextVersion = latest.version_num + 1;
   const promoteCid = playbookClientId(parsed.playbook_id, nextVersion);
   const writeIdentity = replayWriteIdentityFromInput(parsed, replayWriteIdentityFromRow(source));
+  const promotedTitle = source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`;
+  const promotedTextSummary = source.text_summary ?? `Replay playbook ${parsed.playbook_id}`;
+  const promotedSlots = {
+    ...sourceSlots,
+    replay_kind: "playbook",
+    playbook_id: parsed.playbook_id,
+    version: nextVersion,
+    status: targetStatus,
+    promoted_from_version: source.version_num,
+    promoted_at: new Date().toISOString(),
+    promotion_note: parsed.note ?? null,
+    promotion_metadata: parsed.metadata ?? {},
+  };
+  const promotedNodeFields = await buildStablePlaybookNodeFields({
+    embedder: opts.embedder,
+    scopeKey: tenancy.scope_key,
+    playbookId: parsed.playbook_id,
+    version: nextVersion,
+    status: targetStatus,
+    promotionOrigin: "replay_promote",
+    title: promotedTitle,
+    textSummary: promotedTextSummary,
+    clientId: promoteCid,
+    commitId: null,
+    sourceNodeId: source.id,
+    sourceCommitId: source.commit_id ?? null,
+    slots: promotedSlots,
+  });
   const writeReq = {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
@@ -3228,19 +3636,10 @@ export async function replayPlaybookPromote(client: pg.PoolClient, body: unknown
       {
         client_id: promoteCid,
         type: "procedure" as const,
-        title: source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`,
-        text_summary: source.text_summary ?? `Replay playbook ${parsed.playbook_id}`,
-        slots: {
-          ...sourceSlots,
-          replay_kind: "playbook",
-          playbook_id: parsed.playbook_id,
-          version: nextVersion,
-          status: targetStatus,
-          promoted_from_version: source.version_num,
-          promoted_at: new Date().toISOString(),
-          promotion_note: parsed.note ?? null,
-          promotion_metadata: parsed.metadata ?? {},
-        },
+        title: promotedTitle,
+        text_summary: promotedTextSummary,
+        slots: promotedNodeFields.slots,
+        ...(promotedNodeFields.embedding ? { embedding: promotedNodeFields.embedding, embedding_model: promotedNodeFields.embedding_model } : {}),
       },
     ],
     edges: [
@@ -3755,6 +4154,8 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
   const reviewCid = playbookClientId(parsed.playbook_id, nextVersion);
   const reviewedAt = new Date().toISOString();
   const writeIdentity = replayWriteIdentityFromInput(parsed, replayWriteIdentityFromRow(source));
+  const reviewedTitle = source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`;
+  const reviewedTextSummary = source.text_summary ?? `Replay playbook ${parsed.playbook_id}`;
   const reviewedSlots = {
     ...sourceSlots,
     replay_kind: "playbook",
@@ -3781,6 +4182,21 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
     },
     shadow_validation_last: shadowValidation ?? sourceSlots.shadow_validation_last ?? null,
   };
+  const reviewedNodeFields = await buildStablePlaybookNodeFields({
+    embedder: opts.embedder,
+    scopeKey: tenancy.scope_key,
+    playbookId: parsed.playbook_id,
+    version: nextVersion,
+    status: nextStatus,
+    promotionOrigin: "replay_promote",
+    title: reviewedTitle,
+    textSummary: reviewedTextSummary,
+    clientId: reviewCid,
+    commitId: null,
+    sourceNodeId: source.id,
+    sourceCommitId: source.commit_id ?? null,
+    slots: reviewedSlots,
+  });
   const writeReq = {
     tenant_id: tenancy.tenant_id,
     scope: tenancy.scope,
@@ -3792,9 +4208,10 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
       {
         client_id: reviewCid,
         type: "procedure" as const,
-        title: source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`,
-        text_summary: source.text_summary ?? `Replay playbook ${parsed.playbook_id}`,
-        slots: reviewedSlots,
+        title: reviewedTitle,
+        text_summary: reviewedTextSummary,
+        slots: reviewedNodeFields.slots,
+        ...(reviewedNodeFields.embedding ? { embedding: reviewedNodeFields.embedding, embedding_model: reviewedNodeFields.embedding_model } : {}),
       },
     ],
     edges: [
@@ -3875,6 +4292,23 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
           gate: gateEval,
         },
       };
+      const promotedTitle = source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`;
+      const promotedTextSummary = source.text_summary ?? `Replay playbook ${parsed.playbook_id}`;
+      const promotedNodeFields = await buildStablePlaybookNodeFields({
+        embedder: opts.embedder,
+        scopeKey: tenancy.scope_key,
+        playbookId: parsed.playbook_id,
+        version: promoteVersion,
+        status: parsed.auto_promote_target_status,
+        promotionOrigin: "replay_promote",
+        title: promotedTitle,
+        textSummary: promotedTextSummary,
+        clientId: promoteCid,
+        commitId: null,
+        sourceNodeId: reviewed?.id ?? source.id,
+        sourceCommitId: out.commit_id ?? source.commit_id ?? null,
+        slots: promoteSlots,
+      });
       const promoteReq = {
         tenant_id: tenancy.tenant_id,
         scope: tenancy.scope,
@@ -3886,9 +4320,10 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
           {
             client_id: promoteCid,
             type: "procedure" as const,
-            title: source.title ?? `replay_playbook_${parsed.playbook_id.slice(0, 8)}`,
-            text_summary: source.text_summary ?? `Replay playbook ${parsed.playbook_id}`,
-            slots: promoteSlots,
+            title: promotedTitle,
+            text_summary: promotedTextSummary,
+            slots: promotedNodeFields.slots,
+            ...(promotedNodeFields.embedding ? { embedding: promotedNodeFields.embedding, embedding_model: promotedNodeFields.embedding_model } : {}),
           },
         ],
         edges: [
@@ -3958,6 +4393,16 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
       status: "skipped",
       reason: "learning_projection_disabled",
     };
+  } else if (learningProjectionConfig.delivery === "async_outbox" && asLiteReplayWriteStore(opts.writeAccess)) {
+    throw new HttpError(
+      400,
+      "replay_learning_async_outbox_unsupported_in_lite",
+      "lite replay repair review requires sync_inline learning projection delivery",
+      {
+        delivery: learningProjectionConfig.delivery,
+        supported_delivery: "sync_inline",
+      },
+    );
   } else {
     const gateMetrics = extractShadowValidationGateMetrics(shadowValidation);
     const inferredTotalSteps = Array.isArray((reviewedSlots as any).steps_template)
@@ -4007,6 +4452,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
           scopeKey: tenancy.scope_key,
           commitId: finalCommitId,
           payload,
+          writeAccess: opts.writeAccess,
         });
         learningProjectionResult = {
           triggered: true,

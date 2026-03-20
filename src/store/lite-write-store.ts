@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import type { ExecutionNativeV1 } from "../memory/schemas.js";
 import type {
   AssociationCandidateRecord,
   ListAssociationCandidatesForSourceArgs,
@@ -241,6 +242,10 @@ export type LiteRuleFeedbackRow = {
   created_at: string;
 };
 
+export type LiteExecutionNativeNodeRow = LiteFindNodeRow & {
+  execution_native_v1: ExecutionNativeV1;
+};
+
 export type LiteWriteStore = WriteStoreAccess & {
   withTx<T>(fn: () => Promise<T>): Promise<T>;
   findNodes(args: {
@@ -257,6 +262,20 @@ export type LiteWriteStore = WriteStoreAccess & {
     limit: number;
     offset: number;
   }): Promise<{ rows: LiteFindNodeRow[]; has_more: boolean }>;
+  findExecutionNativeNodes(args: {
+    scope: string;
+    executionKind?: "distilled_evidence" | "distilled_fact" | "workflow_candidate" | "workflow_anchor" | "pattern_anchor" | "execution_native" | null;
+    anchorKind?: "execution" | "workflow" | "pattern" | "decision" | null;
+    patternState?: "provisional" | "stable" | null;
+    taskSignature?: string | null;
+    errorSignature?: string | null;
+    workflowSignature?: string | null;
+    compressionLayer?: "L0" | "L1" | "L2" | "L3" | "L4" | "L5" | null;
+    consumerAgentId?: string | null;
+    consumerTeamId?: string | null;
+    limit: number;
+    offset: number;
+  }): Promise<{ rows: LiteExecutionNativeNodeRow[]; has_more: boolean }>;
   findLatestNodeByClientId(
     scope: string,
     type: string,
@@ -396,6 +415,16 @@ export type LiteWriteStore = WriteStoreAccess & {
     embedding: number[];
     embeddingModel: string;
   }): Promise<void>;
+  updateNodeAnchorState(args: {
+    scope: string;
+    id: string;
+    slots: Record<string, unknown>;
+    textSummary: string | null;
+    salience: number;
+    importance: number;
+    confidence: number;
+    commitId?: string | null;
+  }): Promise<LiteFindNodeRow | null>;
   setNodeEmbeddingFailed(args: {
     scope: string;
     id: string;
@@ -1002,6 +1031,39 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
         .filter((row) => !args.memoryLane || row.memory_lane === args.memoryLane)
         .filter((row) => !args.slotsContains || jsonContains(row.slots, args.slotsContains))
         .filter((row) => nodeVisible(row, args.consumerAgentId ?? null, args.consumerTeamId ?? null));
+      const slice = filtered.slice(args.offset, args.offset + args.limit + 1);
+      const hasMore = slice.length > args.limit;
+      return {
+        rows: hasMore ? slice.slice(0, args.limit) : slice,
+        has_more: hasMore,
+      };
+    },
+
+    async findExecutionNativeNodes(args): Promise<{ rows: LiteExecutionNativeNodeRow[]; has_more: boolean }> {
+      const { rows } = await this.findNodes({
+        scope: args.scope,
+        consumerAgentId: args.consumerAgentId ?? null,
+        consumerTeamId: args.consumerTeamId ?? null,
+        limit: Math.max(args.limit + args.offset + 32, 64),
+        offset: 0,
+      });
+      const filtered = rows
+        .map((row) => {
+          const executionNative = row.slots?.execution_native_v1;
+          if (!executionNative || typeof executionNative !== "object" || Array.isArray(executionNative)) return null;
+          return {
+            ...row,
+            execution_native_v1: executionNative as ExecutionNativeV1,
+          } satisfies LiteExecutionNativeNodeRow;
+        })
+        .filter((row): row is LiteExecutionNativeNodeRow => !!row)
+        .filter((row) => !args.executionKind || row.execution_native_v1.execution_kind === args.executionKind)
+        .filter((row) => !args.anchorKind || row.execution_native_v1.anchor_kind === args.anchorKind)
+        .filter((row) => !args.patternState || row.execution_native_v1.pattern_state === args.patternState)
+        .filter((row) => !args.taskSignature || row.execution_native_v1.task_signature === args.taskSignature)
+        .filter((row) => !args.errorSignature || row.execution_native_v1.error_signature === args.errorSignature)
+        .filter((row) => !args.workflowSignature || row.execution_native_v1.workflow_signature === args.workflowSignature)
+        .filter((row) => !args.compressionLayer || row.execution_native_v1.compression_layer === args.compressionLayer);
       const slice = filtered.slice(args.offset, args.offset + args.limit + 1);
       const hasMore = slice.length > args.limit;
       return {
@@ -2143,6 +2205,36 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
         args.scope,
         args.id,
       );
+    },
+
+    async updateNodeAnchorState(args): Promise<LiteFindNodeRow | null> {
+      db.prepare(
+        `UPDATE lite_memory_nodes
+         SET slots_json = ?,
+             text_summary = ?,
+             salience = ?,
+             importance = ?,
+             confidence = ?,
+             commit_id = COALESCE(?, commit_id)
+         WHERE scope = ?
+           AND id = ?`,
+      ).run(
+        stringifyJson(args.slots),
+        args.textSummary,
+        args.salience,
+        args.importance,
+        args.confidence,
+        args.commitId ?? null,
+        args.scope,
+        args.id,
+      );
+      const { rows } = await this.findNodes({
+        scope: args.scope,
+        id: args.id,
+        limit: 1,
+        offset: 0,
+      });
+      return rows[0] ?? null;
     },
 
     async setNodeEmbeddingFailed(args): Promise<void> {

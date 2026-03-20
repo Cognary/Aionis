@@ -86,6 +86,7 @@ function classifyRecallItemKind(kind: string): ContextLayerName {
   if (kind === "rule" || kind === "policy") return "rules";
   if (kind === "decision") return "decisions";
   if (kind === "tool") return "tools";
+  if (kind === "procedure") return "episodes";
   if (kind === "event" || kind === "evidence" || kind === "episode") return "episodes";
   if (kind === "entity" || kind === "topic" || kind === "concept" || kind === "fact") return "facts";
   return "episodes";
@@ -121,6 +122,419 @@ function pushCandidate(bucket: LayerCandidateLine[], text: string, meta?: Omit<L
 function firstFiniteNumber(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+function firstBoolean(v: unknown): boolean | null {
+  if (typeof v === "boolean") return v;
+  return null;
+}
+
+type PatternSignal = {
+  anchor_id: string;
+  anchor_level: string | null;
+  selected_tool: string | null;
+  pattern_state: "provisional" | "stable";
+  credibility_state: "candidate" | "trusted" | "contested";
+  trusted: boolean;
+  distinct_run_count: number | null;
+  required_distinct_runs: number | null;
+  counter_evidence_count: number | null;
+  counter_evidence_open: boolean;
+  last_transition: string | null;
+  summary: string | null;
+};
+
+type PlannerPacketTextSurface = {
+  packet_version: "planner_packet_v1";
+  sections: {
+    recommended_workflows: string[];
+    candidate_workflows: string[];
+    candidate_patterns: string[];
+    trusted_patterns: string[];
+    contested_patterns: string[];
+    rehydration_candidates: string[];
+    supporting_knowledge: string[];
+  };
+  merged_text: string;
+};
+
+export type PlannerPacketSurface = {
+  planner_packet?: unknown;
+  action_recall_packet?: unknown;
+  recommended_workflows: unknown[];
+  candidate_workflows: unknown[];
+  candidate_patterns: unknown[];
+  trusted_patterns: unknown[];
+  contested_patterns: unknown[];
+  rehydration_candidates: unknown[];
+  supporting_knowledge: unknown[];
+  pattern_signals: unknown[];
+  workflow_signals: unknown[];
+};
+
+function collectPatternSignals(recall: any): PatternSignal[] {
+  const runtimeToolHints = Array.isArray(recall?.runtime_tool_hints) ? recall.runtime_tool_hints : [];
+  const out: PatternSignal[] = [];
+  const seen = new Set<string>();
+  for (const hint of runtimeToolHints.slice(0, 16)) {
+    const anchorKind = String(hint?.anchor?.anchor_kind || "").trim();
+    if (anchorKind !== "pattern") continue;
+    const anchorId = String(hint?.anchor?.id || "").trim();
+    if (!anchorId || seen.has(anchorId)) continue;
+    seen.add(anchorId);
+    const patternState = String(hint?.anchor?.pattern_state || "").trim() === "stable" ? "stable" : "provisional";
+    const counterEvidenceOpen = firstBoolean(hint?.anchor?.counter_evidence_open) === true;
+    const trusted = firstBoolean(hint?.anchor?.trusted) === true;
+    const credibilityStateRaw = String(hint?.anchor?.credibility_state || "").trim();
+    const credibilityState =
+      credibilityStateRaw === "trusted" || credibilityStateRaw === "contested" || credibilityStateRaw === "candidate"
+        ? credibilityStateRaw
+        : counterEvidenceOpen
+          ? "contested"
+          : trusted
+            ? "trusted"
+            : "candidate";
+    out.push({
+      anchor_id: anchorId,
+      anchor_level: String(hint?.anchor?.anchor_level || "").trim() || null,
+      selected_tool: String(hint?.anchor?.selected_tool || "").trim() || null,
+      pattern_state: patternState,
+      credibility_state: credibilityState,
+      trusted,
+      distinct_run_count: firstFiniteNumber(hint?.anchor?.distinct_run_count),
+      required_distinct_runs: firstFiniteNumber(hint?.anchor?.required_distinct_runs),
+      counter_evidence_count: firstFiniteNumber(hint?.anchor?.counter_evidence_count),
+      counter_evidence_open: counterEvidenceOpen,
+      last_transition: String(hint?.anchor?.last_transition || "").trim() || null,
+      summary: String(hint?.anchor?.summary || "").trim() || null,
+    });
+  }
+  return out;
+}
+
+function collectWorkflowSignals(packet: ReturnType<typeof normalizeActionRecallPacket>) {
+  const stable = packet.recommended_workflows
+    .filter((entry: any) => !!entry && typeof entry === "object")
+    .map((entry: any) => ({
+      anchor_id: String(entry?.anchor_id || "").trim(),
+      anchor_level: String(entry?.anchor_level || "").trim() || null,
+      title: String(entry?.title || "").trim() || null,
+      summary: String(entry?.summary || "").trim() || null,
+      promotion_state: "stable" as const,
+      promotion_ready: false,
+      observed_count: null,
+      required_observations: null,
+      source_kind: String(entry?.source_kind || "").trim() || null,
+      promotion_origin: String(entry?.promotion_origin || "").trim() || null,
+      last_transition: String(entry?.last_transition || "").trim() || null,
+      maintenance_state: String(entry?.maintenance_state || "").trim() || null,
+      offline_priority: String(entry?.offline_priority || "").trim() || null,
+      last_maintenance_at: String(entry?.last_maintenance_at || "").trim() || null,
+    }))
+    .filter((entry: any) => entry.anchor_id);
+  const candidate = packet.candidate_workflows
+    .filter((entry: any) => !!entry && typeof entry === "object")
+    .map((entry: any) => {
+      const observedCount = firstFiniteNumber(entry?.observed_count);
+      const requiredObservations = firstFiniteNumber(entry?.required_observations);
+      const promotionReady = (
+        entry?.promotion_ready === true
+        || (
+          Number.isFinite(observedCount)
+          && Number.isFinite(requiredObservations)
+          && Number(requiredObservations) > 0
+          && Number(observedCount) >= Number(requiredObservations)
+        )
+      );
+      return {
+        anchor_id: String(entry?.anchor_id || "").trim(),
+        anchor_level: String(entry?.anchor_level || "").trim() || null,
+        title: String(entry?.title || "").trim() || null,
+        summary: String(entry?.summary || "").trim() || null,
+        promotion_state: String(entry?.promotion_state || "").trim() || "candidate",
+        promotion_ready: promotionReady,
+        observed_count: observedCount,
+        required_observations: requiredObservations,
+        source_kind: String(entry?.source_kind || "").trim() || null,
+        promotion_origin: String(entry?.promotion_origin || "").trim() || null,
+        last_transition: String(entry?.last_transition || "").trim() || null,
+        maintenance_state: String(entry?.maintenance_state || "").trim() || null,
+        offline_priority: String(entry?.offline_priority || "").trim() || null,
+        last_maintenance_at: String(entry?.last_maintenance_at || "").trim() || null,
+      };
+    })
+    .filter((entry) => entry.anchor_id);
+  return [...stable, ...candidate];
+}
+
+function normalizeActionRecallPacket(recall: any) {
+  const packet =
+    recall?.action_recall_packet && typeof recall.action_recall_packet === "object"
+      ? (recall.action_recall_packet as Record<string, unknown>)
+      : null;
+  const runtimeToolHints = Array.isArray(recall?.runtime_tool_hints) ? recall.runtime_tool_hints : [];
+  const recommendedWorkflows = Array.isArray(packet?.recommended_workflows) ? packet.recommended_workflows : [];
+  const candidateWorkflows = Array.isArray(packet?.candidate_workflows) ? packet.candidate_workflows : [];
+  const candidatePatterns = Array.isArray(packet?.candidate_patterns) ? packet.candidate_patterns : [];
+  const trustedPatterns = Array.isArray(packet?.trusted_patterns) ? packet.trusted_patterns : [];
+  const contestedPatterns = Array.isArray(packet?.contested_patterns) ? packet.contested_patterns : [];
+  const rehydrationCandidates = Array.isArray(packet?.rehydration_candidates) ? packet.rehydration_candidates : [];
+  const supportingKnowledge = Array.isArray(packet?.supporting_knowledge) ? packet.supporting_knowledge : [];
+  const workflowHints = runtimeToolHints
+    .filter((hint: any) => String(hint?.anchor?.anchor_kind || "").trim() === "workflow")
+    .map((hint: any) => ({
+      anchor_id: String(hint?.anchor?.id || "").trim(),
+      uri: null,
+      type: "procedure",
+      title: null,
+      summary: String(hint?.anchor?.summary || "").trim() || null,
+      anchor_level: String(hint?.anchor?.anchor_level || "").trim() || null,
+      tool_set: [],
+      confidence: null,
+    }))
+    .filter((entry: any) => entry.anchor_id);
+  const trustedPatternHints = runtimeToolHints
+    .filter(
+      (hint: any) =>
+        String(hint?.anchor?.anchor_kind || "").trim() === "pattern"
+        && String(hint?.anchor?.pattern_state || "").trim() === "stable",
+    )
+    .map((hint: any) => ({
+      anchor_id: String(hint?.anchor?.id || "").trim(),
+      uri: null,
+      type: "concept",
+      title: null,
+      summary: String(hint?.anchor?.summary || "").trim() || null,
+      anchor_level: String(hint?.anchor?.anchor_level || "").trim() || null,
+      selected_tool: String(hint?.anchor?.selected_tool || "").trim() || null,
+      pattern_state: "stable",
+      credibility_state: "trusted",
+      distinct_run_count: firstFiniteNumber(hint?.anchor?.distinct_run_count),
+      required_distinct_runs: firstFiniteNumber(hint?.anchor?.required_distinct_runs),
+      trusted: firstBoolean(hint?.anchor?.trusted) === true,
+      last_transition: String(hint?.anchor?.last_transition || "").trim() || null,
+      confidence: null,
+    }))
+    .filter((entry: any) => entry.anchor_id);
+  const candidatePatternHints = runtimeToolHints
+    .filter(
+      (hint: any) =>
+        String(hint?.anchor?.anchor_kind || "").trim() === "pattern"
+        && String(hint?.anchor?.credibility_state || "").trim() === "candidate",
+    )
+    .map((hint: any) => ({
+      anchor_id: String(hint?.anchor?.id || "").trim(),
+      uri: null,
+      type: "concept",
+      title: null,
+      summary: String(hint?.anchor?.summary || "").trim() || null,
+      anchor_level: String(hint?.anchor?.anchor_level || "").trim() || null,
+      selected_tool: String(hint?.anchor?.selected_tool || "").trim() || null,
+      pattern_state: "provisional",
+      credibility_state: firstBoolean(hint?.anchor?.counter_evidence_open) === true ? "contested" : "candidate",
+      distinct_run_count: firstFiniteNumber(hint?.anchor?.distinct_run_count),
+      required_distinct_runs: firstFiniteNumber(hint?.anchor?.required_distinct_runs),
+      trusted: false,
+      counter_evidence_open: firstBoolean(hint?.anchor?.counter_evidence_open) === true,
+      last_transition: String(hint?.anchor?.last_transition || "").trim() || null,
+      confidence: null,
+    }))
+    .filter((entry: any) => entry.anchor_id);
+  const contestedPatternHints = runtimeToolHints
+    .filter(
+      (hint: any) =>
+        String(hint?.anchor?.anchor_kind || "").trim() === "pattern"
+        && (
+          String(hint?.anchor?.credibility_state || "").trim() === "contested"
+          || firstBoolean(hint?.anchor?.counter_evidence_open) === true
+        ),
+    )
+    .map((hint: any) => ({
+      anchor_id: String(hint?.anchor?.id || "").trim(),
+      uri: null,
+      type: "concept",
+      title: null,
+      summary: String(hint?.anchor?.summary || "").trim() || null,
+      anchor_level: String(hint?.anchor?.anchor_level || "").trim() || null,
+      selected_tool: String(hint?.anchor?.selected_tool || "").trim() || null,
+      pattern_state: String(hint?.anchor?.pattern_state || "").trim() === "stable" ? "stable" : "provisional",
+      credibility_state: "contested",
+      distinct_run_count: firstFiniteNumber(hint?.anchor?.distinct_run_count),
+      required_distinct_runs: firstFiniteNumber(hint?.anchor?.required_distinct_runs),
+      trusted: false,
+      counter_evidence_open: true,
+      last_transition: String(hint?.anchor?.last_transition || "").trim() || null,
+      confidence: null,
+    }))
+    .filter((entry: any) => entry.anchor_id);
+  const rehydrationHintCandidates = runtimeToolHints
+    .filter((hint: any) => String(hint?.tool_name || "").trim() === "rehydrate_payload")
+    .map((hint: any) => ({
+      anchor_id: String(hint?.anchor?.id || "").trim(),
+      anchor_uri: null,
+      anchor_kind: String(hint?.anchor?.anchor_kind || "").trim() || null,
+      anchor_level: String(hint?.anchor?.anchor_level || "").trim() || null,
+      title: null,
+      summary: String(hint?.anchor?.summary || "").trim() || null,
+      mode: String(hint?.invocation?.mode || "").trim() || null,
+      payload_cost_hint: String(hint?.payload_cost_hint || "").trim() || null,
+      recommended_when: [],
+      trusted: firstBoolean(hint?.anchor?.trusted) === true,
+      selected_tool: String(hint?.anchor?.selected_tool || "").trim() || null,
+      example_call: String(hint?.invocation?.example_call || "").trim() || null,
+    }))
+    .filter((entry: any) => entry.anchor_id);
+  return {
+    packet_version: "action_recall_v1" as const,
+    recommended_workflows: recommendedWorkflows.length > 0 ? recommendedWorkflows : workflowHints,
+    candidate_workflows: candidateWorkflows,
+    candidate_patterns: candidatePatterns.length > 0 ? candidatePatterns : candidatePatternHints,
+    trusted_patterns: trustedPatterns.length > 0 ? trustedPatterns : trustedPatternHints,
+    contested_patterns: contestedPatterns.length > 0 ? contestedPatterns : contestedPatternHints,
+    rehydration_candidates: rehydrationCandidates.length > 0 ? rehydrationCandidates : rehydrationHintCandidates,
+    supporting_knowledge: supportingKnowledge,
+  };
+}
+
+export function extractPlannerPacketSurface(args: { layeredContext?: unknown; recall?: unknown }): PlannerPacketSurface {
+  const layered = args.layeredContext && typeof args.layeredContext === "object"
+    ? args.layeredContext as Record<string, unknown>
+    : null;
+  const recall = args.recall && typeof args.recall === "object"
+    ? args.recall as Record<string, unknown>
+    : null;
+  return {
+    planner_packet: layered && "planner_packet" in layered ? layered.planner_packet : undefined,
+    action_recall_packet:
+      recall?.action_recall_packet && typeof recall.action_recall_packet === "object"
+        ? recall.action_recall_packet
+        : layered?.action_recall_packet && typeof layered.action_recall_packet === "object"
+          ? layered.action_recall_packet
+          : undefined,
+    recommended_workflows: Array.isArray(layered?.recommended_workflows) ? layered.recommended_workflows : [],
+    candidate_workflows: Array.isArray(layered?.candidate_workflows) ? layered.candidate_workflows : [],
+    candidate_patterns: Array.isArray(layered?.candidate_patterns) ? layered.candidate_patterns : [],
+    trusted_patterns: Array.isArray(layered?.trusted_patterns) ? layered.trusted_patterns : [],
+    contested_patterns: Array.isArray(layered?.contested_patterns) ? layered.contested_patterns : [],
+    rehydration_candidates: Array.isArray(layered?.rehydration_candidates) ? layered.rehydration_candidates : [],
+    supporting_knowledge: Array.isArray(layered?.supporting_knowledge) ? layered.supporting_knowledge : [],
+    pattern_signals: Array.isArray(layered?.pattern_signals) ? layered.pattern_signals : [],
+    workflow_signals: Array.isArray(layered?.workflow_signals) ? layered.workflow_signals : [],
+  };
+}
+
+function plannerPacketLine(kind: string, parts: Array<string | null | undefined>) {
+  const body = parts.filter(Boolean).join("; ");
+  return trimLine(body ? `${kind}: ${body}` : kind, 260);
+}
+
+function buildPlannerPacketText(packet: ReturnType<typeof normalizeActionRecallPacket>): PlannerPacketTextSurface {
+  const recommendedWorkflows = packet.recommended_workflows.slice(0, 6).map((entry: any) =>
+    plannerPacketLine("recommended workflow", [
+      String(entry?.title || "").trim() || String(entry?.summary || "").trim() || null,
+      String(entry?.anchor_id || "").trim() ? `anchor=${String(entry.anchor_id).trim()}` : null,
+      String(entry?.source_kind || "").trim() ? `source=${String(entry.source_kind).trim()}` : null,
+      Array.isArray(entry?.tool_set) && entry.tool_set.length > 0 ? `tools=${entry.tool_set.join(", ")}` : null,
+      String(entry?.anchor_level || "").trim() ? `level=${String(entry.anchor_level).trim()}` : null,
+      String(entry?.last_transition || "").trim() ? `transition=${String(entry.last_transition).trim()}` : null,
+      String(entry?.maintenance_state || "").trim() ? `maintenance=${String(entry.maintenance_state).trim()}` : null,
+      String(entry?.offline_priority || "").trim() ? `priority=${String(entry.offline_priority).trim()}` : null,
+    ])
+  );
+  const candidateWorkflows = packet.candidate_workflows.slice(0, 6).map((entry: any) =>
+    plannerPacketLine("candidate workflow", [
+      String(entry?.title || "").trim() || String(entry?.summary || "").trim() || null,
+      String(entry?.anchor_id || "").trim() ? `anchor=${String(entry.anchor_id).trim()}` : null,
+      String(entry?.source_kind || "").trim() ? `source=${String(entry.source_kind).trim()}` : null,
+      Array.isArray(entry?.tool_set) && entry.tool_set.length > 0 ? `tools=${entry.tool_set.join(", ")}` : null,
+      String(entry?.anchor_level || "").trim() ? `level=${String(entry.anchor_level).trim()}` : null,
+      Number.isFinite(Number(entry?.observed_count)) && Number.isFinite(Number(entry?.required_observations))
+        ? `observed=${Math.trunc(Number(entry.observed_count))}/${Math.trunc(Number(entry.required_observations))}`
+        : null,
+      entry?.promotion_ready === true ? "promotion=ready" : null,
+      String(entry?.last_transition || "").trim() ? `transition=${String(entry.last_transition).trim()}` : null,
+      String(entry?.maintenance_state || "").trim() ? `maintenance=${String(entry.maintenance_state).trim()}` : null,
+      String(entry?.offline_priority || "").trim() ? `priority=${String(entry.offline_priority).trim()}` : null,
+    ])
+  );
+  const candidatePatterns = packet.candidate_patterns.slice(0, 6).map((entry: any) =>
+    plannerPacketLine("candidate pattern", [
+      String(entry?.selected_tool || "").trim() ? `prefer ${String(entry.selected_tool).trim()}` : null,
+      String(entry?.summary || "").trim() || String(entry?.title || "").trim() || null,
+      String(entry?.anchor_id || "").trim() ? `anchor=${String(entry.anchor_id).trim()}` : null,
+      String(entry?.pattern_state || "").trim() ? `state=${String(entry.pattern_state).trim()}` : null,
+      String(entry?.credibility_state || "").trim() ? `credibility=${String(entry.credibility_state).trim()}` : null,
+      String(entry?.last_transition || "").trim() ? `transition=${String(entry.last_transition).trim()}` : null,
+    ])
+  );
+  const trustedPatterns = packet.trusted_patterns.slice(0, 6).map((entry: any) =>
+    plannerPacketLine("trusted pattern", [
+      String(entry?.selected_tool || "").trim() ? `prefer ${String(entry.selected_tool).trim()}` : null,
+      String(entry?.summary || "").trim() || String(entry?.title || "").trim() || null,
+      String(entry?.anchor_id || "").trim() ? `anchor=${String(entry.anchor_id).trim()}` : null,
+      String(entry?.pattern_state || "").trim() ? `state=${String(entry.pattern_state).trim()}` : null,
+      String(entry?.credibility_state || "").trim() ? `credibility=${String(entry.credibility_state).trim()}` : null,
+      String(entry?.last_transition || "").trim() ? `transition=${String(entry.last_transition).trim()}` : null,
+    ])
+  );
+  const contestedPatterns = packet.contested_patterns.slice(0, 6).map((entry: any) =>
+    plannerPacketLine("contested pattern", [
+      String(entry?.selected_tool || "").trim() ? `prefer ${String(entry.selected_tool).trim()}` : null,
+      String(entry?.summary || "").trim() || String(entry?.title || "").trim() || null,
+      String(entry?.anchor_id || "").trim() ? `anchor=${String(entry.anchor_id).trim()}` : null,
+      String(entry?.pattern_state || "").trim() ? `state=${String(entry.pattern_state).trim()}` : null,
+      String(entry?.credibility_state || "").trim() ? `credibility=${String(entry.credibility_state).trim()}` : null,
+      String(entry?.last_transition || "").trim() ? `transition=${String(entry.last_transition).trim()}` : null,
+      entry?.counter_evidence_open === true ? "counter_evidence_open=true" : null,
+    ])
+  );
+  const rehydrationCandidates = packet.rehydration_candidates.slice(0, 6).map((entry: any) =>
+    plannerPacketLine("rehydration candidate", [
+      String(entry?.title || "").trim() || String(entry?.summary || "").trim() || null,
+      String(entry?.anchor_id || "").trim() ? `anchor=${String(entry.anchor_id).trim()}` : null,
+      String(entry?.mode || "").trim() ? `mode=${String(entry.mode).trim()}` : null,
+      String(entry?.payload_cost_hint || "").trim() ? `cost=${String(entry.payload_cost_hint).trim()}` : null,
+    ])
+  );
+  const supportingKnowledge = packet.supporting_knowledge.slice(0, 8).map((entry: any) =>
+    plannerPacketLine("supporting knowledge", [
+      String(entry?.title || "").trim() || String(entry?.summary || "").trim() || null,
+      String(entry?.id || "").trim() ? `id=${String(entry.id).trim()}` : null,
+      String(entry?.type || "").trim() ? `type=${String(entry.type).trim()}` : null,
+    ])
+  );
+
+  const sections = {
+    recommended_workflows: recommendedWorkflows,
+    candidate_workflows: candidateWorkflows,
+    candidate_patterns: candidatePatterns,
+    trusted_patterns: trustedPatterns,
+    contested_patterns: contestedPatterns,
+    rehydration_candidates: rehydrationCandidates,
+    supporting_knowledge: supportingKnowledge,
+  };
+
+  const mergedParts: string[] = [];
+  const sectionOrder: Array<[string, string[]]> = [
+    ["# Recommended Workflows", sections.recommended_workflows],
+    ["# Candidate Workflows", sections.candidate_workflows],
+    ["# Candidate Patterns", sections.candidate_patterns],
+    ["# Trusted Patterns", sections.trusted_patterns],
+    ["# Contested Patterns", sections.contested_patterns],
+    ["# Rehydration Candidates", sections.rehydration_candidates],
+    ["# Supporting Knowledge", sections.supporting_knowledge],
+  ];
+  for (const [header, items] of sectionOrder) {
+    if (items.length === 0) continue;
+    mergedParts.push(header);
+    for (const item of items) mergedParts.push(`- ${item}`);
+  }
+
+  return {
+    packet_version: "planner_packet_v1",
+    sections,
+    merged_text: mergedParts.join("\n"),
+  };
 }
 
 function collectLayerCandidates(recall: any, rules: any, tools: any): Record<ContextLayerName, LayerCandidateLine[]> {
@@ -171,6 +585,42 @@ function collectLayerCandidates(recall: any, rules: any, tools: any): Record<Con
   const orderedTools = Array.isArray(tools?.selection?.ordered) ? tools.selection.ordered : [];
   if (selectedTool) pushCandidate(out.tools, `selected tool: ${selectedTool}`);
   if (orderedTools.length > 0) pushCandidate(out.tools, `tool ranking: ${orderedTools.join(", ")}`);
+  const runtimeToolHints = Array.isArray(recall?.runtime_tool_hints) ? recall.runtime_tool_hints : [];
+  for (const hint of runtimeToolHints.slice(0, 6)) {
+    const toolName = String(hint?.tool_name || "").trim();
+    const anchorId = String(hint?.anchor?.id || "").trim();
+    const anchorKind = String(hint?.anchor?.anchor_kind || "").trim();
+    const anchorLevel = String(hint?.anchor?.anchor_level || "").trim();
+    const patternState = String(hint?.anchor?.pattern_state || "").trim();
+    const credibilityState = String(hint?.anchor?.credibility_state || "").trim();
+    const selectedPatternTool = String(hint?.anchor?.selected_tool || "").trim();
+    const mode = String(hint?.invocation?.mode || "").trim();
+    const payloadCostHint = String(hint?.payload_cost_hint || "").trim();
+    const summary = String(hint?.anchor?.summary || "").trim();
+    const exampleCall = String(hint?.invocation?.example_call || "").trim();
+    if (anchorKind === "pattern" && selectedPatternTool) {
+      const patternPieces = [
+        `${credibilityState === "trusted" ? "validated" : credibilityState === "contested" ? "contested" : "candidate"} tool pattern: prefer ${selectedPatternTool}`,
+        anchorId ? `anchor=${anchorId}` : null,
+        anchorLevel ? `level=${anchorLevel}` : null,
+        patternState ? `state=${patternState}` : null,
+        credibilityState ? `credibility=${credibilityState}` : null,
+        summary ? `summary=${summary}` : null,
+      ].filter(Boolean);
+      pushCandidate(out.tools, patternPieces.join("; "));
+    }
+    const pieces = [
+      toolName ? `${toolName} available` : "runtime tool available",
+      anchorId ? `anchor=${anchorId}` : null,
+      anchorKind ? `kind=${anchorKind}` : null,
+      anchorLevel ? `level=${anchorLevel}` : null,
+      mode ? `mode=${mode}` : null,
+      payloadCostHint ? `cost=${payloadCostHint}` : null,
+      summary ? `summary=${summary}` : null,
+      exampleCall ? `call=${exampleCall}` : null,
+    ].filter(Boolean);
+    pushCandidate(out.tools, pieces.join("; "));
+  }
 
   const decisionId = String(tools?.decision?.decision_id || tools?.decision_id || "").trim();
   const runId = String(tools?.decision?.run_id || tools?.run_id || "").trim();
@@ -457,6 +907,10 @@ export function assembleLayeredContext(args: {
   raw.static = staticCandidates.lines;
   const totalBudget = parseBoundedInt(cfg.char_budget_total, 4000, 200, 200000);
   const includeMergeTrace = cfg.include_merge_trace !== false;
+  const patternSignals = collectPatternSignals(args.recall);
+  const actionRecallPacket = normalizeActionRecallPacket(args.recall);
+  const workflowSignals = collectWorkflowSignals(actionRecallPacket);
+  const plannerPacket = buildPlannerPacketText(actionRecallPacket);
 
   const layers: Record<string, any> = {};
   const mergeTrace: Array<Record<string, unknown>> = [];
@@ -533,6 +987,8 @@ export function assembleLayeredContext(args: {
       budget_chars: charBudget,
       used_chars: used,
       max_items: maxItems,
+      ...(layer === "tools" && patternSignals.length > 0 ? { pattern_signals: patternSignals } : {}),
+      ...(layer === "tools" && workflowSignals.length > 0 ? { workflow_signals: workflowSignals } : {}),
     };
 
     if (kept.length > 0) {
@@ -581,6 +1037,17 @@ export function assembleLayeredContext(args: {
       assembly_loop_ms: assemblyLoopMs,
       layered_total_ms: totalMs,
     },
+    planner_packet: plannerPacket,
+    action_recall_packet: actionRecallPacket,
+    recommended_workflows: actionRecallPacket.recommended_workflows,
+    candidate_workflows: actionRecallPacket.candidate_workflows,
+    candidate_patterns: actionRecallPacket.candidate_patterns,
+    trusted_patterns: actionRecallPacket.trusted_patterns,
+    contested_patterns: actionRecallPacket.contested_patterns,
+    rehydration_candidates: actionRecallPacket.rehydration_candidates,
+    supporting_knowledge: actionRecallPacket.supporting_knowledge,
+    pattern_signals: patternSignals,
+    workflow_signals: workflowSignals,
     forgetting: {
       enabled: forgetting.enabled,
       allowed_tiers: Array.from(forgetting.allowedTiers),
