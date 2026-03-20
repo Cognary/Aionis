@@ -6,6 +6,8 @@ title: "Lite 排障与反馈"
 
 如果 Lite 已经能启动，但本地行为仍然让你不确定，或者你准备在 beta 期间提交反馈，就看这页。
 
+如果你想先看简版 route 能力总结，直接看 [Lite API 能力指南](/public/zh/getting-started/07-lite-api-capability-guide)。
+
 ## 快速排查顺序
 
 按这个顺序查：
@@ -14,7 +16,7 @@ title: "Lite 排障与反馈"
 2. `/health`
 3. `memory_lane`
 4. pack payload 形状和运行时身份
-5. `npm run -s lite:dogfood`
+5. `npm run smoke:lite`
 
 这个顺序能先排掉最常见的误判。
 
@@ -78,7 +80,7 @@ curl -fsS http://localhost:3001/health | jq '{ok,runtime,storage,lite}'
 1. write 返回里是否没有 `write_no_nodes`
 2. 返回里是否出现 `lite_embedding_backfill_completed_inline`
 3. 换成 `memory_lane = "shared"` 后问题是否还在
-4. `npm run -s lite:dogfood` 是否也会失败
+4. `npm run smoke:lite` 是否也会失败
 
 `lite_embedding_backfill_completed_inline` 是正常信号，表示 Lite 已经本地 inline 完成 embedding backfill。
 
@@ -89,7 +91,7 @@ curl -fsS http://localhost:3001/health | jq '{ok,runtime,storage,lite}'
 先做这三件事：
 
 1. 确认 `/health` 显示 Lite
-2. 重跑 `npm run -s lite:dogfood`
+2. 重跑 `npm run smoke:lite`
 3. 确认失败点是在 `run/start`、step 写入，还是 `runs/get`
 
 当前 beta 预期是：
@@ -131,7 +133,7 @@ curl -fsS http://localhost:3001/health | jq '{ok,runtime,storage,lite}'
 不确定时，直接跑：
 
 ```bash
-npm run -s lite:dogfood
+npm run smoke:lite
 ```
 
 它会验证：
@@ -145,8 +147,7 @@ npm run -s lite:dogfood
 7. context/assemble
 8. pack export/import
 9. replay lifecycle
-
-同时会把 artifact 写到 `artifacts/lite/`。
+10. sandbox session -> execute -> logs
 
 ## 如何提交反馈
 
@@ -155,7 +156,7 @@ npm run -s lite:dogfood
 1. 操作系统和 Node 版本
 2. 启动命令
 3. `/health` 输出
-4. `lite:dogfood` 是否通过
+4. `smoke:lite` 是否通过
 5. 问题属于 startup、visibility、replay 还是 packs
 6. 最小可复现请求
 
@@ -172,3 +173,4 @@ npm run -s lite:dogfood
 1. [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
 2. [Lite 运维说明](/public/zh/getting-started/04-lite-operator-notes)
 3. [5 分钟上手](/public/zh/getting-started/02-onboarding-5min)
+4. [Lite API 能力指南](/public/zh/getting-started/07-lite-api-capability-guide)

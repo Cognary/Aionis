@@ -6,6 +6,8 @@ title: "Lite Troubleshooting and Feedback"
 
 Use this page when Lite starts but local behavior still feels wrong, or when you want to report beta feedback in a structured way.
 
+For the short route-level summary, see [Lite API Capability Guide](/public/en/getting-started/07-lite-api-capability-guide).
+
 ## Fast Triage Order
 
 Check these in order:
@@ -14,7 +16,7 @@ Check these in order:
 2. `/health`
 3. `memory_lane`
 4. pack payload shape and runtime identity
-5. `npm run -s lite:dogfood`
+5. `npm run smoke:lite`
 
 That order removes the most common false leads first.
 
@@ -78,7 +80,7 @@ Check:
 1. the write response did not return `write_no_nodes`
 2. the response may contain `lite_embedding_backfill_completed_inline`
 3. the issue still reproduces with `memory_lane = "shared"`
-4. the same flow fails under `npm run -s lite:dogfood`
+4. the same flow fails under `npm run smoke:lite`
 
 `lite_embedding_backfill_completed_inline` is expected. It means Lite completed local embedding backfill immediately instead of waiting on a worker.
 
@@ -89,7 +91,7 @@ Check:
 Before digging further:
 
 1. confirm `/health` shows Lite
-2. rerun `npm run -s lite:dogfood`
+2. rerun `npm run smoke:lite`
 3. identify whether failure is on `run/start`, step writes, or `runs/get`
 
 Current beta expectation:
@@ -131,7 +133,7 @@ If an unsupported automation governance route returns `501 automation_feature_no
 When in doubt, run:
 
 ```bash
-npm run -s lite:dogfood
+npm run smoke:lite
 ```
 
 That path validates:
@@ -145,8 +147,7 @@ That path validates:
 7. context/assemble
 8. pack export/import
 9. replay lifecycle
-
-It also writes an artifact under `artifacts/lite/`.
+10. sandbox session -> execute -> logs
 
 ## How to Report Feedback
 
@@ -155,7 +156,7 @@ Use the GitHub `Lite Beta Feedback` issue template and include:
 1. OS and Node version
 2. exact startup command
 3. relevant `/health` output
-4. whether `lite:dogfood` passed or failed
+4. whether `smoke:lite` passed or failed
 5. whether the issue is startup, visibility, replay, or packs
 6. the smallest request payload that reproduces it
 
@@ -172,3 +173,4 @@ If the run was successful, that is still useful feedback. Successful reports hel
 1. [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
 2. [Lite Operator Notes](/public/en/getting-started/04-lite-operator-notes)
 3. [5-Minute Onboarding](/public/en/getting-started/02-onboarding-5min)
+4. [Lite API Capability Guide](/public/en/getting-started/07-lite-api-capability-guide)

@@ -6,6 +6,8 @@ title: "Lite Operator Notes"
 
 Use this page when `npm run start:lite` is already working and you want the shortest path to operating Lite without guessing at local-only behavior.
 
+For a shorter route-level summary, see [Lite API Capability Guide](/public/en/getting-started/07-lite-api-capability-guide).
+
 ## What Lite Is
 
 Lite Alpha is the single-user, local SQLite-backed Aionis edition.
@@ -193,7 +195,7 @@ LITE_LOCAL_ACTOR_ID=lucio npm run start:lite
 The canonical real-process validation command is:
 
 ```bash
-npm run -s lite:dogfood
+npm run smoke:lite
 ```
 
 It validates the full local loop:
@@ -207,8 +209,13 @@ It validates the full local loop:
 7. context/assemble
 8. pack export/import
 9. replay lifecycle
+10. sandbox session -> execute -> logs
 
-The script writes a run artifact under `artifacts/lite/`.
+If you also want to validate the narrow local-process sandbox preset:
+
+```bash
+npm run smoke:lite:local-process
+```
 
 Use it when:
 
@@ -249,7 +256,7 @@ Check:
 1. the write actually created nodes
 2. the response does not contain `write_no_nodes`
 3. the response may contain `lite_embedding_backfill_completed_inline`, which is expected and should help fresh recallability
-4. rerun the same flow with `npm run -s lite:dogfood`
+4. rerun the same flow with `npm run smoke:lite`
 
 ### pack routes fail locally
 
@@ -269,7 +276,7 @@ The stable local operator order is:
 5. validate `recall_text`
 6. validate `planning/context`
 7. validate `context/assemble`
-8. run `lite:dogfood`
+8. run `smoke:lite`
 
 ## Next Reading
 
@@ -278,3 +285,4 @@ The stable local operator order is:
 3. [Lite Public Beta Boundary](/public/en/getting-started/05-lite-public-beta-boundary)
 4. [Get Started](/public/en/getting-started/01-get-started)
 5. [Lite Troubleshooting and Feedback](/public/en/getting-started/06-lite-troubleshooting-and-feedback)
+6. [Lite API Capability Guide](/public/en/getting-started/07-lite-api-capability-guide)

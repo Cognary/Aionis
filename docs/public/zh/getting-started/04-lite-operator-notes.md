@@ -6,6 +6,8 @@ title: "Lite 运维说明"
 
 如果 `npm run start:lite` 已经能启动，但你想避免在本地使用时反复猜测 Lite 的行为边界，就看这页。
 
+如果你想先看更短的 route 级能力总结，直接看 [Lite API 能力指南](/public/zh/getting-started/07-lite-api-capability-guide)。
+
 ## Lite 是什么
 
 Lite Alpha 是 Aionis 的单用户、本地 SQLite 版。
@@ -193,7 +195,7 @@ LITE_LOCAL_ACTOR_ID=lucio npm run start:lite
 当前标准的真实进程验证命令是：
 
 ```bash
-npm run -s lite:dogfood
+npm run smoke:lite
 ```
 
 它会验证完整本地链路：
@@ -207,8 +209,13 @@ npm run -s lite:dogfood
 7. context/assemble
 8. pack export/import
 9. replay lifecycle
+10. sandbox session -> execute -> logs
 
-脚本会把结果写到 `artifacts/lite/` 下。
+如果你还想顺手验证更实用的本地进程 sandbox preset：
+
+```bash
+npm run smoke:lite:local-process
+```
 
 适用场景：
 
@@ -249,7 +256,7 @@ npm run -s lite:dogfood
 1. 这次 write 是否真的创建了 node
 2. 返回里是否出现了 `write_no_nodes`
 3. 返回里如果有 `lite_embedding_backfill_completed_inline`，这反而是正常且有帮助的
-4. 直接重跑 `npm run -s lite:dogfood`
+4. 直接重跑 `npm run smoke:lite`
 
 ### pack 路由本地失败
 
@@ -269,7 +276,7 @@ npm run -s lite:dogfood
 5. 验证 `recall_text`
 6. 验证 `planning/context`
 7. 验证 `context/assemble`
-8. 跑 `lite:dogfood`
+8. 跑 `smoke:lite`
 
 ## 下一步阅读
 
@@ -278,3 +285,4 @@ npm run -s lite:dogfood
 3. [Lite Public Beta 边界](/public/zh/getting-started/05-lite-public-beta-boundary)
 4. [快速开始](/public/zh/getting-started/01-get-started)
 5. [Lite 排障与反馈](/public/zh/getting-started/06-lite-troubleshooting-and-feedback)
+6. [Lite API 能力指南](/public/zh/getting-started/07-lite-api-capability-guide)
