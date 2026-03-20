@@ -476,6 +476,53 @@ function stringifyJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+type LiteExecutionDecisionDbRow = {
+  id: string;
+  scope: string;
+  decision_kind: "tools_select";
+  run_id: string | null;
+  selected_tool: string | null;
+  candidates_json: string;
+  context_sha256: string;
+  policy_sha256: string;
+  source_rule_ids_json: string;
+  metadata_json: string;
+  commit_id: string | null;
+  created_at: string;
+};
+
+const LITE_EXECUTION_DECISION_SELECT_SQL = `SELECT
+   id,
+   scope,
+   decision_kind,
+   run_id,
+   selected_tool,
+   candidates_json,
+   context_sha256,
+   policy_sha256,
+   source_rule_ids_json,
+   metadata_json,
+   commit_id,
+   created_at
+ FROM lite_memory_execution_decisions`;
+
+function decodeExecutionDecisionRow(row: LiteExecutionDecisionDbRow): LiteExecutionDecisionRow {
+  return {
+    id: row.id,
+    scope: row.scope,
+    decision_kind: row.decision_kind,
+    run_id: row.run_id,
+    selected_tool: row.selected_tool,
+    candidates_json: parseJsonArray(row.candidates_json),
+    context_sha256: row.context_sha256,
+    policy_sha256: row.policy_sha256,
+    source_rule_ids: parseJsonArray(row.source_rule_ids_json).map((value) => String(value)),
+    metadata_json: parseJsonObject(row.metadata_json),
+    commit_id: row.commit_id,
+    created_at: row.created_at,
+  };
+}
+
 function nodeVisible(
   row: { memory_lane: "private" | "shared"; owner_agent_id: string | null; owner_team_id: string | null },
   consumerAgentId: string | null,
@@ -985,45 +1032,19 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
 
     async resolveDecision(args): Promise<LiteResolveDecisionRow | null> {
       const row = db.prepare(
-        `SELECT
-           id,
-           scope,
-           decision_kind,
-           run_id,
-           selected_tool,
-           candidates_json,
-           context_sha256,
-           policy_sha256,
-           source_rule_ids_json,
-           metadata_json,
-           commit_id,
-           created_at
-         FROM lite_memory_execution_decisions
+        `${LITE_EXECUTION_DECISION_SELECT_SQL}
          WHERE scope = ?
            AND id = ?
          LIMIT 1`,
-      ).get(args.scope, args.id) as {
-        id: string;
-        scope: string;
-        decision_kind: "tools_select";
-        run_id: string | null;
-        selected_tool: string | null;
-        candidates_json: string;
-        context_sha256: string;
-        policy_sha256: string;
-        source_rule_ids_json: string;
-        metadata_json: string;
-        commit_id: string | null;
-        created_at: string;
-      } | undefined;
+      ).get(args.scope, args.id) as LiteExecutionDecisionDbRow | undefined;
       if (!row) return null;
-      const sourceRuleIds = parseJsonArray(row.source_rule_ids_json).map((v) => String(v));
+      const decoded = decodeExecutionDecisionRow(row);
       if (
         (row.commit_id && !commitVisible(db, args.scope, row.commit_id, args.consumerAgentId ?? null, args.consumerTeamId ?? null))
         || !decisionSourceRulesVisible(
           db,
           args.scope,
-          sourceRuleIds,
+          decoded.source_rule_ids,
           args.consumerAgentId ?? null,
           args.consumerTeamId ?? null,
         )
@@ -1031,18 +1052,7 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
         return null;
       }
       return {
-        id: row.id,
-        scope: row.scope,
-        decision_kind: row.decision_kind,
-        run_id: row.run_id,
-        selected_tool: row.selected_tool,
-        candidates_json: parseJsonArray(row.candidates_json),
-        context_sha256: row.context_sha256,
-        policy_sha256: row.policy_sha256,
-        source_rule_ids: sourceRuleIds,
-        metadata_json: parseJsonObject(row.metadata_json),
-        commit_id: row.commit_id,
-        created_at: row.created_at,
+        ...decoded,
         commit_scope: row.commit_id ? args.scope : null,
       };
     },
@@ -1236,73 +1246,20 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
     async getExecutionDecision(args): Promise<LiteExecutionDecisionRow | null> {
       const row = args.id
         ? db.prepare(
-            `SELECT
-               id,
-               scope,
-               decision_kind,
-               run_id,
-               selected_tool,
-               candidates_json,
-               context_sha256,
-               policy_sha256,
-               source_rule_ids_json,
-               metadata_json,
-               commit_id,
-               created_at
-             FROM lite_memory_execution_decisions
+            `${LITE_EXECUTION_DECISION_SELECT_SQL}
              WHERE scope = ?
                AND id = ?
              LIMIT 1`,
           ).get(args.scope, args.id)
         : db.prepare(
-            `SELECT
-               id,
-               scope,
-               decision_kind,
-               run_id,
-               selected_tool,
-               candidates_json,
-               context_sha256,
-               policy_sha256,
-               source_rule_ids_json,
-               metadata_json,
-               commit_id,
-               created_at
-             FROM lite_memory_execution_decisions
+            `${LITE_EXECUTION_DECISION_SELECT_SQL}
              WHERE scope = ?
                AND run_id = ?
              ORDER BY created_at DESC, id DESC
              LIMIT 1`,
           ).get(args.scope, args.runId ?? null);
       if (!row) return null;
-      const typed = row as {
-        id: string;
-        scope: string;
-        decision_kind: "tools_select";
-        run_id: string | null;
-        selected_tool: string | null;
-        candidates_json: string;
-        context_sha256: string;
-        policy_sha256: string;
-        source_rule_ids_json: string;
-        metadata_json: string;
-        commit_id: string | null;
-        created_at: string;
-      };
-      return {
-        id: typed.id,
-        scope: typed.scope,
-        decision_kind: typed.decision_kind,
-        run_id: typed.run_id,
-        selected_tool: typed.selected_tool,
-        candidates_json: parseJsonArray(typed.candidates_json),
-        context_sha256: typed.context_sha256,
-        policy_sha256: typed.policy_sha256,
-        source_rule_ids: parseJsonArray(typed.source_rule_ids_json).map((v) => String(v)),
-        metadata_json: parseJsonObject(typed.metadata_json),
-        commit_id: typed.commit_id,
-        created_at: typed.created_at,
-      };
+      return decodeExecutionDecisionRow(row as LiteExecutionDecisionDbRow);
     },
 
     async listExecutionDecisionsByRun(args): Promise<{
@@ -1322,55 +1279,16 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
         latest_created_at: string | null;
       };
       const rows = db.prepare(
-        `SELECT
-           id,
-           scope,
-           decision_kind,
-           run_id,
-           selected_tool,
-           candidates_json,
-           context_sha256,
-           policy_sha256,
-           source_rule_ids_json,
-           metadata_json,
-           commit_id,
-           created_at
-         FROM lite_memory_execution_decisions
+        `${LITE_EXECUTION_DECISION_SELECT_SQL}
          WHERE scope = ?
            AND run_id = ?
          ORDER BY created_at DESC, id DESC
          LIMIT ?`,
-      ).all(args.scope, args.runId, Math.max(1, args.limit)) as Array<{
-        id: string;
-        scope: string;
-        decision_kind: "tools_select";
-        run_id: string | null;
-        selected_tool: string | null;
-        candidates_json: string;
-        context_sha256: string;
-        policy_sha256: string;
-        source_rule_ids_json: string;
-        metadata_json: string;
-        commit_id: string | null;
-        created_at: string;
-      }>;
+      ).all(args.scope, args.runId, Math.max(1, args.limit)) as LiteExecutionDecisionDbRow[];
       return {
         count: Number(stats?.count ?? 0),
         latest_created_at: stats?.latest_created_at ?? null,
-        rows: rows.map((row) => ({
-          id: row.id,
-          scope: row.scope,
-          decision_kind: row.decision_kind,
-          run_id: row.run_id,
-          selected_tool: row.selected_tool,
-          candidates_json: parseJsonArray(row.candidates_json),
-          context_sha256: row.context_sha256,
-          policy_sha256: row.policy_sha256,
-          source_rule_ids: parseJsonArray(row.source_rule_ids_json).map((v) => String(v)),
-          metadata_json: parseJsonObject(row.metadata_json),
-          commit_id: row.commit_id,
-          created_at: row.created_at,
-        })),
+        rows: rows.map(decodeExecutionDecisionRow),
       };
     },
 
@@ -1433,58 +1351,19 @@ export function createLiteWriteStore(path: string): LiteWriteStore {
 
     async findExecutionDecisionForFeedback(args): Promise<LiteExecutionDecisionRow | null> {
       const rows = db.prepare(
-        `SELECT
-           id,
-           scope,
-           decision_kind,
-           run_id,
-           selected_tool,
-           candidates_json,
-           context_sha256,
-           policy_sha256,
-           source_rule_ids_json,
-           metadata_json,
-           commit_id,
-           created_at
-         FROM lite_memory_execution_decisions
+        `${LITE_EXECUTION_DECISION_SELECT_SQL}
          WHERE scope = ?
            AND selected_tool = ?
            AND context_sha256 = ?
          ORDER BY created_at DESC, id DESC
          LIMIT 50`,
-      ).all(args.scope, args.selectedTool, args.contextSha256) as Array<{
-        id: string;
-        scope: string;
-        decision_kind: "tools_select";
-        run_id: string | null;
-        selected_tool: string | null;
-        candidates_json: string;
-        context_sha256: string;
-        policy_sha256: string;
-        source_rule_ids_json: string;
-        metadata_json: string;
-        commit_id: string | null;
-        created_at: string;
-      }>;
+      ).all(args.scope, args.selectedTool, args.contextSha256) as LiteExecutionDecisionDbRow[];
       const wanted = stringifyJson(args.candidatesJson);
       const matched = rows
         .filter((row) => (args.runId ? row.run_id === args.runId : true))
         .find((row) => row.candidates_json === wanted);
       if (!matched) return null;
-      return {
-        id: matched.id,
-        scope: matched.scope,
-        decision_kind: matched.decision_kind,
-        run_id: matched.run_id,
-        selected_tool: matched.selected_tool,
-        candidates_json: parseJsonArray(matched.candidates_json),
-        context_sha256: matched.context_sha256,
-        policy_sha256: matched.policy_sha256,
-        source_rule_ids: parseJsonArray(matched.source_rule_ids_json).map((v) => String(v)),
-        metadata_json: parseJsonObject(matched.metadata_json),
-        commit_id: matched.commit_id,
-        created_at: matched.created_at,
-      };
+      return decodeExecutionDecisionRow(matched);
     },
 
     async updateExecutionDecisionLink(args): Promise<LiteExecutionDecisionRow | null> {
