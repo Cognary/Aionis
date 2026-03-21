@@ -14,10 +14,11 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { WriteStoreAccess } from "../store/write-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
+import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "./lite-projected-write.js";
 
 type LiteWriteStoreLike = NonNullable<NonNullable<Parameters<typeof recoverHandoff>[0]>["liteWriteStore"]> & WriteStoreAccess & {
   withTx: <T>(fn: () => Promise<T>) => Promise<T>;
-};
+} & LiteProjectedWriteStore;
 
 type HandoffRouteKind = "handoff_store" | "handoff_recover";
 
@@ -93,25 +94,31 @@ export function registerHandoffRoutes(args: RegisterHandoffRoutesArgs) {
   const embeddingSurfacePolicy =
     embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
   const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
-  const buildPrincipalHandoffWriteBody = (body: HandoffStoreInput, principal: AuthPrincipal | null) =>
-    buildHandoffWriteBody({
+  const buildPrincipalHandoffWriteBody = (body: HandoffStoreInput, principal: AuthPrincipal | null) => {
+    const actorId = typeof body.actor === "string" && body.actor.trim().length > 0 ? body.actor.trim() : null;
+    return buildHandoffWriteBody({
       ...body,
-      ...(principal?.agent_id ? { producer_agent_id: principal.agent_id } : {}),
-      ...(principal?.agent_id ? { owner_agent_id: principal.agent_id } : {}),
+      ...(principal?.agent_id ? { producer_agent_id: principal.agent_id } : actorId ? { producer_agent_id: actorId } : {}),
+      ...(principal?.agent_id ? { owner_agent_id: principal.agent_id } : actorId ? { owner_agent_id: actorId } : {}),
       ...(!principal?.agent_id && principal?.team_id ? { owner_team_id: principal.team_id } : {}),
     });
+  };
   const runCommittedHandoffWrite = async (prepared: PreparedHandoffWrite): Promise<HandoffWriteResult> =>
-    liteWriteStore.withTx(() =>
-      applyMemoryWrite({} as pg.PoolClient, prepared, {
+    (
+      await commitLitePreparedWriteWithProjection({
+      prepared: prepared as any,
+      liteWriteStore,
+      embedder: writeEmbedder,
+      writeOptions: {
         maxTextLen: env.MAX_TEXT_LEN,
         piiRedaction: env.PII_REDACTION,
         allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
         shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
         shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
-        write_access: liteWriteStore,
         associativeLinkOrigin: "handoff_store",
-      }),
-    );
+      },
+      })
+    ).out;
   const applyHandoffExecutionTransitions = (args: {
     writeSlots: Record<string, unknown> | null;
   }) => {

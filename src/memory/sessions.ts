@@ -18,6 +18,7 @@ import { createPostgresWriteStoreAccess } from "../store/write-access.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { buildAionisUri } from "./uri.js";
+import { commitLitePreparedWriteWithProjection } from "../routes/lite-projected-write.js";
 
 type SessionWriteOptions = {
   defaultScope: string;
@@ -353,6 +354,9 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
     session_id: sid,
     event_id: eid,
     ...(parsed.metadata ?? {}),
+    ...(parsed.execution_state_v1 ? { execution_state_v1: parsed.execution_state_v1 } : {}),
+    ...(parsed.execution_packet_v1 ? { execution_packet_v1: parsed.execution_packet_v1 } : {}),
+    ...(parsed.execution_transitions_v1 ? { execution_transitions_v1: parsed.execution_transitions_v1 } : {}),
   };
 
   const writeReq = {
@@ -404,14 +408,20 @@ export async function writeSessionEvent(client: pg.PoolClient, body: unknown, op
     opts.embedder,
   );
   const out = opts.liteWriteStore
-    ? await opts.liteWriteStore.withTx(() => applyMemoryWrite({} as any, prepared, {
-        maxTextLen: opts.maxTextLen,
-        piiRedaction: opts.piiRedaction,
-        allowCrossScopeEdges: opts.allowCrossScopeEdges,
-        shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
-        shadowDualWriteStrict: opts.shadowDualWriteStrict,
-        write_access: opts.liteWriteStore as any,
-      }))
+    ? (
+        await commitLitePreparedWriteWithProjection({
+          prepared: prepared as any,
+          liteWriteStore: opts.liteWriteStore as any,
+          embedder: opts.embedder,
+          writeOptions: {
+            maxTextLen: opts.maxTextLen,
+            piiRedaction: opts.piiRedaction,
+            allowCrossScopeEdges: opts.allowCrossScopeEdges,
+            shadowDualWriteEnabled: opts.shadowDualWriteEnabled,
+            shadowDualWriteStrict: opts.shadowDualWriteStrict,
+          },
+        })
+      ).out
     : await applyMemoryWrite(client, prepared, {
         maxTextLen: opts.maxTextLen,
         piiRedaction: opts.piiRedaction,

@@ -133,6 +133,14 @@ Current runtime reality:
 5. the replay-governed producer path from `repair/review -> learning projection -> planning_context` is now route-tested end to end
 6. workflow lifecycle and maintenance summaries are exposed in planner and execution-kernel surfaces
 7. execution-native-only workflow display now carries stable `source` and `tool_set` presentation in planner/introspection surfaces
+8. structured execution-continuity `/v1/memory/write` requests can now project governed workflow memory, including packet-only continuity writes, and repeated unique writes can move that path into stable workflow guidance on the default planner surface
+9. `handoff/store` now also flows through the generic workflow producer, so ordinary handoff-backed continuity writes can progress into planner-visible workflow guidance without going through replay
+10. `memory/events` session-event writes can now also participate in the generic workflow producer when callers provide explicit execution continuity, so session-backed execution runs no longer require replay or handoff to enter workflow guidance
+11. the current continuity-backed producer family now shares one Lite projected-write commit pipeline across `memory/write`, `handoff/store`, and `memory/events`, reducing the risk that workflow projection, commit, and inline embedding semantics drift by route
+12. continuity-backed producer preconditions and distinct-observation semantics are now covered by an explicit projection contract test instead of remaining only implicit in route behavior
+13. `execution/introspect` now exposes continuity-producer provenance and compact inventory counts for projected workflow memory, so operator/debug workflows can see which workflow rows were produced by generic execution-write projection without widening the default planner surface
+14. Lite now has a first `suppress-first` operator intervention slice for learned pattern reuse, with dedicated `patterns/suppress` and `patterns/unsuppress` routes that preserve learned credibility while blocking trusted selector reuse
+15. selector and introspection surfaces now expose suppression as operator overlay state, so a historically trusted pattern can remain learned-trusted while still being operator-blocked in live selection
 
 Primary code:
 
@@ -142,6 +150,12 @@ Primary code:
 4. `src/memory/workflow-candidate-aggregation.ts`
 5. `src/memory/execution-introspection.ts`
 6. `scripts/ci/lite-replay-governed-learning-projection-route.test.ts`
+7. `src/memory/workflow-write-projection.ts`
+8. `scripts/ci/lite-memory-write-workflow-projection-route.test.ts`
+9. `scripts/ci/lite-handoff-workflow-projection-route.test.ts`
+10. `scripts/ci/lite-session-event-workflow-projection-route.test.ts`
+11. `src/memory/pattern-operator-override.ts`
+12. `scripts/ci/lite-pattern-suppress-route.test.ts`
 
 ### 6. Runtime-Governed Adjudication Contract
 
@@ -205,11 +219,14 @@ Current reality:
 1. replay can promote stable workflow memory
 2. tools feedback can distill stable or contested pattern memory
 3. execution-native writes now carry signatures, anchor metadata, and compression metadata
+4. structured execution-continuity ordinary writes can now project governed workflow memory into the planner recall path
+5. a minimal operator stop-loss path now exists for learned pattern reuse through `patterns/suppress` and `patterns/unsuppress`
 
 But:
 
 1. Lite does not yet have a broad automatic promotion pipeline from arbitrary event streams into reusable workflow or pattern memory
-2. the strongest promotion paths still come from replay and tool-feedback entry points
+2. the strongest stable promotion paths still come from replay-centered or explicit continuity entry points
+3. Lite still does not have the broader operator intervention surface proposed in ADR-0002 beyond the new `suppress-first` slice
 
 Primary code:
 
@@ -342,7 +359,7 @@ But:
 | Replay-learning workflow maturity | Implemented | Candidate-to-stable path is visible, aggregated, and route-tested through the replay-governed producer path. |
 | Runtime-governed adjudication model | Partially Implemented | Strong schema/contract, partial public product surface. |
 | Tier-aware memory semantics | Partially Implemented | Tier model exists; lifecycle control plane does not. |
-| Distillation beyond replay/tools entry points | Partially Implemented | Mainline paths exist; general promotion does not. |
+| Distillation beyond replay/tools entry points | Partially Implemented | Replay/tool-feedback remain strongest, but structured execution-continuity writes now produce governed workflow memory, including conservative generic-path auto-promotion. |
 | Maintenance model | Partially Implemented | Summaries exist; full maintenance system does not. |
 | Slim default planner/context response | Implemented | Default planner/context routes are slim; `layered_context` is explicit debug/operator output only. |
 | General governed mutation APIs | Contract-First | Schemas exist, product routes mostly do not. |
@@ -372,7 +389,8 @@ These are the next steps that most directly close the remaining gap between the 
 Why:
 
 1. replay- and replay-governed workflow promotion paths are now real and route-tested
-2. broader event-to-workflow promotion is still narrower than the overall execution-memory direction
+2. structured execution-continuity ordinary writes now also produce governed workflow memory
+3. broader event-to-workflow promotion is still narrower than the overall execution-memory direction
 
 Concrete next step:
 
@@ -391,6 +409,7 @@ Concrete next step:
 1. choose a deliberate boundary
 2. either expose a Lite-governed route family
 3. or mark them explicitly internal for now and stop implying near-term public availability
+4. treat the new `suppress-first` slice as the only current runtime-real operator intervention baseline
 
 ### Priority 3: Define The Lite Position On Tier Lifecycle
 

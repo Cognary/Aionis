@@ -202,6 +202,7 @@ export const MemoryAnchorKind = z.enum(["execution", "workflow", "pattern", "dec
 export const MemoryAnchorLevel = z.enum(["L1", "L2", "L3"]);
 export const MemoryPatternState = z.enum(["provisional", "stable"]);
 export const MemoryPatternCredibilityState = z.enum(["candidate", "trusted", "contested"]);
+export const PatternOperatorOverrideMode = z.enum(["shadow_learn", "hard_freeze"]);
 export const MemoryPatternTransitionKind = z.enum([
   "candidate_observed",
   "promoted_to_trusted",
@@ -214,6 +215,7 @@ export const MemoryAnchorSourceKind = z.enum([
   "distilled_trace",
   "tool_decision",
   "workflow_cluster",
+  "execution_write",
 ]);
 export const MemoryAnchorRehydrationMode = z.enum(["summary_only", "partial", "full"]);
 export const MemoryAnchorPayloadCostHint = z.enum(["low", "medium", "high"]);
@@ -290,7 +292,14 @@ export const MemoryAnchorMaintenanceSchema = z.object({
 });
 
 export const MemoryWorkflowPromotionState = z.enum(["candidate", "stable"]);
-export const MemoryWorkflowPromotionOrigin = z.enum(["replay_promote", "replay_stable_normalization", "replay_learning_episode", "replay_learning_auto_promotion"]);
+export const MemoryWorkflowPromotionOrigin = z.enum([
+  "replay_promote",
+  "replay_stable_normalization",
+  "replay_learning_episode",
+  "replay_learning_auto_promotion",
+  "execution_write_projection",
+  "execution_write_auto_promotion",
+]);
 export const MemoryWorkflowTransitionKind = z.enum(["candidate_observed", "promoted_to_stable", "normalized_latest_stable"]);
 
 export const MemoryWorkflowPromotionSchema = z.object({
@@ -825,7 +834,29 @@ export const ExecutionMemoryIntrospectionResponseSchema = z.object({
     raw_workflow_anchor_count: z.number().int().min(0),
     raw_workflow_candidate_count: z.number().int().min(0),
     suppressed_candidate_workflow_count: z.number().int().min(0),
+    continuity_projected_candidate_count: z.number().int().min(0),
+    continuity_auto_promoted_workflow_count: z.number().int().min(0),
     raw_pattern_anchor_count: z.number().int().min(0),
+  }),
+  continuity_projection_report: z.object({
+    sampled_source_event_count: z.number().int().min(0),
+    decision_counts: z.object({
+      projected: z.number().int().min(0),
+      skipped_missing_execution_continuity: z.number().int().min(0),
+      skipped_invalid_execution_state: z.number().int().min(0),
+      skipped_invalid_execution_packet: z.number().int().min(0),
+      skipped_existing_workflow_memory: z.number().int().min(0),
+      skipped_stable_exists: z.number().int().min(0),
+      eligible_without_projection: z.number().int().min(0),
+    }),
+    samples: z.array(z.object({
+      source_node_id: z.string(),
+      source_client_id: z.string().nullable(),
+      title: z.string().nullable(),
+      decision: z.string(),
+      workflow_signature: z.string().nullable(),
+      projection_client_id: z.string().nullable(),
+    })),
   }),
   demo_surface: ExecutionMemoryDemoSurfaceSchema,
   recommended_workflows: z.array(PlannerPacketEntrySchema),
@@ -905,6 +936,8 @@ export const DecisionPatternSummaryContractSchema = z.object({
   used_trusted_pattern_tools: z.array(z.string()),
   skipped_contested_pattern_anchor_ids: z.array(z.string()),
   skipped_contested_pattern_tools: z.array(z.string()),
+  skipped_suppressed_pattern_anchor_ids: z.array(z.string()),
+  skipped_suppressed_pattern_tools: z.array(z.string()),
 });
 
 export type DecisionPatternSummaryContract = z.infer<typeof DecisionPatternSummaryContractSchema>;
@@ -914,6 +947,10 @@ export const PatternMatchAnchorContractSchema = z.object({
   selected_tool: z.string().nullable().optional(),
   pattern_state: z.string().nullable().optional(),
   credibility_state: z.string().nullable().optional(),
+  suppressed: z.boolean().optional(),
+  suppression_mode: z.string().nullable().optional(),
+  suppression_reason: z.string().nullable().optional(),
+  suppressed_until: z.string().nullable().optional(),
   trusted: z.boolean().optional(),
   counter_evidence_open: z.boolean().optional(),
   last_transition: z.string().nullable().optional(),
@@ -934,8 +971,10 @@ export const ToolsSelectionSummaryContractSchema = z.object({
   selected_tool: z.string().nullable(),
   trusted_pattern_count: z.number().int().min(0),
   contested_pattern_count: z.number().int().min(0),
+  suppressed_pattern_count: z.number().int().min(0),
   used_trusted_pattern_tools: z.array(z.string()),
   skipped_contested_pattern_tools: z.array(z.string()),
+  skipped_suppressed_pattern_tools: z.array(z.string()),
   provenance_explanation: z.string().nullable(),
   pattern_lifecycle_summary: PatternLifecycleSummarySchema,
   pattern_maintenance_summary: PatternMaintenanceSummarySchema,
@@ -1147,6 +1186,9 @@ export const MemoryEventWriteRequest = z
     text_summary: z.string().min(1).max(4000).optional(),
     input_text: z.string().min(1).optional(),
     metadata: z.record(z.any()).optional(),
+    execution_state_v1: ExecutionStateV1Schema.optional(),
+    execution_packet_v1: ExecutionPacketV1Schema.optional(),
+    execution_transitions_v1: z.array(ExecutionStateTransitionV1Schema).optional(),
     auto_embed: z.boolean().optional(),
     memory_lane: z.enum(["private", "shared"]).optional(),
     producer_agent_id: z.string().min(1).optional(),
@@ -1445,6 +1487,54 @@ export const ToolsFeedbackRequest = z
   .refine((v) => !!v.input_text || !!v.input_sha256, { message: "must set input_text or input_sha256" });
 
 export type ToolsFeedbackInput = z.infer<typeof ToolsFeedbackRequest>;
+
+export const PatternOperatorOverrideSchema = z.object({
+  schema_version: z.literal("operator_override_v1"),
+  suppressed: z.boolean(),
+  reason: z.string().nullable(),
+  mode: PatternOperatorOverrideMode,
+  until: z.string().nullable(),
+  updated_at: z.string(),
+  updated_by: z.string().nullable(),
+  last_action: z.enum(["suppress", "unsuppress"]),
+});
+
+export type PatternOperatorOverride = z.infer<typeof PatternOperatorOverrideSchema>;
+
+export const PatternSuppressRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  anchor_id: UUID,
+  reason: z.string().min(1),
+  until: z.string().datetime().optional(),
+  mode: PatternOperatorOverrideMode.default("shadow_learn"),
+});
+
+export type PatternSuppressInput = z.infer<typeof PatternSuppressRequest>;
+
+export const PatternUnsuppressRequest = z.object({
+  tenant_id: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  actor: z.string().min(1).optional(),
+  anchor_id: UUID,
+  reason: z.string().min(1).optional(),
+});
+
+export type PatternUnsuppressInput = z.infer<typeof PatternUnsuppressRequest>;
+
+export const PatternSuppressResponseSchema = z.object({
+  tenant_id: z.string(),
+  scope: z.string(),
+  anchor_id: z.string(),
+  anchor_uri: z.string(),
+  selected_tool: z.string().nullable(),
+  pattern_state: z.string().nullable(),
+  credibility_state: z.string().nullable(),
+  operator_override: PatternOperatorOverrideSchema,
+});
+
+export type PatternSuppressResponse = z.infer<typeof PatternSuppressResponseSchema>;
 
 export const ReplaySafetyLevel = z.enum(["auto_ok", "needs_confirm", "manual_only"]);
 export type ReplaySafetyLevelInput = z.infer<typeof ReplaySafetyLevel>;

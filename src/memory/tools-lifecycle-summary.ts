@@ -31,8 +31,10 @@ export type ToolsSelectionSummary = {
   source_rule_count: number;
   trusted_pattern_count: number;
   contested_pattern_count: number;
+  suppressed_pattern_count: number;
   used_trusted_pattern_tools: string[];
   skipped_contested_pattern_tools: string[];
+  skipped_suppressed_pattern_tools: string[];
   fallback_applied: boolean;
   fallback_reason: string | null;
   provenance_explanation: string | null;
@@ -121,6 +123,7 @@ function buildSelectionProvenanceExplanation(args: {
   trustedPatternTools: string[];
   candidatePatternTools: string[];
   contestedPatternTools: string[];
+  suppressedPatternTools: string[];
   fallbackApplied: boolean;
   fallbackReason: string | null;
 }): string | null {
@@ -138,6 +141,9 @@ function buildSelectionProvenanceExplanation(args: {
   }
   if (args.contestedPatternTools.length > 0) {
     parts.push(`contested patterns visible but not trusted: ${args.contestedPatternTools.join(", ")}`);
+  }
+  if (args.suppressedPatternTools.length > 0) {
+    parts.push(`suppressed patterns visible but operator-blocked: ${args.suppressedPatternTools.join(", ")}`);
   }
   if (args.fallbackApplied) {
     parts.push(`fallback applied${args.fallbackReason ? `: ${args.fallbackReason}` : ""}`);
@@ -219,6 +225,7 @@ export function buildToolsSelectionSummary(args: {
     anchors?: Array<{
       selected_tool?: string | null;
       trusted?: boolean;
+      suppressed?: boolean;
       credibility_state?: "candidate" | "trusted" | "contested" | null;
     }>;
   } | null;
@@ -243,11 +250,19 @@ export function buildToolsSelectionSummary(args: {
     .length;
   const contestedPatternTools = uniqueStrings(
     patternAnchors
-      .filter((anchor) => anchor?.trusted !== true && anchor?.credibility_state === "contested")
+      .filter((anchor) => anchor?.trusted !== true && anchor?.suppressed !== true && anchor?.credibility_state === "contested")
       .map((anchor) => anchor?.selected_tool ?? null),
   );
   const contestedPatternCount = patternAnchors
-    .filter((anchor) => anchor?.trusted !== true && anchor?.credibility_state === "contested")
+    .filter((anchor) => anchor?.trusted !== true && anchor?.suppressed !== true && anchor?.credibility_state === "contested")
+    .length;
+  const suppressedPatternTools = uniqueStrings(
+    patternAnchors
+      .filter((anchor) => anchor?.suppressed === true)
+      .map((anchor) => anchor?.selected_tool ?? null),
+  );
+  const suppressedPatternCount = patternAnchors
+    .filter((anchor) => anchor?.suppressed === true)
     .length;
   const fallbackApplied = Boolean(selection.fallback?.applied);
   const fallbackReason = selection.fallback?.reason ?? null;
@@ -321,8 +336,10 @@ export function buildToolsSelectionSummary(args: {
     source_rule_count: safeStringArray(args.source_rule_ids).length,
     trusted_pattern_count: Number(args.pattern_matches?.trusted ?? trustedPatternTools.length ?? 0),
     contested_pattern_count: contestedPatternTools.length,
+    suppressed_pattern_count: suppressedPatternCount,
     used_trusted_pattern_tools: selectedTool && trustedPatternTools.includes(selectedTool) ? [selectedTool] : [],
     skipped_contested_pattern_tools: contestedPatternTools,
+    skipped_suppressed_pattern_tools: suppressedPatternTools,
     fallback_applied: fallbackApplied,
     fallback_reason: fallbackReason,
     provenance_explanation: buildSelectionProvenanceExplanation({
@@ -330,6 +347,7 @@ export function buildToolsSelectionSummary(args: {
       trustedPatternTools,
       candidatePatternTools,
       contestedPatternTools,
+      suppressedPatternTools,
       fallbackApplied,
       fallbackReason,
     }),

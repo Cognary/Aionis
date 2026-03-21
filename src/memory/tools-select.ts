@@ -15,6 +15,7 @@ import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js"
 import type { LiteWriteStore } from "../store/lite-write-store.js";
 import { buildToolsSelectionSummary } from "./tools-lifecycle-summary.js";
 import { buildAionisUri } from "./uri.js";
+import { isPatternSuppressed, readPatternOperatorOverride } from "./pattern-operator-override.js";
 import {
   ControlProfileV1Schema,
   ExecutionStateV1Schema,
@@ -171,6 +172,10 @@ type RecalledToolPattern = {
   pattern_state: "provisional" | "stable";
   credibility_state: "candidate" | "trusted" | "contested";
   trusted: boolean;
+  suppressed: boolean;
+  suppression_mode: "shadow_learn" | "hard_freeze" | null;
+  suppression_reason: string | null;
+  suppressed_until: string | null;
   counter_evidence_open: boolean;
   last_transition: string | null;
   maintenance_state: "observe" | "retain" | "review" | null;
@@ -234,6 +239,8 @@ async function recallToolSelectionPatterns(args: {
     const toolSet = uniqueStrings(Array.isArray(anchor.tool_set) ? (anchor.tool_set as Array<string | null | undefined>) : []);
     const promotion = asRecord(executionNative?.promotion) ?? asRecord(anchor.promotion);
     const maintenance = asRecord(executionNative?.maintenance) ?? asRecord(anchor.maintenance);
+    const operatorOverride = readPatternOperatorOverride(slots ?? {});
+    const suppressed = isPatternSuppressed(operatorOverride);
     const metrics = asRecord(anchor.metrics);
     const distinctRunCount = Number(promotion?.distinct_run_count ?? metrics?.distinct_run_count ?? 0);
     const requiredDistinctRuns = Math.max(2, Number(promotion?.required_distinct_runs ?? 2));
@@ -257,7 +264,11 @@ async function recallToolSelectionPatterns(args: {
       tool_set: toolSet,
       pattern_state: patternState,
       credibility_state: credibilityState,
-      trusted: credibilityState === "trusted",
+      trusted: credibilityState === "trusted" && !suppressed,
+      suppressed,
+      suppression_mode: operatorOverride?.mode ?? null,
+      suppression_reason: operatorOverride?.reason ?? null,
+      suppressed_until: operatorOverride?.until ?? null,
       counter_evidence_open: counterEvidenceOpen,
       last_transition: firstString([promotion?.last_transition]),
       maintenance_state: firstString([maintenance?.maintenance_state]) as any,
@@ -411,7 +422,8 @@ export async function selectTools(
         })
       : [];
   const trustedPatterns = recalledPatterns.filter((pattern) => pattern.trusted);
-  const contestedPatterns = recalledPatterns.filter((pattern) => !pattern.trusted);
+  const suppressedPatterns = recalledPatterns.filter((pattern) => pattern.suppressed);
+  const contestedPatterns = recalledPatterns.filter((pattern) => !pattern.trusted && !pattern.suppressed);
   const patternPreferred = uniqueStrings(trustedPatterns.map((pattern) => pattern.selected_tool), filteredCandidates.length);
 
   const explicitPreferred = Array.isArray((rules.applied as any)?.policy?.tool?.prefer)
@@ -469,6 +481,8 @@ export async function selectTools(
     used_trusted_pattern_tools: uniqueSelectedTools(usedTrustedPatterns),
     skipped_contested_pattern_anchor_ids: contestedPatterns.map((pattern) => pattern.node_id),
     skipped_contested_pattern_tools: uniqueSelectedTools(contestedPatterns),
+    skipped_suppressed_pattern_anchor_ids: suppressedPatterns.map((pattern) => pattern.node_id),
+    skipped_suppressed_pattern_tools: uniqueSelectedTools(suppressedPatterns),
     ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
   };
   const decisionRes: { id: string; created_at: string } = opts.liteWriteStore
@@ -533,6 +547,8 @@ export async function selectTools(
           used_trusted_pattern_tools: uniqueSelectedTools(usedTrustedPatterns),
           skipped_contested_pattern_anchor_ids: contestedPatterns.map((pattern) => pattern.node_id),
           skipped_contested_pattern_tools: uniqueSelectedTools(contestedPatterns),
+          skipped_suppressed_pattern_anchor_ids: suppressedPatterns.map((pattern) => pattern.node_id),
+          skipped_suppressed_pattern_tools: uniqueSelectedTools(suppressedPatterns),
           ...(parsed.include_shadow ? { shadow_tool_conflicts_summary } : {}),
         },
         created_at: decision_created_at,
@@ -572,15 +588,19 @@ export async function selectTools(
     },
     pattern_matches: {
       matched: recalledPatterns.length,
-      trusted: trustedPatterns.length,
-      preferred_tools: patternPreferred,
-      anchors: recalledPatterns.map((pattern) => ({
+        trusted: trustedPatterns.length,
+        preferred_tools: patternPreferred,
+        anchors: recalledPatterns.map((pattern) => ({
         node_id: pattern.node_id,
         selected_tool: pattern.selected_tool,
         pattern_state: pattern.pattern_state,
-        credibility_state: pattern.credibility_state,
-        trusted: pattern.trusted,
-        counter_evidence_open: pattern.counter_evidence_open,
+          credibility_state: pattern.credibility_state,
+          trusted: pattern.trusted,
+          suppressed: pattern.suppressed,
+          suppression_mode: pattern.suppression_mode,
+          suppression_reason: pattern.suppression_reason,
+          suppressed_until: pattern.suppressed_until,
+          counter_evidence_open: pattern.counter_evidence_open,
         last_transition: pattern.last_transition,
         maintenance_state: pattern.maintenance_state,
         offline_priority: pattern.offline_priority,
@@ -610,6 +630,8 @@ export async function selectTools(
         used_trusted_pattern_tools: uniqueSelectedTools(usedTrustedPatterns),
         skipped_contested_pattern_anchor_ids: contestedPatterns.map((pattern) => pattern.node_id),
         skipped_contested_pattern_tools: uniqueSelectedTools(contestedPatterns),
+        skipped_suppressed_pattern_anchor_ids: suppressedPatterns.map((pattern) => pattern.node_id),
+        skipped_suppressed_pattern_tools: uniqueSelectedTools(suppressedPatterns),
       },
     },
   };

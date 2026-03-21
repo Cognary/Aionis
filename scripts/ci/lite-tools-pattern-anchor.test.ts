@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { FakeEmbeddingProvider } from "../../src/embeddings/fake.ts";
 import { updateRuleState } from "../../src/memory/rules.ts";
 import { MemoryAnchorV1Schema, MemoryRecallRequest } from "../../src/memory/schemas.ts";
+import { suppressPatternAnchorLite } from "../../src/memory/pattern-operator-override.ts";
 import { memoryRecallParsed } from "../../src/memory/recall.ts";
 import { selectTools } from "../../src/memory/tools-select.ts";
 import { toolSelectionFeedback } from "../../src/memory/tools-feedback.ts";
@@ -816,6 +817,136 @@ test("selectTools keeps explicit tool.prefer ahead of trusted pattern preference
       recalled.selection_summary.provenance_explanation,
       "selected tool: bash; trusted patterns available but not used: edit",
     );
+  } finally {
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("selectTools excludes suppressed trusted patterns from trusted reuse without mutating learned credibility", async () => {
+  const dbPath = tmpDbPath("pattern-suppress-selector");
+  const { liteWriteStore, ruleNodeId } = await seedActiveRule(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  const baseContext = {
+    task_kind: "repair_export",
+    goal: "repair export failure in node tests",
+    error: {
+      signature: "node-export-mismatch",
+    },
+  };
+  try {
+    let stableAnchorId: string | null = null;
+    for (const runId of [randomUUID(), randomUUID()]) {
+      const selection = await selectTools(null, {
+        tenant_id: "default",
+        scope: "default",
+        run_id: runId,
+        context: baseContext,
+        candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+        strict: true,
+        reorder_candidates: false,
+      }, "default", "default", {
+        embedder: FakeEmbeddingProvider,
+        recallAccess: liteRecallStore.createRecallAccess(),
+        liteWriteStore,
+      });
+      const feedback = await liteWriteStore.withTx(() =>
+        toolSelectionFeedback(null, {
+          tenant_id: "default",
+          scope: "default",
+          actor: "local-user",
+          run_id: runId,
+          decision_id: selection.decision.decision_id,
+          outcome: "positive",
+          context: baseContext,
+          candidates: ["bash", "edit", "test"],
+          selected_tool: "edit",
+          target: "tool",
+          note: "Edit-based repair succeeded",
+          input_text: "repair export failure in node tests",
+        }, "default", "default", {
+          maxTextLen: 10_000,
+          piiRedaction: false,
+          embedder: FakeEmbeddingProvider,
+          liteWriteStore,
+        }),
+      );
+      stableAnchorId = feedback.pattern_anchor?.node_id ?? stableAnchorId;
+    }
+    assert.ok(stableAnchorId);
+
+    await liteWriteStore.withTx(() =>
+      updateRuleState({} as any, {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        rule_node_id: ruleNodeId,
+        state: "disabled",
+        input_text: "disable prefer edit rule before suppression test",
+      }, "default", "default", {
+        liteWriteStore,
+      }),
+    );
+
+    await liteWriteStore.withTx(() =>
+      suppressPatternAnchorLite({
+        body: {
+          tenant_id: "default",
+          scope: "default",
+          actor: "local-user",
+          anchor_id: stableAnchorId,
+          reason: "operator stop-loss",
+        },
+        defaultScope: "default",
+        defaultTenantId: "default",
+        liteWriteStore,
+      }),
+    );
+
+    const recalled = await selectTools(null, {
+      tenant_id: "default",
+      scope: "default",
+      run_id: randomUUID(),
+      context: baseContext,
+      candidates: ["bash", "edit", "test"],
+      include_shadow: false,
+      rules_limit: 20,
+      strict: true,
+      reorder_candidates: true,
+    }, "default", "default", {
+      embedder: FakeEmbeddingProvider,
+      recallAccess: liteRecallStore.createRecallAccess(),
+      liteWriteStore,
+    });
+
+    assert.equal(recalled.selection.selected, "bash");
+    assert.equal(recalled.pattern_matches.matched, 1);
+    assert.equal(recalled.pattern_matches.trusted, 0);
+    assert.equal(recalled.pattern_matches.anchors[0]?.credibility_state, "trusted");
+    assert.equal(recalled.pattern_matches.anchors[0]?.suppressed, true);
+    assert.equal(recalled.pattern_matches.anchors[0]?.trusted, false);
+    assert.deepEqual(recalled.decision.pattern_summary.used_trusted_pattern_tools, []);
+    assert.deepEqual(recalled.decision.pattern_summary.skipped_suppressed_pattern_tools, ["edit"]);
+    assert.equal(recalled.selection_summary.trusted_pattern_count, 0);
+    assert.equal(recalled.selection_summary.suppressed_pattern_count, 1);
+    assert.deepEqual(recalled.selection_summary.skipped_suppressed_pattern_tools, ["edit"]);
+    assert.equal(
+      recalled.selection_summary.provenance_explanation,
+      "selected tool: bash; suppressed patterns visible but operator-blocked: edit",
+    );
+
+    const { rows } = await liteWriteStore.findNodes({
+      scope: "default",
+      id: stableAnchorId,
+      consumerAgentId: null,
+      consumerTeamId: null,
+      limit: 1,
+      offset: 0,
+    });
+    assert.equal(rows[0]?.slots.anchor_v1.credibility_state, "trusted");
+    assert.equal(rows[0]?.slots.operator_override_v1.suppressed, true);
   } finally {
     await liteRecallStore.close();
     await liteWriteStore.close();

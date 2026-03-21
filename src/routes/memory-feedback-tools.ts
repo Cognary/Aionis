@@ -10,8 +10,10 @@ import { selectTools } from "../memory/tools-select.js";
 import { getToolsDecisionById } from "../memory/tools-decision.js";
 import { getToolsRunLifecycle, listToolsRuns } from "../memory/tools-run.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
+import { suppressPatternAnchorLite, unsuppressPatternAnchorLite } from "../memory/pattern-operator-override.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
+import type { LiteWriteStore } from "../store/lite-write-store.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 
@@ -23,6 +25,8 @@ type MemoryFeedbackToolKind =
   | "tools_decision"
   | "tools_run"
   | "tools_feedback"
+  | "patterns_suppress"
+  | "patterns_unsuppress"
   | "rehydrate_payload";
 type MemoryFeedbackInflightKind = "write" | "recall";
 
@@ -36,6 +40,7 @@ type LiteFeedbackStoreLike =
   & NonNullable<NonNullable<Parameters<typeof getToolsRunLifecycle>[4]>["liteWriteStore"]>
   & NonNullable<NonNullable<Parameters<typeof listToolsRuns>[4]>["liteWriteStore"]>
   & NonNullable<NonNullable<Parameters<typeof toolSelectionFeedback>[4]>["liteWriteStore"]>
+  & Pick<LiteWriteStore, "findNodes" | "updateNodeAnchorState">
   & Parameters<typeof rehydrateAnchorPayloadLite>[0]
   & {
     withTx: <T>(fn: () => Promise<T>) => Promise<T>;
@@ -240,6 +245,42 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
               piiRedaction: env.PII_REDACTION,
               embedder,
               embeddedRuntime,
+              liteWriteStore: liteStore,
+            }),
+          ),
+      }),
+  });
+  registerFeedbackPostRoute({
+    path: "/v1/memory/patterns/suppress",
+    requestKind: "patterns_suppress",
+    inflightKind: "write",
+    withGate: false,
+    execute: (body) =>
+      executeFeedbackWriteOperation({
+        executeLite: (liteStore) =>
+          liteStore.withTx(() =>
+            suppressPatternAnchorLite({
+              body,
+              defaultScope: env.MEMORY_SCOPE,
+              defaultTenantId: env.MEMORY_TENANT_ID,
+              liteWriteStore: liteStore,
+            }),
+          ),
+      }),
+  });
+  registerFeedbackPostRoute({
+    path: "/v1/memory/patterns/unsuppress",
+    requestKind: "patterns_unsuppress",
+    inflightKind: "write",
+    withGate: false,
+    execute: (body) =>
+      executeFeedbackWriteOperation({
+        executeLite: (liteStore) =>
+          liteStore.withTx(() =>
+            unsuppressPatternAnchorLite({
+              body,
+              defaultScope: env.MEMORY_SCOPE,
+              defaultTenantId: env.MEMORY_TENANT_ID,
               liteWriteStore: liteStore,
             }),
           ),

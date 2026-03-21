@@ -1,6 +1,6 @@
 # Aionis Lite Foundation Memory V3 Implementation Plan
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-03-21
 
 This document turns `V3` of the foundation memory roadmap into an implementation plan.
 
@@ -51,10 +51,16 @@ Already-present V3 precursor behavior:
 14. replay-learning producer now has direct contract coverage for both pre-threshold candidate output and auto-promoted stable workflow output
 15. planner/context routes now expose first-class `workflow_signals` and compact `workflow_signal_summary` so stable, promotion-ready, and observing workflow maturity is visible without reconstructing it from packet sections
 16. Lite now also exposes a dedicated execution-memory introspection route that aggregates workflow signals, pattern signals, and maintenance summaries into a demo-friendly surface
+17. Lite memory-write now projects structured execution-continuity ordinary writes into governed workflow memory, including packet-only continuity writes
+18. repeated unique generic writes can now move that workflow path from candidate observation into stable workflow guidance on the default planner surface
+19. `handoff/store` now also benefits from the generic workflow producer, so handoff-backed continuity writes can enter planner-visible workflow guidance without replay mediation
+20. `memory/events` session-event writes now also benefit from the generic workflow producer when callers include explicit execution continuity
+21. the current continuity-backed producer family now shares one Lite projected-write commit pipeline across `memory/write`, `handoff/store`, and `memory/events`, reducing route-level drift in workflow projection and inline-embedding behavior
+22. Lite now has a first `suppress-first` operator overlay slice for learned pattern reuse, preserving learned credibility while blocking trusted selector reuse and exposing suppression state through selector and introspection surfaces
 
 What is still missing is no longer basic credibility visibility, compact maintenance surfacing, or replay-origin workflow governance.
 
-What is still missing is the broader automatic workflow-promotion path beyond existing replay promotion entrypoints, even though candidate workflows now carry governed observation strength.
+What is still missing is the broader automatic workflow-production path beyond existing replay-centered and structured execution-continuity producer entrypoints, even though generic writes now carry governed observation strength and conservative stable auto-promotion.
 
 Current implementation references:
 
@@ -72,6 +78,8 @@ Current implementation references:
 12. [scripts/ci/lite-replay-anchor.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-replay-anchor.test.ts)
 13. [scripts/ci/lite-planning-summary.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-planning-summary.test.ts)
 14. [scripts/ci/lite-context-runtime-packet-contract.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-context-runtime-packet-contract.test.ts)
+15. [src/memory/workflow-write-projection.ts](/Volumes/ziel/Aionisgo/src/memory/workflow-write-projection.ts)
+16. [scripts/ci/lite-memory-write-workflow-projection-route.test.ts](/Volumes/ziel/Aionisgo/scripts/ci/lite-memory-write-workflow-projection-route.test.ts)
 
 ## Scope
 
@@ -82,6 +90,7 @@ V3 covers:
 3. counter-evidence propagation across recall, selector, and summaries
 4. lifecycle-aware maintenance and importance handling
 5. planner-facing visibility for credibility and lifecycle state
+6. first-slice operator intervention that remains distinct from learned credibility
 
 V3 does not cover:
 

@@ -40,6 +40,8 @@ export type IdentityRequestKind =
   | "tools_decision"
   | "tools_run"
   | "tools_feedback"
+  | "patterns_suppress"
+  | "patterns_unsuppress"
   | "replay_run_start"
   | "replay_step_before"
   | "replay_step_after"
@@ -299,11 +301,11 @@ export function createRequestGuards({
       obj.consumer_agent_id = env.LITE_LOCAL_ACTOR_ID;
     }
 
-    if (kind === "rehydrate_payload" && !obj.actor) {
+    if ((kind === "rehydrate_payload" || kind === "patterns_suppress" || kind === "patterns_unsuppress") && !obj.actor) {
       obj.actor = env.LITE_LOCAL_ACTOR_ID;
     }
 
-    if (kind === "write" || isReplayWriteIdentityKind(kind)) {
+    if (kind === "write" || kind === "handoff_store" || isReplayWriteIdentityKind(kind)) {
       if (!obj.actor) obj.actor = env.LITE_LOCAL_ACTOR_ID;
       if (!obj.memory_lane) obj.memory_lane = "private";
       if (!obj.producer_agent_id) obj.producer_agent_id = env.LITE_LOCAL_ACTOR_ID;

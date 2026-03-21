@@ -1,6 +1,6 @@
 # Aionis Lite Foundation Memory Upgrade Roadmap
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-03-21
 
 This document turns the current `Aionis Lite` memory direction into an execution roadmap.
 
@@ -93,7 +93,7 @@ Status as of 2026-03-20:
 
 1. `V1` is implemented as the current runtime baseline
 2. `V2` is now the active substrate baseline for execution-native write, recall, context, and planner/context route contract hardening
-3. `V3` is now active in the current runtime for pattern credibility, counter-evidence propagation, planner/selector lifecycle summaries, low-cost maintenance summaries, workflow-maintenance hardening, and replay-learning workflow-candidate observation governance
+3. `V3` is now active in the current runtime for pattern credibility, counter-evidence propagation, planner/selector lifecycle summaries, low-cost maintenance summaries, workflow-maintenance hardening, replay-learning workflow-candidate observation governance, structured execution-continuity workflow production across the Lite continuity-backed write family, and a minimal `suppress-first` operator overlay for learned pattern reuse
 
 Current `V1` contract reference:
 

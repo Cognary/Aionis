@@ -8,6 +8,7 @@ import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
 import type { TopicClusterParams, TopicClusterResult } from "../jobs/topicClusterLib.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "../memory/write.js";
+import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "./lite-projected-write.js";
 import type { WriteStoreAccess } from "../store/write-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import { HttpError } from "../util/http.js";
@@ -32,7 +33,7 @@ type LiteWriteStoreLike = WriteStoreAccess & {
   }) => Promise<void>;
   close?: () => Promise<void>;
   healthSnapshot?: () => unknown;
-};
+} & LiteProjectedWriteStore;
 
 type MemoryWriteRequest = FastifyRequest<{ Body: unknown }>;
 
@@ -45,6 +46,7 @@ type PreparedWriteRouteState = PreparedWriteLike & {
 type WriteResultLike = Awaited<ReturnType<typeof applyMemoryWrite>>;
 type EffectiveWritePolicyLike = ReturnType<typeof computeEffectiveWritePolicy>;
 type WriteWarningLike = { code: string; message: string; details?: Record<string, unknown> };
+type LiteInlineEmbeddingResultLike = { updated: number; failed: number; error?: string | null } | null;
 
 type EmbeddedRuntimeLike = {
   applyWrite: (prepared: PreparedWriteLike, out: WriteResultLike) => Promise<void>;
@@ -88,99 +90,6 @@ function collectExecutionWriteOverlays(nodes: PreparedWriteLike["nodes"]): {
     }
   }
   return { states, transitions };
-}
-
-async function completeLiteInlineEmbeddings(args: {
-  prepared: PreparedWriteLike;
-  embedder: EmbeddingProvider | null;
-  liteWriteStore: LiteWriteStoreLike;
-}): Promise<{
-  attempted: number;
-  updated: number;
-  failed: number;
-  error?: string;
-} | null> {
-  const { prepared, embedder, liteWriteStore } = args;
-  if (!embedder || !prepared.auto_embed_effective) return null;
-
-  const planned = ((prepared.nodes ?? []) as Array<{
-    id: unknown;
-    embedding?: unknown;
-    embed_text?: unknown;
-  }>)
-    .filter((node) => !node.embedding && typeof node.embed_text === "string" && node.embed_text.trim().length > 0)
-    .map((node) => ({
-      id: String(node.id),
-      text: String(node.embed_text),
-    }));
-  if (planned.length === 0) return null;
-
-  const ready = await liteWriteStore.readyEmbeddingNodeIds(prepared.scope, planned.map((node) => node.id));
-  const pending = planned.filter((node) => !ready.has(node.id));
-  if (pending.length === 0) {
-    return {
-      attempted: planned.length,
-      updated: 0,
-      failed: 0,
-    };
-  }
-
-  let vectors: number[][];
-  try {
-    vectors = await embedder.embed(pending.map((node) => node.text));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await liteWriteStore.withTx(async () => {
-      for (const node of pending) {
-        await liteWriteStore.setNodeEmbeddingFailed({
-          scope: prepared.scope,
-          id: node.id,
-          error: message,
-        });
-      }
-    });
-    return {
-      attempted: pending.length,
-      updated: 0,
-      failed: pending.length,
-      error: message,
-    };
-  }
-  if (vectors.length !== pending.length) {
-    const message = `unexpected embedding count: expected ${pending.length}, got ${vectors.length}`;
-    await liteWriteStore.withTx(async () => {
-      for (const node of pending) {
-        await liteWriteStore.setNodeEmbeddingFailed({
-          scope: prepared.scope,
-          id: node.id,
-          error: message,
-        });
-      }
-    });
-    return {
-      attempted: pending.length,
-      updated: 0,
-      failed: pending.length,
-      error: message,
-    };
-  }
-
-  await liteWriteStore.withTx(async () => {
-    for (let i = 0; i < pending.length; i += 1) {
-      await liteWriteStore.setNodeEmbeddingReady({
-        scope: prepared.scope,
-        id: pending[i].id,
-        embedding: vectors[i] ?? [],
-        embeddingModel: embedder.name,
-      });
-    }
-  });
-
-  return {
-    attempted: pending.length,
-    updated: pending.length,
-    failed: 0,
-  };
 }
 
 export function registerMemoryWriteRoutes(args: {
@@ -236,61 +145,75 @@ export function registerMemoryWriteRoutes(args: {
     prepared: PreparedWriteRouteState;
     policy: EffectiveWritePolicyLike;
     liteModeActive: boolean;
-  }): Promise<{ out: WriteResultLike; forcedLiteTopicClusterAsync: boolean }> => {
+  }): Promise<{
+    out: WriteResultLike;
+    forcedLiteTopicClusterAsync: boolean;
+    liteInlineEmbedding: LiteInlineEmbeddingResultLike;
+  }> => {
     const { prepared, policy, liteModeActive } = args;
     const forcedLiteTopicClusterAsync = liteModeActive && policy.trigger_topic_cluster && !policy.topic_cluster_async;
-    const out = liteModeActive
-      ? await (async () => {
+    if (liteModeActive) {
+      const committed = await (async () => {
           prepared.trigger_topic_cluster = policy.trigger_topic_cluster;
           // Lite write path cannot safely run sync clustering inside the SQLite write transaction.
           prepared.topic_cluster_async = policy.trigger_topic_cluster ? true : policy.topic_cluster_async;
-
-          return liteWriteStore!.withTx(() => applyMemoryWrite({} as pg.PoolClient, prepared, {
-            maxTextLen: env.MAX_TEXT_LEN,
-            piiRedaction: env.PII_REDACTION,
-            allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
-            shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
-            shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
-            write_access: liteWriteStore!,
-          }));
-        })()
-      : await store.withTx(async (client) => {
-          prepared.trigger_topic_cluster = policy.trigger_topic_cluster;
-          prepared.topic_cluster_async = policy.topic_cluster_async;
-
-          const writeRes = await applyMemoryWrite(client, prepared, {
-            maxTextLen: env.MAX_TEXT_LEN,
-            piiRedaction: env.PII_REDACTION,
-            allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
-            shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
-            shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
-            write_access: writeAccessForClient(client),
+          return commitLitePreparedWriteWithProjection({
+            prepared: prepared as any,
+            liteWriteStore: liteWriteStore!,
+            embedder: writeEmbedder,
+            writeOptions: {
+              maxTextLen: env.MAX_TEXT_LEN,
+              piiRedaction: env.PII_REDACTION,
+              allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+              shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+              shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+            },
           });
+        })();
+      return {
+        out: committed.out,
+        forcedLiteTopicClusterAsync,
+        liteInlineEmbedding: committed.liteInlineEmbedding,
+      };
+    }
+    const out = await store.withTx(async (client) => {
+      prepared.trigger_topic_cluster = policy.trigger_topic_cluster;
+      prepared.topic_cluster_async = policy.topic_cluster_async;
 
-          if (policy.trigger_topic_cluster && !policy.topic_cluster_async) {
-            const eventIds = prepared.nodes.filter((n) => n.type === "event").map((n) => n.id);
-            if (eventIds.length > 0) {
-              const clusterRes = await runTopicClusterForEventIds(client, {
-                scope: prepared.scope,
-                eventIds,
-                simThreshold: env.TOPIC_SIM_THRESHOLD,
-                minEventsPerTopic: env.TOPIC_MIN_EVENTS_PER_TOPIC,
-                maxCandidatesPerEvent: env.TOPIC_MAX_CANDIDATES_PER_EVENT,
-                maxTextLen: env.MAX_TEXT_LEN,
-                piiRedaction: env.PII_REDACTION,
-                strategy: env.TOPIC_CLUSTER_STRATEGY,
-              });
-              if (clusterRes.processed_events > 0) {
-                writeRes.topic_cluster = clusterRes;
-              }
-            }
+      const writeRes = await applyMemoryWrite(client, prepared, {
+        maxTextLen: env.MAX_TEXT_LEN,
+        piiRedaction: env.PII_REDACTION,
+        allowCrossScopeEdges: env.ALLOW_CROSS_SCOPE_EDGES,
+        shadowDualWriteEnabled: env.MEMORY_SHADOW_DUAL_WRITE_ENABLED,
+        shadowDualWriteStrict: env.MEMORY_SHADOW_DUAL_WRITE_STRICT,
+        write_access: writeAccessForClient(client),
+      });
+
+      if (policy.trigger_topic_cluster && !policy.topic_cluster_async) {
+        const eventIds = prepared.nodes.filter((n) => n.type === "event").map((n) => n.id);
+        if (eventIds.length > 0) {
+          const clusterRes = await runTopicClusterForEventIds(client, {
+            scope: prepared.scope,
+            eventIds,
+            simThreshold: env.TOPIC_SIM_THRESHOLD,
+            minEventsPerTopic: env.TOPIC_MIN_EVENTS_PER_TOPIC,
+            maxCandidatesPerEvent: env.TOPIC_MAX_CANDIDATES_PER_EVENT,
+            maxTextLen: env.MAX_TEXT_LEN,
+            piiRedaction: env.PII_REDACTION,
+            strategy: env.TOPIC_CLUSTER_STRATEGY,
+          });
+          if (clusterRes.processed_events > 0) {
+            writeRes.topic_cluster = clusterRes;
           }
+        }
+      }
 
-          return writeRes;
-        });
+      return writeRes;
+    });
     return {
       out,
       forcedLiteTopicClusterAsync,
+      liteInlineEmbedding: null,
     };
   };
   const collectWriteWarnings = (args: {
@@ -299,7 +222,7 @@ export function registerMemoryWriteRoutes(args: {
     computedPolicy: EffectiveWritePolicyLike;
     policy: EffectiveWritePolicyLike;
     forcedLiteTopicClusterAsync: boolean;
-    liteInlineEmbedding: Awaited<ReturnType<typeof completeLiteInlineEmbeddings>>;
+    liteInlineEmbedding: LiteInlineEmbeddingResultLike;
   }): WriteWarningLike[] => {
     const { scope, tenantId } = resolveWriteScopeTenant({
       out: args.out,
@@ -418,6 +341,7 @@ export function registerMemoryWriteRoutes(args: {
       writeEmbedder,
     );
     const preparedForRoute: PreparedWriteRouteState = prepared;
+    const liteModeActive = env.AIONIS_EDITION === "lite" && !!liteWriteStore;
     const executionOverlays = executionStateStore ? collectExecutionWriteOverlays(preparedForRoute.nodes) : null;
     if (env.MEMORY_WRITE_REQUIRE_NODES && prepared.nodes.length === 0) {
       throw new HttpError(
@@ -444,7 +368,7 @@ export function registerMemoryWriteRoutes(args: {
       executionOverlays,
       computedPolicy,
       policy: resolveWritePolicy(computedPolicy),
-      liteModeActive: env.AIONIS_EDITION === "lite" && !!liteWriteStore,
+      liteModeActive,
     };
   };
   const finalizeWriteRoute = async (args: {
@@ -456,24 +380,16 @@ export function registerMemoryWriteRoutes(args: {
     computedPolicy: EffectiveWritePolicyLike;
     policy: EffectiveWritePolicyLike;
     forcedLiteTopicClusterAsync: boolean;
-    liteModeActive: boolean;
+    liteInlineEmbedding: LiteInlineEmbeddingResultLike;
     ms: number;
   }) => {
-    const liteInlineEmbedding = args.liteModeActive
-      ? await completeLiteInlineEmbeddings({
-          prepared: args.preparedForRoute,
-          embedder: writeEmbedder,
-          liteWriteStore: liteWriteStore!,
-        })
-      : null;
-
     const warnings = collectWriteWarnings({
       out: args.out,
       prepared: args.prepared,
       computedPolicy: args.computedPolicy,
       policy: args.policy,
       forcedLiteTopicClusterAsync: args.forcedLiteTopicClusterAsync,
-      liteInlineEmbedding,
+      liteInlineEmbedding: args.liteInlineEmbedding,
     });
     const response = warnings.length > 0 ? { ...args.out, warnings } : args.out;
 
@@ -514,7 +430,7 @@ export function registerMemoryWriteRoutes(args: {
     try {
       const { prepared, preparedForRoute, executionOverlays, computedPolicy, policy, liteModeActive } =
         await prepareWriteRouteState(body);
-      const { out, forcedLiteTopicClusterAsync } = await runCommittedMemoryWrite({
+      const { out, forcedLiteTopicClusterAsync, liteInlineEmbedding } = await runCommittedMemoryWrite({
         prepared: preparedForRoute,
         policy,
         liteModeActive,
@@ -528,7 +444,7 @@ export function registerMemoryWriteRoutes(args: {
         computedPolicy,
         policy,
         forcedLiteTopicClusterAsync,
-        liteModeActive,
+        liteInlineEmbedding,
         ms: performance.now() - t0,
       });
       return reply.code(200).send(response);

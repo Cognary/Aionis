@@ -8,7 +8,7 @@ import Fastify from "fastify";
 import { FakeEmbeddingProvider } from "../../src/embeddings/fake.ts";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { registerHostErrorHandler } from "../../src/host/http-host.ts";
-import { MemoryAnchorV1Schema, ToolsSelectRouteContractSchema } from "../../src/memory/schemas.ts";
+import { MemoryAnchorV1Schema, PatternSuppressResponseSchema, ToolsSelectRouteContractSchema } from "../../src/memory/schemas.ts";
 import { updateRuleState } from "../../src/memory/rules.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../../src/memory/write.ts";
 import { registerMemoryFeedbackToolRoutes } from "../../src/routes/memory-feedback-tools.ts";
@@ -274,6 +274,103 @@ test("tools_select route returns the stable execution-memory contract surface", 
     assert.equal(
       body.selection_summary.provenance_explanation,
       "selected tool: bash; trusted patterns available but not used: edit",
+    );
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("tools_select keeps suppressed trusted patterns visible but excludes them from trusted reuse", async () => {
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedToolsSelectFixture(tmpDbPath("suppressed"));
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryFeedbackToolRoutes({
+      app,
+      env: {
+        AIONIS_EDITION: "lite",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+        LITE_LOCAL_ACTOR_ID: "local-user",
+        MAX_TEXT_LEN: 10000,
+        PII_REDACTION: false,
+      } as any,
+      embedder: FakeEmbeddingProvider,
+      embeddedRuntime: null,
+      liteRecallAccess: liteRecallStore.createRecallAccess(),
+      liteWriteStore,
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const patternNode = await liteWriteStore.findNodes({
+      scope: "default",
+      type: "concept",
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 10,
+      offset: 0,
+    });
+    const patternNodeId = patternNode.rows.find((row) => row.slots?.anchor_v1?.anchor_kind === "pattern")?.id;
+    assert.ok(patternNodeId);
+
+    const suppressResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memory/patterns/suppress",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        anchor_id: patternNodeId,
+        reason: "stop trusted reuse during operator review",
+      },
+    });
+    assert.equal(suppressResponse.statusCode, 200);
+    PatternSuppressResponseSchema.parse(suppressResponse.json());
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/tools/select",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        run_id: randomUUID(),
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+        strict: true,
+        reorder_candidates: true,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = ToolsSelectRouteContractSchema.parse(response.json());
+    assert.equal(body.selection.selected, "bash");
+    assert.equal(body.pattern_matches.matched, 1);
+    assert.equal(body.pattern_matches.trusted, 0);
+    assert.equal(body.pattern_matches.anchors[0]?.credibility_state, "trusted");
+    assert.equal(body.pattern_matches.anchors[0]?.suppressed, true);
+    assert.equal(body.selection_summary.trusted_pattern_count, 0);
+    assert.equal(body.selection_summary.suppressed_pattern_count, 1);
+    assert.deepEqual(body.selection_summary.used_trusted_pattern_tools, []);
+    assert.deepEqual(body.selection_summary.skipped_suppressed_pattern_tools, ["edit"]);
+    assert.deepEqual(body.decision.pattern_summary.skipped_suppressed_pattern_tools, ["edit"]);
+    assert.equal(
+      body.selection_summary.provenance_explanation,
+      "selected tool: bash; suppressed patterns visible but operator-blocked: edit",
     );
   } finally {
     await app.close();

@@ -11,6 +11,8 @@ import {
 } from "./schemas.js";
 import type { LiteExecutionNativeNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
 import { dedupeWorkflowCandidatesBySignature } from "./workflow-candidate-aggregation.js";
+import { explainWorkflowProjectionForSourceNode } from "./workflow-write-projection.js";
+import { isPatternSuppressed, readPatternOperatorOverride } from "./pattern-operator-override.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -38,6 +40,11 @@ function dedupeByAnchorId<T extends { anchor_id?: string | null }>(items: T[]): 
     out.push(item);
   }
   return out;
+}
+
+function hasWorkflowProjectionMarker(slots: Record<string, unknown>): boolean {
+  const projection = asRecord(slots.workflow_write_projection);
+  return firstString(projection.generated_by) !== null;
 }
 
 function stringList(value: unknown, limit = 16): string[] {
@@ -75,6 +82,19 @@ function deriveWorkflowSourceKind(args: {
   return null;
 }
 
+function deriveWorkflowProjectionMeta(slots: Record<string, unknown>) {
+  const projection = asRecord(slots.workflow_write_projection);
+  const generatedBy = firstString(projection.generated_by);
+  if (!generatedBy) return null;
+  return {
+    generated_by: generatedBy,
+    source_node_id: firstString(projection.source_node_id),
+    source_client_id: firstString(projection.source_client_id),
+    generated_at: firstString(projection.generated_at),
+    auto_promoted: projection.auto_promoted === true,
+  };
+}
+
 function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope: string) {
   const slots = asRecord(row.slots);
   const execution = asRecord(slots.execution_native_v1);
@@ -82,6 +102,7 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
   const workflowPromotion = asRecord(execution.workflow_promotion ?? anchor.workflow_promotion);
   const maintenance = asRecord(execution.maintenance ?? anchor.maintenance);
   const rehydration = asRecord(execution.rehydration ?? anchor.rehydration);
+  const projectionMeta = deriveWorkflowProjectionMeta(slots);
   const observedCount = Number(workflowPromotion.observed_count ?? Number.NaN);
   const requiredObservations = Number(workflowPromotion.required_observations ?? Number.NaN);
   const promotionReady =
@@ -115,6 +136,11 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     offline_priority: firstString(maintenance.offline_priority),
     last_maintenance_at: firstString(maintenance.last_maintenance_at),
     workflow_signature: firstString(execution.workflow_signature, anchor.workflow_signature),
+    projection_generated_by: projectionMeta?.generated_by ?? null,
+    projection_source_node_id: projectionMeta?.source_node_id ?? null,
+    projection_source_client_id: projectionMeta?.source_client_id ?? null,
+    projection_generated_at: projectionMeta?.generated_at ?? null,
+    projection_auto_promoted: projectionMeta?.auto_promoted ?? false,
     confidence: row.confidence,
   };
 }
@@ -125,6 +151,8 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
   const anchor = asRecord(slots.anchor_v1);
   const promotion = asRecord(execution.promotion ?? anchor.promotion);
   const maintenance = asRecord(execution.maintenance ?? anchor.maintenance);
+  const operatorOverride = readPatternOperatorOverride(slots);
+  const suppressed = isPatternSuppressed(operatorOverride);
   const credibilityState = firstString(execution.credibility_state, anchor.credibility_state, promotion.credibility_state) ?? "candidate";
   const distinctRunCount = Number(promotion.distinct_run_count ?? Number.NaN);
   const requiredDistinctRuns = Number(promotion.required_distinct_runs ?? Number.NaN);
@@ -141,6 +169,13 @@ function toPatternEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope
     pattern_state: firstString(execution.pattern_state, anchor.pattern_state) ?? "provisional",
     credibility_state: credibilityState,
     trusted: credibilityState === "trusted",
+    operator_override_present: operatorOverride !== null,
+    suppressed,
+    suppression_mode: operatorOverride?.mode ?? null,
+    suppression_reason: operatorOverride?.reason ?? null,
+    suppressed_until: operatorOverride?.until ?? null,
+    suppressed_by: operatorOverride?.updated_by ?? null,
+    suppressed_at: operatorOverride?.updated_at ?? null,
     distinct_run_count: Number.isFinite(distinctRunCount) ? distinctRunCount : null,
     required_distinct_runs: Number.isFinite(requiredDistinctRuns) ? requiredDistinctRuns : null,
     counter_evidence_count: Number.isFinite(counterEvidenceCount) ? counterEvidenceCount : null,
@@ -161,6 +196,10 @@ function toPatternSignal(entry: ReturnType<typeof toPatternEntry>) {
     pattern_state: entry.pattern_state,
     credibility_state: entry.credibility_state,
     trusted: entry.trusted,
+    suppressed: entry.suppressed,
+    suppression_mode: entry.suppression_mode,
+    suppression_reason: entry.suppression_reason,
+    suppressed_until: entry.suppressed_until,
     distinct_run_count: entry.distinct_run_count,
     required_distinct_runs: entry.required_distinct_runs,
     counter_evidence_count: entry.counter_evidence_count,
@@ -204,7 +243,10 @@ function buildDemoSurface(args: {
     ...args.recommendedWorkflows.slice(0, 6).map((entry) => {
       const title = entry.title ?? entry.summary ?? entry.anchor_id;
       const tools = Array.isArray(entry.tool_set) && entry.tool_set.length > 0 ? `; tools=${entry.tool_set.join(", ")}` : "";
-      return `stable workflow: ${title}; source=${entry.source_kind ?? "unknown"}${tools}; transition=${entry.last_transition ?? "unknown"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
+      const projection = entry.projection_generated_by
+        ? `; projection=${entry.projection_generated_by}; source_node=${entry.projection_source_node_id ?? "unknown"}`
+        : "";
+      return `stable workflow: ${title}; source=${entry.source_kind ?? "unknown"}${tools}${projection}; transition=${entry.last_transition ?? "unknown"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
     }),
     ...args.candidateWorkflows.slice(0, 6).map((entry) => {
       const title = entry.title ?? entry.summary ?? entry.anchor_id;
@@ -216,13 +258,16 @@ function buildDemoSurface(args: {
         : "observed=unknown";
       const source = entry.source_kind ? `; source=${entry.source_kind}` : "";
       const tools = Array.isArray(entry.tool_set) && entry.tool_set.length > 0 ? `; tools=${entry.tool_set.join(", ")}` : "";
-      return `candidate workflow: ${title}; ${observed}${source}${tools}; promotion=${entry.promotion_ready ? "ready" : "observing"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
+      const projection = entry.projection_generated_by
+        ? `; projection=${entry.projection_generated_by}; source_node=${entry.projection_source_node_id ?? "unknown"}`
+        : "";
+      return `candidate workflow: ${title}; ${observed}${source}${tools}${projection}; promotion=${entry.promotion_ready ? "ready" : "observing"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
     }),
   ];
   const patternLines = [
-    ...args.trustedPatterns.slice(0, 6).map((entry) => `trusted pattern: prefer ${entry.selected_tool ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}`),
-    ...args.candidatePatterns.slice(0, 6).map((entry) => `candidate pattern: prefer ${entry.selected_tool ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}`),
-    ...args.contestedPatterns.slice(0, 6).map((entry) => `contested pattern: prefer ${entry.selected_tool ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}`),
+    ...args.trustedPatterns.slice(0, 6).map((entry) => `trusted pattern: prefer ${entry.selected_tool ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}${entry.suppressed ? `; suppressed=${entry.suppression_mode ?? "shadow_learn"}` : ""}`),
+    ...args.candidatePatterns.slice(0, 6).map((entry) => `candidate pattern: prefer ${entry.selected_tool ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}${entry.suppressed ? `; suppressed=${entry.suppression_mode ?? "shadow_learn"}` : ""}`),
+    ...args.contestedPatterns.slice(0, 6).map((entry) => `contested pattern: prefer ${entry.selected_tool ?? "unknown"}; summary=${entry.summary ?? entry.anchor_id}; maintenance=${entry.maintenance_state ?? "unknown"}${entry.suppressed ? `; suppressed=${entry.suppression_mode ?? "shadow_learn"}` : ""}`),
   ];
   const maintenanceLines = [
     `workflow maintenance: retain=${args.workflowMaintenanceSummary.retain_count}; observe=${args.workflowMaintenanceSummary.observe_count}; promote_candidate=${args.workflowMaintenanceSummary.promote_candidate_count}`,
@@ -267,7 +312,7 @@ export async function buildExecutionMemoryIntrospectionLite(
   const consumerTeamId = parsed.consumer_team_id ?? null;
   const limit = parsed.limit;
 
-  const [workflowAnchors, workflowCandidates, patternAnchors] = await Promise.all([
+  const [workflowAnchors, workflowCandidates, patternAnchors, recentSourceEvents] = await Promise.all([
     liteWriteStore.findExecutionNativeNodes({
       scope,
       executionKind: "workflow_anchor",
@@ -292,6 +337,14 @@ export async function buildExecutionMemoryIntrospectionLite(
       limit,
       offset: 0,
     }),
+    liteWriteStore.findNodes({
+      scope,
+      type: "event",
+      consumerAgentId,
+      consumerTeamId,
+      limit: Math.max(limit * 4, 24),
+      offset: 0,
+    }),
   ]);
 
   const recommendedWorkflows = dedupeByAnchorId(
@@ -309,6 +362,12 @@ export async function buildExecutionMemoryIntrospectionLite(
     rawCandidateWorkflows.filter((entry) => !entry.workflow_signature || !stableWorkflowSignatures.has(entry.workflow_signature)),
   );
   const suppressedCandidateWorkflowCount = rawCandidateWorkflows.length - candidateWorkflows.length;
+  const continuityProjectedCandidateCount = rawCandidateWorkflows.filter(
+    (entry) => entry.projection_generated_by === "execution_write_projection_v1",
+  ).length;
+  const continuityAutoPromotedWorkflowCount = recommendedWorkflows.filter(
+    (entry) => entry.projection_generated_by === "execution_write_projection_v1" || entry.promotion_origin === "execution_write_auto_promotion",
+  ).length;
 
   const patternEntries = dedupeByAnchorId(
     patternAnchors.rows.map((row) => toPatternEntry(row, tenantId, scope)),
@@ -360,6 +419,47 @@ export async function buildExecutionMemoryIntrospectionLite(
     workflow_signals: workflowSignals,
   };
   const summaryBundle = buildExecutionMemorySummaryBundle(surface);
+  const continuitySourceEvents = recentSourceEvents.rows
+    .filter((row) => !hasWorkflowProjectionMarker(asRecord(row.slots)))
+    .slice(0, Math.max(limit, 8));
+  const continuityProjectionSamples = await Promise.all(
+    continuitySourceEvents.map(async (row) => {
+      const explained = await explainWorkflowProjectionForSourceNode({
+        scope,
+        source: {
+          id: row.id,
+          client_id: row.client_id ?? undefined,
+          scope,
+          type: row.type,
+          memory_lane: row.memory_lane,
+          producer_agent_id: row.producer_agent_id ?? undefined,
+          owner_agent_id: row.owner_agent_id ?? undefined,
+          owner_team_id: row.owner_team_id ?? undefined,
+          title: row.title ?? undefined,
+          text_summary: row.text_summary ?? undefined,
+          slots: asRecord(row.slots),
+        },
+        liteWriteStore,
+      });
+      return {
+        source_node_id: row.id,
+        source_client_id: row.client_id,
+        title: firstString(row.title, row.text_summary),
+        decision: explained.decision,
+        workflow_signature: explained.workflowSignature,
+        projection_client_id: explained.projectionClientId,
+      };
+    }),
+  );
+  const continuityDecisionCounts = {
+    projected: continuityProjectionSamples.filter((sample) => sample.decision === "projected").length,
+    skipped_missing_execution_continuity: continuityProjectionSamples.filter((sample) => sample.decision === "skipped_missing_execution_continuity").length,
+    skipped_invalid_execution_state: continuityProjectionSamples.filter((sample) => sample.decision === "skipped_invalid_execution_state").length,
+    skipped_invalid_execution_packet: continuityProjectionSamples.filter((sample) => sample.decision === "skipped_invalid_execution_packet").length,
+    skipped_existing_workflow_memory: continuityProjectionSamples.filter((sample) => sample.decision === "skipped_existing_workflow_memory").length,
+    skipped_stable_exists: continuityProjectionSamples.filter((sample) => sample.decision === "skipped_stable_exists").length,
+    eligible_without_projection: continuityProjectionSamples.filter((sample) => sample.decision === "eligible_without_projection").length,
+  };
   const demoSurface = buildDemoSurface({
     workflowSignalSummary: summaryBundle.workflow_signal_summary,
     patternSignalSummary: summaryBundle.pattern_signal_summary,
@@ -380,7 +480,14 @@ export async function buildExecutionMemoryIntrospectionLite(
       raw_workflow_anchor_count: workflowAnchors.rows.length,
       raw_workflow_candidate_count: rawCandidateWorkflows.length,
       suppressed_candidate_workflow_count: suppressedCandidateWorkflowCount,
+      continuity_projected_candidate_count: continuityProjectedCandidateCount,
+      continuity_auto_promoted_workflow_count: continuityAutoPromotedWorkflowCount,
       raw_pattern_anchor_count: patternAnchors.rows.length,
+    },
+    continuity_projection_report: {
+      sampled_source_event_count: continuityProjectionSamples.length,
+      decision_counts: continuityDecisionCounts,
+      samples: continuityProjectionSamples.slice(0, Math.max(Math.min(limit, 8), 4)),
     },
     demo_surface: demoSurface,
     recommended_workflows: recommendedWorkflows,
