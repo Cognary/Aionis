@@ -149,6 +149,21 @@ See:
 1. [AIONIS_ADAPTER_SIDECAR_SPEC.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_SIDECAR_SPEC.md)
 2. [AIONIS_ADAPTER_SIDECAR_GUIDE.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md)
 
+## Wrapper Path
+
+The next practical execution layer above the sidecar is the local adapter wrapper.
+
+Use it when:
+
+1. your client can run command-backed steps
+2. you want one local entrypoint instead of directly calling adapter methods
+3. you want a first usable adapter-first path before richer native client hooks exist
+
+See:
+
+1. [AIONIS_ADAPTER_WRAPPER_SPEC.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_WRAPPER_SPEC.md)
+2. [AIONIS_ADAPTER_WRAPPER_GUIDE.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_WRAPPER_GUIDE.md)
+
 ## Related Documents
 
 1. [AIONIS_ADAPTER_DIRECTION.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_DIRECTION.md)
@@ -157,3 +172,5 @@ See:
 4. [AIONIS_THIN_MCP_GUIDE.md](/Volumes/ziel/Aionisgo/docs/AIONIS_THIN_MCP_GUIDE.md)
 5. [AIONIS_ADAPTER_SIDECAR_SPEC.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_SIDECAR_SPEC.md)
 6. [AIONIS_ADAPTER_SIDECAR_GUIDE.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md)
+7. [AIONIS_ADAPTER_WRAPPER_SPEC.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_WRAPPER_SPEC.md)
+8. [AIONIS_ADAPTER_WRAPPER_GUIDE.md](/Volumes/ziel/Aionisgo/docs/AIONIS_ADAPTER_WRAPPER_GUIDE.md)
