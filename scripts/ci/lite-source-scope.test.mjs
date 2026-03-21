@@ -10,7 +10,6 @@ const FORBIDDEN_PATHS = [
   "src/bench/many-tools.ts",
   "src/dev/contract-smoke.ts",
   "src/eval/score.ts",
-  "src/mcp/aionis-mcp.ts",
   "src/sdk/index.ts",
   "src/memory/automation.ts",
   "src/routes/admin-control-alerts.ts",
@@ -25,10 +24,14 @@ const ALLOWED_JOB_FILES = [
   "topicClusterLib.ts",
 ];
 
-test("lite repo excludes bench/dev/eval/mcp/sdk source entrypoints", () => {
+test("lite repo excludes bench/dev/eval/sdk source entrypoints while keeping the thin MCP source", () => {
   for (const rel of FORBIDDEN_PATHS) {
     assert.equal(fs.existsSync(path.join(ROOT, rel)), false, `${rel} should be absent in lite repo`);
   }
+});
+
+test("lite repo keeps the new source-owned thin MCP entrypoint", () => {
+  assert.equal(fs.existsSync(path.join(ROOT, "src", "mcp", "aionis-mcp.ts")), true, "src/mcp/aionis-mcp.ts should exist");
 });
 
 test("lite repo keeps only kernel-linked job helpers", () => {

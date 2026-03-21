@@ -26,6 +26,8 @@ Fast entry points:
    [docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md](docs/LITE_EXECUTION_MEMORY_INTEGRATOR_GUIDE.md)
 5. `0.1.0` release note:
    [docs/AIONIS_0_1_0_RELEASE_NOTE.md](docs/AIONIS_0_1_0_RELEASE_NOTE.md)
+6. thin MCP guide:
+   [docs/AIONIS_THIN_MCP_GUIDE.md](docs/AIONIS_THIN_MCP_GUIDE.md)
 
 Repository split:
 
@@ -80,6 +82,7 @@ Integrator docs:
 8. [docs/LITE_CLAUDE_CODE_REAL_VALIDATION_REPORT.md](docs/LITE_CLAUDE_CODE_REAL_VALIDATION_REPORT.md)
 9. [docs/LITE_REAL_TASK_BENCHMARK_REPORT.md](docs/LITE_REAL_TASK_BENCHMARK_REPORT.md)
 10. [docs/plans/2026-03-21-lite-real-task-benchmark-suite-spec.md](docs/plans/2026-03-21-lite-real-task-benchmark-suite-spec.md)
+11. [docs/AIONIS_THIN_MCP_GUIDE.md](docs/AIONIS_THIN_MCP_GUIDE.md)
 
 Internal design docs:
 

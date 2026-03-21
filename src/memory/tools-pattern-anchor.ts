@@ -177,6 +177,7 @@ function buildPatternSummary(args: {
   patternState: "provisional" | "stable";
   credibilityState: PatternCredibilityState;
   feedbackOutcome: "positive" | "negative";
+  ruleBacked: boolean;
 }): string {
   const prefix =
     args.credibilityState === "trusted"
@@ -191,8 +192,12 @@ function buildPatternSummary(args: {
     args.credibilityState === "contested"
       ? "counter-evidence observed; requires fresh successful validation before trusted reuse."
       : args.patternState === "stable"
-        ? "after repeated successful rule-backed tool selections."
-        : "after one successful rule-backed tool selection.";
+        ? args.ruleBacked
+          ? "after repeated successful rule-backed tool selections."
+          : "after repeated successful tool selections."
+        : args.ruleBacked
+          ? "after one successful rule-backed tool selection."
+          : "after one successful tool selection.";
   return truncate(`${prefix}: ${body} ${evidence}`, 400);
 }
 
@@ -344,6 +349,7 @@ function buildPatternAnchor(args: {
     patternState,
     credibilityState,
     feedbackOutcome: args.feedbackOutcome,
+    ruleBacked: args.sourceRuleIds.length > 0,
   });
   const keywordTerms = uniqueStrings([
     args.selectedTool,
@@ -422,7 +428,7 @@ function buildPatternAnchor(args: {
       tool_tags: uniqueStrings([args.selectedTool, ...args.candidates], 16),
       outcome_tags: uniqueStrings([
         args.feedbackOutcome === "negative" ? "negative_feedback" : "positive_feedback",
-        "rule_backed_selection",
+        args.sourceRuleIds.length > 0 ? "rule_backed_selection" : "feedback_derived_selection",
         counterEvidenceOpen ? "counter_evidence_open" : "counter_evidence_clear",
         `credibility_${credibilityState}`,
         patternState === "stable" ? "stable_pattern" : "provisional_pattern",

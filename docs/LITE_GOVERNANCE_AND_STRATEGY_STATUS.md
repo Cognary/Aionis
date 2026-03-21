@@ -169,6 +169,8 @@ Current runtime reality:
 18. pattern anchors now persist explicit trust-hardening metadata such as `task_family`, `error_family`, distinct family counts, and current gate metadata, so the next trust-hardening slice no longer depends on implicit branch logic alone
 19. Lite now requires `3` distinct positive runs before a pattern becomes `trusted`, and contested recovery now requires `2` fresh post-contest runs before revalidation
 20. selector reuse now applies deterministic task-affinity weighting, so nearby cross-task recall can remain visible without inheriting flat trusted reuse
+21. Aionis now has a source-owned thin MCP surface in `src/mcp/` with five execution-memory tools: planning context, tool selection, feedback recording, task finalization, and introspection
+22. the thin MCP no longer depends on conversational confirmation loops to finish a task; `aionis_finalize_task` now provides the preferred task-boundary completion path while `user_confirmed` and `user_rejected` remain optional high-confidence extra evidence
 
 Primary code:
 
@@ -187,6 +189,8 @@ Primary code:
 13. `scripts/lite-real-task-benchmark.ts`
 14. `docs/plans/2026-03-21-lite-pattern-trust-robustness-spec.md`
 15. `docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md`
+16. `src/mcp/aionis-mcp.ts`
+17. `docs/AIONIS_THIN_MCP_GUIDE.md`
 
 ### 6. Runtime-Governed Adjudication Contract
 
@@ -252,12 +256,14 @@ Current reality:
 3. execution-native writes now carry signatures, anchor metadata, and compression metadata
 4. structured execution-continuity ordinary writes can now project governed workflow memory into the planner recall path
 5. a minimal operator stop-loss path now exists for learned pattern reuse through `patterns/suppress` and `patterns/unsuppress`
+6. a thin MCP adapter now exists for the stable execution-memory mainline, but it is still a first slice rather than a fully productized IDE or agent integration surface
 
 But:
 
 1. Lite does not yet have a broad automatic promotion pipeline from arbitrary event streams into reusable workflow or pattern memory
 2. the strongest stable promotion paths still come from replay-centered or explicit continuity entry points
 3. Lite still does not have the broader operator intervention surface proposed in ADR-0002 beyond the new `suppress-first` slice
+4. the thin MCP onboarding and auto-calling ergonomics are not yet benchmarked as a first-class product loop
 
 Primary code:
 

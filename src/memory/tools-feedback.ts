@@ -326,19 +326,6 @@ export async function toolSelectionFeedback(
 
   const uniq = uniqueRuleIds(targetRuleIds);
 
-  if (uniq.length === 0) {
-    return {
-      ok: true,
-      scope: tenancy.scope,
-      tenant_id: tenancy.tenant_id,
-      updated_rules: 0,
-      rule_node_ids: [],
-      commit_id: null,
-      commit_hash: null,
-      note: "no matching rule sources for attribution",
-    };
-  }
-
   const contextSha256 = hashExecutionContext(parsed.context);
   const policySha256 = hashPolicy((rules.applied as any)?.policy ?? {});
   const candidatesJson = JSON.stringify(normalizedCandidates);

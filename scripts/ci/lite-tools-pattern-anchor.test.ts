@@ -405,6 +405,87 @@ test("positive tools feedback writes a provisional recallable pattern anchor", a
   }
 });
 
+test("positive tools feedback without matched rule sources still writes a provisional recallable pattern anchor", async () => {
+  const dbPath = tmpDbPath("pattern-anchor-generic-feedback");
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  const runId = randomUUID();
+  const context = {
+    task_kind: "repair_export",
+    goal: "repair export failure in node tests",
+    error: {
+      signature: "node-export-mismatch",
+    },
+  };
+  try {
+    const feedback = await liteWriteStore.withTx(() =>
+      toolSelectionFeedback(null, {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: runId,
+        outcome: "positive",
+        context,
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Edit-based repair succeeded without an active tool rule",
+        input_text: "repair export failure in node tests",
+      }, "default", "default", {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        embedder: FakeEmbeddingProvider,
+        liteWriteStore,
+      }),
+    );
+
+    assert.equal(feedback.updated_rules, 0);
+    assert.deepEqual(feedback.rule_node_ids, []);
+    assert.equal(feedback.decision_link_mode, "created_from_feedback");
+    assert.ok(feedback.pattern_anchor);
+    assert.equal(feedback.pattern_anchor?.pattern_state, "provisional");
+    assert.equal(feedback.pattern_anchor?.credibility_state, "candidate");
+
+    const { rows } = await liteWriteStore.findNodes({
+      scope: "default",
+      id: feedback.pattern_anchor?.node_id ?? "",
+      consumerAgentId: null,
+      consumerTeamId: null,
+      limit: 1,
+      offset: 0,
+    });
+    assert.equal(rows.length, 1);
+    const anchor = MemoryAnchorV1Schema.parse(rows[0]?.slots?.anchor_v1);
+    assert.match(anchor.summary ?? "", /after one successful tool selection/i);
+    assert.equal(anchor.selected_tool, "edit");
+
+    const queryEmbedding = (await FakeEmbeddingProvider.embed([rows[0]?.title ?? ""]))[0];
+    const recall = await memoryRecallParsed(
+      {} as any,
+      MemoryRecallRequest.parse({
+        tenant_id: "default",
+        scope: "default",
+        query_embedding: queryEmbedding,
+        limit: 5,
+        neighborhood_hops: 1,
+        max_nodes: 10,
+        max_edges: 10,
+        ranked_limit: 10,
+      }),
+      "default",
+      "default",
+      { allow_debug_embeddings: false },
+      undefined,
+      "planning_context",
+      { recall_access: liteRecallStore.createRecallAccess(), internal_allow_l4_selection: true },
+    );
+    assert.ok(recall.seeds.some((seed) => seed.id === feedback.pattern_anchor?.node_id && seed.type === "concept"));
+  } finally {
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
 test("selectTools does not trust provisional pattern anchors after the source rule is disabled", async () => {
   const dbPath = tmpDbPath("pattern-selector");
   const { liteWriteStore, ruleNodeId } = await seedActiveRule(dbPath);
