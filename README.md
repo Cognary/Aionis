@@ -38,6 +38,31 @@ Fast entry points:
    [docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md](docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md)
 11. adapter wrapper guide:
    [docs/AIONIS_ADAPTER_WRAPPER_GUIDE.md](docs/AIONIS_ADAPTER_WRAPPER_GUIDE.md)
+12. Codex CLI integration spec:
+   [docs/AIONIS_CODEX_CLI_SPEC.md](docs/AIONIS_CODEX_CLI_SPEC.md)
+13. host integration architecture:
+   [docs/AIONIS_HOST_INTEGRATION_ARCHITECTURE.md](docs/AIONIS_HOST_INTEGRATION_ARCHITECTURE.md)
+14. Codex CLI guide:
+   [docs/AIONIS_CODEX_CLI_GUIDE.md](docs/AIONIS_CODEX_CLI_GUIDE.md)
+15. Aionis for Codex product shell:
+   [docs/AIONIS_FOR_CODEX_PRODUCT_SHELL_GUIDE.md](docs/AIONIS_FOR_CODEX_PRODUCT_SHELL_GUIDE.md)
+16. Aionis product CLI spec:
+   [docs/AIONIS_PRODUCT_CLI_SPEC.md](docs/AIONIS_PRODUCT_CLI_SPEC.md)
+
+Current Codex host scripts:
+
+1. `npm run -s adapter:codex-hook`
+2. `npm run -s adapter:codex-shell`
+3. `npm run -s adapter:codex-shell:demo`
+4. `npm run -s product:aionis -- codex setup`
+5. `npm run -s product:aionis -- codex doctor`
+6. `npm run -s product:aionis -- codex start`
+7. `npm run -s product:aionis -- codex status`
+8. `npm run -s product:aionis -- codex disable`
+9. `npm run -s product:aionis -- codex enable`
+10. `npm run -s product:aionis -- codex restore`
+11. `npm run -s product:aionis -- codex remove`
+12. `npm run -s product:aionis`
 
 Repository split:
 
@@ -99,6 +124,11 @@ Integrator docs:
 15. [docs/AIONIS_EXECUTION_ADAPTER_GUIDE.md](docs/AIONIS_EXECUTION_ADAPTER_GUIDE.md)
 16. [docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md](docs/AIONIS_ADAPTER_SIDECAR_GUIDE.md)
 17. [docs/AIONIS_ADAPTER_WRAPPER_GUIDE.md](docs/AIONIS_ADAPTER_WRAPPER_GUIDE.md)
+18. [docs/AIONIS_CODEX_CLI_SPEC.md](docs/AIONIS_CODEX_CLI_SPEC.md)
+19. [docs/plans/2026-03-21-aionis-codex-cli.md](docs/plans/2026-03-21-aionis-codex-cli.md)
+20. [docs/AIONIS_HOST_INTEGRATION_ARCHITECTURE.md](docs/AIONIS_HOST_INTEGRATION_ARCHITECTURE.md)
+21. [docs/AIONIS_PRODUCT_CLI_SPEC.md](docs/AIONIS_PRODUCT_CLI_SPEC.md)
+22. [docs/plans/2026-03-21-aionis-product-cli.md](docs/plans/2026-03-21-aionis-product-cli.md)
 
 Internal design docs:
 

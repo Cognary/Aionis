@@ -1,0 +1,22 @@
+{
+  "session_id": "codex-demo-session-1",
+  "turn_id": "codex-demo-turn-1",
+  "transcript_path": null,
+  "cwd": "/Volumes/ziel/Aionisgo",
+  "model": "gpt-5",
+  "permission_mode": "default",
+  "prompt": "verify package metadata through a command-backed Codex shell task",
+  "task_kind": "verify_package_metadata",
+  "goal": "read package name through node",
+  "candidates": ["bash", "test"],
+  "command": "node",
+  "args": ["-p", "require('./package.json').name"],
+  "note": "run one Codex shell demo command through Aionis",
+  "finalization": {
+    "outcome": "completed",
+    "note": "command-backed Codex shell demo completed"
+  },
+  "introspect": {
+    "limit": 5
+  }
+}
