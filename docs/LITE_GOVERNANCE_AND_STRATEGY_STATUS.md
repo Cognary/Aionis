@@ -1,6 +1,6 @@
 # Aionis Lite Governance And Strategy Status
 
-Last reviewed: 2026-03-20
+Last reviewed: 2026-03-21
 
 This document compares the current `Aionis Lite` implementation against:
 
@@ -22,7 +22,7 @@ Current overall judgment:
 1. the core execution-memory thesis is already real in Lite
 2. the two named mainlines are implemented enough to treat them as product behavior, not just strategy language
 3. the governance model is partly implemented as runtime behavior and partly implemented as schema/contract scaffolding
-4. the largest unfinished area is not the mainline itself, but the broader memory-governance productization around it
+4. the largest unfinished area is no longer the planner/context contract surface itself, but the broader automatic workflow-promotion and memory-governance productization around it
 
 Current confidence by area:
 
@@ -31,6 +31,7 @@ Current confidence by area:
 3. policy-learning and selector reuse: high
 4. governance model as a complete product surface: medium
 5. tier lifecycle and maintenance platform: medium-low
+6. real route-level validation of the main product loops: medium-high
 
 ## What Is Already Implemented
 
@@ -128,13 +129,19 @@ Current runtime reality:
 1. stable playbooks are normalized onto workflow anchors
 2. already-stable latest playbooks are normalized in place rather than being left behind on an old shape
 3. replay-learning candidates can progress to stable workflow guidance
-4. workflow lifecycle and maintenance summaries are exposed in planner and execution-kernel surfaces
+4. same-signature workflow candidates are now aggregated by maturity in planner-facing and introspection surfaces instead of appearing as duplicate observing and promotion-ready rows
+5. the replay-governed producer path from `repair/review -> learning projection -> planning_context` is now route-tested end to end
+6. workflow lifecycle and maintenance summaries are exposed in planner and execution-kernel surfaces
+7. execution-native-only workflow display now carries stable `source` and `tool_set` presentation in planner/introspection surfaces
 
 Primary code:
 
 1. `src/memory/replay.ts`
 2. `src/memory/replay-learning.ts`
 3. `src/app/planning-summary.ts`
+4. `src/memory/workflow-candidate-aggregation.ts`
+5. `src/memory/execution-introspection.ts`
+6. `scripts/ci/lite-replay-governed-learning-projection-route.test.ts`
 
 ### 6. Runtime-Governed Adjudication Contract
 
@@ -332,7 +339,7 @@ But:
 | Anchor-Guided Rehydration Loop | Implemented | Workflow anchor -> recall -> runtime hint -> rehydrate is real. |
 | Execution Policy Learning Loop | Implemented | Feedback -> pattern -> selector reuse is real. |
 | Planner packet / signal / execution-kernel contract | Implemented | Stable and tested. |
-| Replay-learning workflow maturity | Implemented | Candidate-to-stable path is visible and Lite-native. |
+| Replay-learning workflow maturity | Implemented | Candidate-to-stable path is visible, aggregated, and route-tested through the replay-governed producer path. |
 | Runtime-governed adjudication model | Partially Implemented | Strong schema/contract, partial public product surface. |
 | Tier-aware memory semantics | Partially Implemented | Tier model exists; lifecycle control plane does not. |
 | Distillation beyond replay/tools entry points | Partially Implemented | Mainline paths exist; general promotion does not. |
@@ -360,17 +367,17 @@ If someone asks whether the current Lite runtime already matches those documents
 
 These are the next steps that most directly close the remaining gap between the source documents and the current Lite runtime.
 
-### Priority 1: Preserve The Slim Default Planner/Context Contract
+### Priority 1: Broaden Automatic Workflow Promotion Beyond Current Strong Entry Points
 
 Why:
 
-1. the contract docs now say default planner/context routes should stay slim
-2. this is now implemented in runtime and contract tests
+1. replay- and replay-governed workflow promotion paths are now real and route-tested
+2. broader event-to-workflow promotion is still narrower than the overall execution-memory direction
 
 Concrete next step:
 
-1. keep `layered_context` out of the default planner/context response
-2. continue treating explicit `return_layered_context=true` and introspection as the heavy inspection surfaces
+1. extend governed workflow-candidate creation beyond the current replay-centered producer paths
+2. keep it signature-gated and compatible with the same workflow candidate aggregation and promotion-ready semantics
 
 ### Priority 2: Decide Whether Governed Mutation APIs Stay Internal Or Become Public
 
@@ -411,17 +418,17 @@ Concrete next step:
 3. specify what runs offline
 4. specify what is operator-visible and what is internal only
 
-### Priority 5: Expand Distillation Beyond Current Strong Entry Points
+### Priority 5: Preserve The Slim Default Planner/Context Contract
 
 Why:
 
-1. replay and tool-feedback entry points are strong
-2. more general event-to-workflow or event-to-pattern promotion is still narrow
+1. the default planner/context surface is now intentionally slim and aligned with the product contract
+2. this should remain true even as more workflow and pattern signals are added
 
 Concrete next step:
 
-1. add a broader promotion pipeline from arbitrary execution-native evidence into workflow and pattern candidates
-2. keep it signature-gated and runtime-governed
+1. keep `layered_context` out of the default planner/context response
+2. continue treating explicit `return_layered_context=true` and introspection as the heavy inspection surfaces
 
 ## Final Assessment
 
