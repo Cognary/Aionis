@@ -10,6 +10,7 @@ import {
   type ExecutionMemoryIntrospectionResponse,
 } from "./schemas.js";
 import type { LiteExecutionNativeNodeRow, LiteWriteStore } from "../store/lite-write-store.js";
+import { dedupeWorkflowCandidatesBySignature } from "./workflow-candidate-aggregation.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -39,6 +40,41 @@ function dedupeByAnchorId<T extends { anchor_id?: string | null }>(items: T[]): 
   return out;
 }
 
+function stringList(value: unknown, limit = 16): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const next = typeof item === "string" ? item.trim() : "";
+    if (!next || seen.has(next)) continue;
+    seen.add(next);
+    out.push(next);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function deriveWorkflowSourceKind(args: {
+  anchor: Record<string, unknown>;
+  workflowPromotion: Record<string, unknown>;
+  executionKind: string | null;
+}): string | null {
+  const explicitSourceKind = firstString(args.anchor?.source && asRecord(args.anchor.source)?.source_kind);
+  if (explicitSourceKind) return explicitSourceKind;
+  const promotionOrigin = firstString(args.workflowPromotion?.promotion_origin);
+  if (
+    promotionOrigin === "replay_promote"
+    || promotionOrigin === "replay_stable_normalization"
+    || promotionOrigin === "replay_learning_episode"
+    || promotionOrigin === "replay_learning_auto_promotion"
+    || args.executionKind === "workflow_candidate"
+    || args.executionKind === "workflow_anchor"
+  ) {
+    return "playbook";
+  }
+  return null;
+}
+
 function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scope: string) {
   const slots = asRecord(row.slots);
   const execution = asRecord(slots.execution_native_v1);
@@ -61,7 +97,11 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     title: firstString(row.title),
     summary: firstString(row.text_summary, anchor.summary),
     anchor_level: firstString(execution.anchor_level, anchor.anchor_level),
-    source_kind: firstString(anchor?.source && asRecord(anchor.source).source_kind),
+    source_kind: deriveWorkflowSourceKind({
+      anchor,
+      workflowPromotion,
+      executionKind: firstString(execution.execution_kind),
+    }),
     promotion_origin: firstString(workflowPromotion.promotion_origin),
     promotion_state: firstString(workflowPromotion.promotion_state),
     observed_count: Number.isFinite(observedCount) ? observedCount : null,
@@ -70,7 +110,7 @@ function toWorkflowEntry(row: LiteExecutionNativeNodeRow, tenantId: string, scop
     last_transition: firstString(workflowPromotion.last_transition),
     last_transition_at: firstString(workflowPromotion.last_transition_at),
     rehydration_default_mode: firstString(rehydration.default_mode),
-    tool_set: Array.isArray(anchor.tool_set) ? anchor.tool_set.filter((v): v is string => typeof v === "string") : [],
+    tool_set: stringList(execution.tool_set, 16).length > 0 ? stringList(execution.tool_set, 16) : stringList(anchor.tool_set, 16),
     maintenance_state: firstString(maintenance.maintenance_state),
     offline_priority: firstString(maintenance.offline_priority),
     last_maintenance_at: firstString(maintenance.last_maintenance_at),
@@ -163,7 +203,8 @@ function buildDemoSurface(args: {
   const workflowLines = [
     ...args.recommendedWorkflows.slice(0, 6).map((entry) => {
       const title = entry.title ?? entry.summary ?? entry.anchor_id;
-      return `stable workflow: ${title}; source=${entry.source_kind ?? "unknown"}; transition=${entry.last_transition ?? "unknown"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
+      const tools = Array.isArray(entry.tool_set) && entry.tool_set.length > 0 ? `; tools=${entry.tool_set.join(", ")}` : "";
+      return `stable workflow: ${title}; source=${entry.source_kind ?? "unknown"}${tools}; transition=${entry.last_transition ?? "unknown"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
     }),
     ...args.candidateWorkflows.slice(0, 6).map((entry) => {
       const title = entry.title ?? entry.summary ?? entry.anchor_id;
@@ -173,7 +214,9 @@ function buildDemoSurface(args: {
       )
         ? `observed=${entry.observed_count}/${entry.required_observations}`
         : "observed=unknown";
-      return `candidate workflow: ${title}; ${observed}; promotion=${entry.promotion_ready ? "ready" : "observing"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
+      const source = entry.source_kind ? `; source=${entry.source_kind}` : "";
+      const tools = Array.isArray(entry.tool_set) && entry.tool_set.length > 0 ? `; tools=${entry.tool_set.join(", ")}` : "";
+      return `candidate workflow: ${title}; ${observed}${source}${tools}; promotion=${entry.promotion_ready ? "ready" : "observing"}; maintenance=${entry.maintenance_state ?? "unknown"}`;
     }),
   ];
   const patternLines = [
@@ -262,7 +305,9 @@ export async function buildExecutionMemoryIntrospectionLite(
   const rawCandidateWorkflows = dedupeByAnchorId(
     workflowCandidates.rows.map((row) => toWorkflowEntry(row, tenantId, scope)),
   );
-  const candidateWorkflows = rawCandidateWorkflows.filter((entry) => !entry.workflow_signature || !stableWorkflowSignatures.has(entry.workflow_signature));
+  const candidateWorkflows = dedupeWorkflowCandidatesBySignature(
+    rawCandidateWorkflows.filter((entry) => !entry.workflow_signature || !stableWorkflowSignatures.has(entry.workflow_signature)),
+  );
   const suppressedCandidateWorkflowCount = rawCandidateWorkflows.length - candidateWorkflows.length;
 
   const patternEntries = dedupeByAnchorId(

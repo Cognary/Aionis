@@ -19,6 +19,7 @@ import { resolveMemoryLayerPolicy } from "./layer-policy.js";
 import { buildRuntimeToolHintsFromAnchorNodes } from "./runtime-tool-hints.js";
 import { AIONIS_URI_NODE_TYPES, buildAionisUri } from "./uri.js";
 import type { MemoryLayerId, MemoryLayerPolicy } from "./layer-policy.js";
+import { dedupeWorkflowCandidatesBySignature } from "./workflow-candidate-aggregation.js";
 
 export type RecallAuth = {
   allow_debug_embeddings: boolean;
@@ -379,7 +380,7 @@ function buildActionRecallPacket(args: {
 }): ActionRecallPacket {
   const recommendedWorkflows: ActionRecallWorkflow[] = [];
   const candidateWorkflows: ActionRecallWorkflow[] = [];
-  const deferredCandidateWorkflows: Array<{ entry: ActionRecallWorkflow; workflowSignature: string | null }> = [];
+  const deferredCandidateWorkflows: ActionRecallWorkflow[] = [];
   const candidatePatterns: ActionRecallPattern[] = [];
   const trustedPatterns: ActionRecallPattern[] = [];
   const contestedPatterns: ActionRecallPattern[] = [];
@@ -419,14 +420,16 @@ function buildActionRecallPacket(args: {
         last_transition: firstString(meta.workflowPromotion?.last_transition) as any,
         last_transition_at: firstString(meta.workflowPromotion?.last_transition_at),
         rehydration_default_mode: firstString(meta.rehydration?.default_mode) as any,
-        tool_set: stringList(anchor?.tool_set),
+        tool_set: stringList(meta.executionNative?.tool_set).length > 0
+          ? stringList(meta.executionNative?.tool_set)
+          : stringList(anchor?.tool_set),
         maintenance_state: firstString(meta.maintenance?.maintenance_state) as any,
         offline_priority: firstString(meta.maintenance?.offline_priority) as any,
         last_maintenance_at: firstString(meta.maintenance?.last_maintenance_at),
         confidence: firstFinite(node.confidence),
       };
       if (meta.executionKind === "workflow_candidate" || firstString(meta.workflowPromotion?.promotion_state) === "candidate") {
-        deferredCandidateWorkflows.push({ entry: workflowEntry, workflowSignature: workflowEntry.workflow_signature });
+        deferredCandidateWorkflows.push(workflowEntry);
       } else {
         recommendedWorkflows.push(workflowEntry);
         if (workflowEntry.workflow_signature) stableWorkflowSignatures.add(workflowEntry.workflow_signature);
@@ -461,9 +464,10 @@ function buildActionRecallPacket(args: {
     }
   }
 
-  for (const pending of deferredCandidateWorkflows) {
-    if (pending.workflowSignature && stableWorkflowSignatures.has(pending.workflowSignature)) continue;
-    candidateWorkflows.push(pending.entry);
+  const aggregatedDeferredCandidates = dedupeWorkflowCandidatesBySignature(deferredCandidateWorkflows);
+  for (const pending of aggregatedDeferredCandidates) {
+    if (pending.workflow_signature && stableWorkflowSignatures.has(pending.workflow_signature)) continue;
+    candidateWorkflows.push(pending);
   }
 
   const uriByAnchorId = new Map<string, string>();

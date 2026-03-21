@@ -260,6 +260,7 @@ function normalizeExecutionNativeSlots(
       ...(anchor.workflow_signature ? { workflow_signature: anchor.workflow_signature } : {}),
       anchor_kind: anchor.anchor_kind,
       anchor_level: anchor.anchor_level,
+      tool_set: anchor.tool_set,
       ...(anchor.pattern_state ? { pattern_state: anchor.pattern_state } : {}),
       ...(anchor.credibility_state ? { credibility_state: anchor.credibility_state } : {}),
       ...(anchor.selected_tool !== undefined ? { selected_tool: anchor.selected_tool } : {}),

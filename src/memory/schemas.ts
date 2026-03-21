@@ -364,6 +364,7 @@ export const ExecutionNativeV1Schema = z.object({
   workflow_signature: z.string().min(1).max(256).optional(),
   anchor_kind: MemoryAnchorKind.optional(),
   anchor_level: MemoryAnchorLevel.optional(),
+  tool_set: z.array(z.string().min(1).max(128)).max(64).optional(),
   pattern_state: MemoryPatternState.optional(),
   credibility_state: MemoryPatternCredibilityState.optional(),
   selected_tool: z.string().min(1).max(128).nullable().optional(),

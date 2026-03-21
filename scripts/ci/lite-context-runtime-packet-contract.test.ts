@@ -371,6 +371,47 @@ async function seedContextRuntimeFixture(dbPath: string) {
         },
         {
           id: randomUUID(),
+          type: "event",
+          title: "Replay Episode: Fix export failure",
+          text_summary: "Replay repair learning episode for export failure",
+          slots: {
+            summary_kind: "workflow_candidate",
+            compression_layer: "L1",
+            execution_native_v1: {
+              schema_version: "execution_native_v1",
+              execution_kind: "workflow_candidate",
+              summary_kind: "workflow_candidate",
+              compression_layer: "L1",
+              task_signature: "repair-export-node-tests",
+              workflow_signature: "replay-learning-candidate-export-fix",
+              anchor_kind: "workflow",
+              anchor_level: "L1",
+              workflow_promotion: {
+                promotion_state: "candidate",
+                promotion_origin: "replay_learning_episode",
+                required_observations: 2,
+                observed_count: 2,
+                last_transition: "candidate_observed",
+                last_transition_at: "2026-03-20T00:10:00Z",
+                source_status: null,
+              },
+              maintenance: {
+                model: "lazy_online_v1",
+                maintenance_state: "observe",
+                offline_priority: "promote_candidate",
+                lazy_update_fields: ["usage_count", "last_used_at"],
+                last_maintenance_at: "2026-03-20T00:10:00Z",
+              },
+            },
+          },
+          embedding: sharedEmbedding,
+          embedding_model: FakeEmbeddingProvider.name,
+          salience: 0.83,
+          importance: 0.82,
+          confidence: 0.79,
+        },
+        {
+          id: randomUUID(),
           type: "concept",
           title: "Stable edit pattern",
           text_summary: patternAnchor.summary,
@@ -451,6 +492,205 @@ async function seedContextRuntimeFixture(dbPath: string) {
       input_text: "activate prefer edit rule",
     }, "default", "default", {
       liteWriteStore,
+    }),
+  );
+
+  return { liteWriteStore, liteRecallStore };
+}
+
+async function seedPrivateWorkflowFixture(dbPath: string) {
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  const queryText = "repair export failure in node tests";
+  const [sharedEmbedding] = await FakeEmbeddingProvider.embed([queryText]);
+  const workflowAnchor = MemoryAnchorV1Schema.parse({
+    anchor_kind: "workflow",
+    anchor_level: "L2",
+    task_signature: "repair-export-node-tests",
+    error_signature: "node-export-mismatch",
+    workflow_signature: "private-export-fix-workflow",
+    summary: "Inspect failing export test, patch the export, rerun the focused test.",
+    tool_set: ["edit", "test"],
+    outcome: {
+      status: "success",
+      result_class: "workflow_reuse",
+      success_score: 0.93,
+    },
+    source: {
+      source_kind: "playbook",
+      node_id: randomUUID(),
+      run_id: randomUUID(),
+      playbook_id: randomUUID(),
+    },
+    payload_refs: {
+      node_ids: [],
+      decision_ids: [],
+      run_ids: [],
+      step_ids: [],
+      commit_ids: [],
+    },
+    rehydration: {
+      default_mode: "partial",
+      payload_cost_hint: "medium",
+      recommended_when: ["missing_log_detail"],
+    },
+    maintenance: {
+      model: "lazy_online_v1",
+      maintenance_state: "retain",
+      offline_priority: "retain_workflow",
+      lazy_update_fields: ["usage_count", "last_used_at"],
+      last_maintenance_at: "2026-03-20T00:00:00Z",
+    },
+    workflow_promotion: {
+      promotion_state: "stable",
+      promotion_origin: "replay_promote",
+      required_observations: 2,
+      observed_count: 2,
+      last_transition: "promoted_to_stable",
+      last_transition_at: "2026-03-20T00:00:00Z",
+      source_status: "active",
+    },
+    schema_version: "anchor_v1",
+  });
+
+  const prepared = await prepareMemoryWrite(
+    {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      producer_agent_id: "local-user",
+      owner_agent_id: "local-user",
+      input_text: "seed private workflow planning fixture",
+      auto_embed: false,
+      memory_lane: "private",
+      nodes: [
+        {
+          id: randomUUID(),
+          type: "procedure",
+          title: "Fix export failure",
+          text_summary: workflowAnchor.summary,
+          text: queryText,
+          slots: {
+            summary_kind: "workflow_anchor",
+            compression_layer: "L2",
+            anchor_v1: workflowAnchor,
+          },
+          embedding: sharedEmbedding,
+          embedding_model: FakeEmbeddingProvider.name,
+          salience: 0.9,
+          importance: 0.9,
+          confidence: 0.93,
+        },
+      ],
+      edges: [],
+    },
+    "default",
+    "default",
+    {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+    },
+    null,
+  );
+
+  await liteWriteStore.withTx(() =>
+    applyMemoryWrite({} as any, prepared, {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      associativeLinkOrigin: "memory_write",
+      write_access: liteWriteStore,
+    }),
+  );
+
+  return { liteWriteStore, liteRecallStore };
+}
+
+async function seedExecutionNativeOnlyPrivateWorkflowFixture(dbPath: string) {
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  const queryText = "repair export failure in node tests";
+  const [sharedEmbedding] = await FakeEmbeddingProvider.embed([queryText]);
+
+  const prepared = await prepareMemoryWrite(
+    {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      producer_agent_id: "local-user",
+      owner_agent_id: "local-user",
+      input_text: "seed execution-native-only private workflow planning fixture",
+      auto_embed: false,
+      memory_lane: "private",
+      nodes: [
+        {
+          id: randomUUID(),
+          type: "procedure",
+          title: "Fix export failure",
+          text_summary: "Reusable repair workflow for export failure",
+          text: queryText,
+          slots: {
+            summary_kind: "workflow_anchor",
+            compression_layer: "L2",
+            execution_native_v1: {
+              schema_version: "execution_native_v1",
+              execution_kind: "workflow_anchor",
+              summary_kind: "workflow_anchor",
+              compression_layer: "L2",
+              task_signature: "repair-export-node-tests",
+              workflow_signature: "execution-native-only-export-fix",
+              anchor_kind: "workflow",
+              anchor_level: "L2",
+              tool_set: ["edit", "test"],
+              workflow_promotion: {
+                promotion_state: "stable",
+                promotion_origin: "replay_learning_auto_promotion",
+                required_observations: 2,
+                observed_count: 2,
+                last_transition: "promoted_to_stable",
+                last_transition_at: "2026-03-20T00:20:00Z",
+                source_status: null,
+              },
+              maintenance: {
+                model: "lazy_online_v1",
+                maintenance_state: "retain",
+                offline_priority: "retain_workflow",
+                lazy_update_fields: ["usage_count", "last_used_at"],
+                last_maintenance_at: "2026-03-20T00:20:00Z",
+              },
+            },
+          },
+          embedding: sharedEmbedding,
+          embedding_model: FakeEmbeddingProvider.name,
+          salience: 0.9,
+          importance: 0.9,
+          confidence: 0.93,
+        },
+      ],
+      edges: [],
+    },
+    "default",
+    "default",
+    {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+    },
+    null,
+  );
+
+  await liteWriteStore.withTx(() =>
+    applyMemoryWrite({} as any, prepared, {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      associativeLinkOrigin: "memory_write",
+      write_access: liteWriteStore,
     }),
   );
 
@@ -601,10 +841,10 @@ test("planning_context returns aligned planner packet, action packet summary, an
     assert.equal(body.planning_summary.workflow_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.planning_summary.workflow_lifecycle_summary.replay_source_count, 2);
     assert.equal(body.planning_summary.workflow_lifecycle_summary.rehydration_ready_count, 1);
-    assert.equal(body.planning_summary.workflow_lifecycle_summary.promotion_ready_count, 0);
+    assert.equal(body.planning_summary.workflow_lifecycle_summary.promotion_ready_count, 1);
     assert.equal(body.planning_summary.workflow_signal_summary.stable_workflow_count, body.planner_packet.sections.recommended_workflows.length);
-    assert.equal(body.planning_summary.workflow_signal_summary.observing_workflow_count, body.planner_packet.sections.candidate_workflows.length);
-    assert.equal(body.planning_summary.workflow_signal_summary.promotion_ready_workflow_count, 0);
+    assert.equal(body.planning_summary.workflow_signal_summary.observing_workflow_count, 0);
+    assert.equal(body.planning_summary.workflow_signal_summary.promotion_ready_workflow_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.planning_summary.workflow_lifecycle_summary.transition_counts.candidate_observed, 1);
     assert.equal(body.planning_summary.workflow_lifecycle_summary.transition_counts.promoted_to_stable, 1);
     assert.equal(body.planning_summary.workflow_maintenance_summary.observe_count, 1);
@@ -618,10 +858,10 @@ test("planning_context returns aligned planner packet, action packet summary, an
     assert.equal(body.execution_kernel.action_packet_summary.recommended_workflow_count, 1);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.stable_count, body.planner_packet.sections.recommended_workflows.length);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_workflows.length);
-    assert.equal(body.execution_kernel.workflow_lifecycle_summary.promotion_ready_count, 0);
+    assert.equal(body.execution_kernel.workflow_lifecycle_summary.promotion_ready_count, 1);
     assert.equal(body.execution_kernel.workflow_signal_summary.stable_workflow_count, body.planner_packet.sections.recommended_workflows.length);
-    assert.equal(body.execution_kernel.workflow_signal_summary.observing_workflow_count, body.planner_packet.sections.candidate_workflows.length);
-    assert.equal(body.execution_kernel.workflow_signal_summary.promotion_ready_workflow_count, 0);
+    assert.equal(body.execution_kernel.workflow_signal_summary.observing_workflow_count, 0);
+    assert.equal(body.execution_kernel.workflow_signal_summary.promotion_ready_workflow_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.transition_counts.candidate_observed, 1);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.transition_counts.promoted_to_stable, 1);
     assert.equal(body.execution_kernel.workflow_maintenance_summary.observe_count, 1);
@@ -648,12 +888,87 @@ test("planning_context returns aligned planner packet, action packet summary, an
     assert.equal(body.execution_kernel.pattern_maintenance_summary.observe_count, body.planner_packet.sections.candidate_patterns.length);
     assert.equal(body.execution_kernel.pattern_maintenance_summary.review_count, body.planner_packet.sections.contested_patterns.length);
     assert.match(body.planning_summary.planner_explanation, /workflow guidance: Fix export failure/);
-    assert.match(body.planning_summary.planner_explanation, /candidate workflows visible but not yet promoted: Replay Episode: Fix export failure/);
+    assert.match(body.planning_summary.planner_explanation, /promotion-ready workflow candidates: Replay Episode: Fix export failure/);
     assert.match(body.planning_summary.planner_explanation, /selected tool: edit/);
     assert.match(body.planning_summary.planner_explanation, /trusted patterns available but not used: edit/);
     assert.match(body.planning_summary.planner_explanation, /rehydration available: Fix export failure/);
     assert.match(body.planning_summary.planner_explanation, new RegExp(`supporting knowledge appended: ${body.planner_packet.sections.supporting_knowledge.length}`));
     assert.equal(body.tools.selection_summary.provenance_explanation, "selected tool: edit; candidate patterns visible but not yet trusted: edit");
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("planning_context defaults the local consumer identity so private workflow anchors are recallable", async () => {
+  const dbPath = tmpDbPath("planning-context-private-workflow");
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedPrivateWorkflowFixture(dbPath);
+  try {
+    registerContextRuntimeApp({ app, liteWriteStore, liteRecallStore });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair export failure in node tests",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        tool_candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+      },
+    });
+    assert.equal(response.statusCode, 200);
+    const body = PlanningContextRouteContractSchema.parse(response.json());
+    assert.equal(body.planner_packet.sections.recommended_workflows.length, 1);
+    assert.equal(body.workflow_signals.length, 1);
+    assert.equal(body.workflow_signals[0]?.promotion_state, "stable");
+    assert.match(body.planning_summary.planner_explanation, /workflow guidance: Fix export failure/);
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("planning_context recommended workflow lines keep source and tools for execution-native-only workflows", async () => {
+  const dbPath = tmpDbPath("planning-context-execution-native-only-workflow");
+  const app = Fastify();
+  const { liteWriteStore, liteRecallStore } = await seedExecutionNativeOnlyPrivateWorkflowFixture(dbPath);
+  try {
+    registerContextRuntimeApp({ app, liteWriteStore, liteRecallStore });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair export failure in node tests",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        tool_candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+      },
+    });
+    assert.equal(response.statusCode, 200);
+    const body = PlanningContextRouteContractSchema.parse(response.json());
+    assert.equal(body.planner_packet.sections.recommended_workflows.length, 1);
+    assert.match(body.planner_packet.sections.recommended_workflows[0] ?? "", /source=playbook/);
+    assert.match(body.planner_packet.sections.recommended_workflows[0] ?? "", /tools=edit, test/);
   } finally {
     await app.close();
     await liteRecallStore.close();
@@ -706,10 +1021,10 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.replay_source_count, 2);
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.rehydration_ready_count, 1);
-    assert.equal(body.assembly_summary.workflow_lifecycle_summary.promotion_ready_count, 0);
+    assert.equal(body.assembly_summary.workflow_lifecycle_summary.promotion_ready_count, 1);
     assert.equal(body.assembly_summary.workflow_signal_summary.stable_workflow_count, body.planner_packet.sections.recommended_workflows.length);
-    assert.equal(body.assembly_summary.workflow_signal_summary.observing_workflow_count, body.planner_packet.sections.candidate_workflows.length);
-    assert.equal(body.assembly_summary.workflow_signal_summary.promotion_ready_workflow_count, 0);
+    assert.equal(body.assembly_summary.workflow_signal_summary.observing_workflow_count, 0);
+    assert.equal(body.assembly_summary.workflow_signal_summary.promotion_ready_workflow_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.transition_counts.candidate_observed, 1);
     assert.equal(body.assembly_summary.workflow_lifecycle_summary.transition_counts.promoted_to_stable, 1);
     assert.equal(body.assembly_summary.workflow_maintenance_summary.observe_count, 1);
@@ -723,10 +1038,10 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     assert.equal(body.execution_kernel.action_packet_summary.candidate_pattern_count, body.planner_packet.sections.candidate_patterns.length);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.stable_count, body.planner_packet.sections.recommended_workflows.length);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.candidate_count, body.planner_packet.sections.candidate_workflows.length);
-    assert.equal(body.execution_kernel.workflow_lifecycle_summary.promotion_ready_count, 0);
+    assert.equal(body.execution_kernel.workflow_lifecycle_summary.promotion_ready_count, 1);
     assert.equal(body.execution_kernel.workflow_signal_summary.stable_workflow_count, body.planner_packet.sections.recommended_workflows.length);
-    assert.equal(body.execution_kernel.workflow_signal_summary.observing_workflow_count, body.planner_packet.sections.candidate_workflows.length);
-    assert.equal(body.execution_kernel.workflow_signal_summary.promotion_ready_workflow_count, 0);
+    assert.equal(body.execution_kernel.workflow_signal_summary.observing_workflow_count, 0);
+    assert.equal(body.execution_kernel.workflow_signal_summary.promotion_ready_workflow_count, body.planner_packet.sections.candidate_workflows.length);
     assert.equal(body.execution_kernel.workflow_lifecycle_summary.transition_counts.candidate_observed, 1);
     assert.equal(body.execution_kernel.workflow_maintenance_summary.observe_count, 1);
     assert.equal(body.execution_kernel.workflow_maintenance_summary.retain_count, 1);
@@ -748,7 +1063,7 @@ test("context_assemble returns aligned planner packet, assembly summary, and exe
     assert.equal(body.execution_kernel.pattern_maintenance_summary.observe_count, body.planner_packet.sections.candidate_patterns.length);
     assert.equal(body.execution_kernel.pattern_maintenance_summary.review_count, body.planner_packet.sections.contested_patterns.length);
     assert.match(body.assembly_summary.planner_explanation, /workflow guidance: Fix export failure/);
-    assert.match(body.assembly_summary.planner_explanation, /candidate workflows visible but not yet promoted: Replay Episode: Fix export failure/);
+    assert.match(body.assembly_summary.planner_explanation, /promotion-ready workflow candidates: Replay Episode: Fix export failure/);
     assert.match(body.assembly_summary.planner_explanation, /trusted patterns available but not used: edit/);
     assert.match(body.assembly_summary.planner_explanation, new RegExp(`supporting knowledge appended: ${body.planner_packet.sections.supporting_knowledge.length}`));
     assert.equal(body.tools.selection_summary.provenance_explanation, "selected tool: edit; candidate patterns visible but not yet trusted: edit");

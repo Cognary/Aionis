@@ -299,6 +299,43 @@ async function seedExecutionIntrospectionFixture(dbPath: string) {
         },
         {
           id: randomUUID(),
+          type: "event",
+          title: "Replay Episode: Observing duplicate candidate",
+          text_summary: "Older candidate workflow for the same signature",
+          slots: {
+            summary_kind: "workflow_candidate",
+            compression_layer: "L1",
+            execution_native_v1: {
+              schema_version: "execution_native_v1",
+              execution_kind: "workflow_candidate",
+              summary_kind: "workflow_candidate",
+              compression_layer: "L1",
+              task_signature: "repair-import-node-tests",
+              error_signature: "node-import-mismatch",
+              workflow_signature: "inspect-import-patch-rerun",
+              anchor_kind: "workflow",
+              anchor_level: "L1",
+              workflow_promotion: {
+                promotion_state: "candidate",
+                promotion_origin: "replay_learning_episode",
+                required_observations: 2,
+                observed_count: 1,
+                last_transition: "candidate_observed",
+                last_transition_at: "2026-03-19T00:00:00Z",
+                source_status: null,
+              },
+              maintenance: {
+                model: "lazy_online_v1",
+                maintenance_state: "observe",
+                offline_priority: "promote_candidate",
+                lazy_update_fields: ["usage_count", "last_used_at"],
+                last_maintenance_at: "2026-03-19T00:00:00Z",
+              },
+            },
+          },
+        },
+        {
+          id: randomUUID(),
           type: "concept",
           title: "Stable edit pattern",
           text_summary: trustedPattern.summary,
@@ -317,6 +354,83 @@ async function seedExecutionIntrospectionFixture(dbPath: string) {
             summary_kind: "pattern_anchor",
             compression_layer: "L3",
             anchor_v1: contestedPattern,
+          },
+        },
+      ],
+      edges: [],
+    },
+    "default",
+    "default",
+    {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+    },
+    null,
+  );
+
+  await liteWriteStore.withTx(() =>
+    applyMemoryWrite({} as any, prepared, {
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      associativeLinkOrigin: "memory_write",
+      write_access: liteWriteStore,
+    }),
+  );
+
+  return { liteWriteStore };
+}
+
+async function seedExecutionNativeOnlyWorkflowIntrospectionFixture(dbPath: string) {
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const prepared = await prepareMemoryWrite(
+    {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      producer_agent_id: "local-user",
+      owner_agent_id: "local-user",
+      input_text: "seed execution-native-only workflow introspection fixture",
+      auto_embed: false,
+      nodes: [
+        {
+          id: randomUUID(),
+          type: "procedure",
+          title: "Fix export failure",
+          text_summary: "Reusable repair workflow for export failure",
+          slots: {
+            summary_kind: "workflow_anchor",
+            compression_layer: "L2",
+            execution_native_v1: {
+              schema_version: "execution_native_v1",
+              execution_kind: "workflow_anchor",
+              summary_kind: "workflow_anchor",
+              compression_layer: "L2",
+              task_signature: "repair-export-node-tests",
+              workflow_signature: "execution-native-only-export-fix",
+              anchor_kind: "workflow",
+              anchor_level: "L2",
+              tool_set: ["edit", "test"],
+              workflow_promotion: {
+                promotion_state: "stable",
+                promotion_origin: "replay_learning_auto_promotion",
+                required_observations: 2,
+                observed_count: 2,
+                last_transition: "promoted_to_stable",
+                last_transition_at: "2026-03-20T00:20:00Z",
+                source_status: null,
+              },
+              maintenance: {
+                model: "lazy_online_v1",
+                maintenance_state: "retain",
+                offline_priority: "retain_workflow",
+                lazy_update_fields: ["usage_count", "last_used_at"],
+                last_maintenance_at: "2026-03-20T00:20:00Z",
+              },
+            },
           },
         },
       ],
@@ -401,8 +515,8 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     assert.equal(body.pattern_signals.length, 2);
     assert.equal(body.workflow_signals.length, 2);
     assert.equal(body.inventory.raw_workflow_anchor_count, 1);
-    assert.equal(body.inventory.raw_workflow_candidate_count, 2);
-    assert.equal(body.inventory.suppressed_candidate_workflow_count, 1);
+    assert.equal(body.inventory.raw_workflow_candidate_count, 3);
+    assert.equal(body.inventory.suppressed_candidate_workflow_count, 2);
     assert.equal(body.inventory.raw_pattern_anchor_count, 2);
     assert.equal(body.workflow_signal_summary.stable_workflow_count, 1);
     assert.equal(body.workflow_signal_summary.promotion_ready_workflow_count, 1);
@@ -428,6 +542,60 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
     assert.ok(body.demo_surface.sections.maintenance.some((line) => line.includes("workflow maintenance:")));
     assert.ok(body.demo_surface.sections.maintenance.some((line) => line.includes("pattern maintenance:")));
     assert.match(body.demo_surface.merged_text, /# Execution Memory Demo/);
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("execution introspection demo workflow lines keep source and tools for execution-native-only stable workflows", async () => {
+  const dbPath = tmpDbPath("execution-introspect-execution-native-only");
+  const app = Fastify();
+  const { liteWriteStore } = await seedExecutionNativeOnlyWorkflowIntrospectionFixture(dbPath);
+  try {
+    const guards = buildRequestGuards();
+    registerHostErrorHandler(app);
+    registerMemoryAccessRoutes({
+      app,
+      env: {
+        AIONIS_EDITION: "lite",
+        APP_ENV: "test",
+        MEMORY_SCOPE: "default",
+        MEMORY_TENANT_ID: "default",
+        LITE_LOCAL_ACTOR_ID: "local-user",
+        MAX_TEXT_LEN: 10_000,
+        PII_REDACTION: false,
+        ALLOW_CROSS_SCOPE_EDGES: false,
+        MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
+        MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
+      } as any,
+      embedder: null,
+      liteWriteStore,
+      writeAccessShadowMirrorV2: false,
+      requireStoreFeatureCapability: () => {},
+      requireMemoryPrincipal: guards.requireMemoryPrincipal,
+      withIdentityFromRequest: guards.withIdentityFromRequest,
+      enforceRateLimit: guards.enforceRateLimit,
+      enforceTenantQuota: guards.enforceTenantQuota,
+      tenantFromBody: guards.tenantFromBody,
+      acquireInflightSlot: guards.acquireInflightSlot,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/memory/execution/introspect",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        limit: 8,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = ExecutionMemoryIntrospectionResponseSchema.parse(response.json());
+    assert.equal(body.recommended_workflows.length, 1);
+    assert.ok(body.demo_surface.sections.workflows.some((line) => line.includes("source=playbook")));
+    assert.ok(body.demo_surface.sections.workflows.some((line) => line.includes("tools=edit, test")));
   } finally {
     await app.close();
     await liteWriteStore.close();
