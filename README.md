@@ -28,6 +28,10 @@ Fast entry points:
    [docs/AIONIS_0_1_0_RELEASE_NOTE.md](docs/AIONIS_0_1_0_RELEASE_NOTE.md)
 6. thin MCP guide:
    [docs/AIONIS_THIN_MCP_GUIDE.md](docs/AIONIS_THIN_MCP_GUIDE.md)
+7. adapter direction:
+   [docs/AIONIS_ADAPTER_DIRECTION.md](docs/AIONIS_ADAPTER_DIRECTION.md)
+8. execution adapter spec:
+   [docs/AIONIS_EXECUTION_ADAPTER_SPEC.md](docs/AIONIS_EXECUTION_ADAPTER_SPEC.md)
 
 Repository split:
 
@@ -83,6 +87,9 @@ Integrator docs:
 9. [docs/LITE_REAL_TASK_BENCHMARK_REPORT.md](docs/LITE_REAL_TASK_BENCHMARK_REPORT.md)
 10. [docs/plans/2026-03-21-lite-real-task-benchmark-suite-spec.md](docs/plans/2026-03-21-lite-real-task-benchmark-suite-spec.md)
 11. [docs/AIONIS_THIN_MCP_GUIDE.md](docs/AIONIS_THIN_MCP_GUIDE.md)
+12. [docs/AIONIS_ADAPTER_DIRECTION.md](docs/AIONIS_ADAPTER_DIRECTION.md)
+13. [docs/AIONIS_EXECUTION_ADAPTER_SPEC.md](docs/AIONIS_EXECUTION_ADAPTER_SPEC.md)
+14. [docs/plans/2026-03-21-aionis-execution-adapter.md](docs/plans/2026-03-21-aionis-execution-adapter.md)
 
 Internal design docs:
 

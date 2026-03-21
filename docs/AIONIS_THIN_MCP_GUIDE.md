@@ -12,6 +12,14 @@ The first Aionis thin MCP slice exposes five tools:
 
 This MCP is designed to let an MCP-aware agent consume the stable execution-memory mainline without learning the full Aionis HTTP route surface.
 
+It is now best understood as:
+
+1. a compatibility layer for MCP-native clients
+2. an introspection and debug layer
+3. a fast builder integration path
+
+It is no longer the recommended long-term primary product surface for automatic execution-loop behavior.
+
 ## Minimal Setup
 
 Start the Aionis runtime first:
@@ -62,6 +70,8 @@ The thin MCP should help users:
 2. let tool choice become more stable over time
 3. keep default context compact while still surfacing execution guidance
 4. see what Aionis learned after a task
+
+When a client can support deeper execution hooks, the preferred product direction is an adapter-first integration.
 
 ## Tool Roles
 
@@ -258,6 +268,19 @@ The first thin MCP slice works best if the client follows these rules:
 2. auto-call `aionis_select_tool` before concrete tool choice
 3. avoid auto-calling `aionis_record_feedback` from weak inferred signals
 4. prefer `aionis_finalize_task` over conversational confirmation loops at task end
+
+## Relationship To The Adapter Path
+
+The current Aionis direction is:
+
+1. adapter-first for the main execution path
+2. thin MCP for compatibility, inspection, and fast builder integration
+
+That means:
+
+1. a client with real execution hooks should prefer the adapter path
+2. a client limited to MCP tool-calling can still use thin MCP effectively
+3. thin MCP should stay small and stable rather than growing into a second full control plane
 5. auto-call `aionis_introspect` after the first task so the learned state is visible
 
 This keeps the first-run experience simple:

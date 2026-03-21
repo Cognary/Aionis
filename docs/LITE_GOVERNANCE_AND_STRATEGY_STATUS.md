@@ -171,6 +171,7 @@ Current runtime reality:
 20. selector reuse now applies deterministic task-affinity weighting, so nearby cross-task recall can remain visible without inheriting flat trusted reuse
 21. Aionis now has a source-owned thin MCP surface in `src/mcp/` with five execution-memory tools: planning context, tool selection, feedback recording, task finalization, and introspection
 22. the thin MCP no longer depends on conversational confirmation loops to finish a task; `aionis_finalize_task` now provides the preferred task-boundary completion path while `user_confirmed` and `user_rejected` remain optional high-confidence extra evidence
+23. Aionis now also has a first source-owned execution-adapter baseline in `src/adapter/`, with normalized task-start, pre-tool selection, execution-evidence, task-finalization, and Claude-Code-bridge contracts covered by dedicated tests
 
 Primary code:
 
@@ -191,6 +192,11 @@ Primary code:
 15. `docs/plans/2026-03-21-lite-pattern-trust-hardening-plan.md`
 16. `src/mcp/aionis-mcp.ts`
 17. `docs/AIONIS_THIN_MCP_GUIDE.md`
+18. `src/adapter/aionis-adapter.ts`
+19. `src/adapter/claude-code-bridge.ts`
+20. `scripts/ci/aionis-execution-adapter-contract.test.ts`
+21. `scripts/ci/aionis-execution-adapter-feedback.test.ts`
+22. `scripts/ci/aionis-claude-code-bridge.test.ts`
 
 ### 6. Runtime-Governed Adjudication Contract
 
@@ -256,7 +262,8 @@ Current reality:
 3. execution-native writes now carry signatures, anchor metadata, and compression metadata
 4. structured execution-continuity ordinary writes can now project governed workflow memory into the planner recall path
 5. a minimal operator stop-loss path now exists for learned pattern reuse through `patterns/suppress` and `patterns/unsuppress`
-6. a thin MCP adapter now exists for the stable execution-memory mainline, but it is still a first slice rather than a fully productized IDE or agent integration surface
+6. a thin MCP compatibility layer now exists for the stable execution-memory mainline
+7. a first execution-adapter baseline now also exists for task-start, selection, execution evidence, and task finalization, but it is still contract-level and not yet wired into a real client runtime by default
 
 But:
 
@@ -264,6 +271,7 @@ But:
 2. the strongest stable promotion paths still come from replay-centered or explicit continuity entry points
 3. Lite still does not have the broader operator intervention surface proposed in ADR-0002 beyond the new `suppress-first` slice
 4. the thin MCP onboarding and auto-calling ergonomics are not yet benchmarked as a first-class product loop
+5. the new adapter baseline still needs real client wiring before Aionis can rely on adapter-first behavior in everyday usage
 
 Primary code:
 
