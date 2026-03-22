@@ -182,6 +182,7 @@ function buildExecutionWritePayload(args: {
   filePath: string;
   modifiedFiles: string[];
   ownedFiles?: string[];
+  workflowPromotionGovernanceReview?: Record<string, unknown>;
 }) {
   const updatedAt = "2026-03-21T12:00:00.000Z";
   return {
@@ -246,6 +247,9 @@ function buildExecutionWritePayload(args: {
             artifact_refs: [],
             evidence_refs: [],
           },
+          ...(args.workflowPromotionGovernanceReview
+            ? { workflow_promotion_governance_review: args.workflowPromotionGovernanceReview }
+            : {}),
         },
       },
     ],
@@ -512,6 +516,122 @@ test("memory/write projects execution-state-backed writes into workflow candidat
     assert.equal(retryBody.workflow_signal_summary.promotion_ready_workflow_count, 0);
     assert.equal(retryBody.inventory.raw_workflow_candidate_count, 2);
     assert.equal(retryBody.inventory.suppressed_candidate_workflow_count, 2);
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("memory/write stable workflow governance preview evaluates admitted review results without changing promotion behavior", async () => {
+  const dbPath = tmpDbPath("projection-governance-review");
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  try {
+    registerApp({ app, liteWriteStore, liteRecallStore });
+
+    const firstWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildExecutionWritePayload({
+        eventId: randomUUID(),
+        title: "Patch export resolver",
+        inputText: "continue fixing export resolver",
+        taskBrief: "Fix export failure in node tests",
+        stateId: `state:${randomUUID()}`,
+        filePath: "src/routes/export.ts",
+        modifiedFiles: ["src/routes/export.ts"],
+      }),
+    });
+    assert.equal(firstWrite.statusCode, 200);
+
+    const secondWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildExecutionWritePayload({
+        eventId: randomUUID(),
+        title: "Patch export resolver with governance review",
+        inputText: "continue fixing export resolver second run",
+        taskBrief: "Fix export failure in node tests",
+        stateId: `state:${randomUUID()}`,
+        filePath: "src/routes/export.ts",
+        modifiedFiles: ["src/routes/export.ts"],
+        workflowPromotionGovernanceReview: {
+          promote_memory: {
+            review_result: {
+              review_version: "promote_memory_semantic_review_v1",
+              adjudication: {
+                operation: "promote_memory",
+                disposition: "recommend",
+                target_kind: "workflow",
+                target_level: "L2",
+                reason: "stable workflow promotion is strategically valuable here",
+                confidence: 0.92,
+                strategic_value: "high",
+              },
+            },
+          },
+        },
+      }),
+    });
+    assert.equal(secondWrite.statusCode, 200);
+
+    const storedStable = await liteWriteStore.findNodes({
+      scope: "default",
+      type: "procedure",
+      slotsContains: {
+        summary_kind: "workflow_anchor",
+      },
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 20,
+      offset: 0,
+    });
+    const stableWorkflowNode = storedStable.rows.find((row) => {
+      const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
+      return projection?.auto_promoted === true;
+    }) ?? null;
+    assert.ok(stableWorkflowNode);
+
+    const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, unknown>;
+    const governancePreview = (stableProjection.governance_preview ?? {}) as Record<string, unknown>;
+    const promotePreview = (governancePreview.promote_memory ?? {}) as Record<string, unknown>;
+    const reviewResult = (promotePreview.review_result ?? {}) as Record<string, unknown>;
+    const admissibility = (promotePreview.admissibility ?? {}) as Record<string, unknown>;
+    const policyEffect = (promotePreview.policy_effect ?? {}) as Record<string, unknown>;
+    const decisionTrace = (promotePreview.decision_trace ?? {}) as Record<string, unknown>;
+
+    assert.equal(reviewResult.review_version, "promote_memory_semantic_review_v1");
+    assert.equal(admissibility.admissible, true);
+    assert.equal(policyEffect.applies, true);
+    assert.equal(policyEffect.reason_code, "high_confidence_workflow_promotion");
+    assert.equal(decisionTrace.review_supplied, true);
+    assert.equal(decisionTrace.admissibility_evaluated, true);
+    assert.equal(decisionTrace.admissible, true);
+    assert.deepEqual(decisionTrace.stage_order, [
+      "review_packet_built",
+      "review_result_received",
+      "admissibility_evaluated",
+      "policy_effect_derived",
+    ]);
+
+    const planning = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "fix export failure in node tests",
+        context: {
+          goal: "fix export failure in node tests",
+        },
+        tool_candidates: ["bash", "edit", "test"],
+      },
+    });
+    assert.equal(planning.statusCode, 200);
+    const planningBody = PlanningContextRouteContractSchema.parse(planning.json());
+    assert.equal(planningBody.planner_packet.sections.recommended_workflows.length, 1);
+    assert.equal(planningBody.workflow_signals[0]?.promotion_state, "stable");
   } finally {
     await app.close();
     await liteWriteStore.close();

@@ -630,6 +630,8 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
     if (observedCount >= requiredObservations) {
       const stableClientId = `workflow_projection:stable:${workflowSignature}`;
       const stableNodeId = stableUuid(`${args.scope}:node:${stableClientId}`);
+      const workflowPromotionGovernanceReview = asRecord(source.slots?.workflow_promotion_governance_review);
+      const promoteMemoryGovernanceReview = asRecord(workflowPromotionGovernanceReview?.promote_memory);
       const governancePreview = buildWorkflowPromotionGovernancePreview({
         candidateNodeIds: Array.from(new Set([projectedNodeId, ...existingCandidates.rows.map((row) => row.id)])),
         inputText: summary,
@@ -645,6 +647,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
             success_score: 0.5,
           },
         ],
+        reviewResult: (promoteMemoryGovernanceReview?.review_result ?? null) as any,
       });
       const stableAnchor = buildStableWorkflowAnchor({
         scope: args.scope,

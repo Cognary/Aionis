@@ -533,3 +533,4 @@ In short:
 3. the next phase is product-boundary clarification, not thesis discovery
 4. live governance paths are starting to share a common internal pipeline for trace/reason/apply plumbing
 5. workflow auto-promotion now exposes a first bounded `promote_memory` governance preview surface
+6. workflow auto-promotion preview can now evaluate bounded review results and emit admissibility/policy-effect trace without changing promotion semantics
