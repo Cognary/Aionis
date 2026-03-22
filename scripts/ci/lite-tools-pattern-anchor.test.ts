@@ -582,6 +582,7 @@ test("positive tools feedback with multiple matched rule sources exposes form_pa
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.policy_effect_applies, false);
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.base_pattern_state, "provisional");
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.effective_pattern_state, "provisional");
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.runtime_apply_changed_pattern_state, false);
     assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.stage_order, [
       "review_packet_built",
       "policy_effect_derived",
@@ -656,6 +657,8 @@ test("tools feedback form_pattern governance preview evaluates admitted review r
     );
 
     const parsed = ToolsFeedbackResponseSchema.parse(feedback);
+    assert.equal(parsed.pattern_anchor?.pattern_state, "stable");
+    assert.equal(parsed.pattern_anchor?.credibility_state, "trusted");
     assert.equal(parsed.governance_preview?.form_pattern.review_result?.adjudication.confidence, 0.89);
     assert.equal(parsed.governance_preview?.form_pattern.admissibility?.admissible, true);
     assert.equal(parsed.governance_preview?.form_pattern.admissibility?.accepted_mutation_count, 1);
@@ -671,13 +674,30 @@ test("tools feedback form_pattern governance preview evaluates admitted review r
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.policy_effect_applies, true);
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.base_pattern_state, "provisional");
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.effective_pattern_state, "stable");
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.runtime_apply_changed_pattern_state, true);
     assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.stage_order, [
       "review_packet_built",
       "review_result_received",
       "admissibility_evaluated",
       "policy_effect_derived",
+      "runtime_policy_applied",
     ]);
     assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.reason_codes, []);
+
+    const { rows } = await liteWriteStore.findNodes({
+      scope: "default",
+      id: parsed.pattern_anchor?.node_id ?? "",
+      consumerAgentId: null,
+      consumerTeamId: null,
+      limit: 1,
+      offset: 0,
+    });
+    const storedAnchor = MemoryAnchorV1Schema.parse(rows[0]?.slots?.anchor_v1);
+    assert.equal(storedAnchor.pattern_state, "stable");
+    assert.equal(storedAnchor.credibility_state, "trusted");
+    assert.equal(storedAnchor.promotion?.credibility_state, "trusted");
+    assert.equal(storedAnchor.trust_hardening?.semantic_review_override_applied, true);
+    assert.equal(storedAnchor.trust_hardening?.semantic_review_override_reason, "high_confidence_form_pattern_review");
   } finally {
     await liteWriteStore.close();
   }
@@ -760,6 +780,7 @@ test("tools feedback form_pattern governance preview rejects low-confidence revi
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.policy_effect_applies, false);
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.base_pattern_state, "provisional");
     assert.equal(parsed.governance_preview?.form_pattern.decision_trace.effective_pattern_state, "provisional");
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.runtime_apply_changed_pattern_state, false);
     assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.stage_order, [
       "review_packet_built",
       "review_result_received",

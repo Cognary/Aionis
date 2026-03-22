@@ -172,6 +172,7 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
     policy_effect_applies: policyEffect.applies,
     base_pattern_state: policyEffect.base_pattern_state,
     effective_pattern_state: policyEffect.effective_pattern_state,
+    runtime_apply_changed_pattern_state: false,
     stage_order: stageOrder,
     reason_codes: policyEffect.applies
       ? admissibility?.reason_codes ?? []
@@ -586,7 +587,7 @@ export async function toolSelectionFeedback(
     }
 
     if (parsed.outcome === "positive" || parsed.outcome === "negative") {
-      const anchorOut = await writeToolsDecisionPatternAnchor(null, {
+      let anchorOut = await writeToolsDecisionPatternAnchor(null, {
         tenant_id: tenancy.tenant_id,
         scope: tenancy.scope,
         actor,
@@ -600,6 +601,7 @@ export async function toolSelectionFeedback(
         decision: decision!,
         feedback_commit_id: commit_id,
         feedback_outcome: parsed.outcome,
+        governed_pattern_state_override: null,
       }, {
         defaultScope,
         defaultTenantId,
@@ -611,6 +613,56 @@ export async function toolSelectionFeedback(
         liteWriteStore: opts.liteWriteStore ?? null,
       });
       if (anchorOut) {
+        governancePreview = await buildToolsFeedbackFormPatternGovernancePreview({
+          liteWriteStore: opts.liteWriteStore,
+          scope,
+          inputText: redactedInput ?? null,
+          inputSha256: inputSha,
+          sourceRuleIds: uniq,
+          anchor: anchorOut.anchor,
+          governanceReview: parsed.governance_review?.form_pattern ?? null,
+        });
+        if (parsed.governance_review?.form_pattern?.review_result && !governancePreview) {
+          badRequest("form_pattern_governance_preview_unavailable", "form_pattern governance review requires at least two source nodes", {
+            source_rule_count: uniq.length,
+          });
+        }
+        if (governancePreview?.form_pattern?.policy_effect?.applies) {
+          const applied = await writeToolsDecisionPatternAnchor(null, {
+            tenant_id: tenancy.tenant_id,
+            scope: tenancy.scope,
+            actor,
+            input_text: redactedInput ?? null,
+            input_sha256: inputSha,
+            note: note ?? null,
+            context: parsed.context,
+            selected_tool: selectedTool,
+            candidates: normalizedCandidates,
+            source_rule_ids: uniq,
+            decision: decision!,
+            feedback_commit_id: commit_id,
+            feedback_outcome: parsed.outcome,
+            governed_pattern_state_override: "stable",
+          }, {
+            defaultScope,
+            defaultTenantId,
+            maxTextLen: opts.maxTextLen,
+            piiRedaction: opts.piiRedaction,
+            embedder: opts.embedder ?? null,
+            embeddedRuntime: opts.embeddedRuntime ?? null,
+            writeAccess: opts.liteWriteStore as unknown as WriteStoreAccess,
+            liteWriteStore: opts.liteWriteStore ?? null,
+          });
+          if (applied) {
+            anchorOut = applied;
+            governancePreview.form_pattern.decision_trace.runtime_apply_changed_pattern_state =
+              (anchorOut.anchor.pattern_state ?? "provisional") === "stable";
+            governancePreview.form_pattern.decision_trace.stage_order = [
+              ...governancePreview.form_pattern.decision_trace.stage_order,
+              "runtime_policy_applied",
+            ];
+          }
+        }
         patternAnchor = {
           node_id: anchorOut.node_id,
           node_uri: buildAionisUri({
@@ -628,20 +680,6 @@ export async function toolSelectionFeedback(
           maintenance: anchorOut.anchor.maintenance ?? undefined,
           promotion: anchorOut.anchor.promotion ?? undefined,
         };
-        governancePreview = await buildToolsFeedbackFormPatternGovernancePreview({
-          liteWriteStore: opts.liteWriteStore,
-          scope,
-          inputText: redactedInput ?? null,
-          inputSha256: inputSha,
-          sourceRuleIds: uniq,
-          anchor: anchorOut.anchor,
-          governanceReview: parsed.governance_review?.form_pattern ?? null,
-        });
-        if (parsed.governance_review?.form_pattern?.review_result && !governancePreview) {
-          badRequest("form_pattern_governance_preview_unavailable", "form_pattern governance review requires at least two source nodes", {
-            source_rule_count: uniq.length,
-          });
-        }
       }
     }
 
@@ -930,7 +968,10 @@ export async function toolSelectionFeedback(
   }
 
   if (parsed.outcome === "positive" || parsed.outcome === "negative") {
-    const anchorOut = await writeToolsDecisionPatternAnchor(client, {
+    if (parsed.governance_review?.form_pattern?.review_result && !opts.liteWriteStore) {
+      badRequest("form_pattern_governance_requires_lite_lookup", "form_pattern governance review currently requires lite node lookup support", {});
+    }
+    let anchorOut = await writeToolsDecisionPatternAnchor(client, {
       tenant_id: tenancy.tenant_id,
       scope: tenancy.scope,
       actor,
@@ -944,6 +985,7 @@ export async function toolSelectionFeedback(
       decision: decision!,
       feedback_commit_id: commit_id,
       feedback_outcome: parsed.outcome,
+      governed_pattern_state_override: null,
     }, {
       defaultScope,
       defaultTenantId,
@@ -954,6 +996,57 @@ export async function toolSelectionFeedback(
       liteWriteStore: null,
     });
     if (anchorOut) {
+      governancePreview = opts.liteWriteStore
+        ? await buildToolsFeedbackFormPatternGovernancePreview({
+            liteWriteStore: opts.liteWriteStore,
+            scope,
+            inputText: redactedInput ?? null,
+            inputSha256: inputSha,
+            sourceRuleIds: uniq,
+            anchor: anchorOut.anchor,
+            governanceReview: parsed.governance_review?.form_pattern ?? null,
+          })
+        : null;
+      if (parsed.governance_review?.form_pattern?.review_result && !governancePreview) {
+        badRequest("form_pattern_governance_preview_unavailable", "form_pattern governance review requires at least two source nodes", {
+          source_rule_count: uniq.length,
+        });
+      }
+      if (governancePreview?.form_pattern?.policy_effect?.applies) {
+        const applied = await writeToolsDecisionPatternAnchor(client, {
+          tenant_id: tenancy.tenant_id,
+          scope: tenancy.scope,
+          actor,
+          input_text: redactedInput ?? null,
+          input_sha256: inputSha,
+          note: note ?? null,
+          context: parsed.context,
+          selected_tool: selectedTool,
+          candidates: normalizedCandidates,
+          source_rule_ids: uniq,
+          decision: decision!,
+          feedback_commit_id: commit_id,
+          feedback_outcome: parsed.outcome,
+          governed_pattern_state_override: "stable",
+        }, {
+          defaultScope,
+          defaultTenantId,
+          maxTextLen: opts.maxTextLen,
+          piiRedaction: opts.piiRedaction,
+          embedder: opts.embedder ?? null,
+          embeddedRuntime: opts.embeddedRuntime ?? null,
+          liteWriteStore: null,
+        });
+        if (applied) {
+          anchorOut = applied;
+          governancePreview.form_pattern.decision_trace.runtime_apply_changed_pattern_state =
+            (anchorOut.anchor.pattern_state ?? "provisional") === "stable";
+          governancePreview.form_pattern.decision_trace.stage_order = [
+            ...governancePreview.form_pattern.decision_trace.stage_order,
+            "runtime_policy_applied",
+          ];
+        }
+      }
       patternAnchor = {
         node_id: anchorOut.node_id,
         node_uri: buildAionisUri({

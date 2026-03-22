@@ -44,6 +44,7 @@ type WriteToolsDecisionPatternAnchorArgs = {
   decision: DecisionAnchorSource;
   feedback_commit_id: string;
   feedback_outcome: "positive" | "negative";
+  governed_pattern_state_override?: "stable" | null;
 };
 
 type WriteToolsDecisionPatternAnchorOptions = {
@@ -274,6 +275,7 @@ function buildPatternAnchor(args: {
   feedbackCommitId: string;
   feedbackOutcome: "positive" | "negative";
   existing?: MemoryAnchorV1 | null;
+  governedPatternStateOverride?: "stable" | null;
 }): MemoryAnchorV1 {
   const existing = args.existing ?? null;
   const existingHardening = trustHardeningRecord(existing);
@@ -366,7 +368,7 @@ function buildPatternAnchor(args: {
     timestamp: args.decision.created_at,
   });
   const promotionGateSatisfied = distinctRunCount >= requiredDistinctRuns;
-  return MemoryAnchorV1Schema.parse({
+  const baseAnchor = MemoryAnchorV1Schema.parse({
     anchor_kind: "pattern",
     anchor_level: "L3",
     pattern_state: patternState,
@@ -479,8 +481,52 @@ function buildPatternAnchor(args: {
       revalidation_floor_kind: "post_contest_two_fresh_runs_v1",
       revalidation_floor_satisfied: revalidationFloorSatisfied,
       task_affinity_weighting_enabled: false,
+      semantic_review_override_applied: false,
+      semantic_review_override_reason: null,
     },
     schema_version: "anchor_v1",
+  });
+
+  if (args.governedPatternStateOverride !== "stable") {
+    return baseAnchor;
+  }
+  if ((baseAnchor.pattern_state ?? "provisional") === "stable") {
+    return baseAnchor;
+  }
+
+  return MemoryAnchorV1Schema.parse({
+    ...baseAnchor,
+    pattern_state: "stable",
+    credibility_state: "trusted",
+    summary: buildPatternSummary({
+      taskCue: args.taskCue,
+      selectedTool: args.selectedTool,
+      patternState: "stable",
+      credibilityState: "trusted",
+      feedbackOutcome: args.feedbackOutcome,
+      ruleBacked: args.sourceRuleIds.length > 0,
+    }),
+    maintenance: buildPatternMaintenance({
+      credibilityState: "trusted",
+      distinctRunCount,
+      requiredDistinctRuns,
+      counterEvidenceOpen: false,
+      timestamp: args.decision.created_at,
+    }),
+    promotion: {
+      ...baseAnchor.promotion,
+      counter_evidence_open: false,
+      credibility_state: "trusted",
+      previous_credibility_state: baseAnchor.credibility_state ?? baseAnchor.promotion?.credibility_state ?? "candidate",
+      last_transition: baseAnchor.credibility_state === "contested" ? "revalidated_to_trusted" : "promoted_to_trusted",
+      last_transition_at: args.decision.created_at,
+      stable_at: baseAnchor.promotion?.stable_at ?? args.decision.created_at,
+    },
+    trust_hardening: {
+      ...baseAnchor.trust_hardening,
+      semantic_review_override_applied: true,
+      semantic_review_override_reason: "high_confidence_form_pattern_review",
+    },
   });
 }
 
@@ -701,6 +747,7 @@ export async function writeToolsDecisionPatternAnchor(
     feedbackCommitId: args.feedback_commit_id,
     feedbackOutcome: args.feedback_outcome,
     existing: existingAnchor,
+    governedPatternStateOverride: args.governed_pattern_state_override ?? null,
   });
   const summary = anchor.summary;
   const trustProfile = buildPatternNodeTrustProfile((anchor.credibility_state ?? "candidate") as PatternCredibilityState);

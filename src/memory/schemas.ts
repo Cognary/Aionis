@@ -343,6 +343,8 @@ export const MemoryPatternTrustHardeningSchema = z.object({
   revalidation_floor_kind: MemoryPatternRevalidationFloorKind.default("post_contest_two_fresh_runs_v1"),
   revalidation_floor_satisfied: z.boolean().default(true),
   task_affinity_weighting_enabled: z.boolean().default(false),
+  semantic_review_override_applied: z.boolean().default(false),
+  semantic_review_override_reason: z.string().min(1).max(128).nullable().default(null),
 });
 
 export const MemoryAnchorV1Schema = z.object({
@@ -1242,12 +1244,14 @@ export const ToolsFeedbackFormPatternGovernanceDecisionTraceSchema = z.object({
   policy_effect_applies: z.boolean(),
   base_pattern_state: z.enum(["provisional", "stable"]),
   effective_pattern_state: z.enum(["provisional", "stable"]),
+  runtime_apply_changed_pattern_state: z.boolean(),
   stage_order: z.array(z.enum([
     "review_packet_built",
     "review_result_received",
     "admissibility_evaluated",
     "policy_effect_derived",
-  ])).min(1).max(4),
+    "runtime_policy_applied",
+  ])).min(1).max(5),
   reason_codes: z.array(z.string().min(1).max(128)).max(8).default([]),
 }).passthrough();
 
