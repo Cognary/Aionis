@@ -532,6 +532,42 @@ export const MemoryPromoteRequest = MemoryGovernedMutationBase.extend({
 
 export type MemoryPromoteInput = z.infer<typeof MemoryPromoteRequest>;
 
+export const MemoryPromoteSemanticReviewCandidateSchema = z.object({
+  node_id: z.string().min(1).max(256),
+  title: z.string().min(1).max(200).optional(),
+  summary: z.string().min(1).max(1000).optional(),
+  task_signature: z.string().min(1).max(256).nullable().optional(),
+  error_signature: z.string().min(1).max(256).nullable().optional(),
+  workflow_signature: z.string().min(1).max(256).nullable().optional(),
+  selected_tool: z.string().min(1).max(128).nullable().optional(),
+  outcome_status: z.string().min(1).max(64).nullable().optional(),
+  success_score: z.number().min(0).max(1).nullable().optional(),
+});
+
+export const MemoryPromoteSemanticReviewPacketSchema = z.object({
+  review_version: z.literal("promote_memory_semantic_review_v1"),
+  operation: z.literal("promote_memory"),
+  requested_target_kind: z.enum(["execution", "workflow", "pattern", "decision"]),
+  requested_target_level: MemoryAnchorLevel,
+  candidate_count: z.number().int().min(0).max(200),
+  deterministic_gate: z.object({
+    candidate_count_satisfied: z.boolean(),
+    target_kind_present: z.boolean(),
+    target_level_present: z.boolean(),
+    gate_satisfied: z.boolean(),
+  }),
+  candidate_examples: z.array(MemoryPromoteSemanticReviewCandidateSchema).max(6),
+});
+
+export type MemoryPromoteSemanticReviewPacket = z.infer<typeof MemoryPromoteSemanticReviewPacketSchema>;
+
+export const MemoryPromoteSemanticReviewResultSchema = z.object({
+  review_version: z.literal("promote_memory_semantic_review_v1"),
+  adjudication: MemoryPromoteAdjudicationSchema,
+});
+
+export type MemoryPromoteSemanticReviewResult = z.infer<typeof MemoryPromoteSemanticReviewResultSchema>;
+
 export const MemoryCompressRequest = MemoryGovernedMutationBase.extend({
   node_ids: MemoryAnchorIdList.min(1).max(200),
   compression_mode: z.enum(["summarize", "drop_redundant_details", "anchor_only"]).default("summarize"),
