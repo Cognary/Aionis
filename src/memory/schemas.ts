@@ -1139,6 +1139,14 @@ export const ReplayLearningProjectionResultContractSchema = z.object({
 
 export type ReplayLearningProjectionResultContract = z.infer<typeof ReplayLearningProjectionResultContractSchema>;
 
+export const ReplayRepairReviewGovernancePreviewSchema = z.object({
+  promote_memory: z.object({
+    review_packet: MemoryPromoteSemanticReviewPacketSchema,
+  }),
+}).passthrough();
+
+export type ReplayRepairReviewGovernancePreview = z.infer<typeof ReplayRepairReviewGovernancePreviewSchema>;
+
 export const ReplayPlaybookRepairReviewResponseSchema = z.object({
   tenant_id: z.string(),
   scope: z.string(),
@@ -1156,6 +1164,7 @@ export const ReplayPlaybookRepairReviewResponseSchema = z.object({
   commit_uri: z.string().nullable(),
   commit_hash: z.string().nullable(),
   learning_projection_result: ReplayLearningProjectionResultContractSchema.nullable().optional(),
+  governance_preview: ReplayRepairReviewGovernancePreviewSchema.nullable().optional(),
 }).passthrough();
 
 export type ReplayPlaybookRepairReviewResponse = z.infer<typeof ReplayPlaybookRepairReviewResponseSchema>;

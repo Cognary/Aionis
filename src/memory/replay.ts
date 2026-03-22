@@ -41,6 +41,8 @@ import {
   ReplayStepAfterRequest,
   ReplayStepBeforeRequest,
   MemoryAnchorV1Schema,
+  MemoryPromoteRequest,
+  type ReplayRepairReviewGovernancePreview,
   type ReplayPlaybookDispatchInput,
   type ReplayPlaybookCandidateInput,
   type ReplayPlaybookCompileInput,
@@ -55,6 +57,7 @@ import {
   type ReplayStepAfterInput,
   type ReplayStepBeforeInput,
 } from "./schemas.js";
+import { buildPromoteMemorySemanticReviewPacket } from "./promote-memory-governance.js";
 import { resolveTenantScope } from "./tenant.js";
 import { summarizeToolResult } from "./tool-result-summary.js";
 import { buildAionisUri } from "./uri.js";
@@ -4372,6 +4375,32 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
     opts.learningProjectionDefaults,
   );
   let learningProjectionResult: ReplayLearningProjectionResult | undefined;
+  let governancePreview: ReplayRepairReviewGovernancePreview | null = null;
+  if (parsed.action === "approve" && reviewState === "approved" && learningProjectionConfig.enabled) {
+    const promoteInput = MemoryPromoteRequest.parse({
+      candidate_node_ids: [finalNodeId ?? source.id],
+      target_kind: "workflow",
+      target_level: "L2",
+      input_text: `promote replay repair review ${parsed.playbook_id} v${finalVersion}`,
+    });
+    governancePreview = {
+      promote_memory: {
+        review_packet: buildPromoteMemorySemanticReviewPacket({
+          input: promoteInput,
+          candidateExamples: [
+            {
+              node_id: finalNodeId ?? source.id,
+              title: source.title ?? null,
+              summary: source.text_summary ?? null,
+              workflow_signature: toStringOrNull((reviewedSlots as any).workflow_signature) ?? null,
+              outcome_status: nextStatus === "disabled" ? "disabled" : "success",
+              success_score: 1,
+            },
+          ],
+        }),
+      },
+    };
+  }
   if (parsed.action !== "approve") {
     learningProjectionResult = {
       triggered: false,
@@ -4488,6 +4517,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
     commit_uri: finalCommitUri,
     commit_hash: finalCommitHash,
     learning_projection_result: learningProjectionResult,
+    governance_preview: governancePreview,
   };
 }
 

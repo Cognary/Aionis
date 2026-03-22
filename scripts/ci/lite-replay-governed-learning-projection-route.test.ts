@@ -395,6 +395,10 @@ test("lite replay repair review applies learning projection inline by default", 
     assert.equal(body.learning_projection_result.status, "applied");
     assert.ok(body.learning_projection_result.generated_episode_node_id);
     assert.ok(body.learning_projection_result.generated_rule_node_id);
+    assert.equal(body.governance_preview?.promote_memory.review_packet.operation, "promote_memory");
+    assert.equal(body.governance_preview?.promote_memory.review_packet.requested_target_kind, "workflow");
+    assert.equal(body.governance_preview?.promote_memory.review_packet.requested_target_level, "L2");
+    assert.equal(body.governance_preview?.promote_memory.review_packet.deterministic_gate.gate_satisfied, true);
 
     const { rows: ruleRows } = await liteWriteStore.findNodes({
       scope: "default",
