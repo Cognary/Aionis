@@ -9,6 +9,7 @@ import {
   type PromoteMemoryCandidateExample,
   evaluatePromoteMemorySemanticReview,
 } from "./promote-memory-governance.js";
+import { runGovernedSemanticPreview } from "./governance-operation-runner.js";
 
 export function runPromoteMemoryGovernancePreview<TPolicyEffect, TDecisionTrace>(args: {
   input: MemoryPromoteInput;
@@ -31,33 +32,19 @@ export function runPromoteMemoryGovernancePreview<TPolicyEffect, TDecisionTrace>
   policy_effect: TPolicyEffect;
   decision_trace: TDecisionTrace;
 } {
-  const reviewPacket = buildPromoteMemorySemanticReviewPacket({
-    input: args.input,
-    candidateExamples: args.candidateExamples,
+  return runGovernedSemanticPreview({
+    buildPacket: () =>
+      buildPromoteMemorySemanticReviewPacket({
+        input: args.input,
+        candidateExamples: args.candidateExamples,
+      }),
+    reviewResult: args.reviewResult ?? null,
+    evaluateAdmissibility: ({ packet, review }) =>
+      evaluatePromoteMemorySemanticReview({
+        packet,
+        review,
+      }),
+    derivePolicyEffect: args.derivePolicyEffect,
+    buildDecisionTrace: args.buildDecisionTrace,
   });
-  const reviewResult = args.reviewResult ?? null;
-  const admissibility = reviewResult
-    ? evaluatePromoteMemorySemanticReview({
-        packet: reviewPacket,
-        review: reviewResult,
-      })
-    : null;
-  const policyEffect = args.derivePolicyEffect({
-    review: reviewResult,
-    admissibility,
-  });
-  const decisionTrace = args.buildDecisionTrace({
-    reviewPacket,
-    reviewResult,
-    admissibility,
-    policyEffect,
-  });
-
-  return {
-    review_packet: reviewPacket,
-    review_result: reviewResult,
-    admissibility,
-    policy_effect: policyEffect,
-    decision_trace: decisionTrace,
-  };
 }

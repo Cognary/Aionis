@@ -34,8 +34,8 @@ import {
 import {
   buildFormPatternSemanticReviewPacket,
   deriveFormPatternSemanticPolicyEffect,
-  evaluateFormPatternSemanticReview,
 } from "./form-pattern-governance.js";
+import { runFormPatternGovernancePreview } from "./form-pattern-governance-shared.js";
 import type {
   EmbeddedExecutionDecisionView,
   EmbeddedMemoryRuntime,
@@ -146,52 +146,37 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
     await Promise.all(sourceNodeIds.map((nodeId) => lookupLiteNodeExample(args.liteWriteStore, args.scope, nodeId)))
   ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
-  const reviewPacket = buildFormPatternSemanticReviewPacket({
-    input,
-    sourceExamples,
-  });
-
-  const reviewResult: MemoryFormPatternSemanticReviewResult | null = args.governanceReview?.review_result ?? null;
-  const admissibility = reviewResult
-    ? evaluateFormPatternSemanticReview({
-        packet: reviewPacket,
-        review: reviewResult,
-      })
-    : null;
-  const policyEffect = deriveFormPatternSemanticPolicyEffect({
-    basePatternState: args.anchor.pattern_state ?? "provisional",
-    review: reviewResult,
-    admissibility,
-  });
-  const stageOrder: ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"] = buildGovernanceTraceStageOrder({
-    reviewSupplied: !!reviewResult,
-    admissibilityEvaluated: !!reviewResult,
-  });
-  const decisionTrace: ToolsFeedbackFormPatternGovernanceDecisionTrace = {
-    trace_version: "form_pattern_governance_trace_v1",
-    review_supplied: !!reviewResult,
-    admissibility_evaluated: !!reviewResult,
-    admissible: admissibility?.admissible ?? null,
-    policy_effect_applies: policyEffect.applies,
-    base_pattern_state: policyEffect.base_pattern_state,
-    effective_pattern_state: policyEffect.effective_pattern_state,
-    runtime_apply_changed_pattern_state: false,
-    stage_order: stageOrder,
-    reason_codes: buildGovernanceReasonCodes({
-      admissibility,
-      policyEffectReasonCode: policyEffect.reason_code,
-      includePolicyEffectReasonCode: !policyEffect.applies,
-    }),
-  };
-
   return {
-    form_pattern: {
-      review_packet: reviewPacket,
-      review_result: reviewResult,
-      admissibility,
-      policy_effect: policyEffect,
-      decision_trace: decisionTrace,
-    },
+    form_pattern: runFormPatternGovernancePreview({
+      input,
+      sourceExamples,
+      reviewResult: args.governanceReview?.review_result ?? null,
+      derivePolicyEffect: ({ review, admissibility }) =>
+        deriveFormPatternSemanticPolicyEffect({
+          basePatternState: args.anchor.pattern_state ?? "provisional",
+          review,
+          admissibility,
+        }),
+      buildDecisionTrace: ({ reviewResult, admissibility, policyEffect }) => ({
+        trace_version: "form_pattern_governance_trace_v1",
+        review_supplied: !!reviewResult,
+        admissibility_evaluated: !!reviewResult,
+        admissible: admissibility?.admissible ?? null,
+        policy_effect_applies: policyEffect.applies,
+        base_pattern_state: policyEffect.base_pattern_state,
+        effective_pattern_state: policyEffect.effective_pattern_state,
+        runtime_apply_changed_pattern_state: false,
+        stage_order: buildGovernanceTraceStageOrder({
+          reviewSupplied: !!reviewResult,
+          admissibilityEvaluated: !!reviewResult,
+        }) as ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"],
+        reason_codes: buildGovernanceReasonCodes({
+          admissibility,
+          policyEffectReasonCode: policyEffect.reason_code,
+          includePolicyEffectReasonCode: !policyEffect.applies,
+        }),
+      }),
+    }),
   };
 }
 

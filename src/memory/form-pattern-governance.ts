@@ -10,7 +10,7 @@ import {
   type ToolsFeedbackFormPatternGovernancePolicyEffect,
 } from "./schemas.js";
 
-type FormPatternSourceExample = {
+export type FormPatternSourceExample = {
   node_id: string;
   title?: string | null;
   summary?: string | null;
