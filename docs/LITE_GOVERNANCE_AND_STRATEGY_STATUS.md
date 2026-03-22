@@ -201,17 +201,21 @@ What is real:
 2. Lite explicitly models admissibility-requiring operations
 3. proposals and admissibility results have stable contract shapes
 4. rehydration already follows the runtime-governed model in product behavior
+5. Lite now has a first internal-only `form_pattern` semantic-review slice where the runtime builds a bounded review packet, accepts a bounded review result, and still keeps final admissibility under deterministic runtime control
 
 Primary code:
 
 1. `src/memory/schemas.ts`
 2. `src/memory/governance.ts`
-3. `scripts/ci/lite-memory-governance-contract.test.ts`
+3. `src/memory/form-pattern-governance.ts`
+4. `scripts/ci/lite-memory-governance-contract.test.ts`
+5. `scripts/ci/lite-form-pattern-governance-contract.test.ts`
 
 What is not yet fully real:
 
 1. the general governed operations are not all exposed as public product routes
-2. the schema family is ahead of the route/product surface
+2. only `form_pattern` has a concrete internal semantic-review slice so far; the rest of the governed operations are still contract-first
+3. the schema family is still ahead of the route/product surface
 
 ## What Is Only Partially Implemented
 

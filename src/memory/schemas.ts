@@ -552,6 +552,45 @@ export const MemoryFormPatternRequest = MemoryGovernedMutationBase.extend({
 
 export type MemoryFormPatternInput = z.infer<typeof MemoryFormPatternRequest>;
 
+export const MemoryFormPatternSemanticReviewExampleSchema = z.object({
+  node_id: z.string().min(1).max(256),
+  title: z.string().min(1).max(200).optional(),
+  summary: z.string().min(1).max(1000).optional(),
+  task_signature: z.string().min(1).max(256).nullable().optional(),
+  error_signature: z.string().min(1).max(256).nullable().optional(),
+  workflow_signature: z.string().min(1).max(256).nullable().optional(),
+  selected_tool: z.string().min(1).max(128).nullable().optional(),
+  outcome_status: z.string().min(1).max(64).nullable().optional(),
+  success_score: z.number().min(0).max(1).nullable().optional(),
+});
+
+export const MemoryFormPatternSemanticReviewPacketSchema = z.object({
+  review_version: z.literal("form_pattern_semantic_review_v1"),
+  operation: z.literal("form_pattern"),
+  target_level: z.literal("L3"),
+  source_count: z.number().int().min(2).max(100),
+  deterministic_gate: z.object({
+    source_count_satisfied: z.boolean(),
+    signature_present: z.boolean(),
+    gate_satisfied: z.boolean(),
+  }),
+  signatures: z.object({
+    task_signature: z.string().min(1).max(256).nullable().optional(),
+    error_signature: z.string().min(1).max(256).nullable().optional(),
+    workflow_signature: z.string().min(1).max(256).nullable().optional(),
+  }),
+  source_examples: z.array(MemoryFormPatternSemanticReviewExampleSchema).max(6),
+});
+
+export type MemoryFormPatternSemanticReviewPacket = z.infer<typeof MemoryFormPatternSemanticReviewPacketSchema>;
+
+export const MemoryFormPatternSemanticReviewResultSchema = z.object({
+  review_version: z.literal("form_pattern_semantic_review_v1"),
+  adjudication: MemoryFormPatternAdjudicationSchema,
+});
+
+export type MemoryFormPatternSemanticReviewResult = z.infer<typeof MemoryFormPatternSemanticReviewResultSchema>;
+
 export const MemoryPayloadRehydrateToolRequest = z.object({
   tenant_id: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
