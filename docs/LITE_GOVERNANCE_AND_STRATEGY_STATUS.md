@@ -203,7 +203,7 @@ What is real:
 4. rehydration already follows the runtime-governed model in product behavior
 5. Lite now has internal-only semantic-review slices for both `form_pattern` and `promote_memory`, where the runtime builds bounded review packets, accepts bounded review results, and still keeps final admissibility under deterministic runtime control
 6. replay-governed repair review now emits a bounded `promote_memory` governance preview on approved learning-projection paths, can optionally evaluate a supplied bounded review result through runtime admissibility, exposes a bounded `policy_effect` preview, allows that policy effect to influence replay learning projection `target_rule_state` in one narrow case (`draft -> shadow`), and now also emits a stable governance `decision_trace` that records the packet/review/admissibility/policy-effect/apply chain for auditability
-7. `tools/feedback` now also has a bounded `form_pattern` governance preview path when pattern-anchor formation has at least two matched source nodes, and that route returns a stable preview packet plus a preview-only decision trace without changing pattern-anchor write behavior
+7. `tools/feedback` now also has a bounded `form_pattern` governance preview path when pattern-anchor formation has at least two matched source nodes, and that route can now optionally accept a bounded review result, evaluate runtime admissibility, and return a stable preview packet, admissibility result, and decision trace without changing pattern-anchor write behavior
 
 Primary code:
 

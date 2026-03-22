@@ -1260,6 +1260,14 @@ export const ToolsFeedbackGovernancePreviewSchema = z.object({
 
 export type ToolsFeedbackGovernancePreview = z.infer<typeof ToolsFeedbackGovernancePreviewSchema>;
 
+export const ToolsFeedbackGovernanceInputSchema = z.object({
+  form_pattern: z.object({
+    review_result: MemoryFormPatternSemanticReviewResultSchema,
+  }),
+}).passthrough();
+
+export type ToolsFeedbackGovernanceInput = z.infer<typeof ToolsFeedbackGovernanceInputSchema>;
+
 export const ToolsFeedbackResponseSchema = z.object({
   ok: z.literal(true),
   scope: z.string(),
@@ -1713,6 +1721,7 @@ export const ToolsFeedbackRequest = z
     note: z.string().min(1).optional(),
     input_text: z.string().min(1).optional(),
     input_sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    governance_review: ToolsFeedbackGovernanceInputSchema.optional(),
   })
   .refine((v) => !!v.input_text || !!v.input_sha256, { message: "must set input_text or input_sha256" });
 

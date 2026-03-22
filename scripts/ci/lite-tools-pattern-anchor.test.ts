@@ -581,6 +581,167 @@ test("positive tools feedback with multiple matched rule sources exposes form_pa
   }
 });
 
+test("tools feedback form_pattern governance preview evaluates admitted review results", async () => {
+  const dbPath = tmpDbPath("pattern-anchor-governance-admissible");
+  const { liteWriteStore } = await seedActiveRules(dbPath, ["edit", "edit"]);
+  const runId = randomUUID();
+  const context = {
+    task_kind: "repair_export",
+    goal: "repair export failure in node tests",
+    error: {
+      signature: "node-export-mismatch",
+    },
+  };
+  try {
+    const selection = await selectTools(null, {
+      tenant_id: "default",
+      scope: "default",
+      run_id: runId,
+      context,
+      candidates: ["bash", "edit", "test"],
+      include_shadow: false,
+      rules_limit: 20,
+      strict: true,
+      reorder_candidates: false,
+    }, "default", "default", {
+      liteWriteStore,
+    });
+
+    const feedback = await liteWriteStore.withTx(() =>
+      toolSelectionFeedback(null, {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: runId,
+        decision_id: selection.decision.decision_id,
+        outcome: "positive",
+        context,
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Edit-based repair succeeded with high-confidence grouped evidence",
+        input_text: "repair export failure in node tests",
+        governance_review: {
+          form_pattern: {
+            review_result: {
+              review_version: "form_pattern_semantic_review_v1",
+              adjudication: {
+                operation: "form_pattern",
+                disposition: "recommend",
+                target_kind: "pattern",
+                target_level: "L3",
+                reason: "Grouped repair traces share one stable reusable pattern",
+                confidence: 0.89,
+              },
+            },
+          },
+        },
+      }, "default", "default", {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        embedder: FakeEmbeddingProvider,
+        liteWriteStore,
+      }),
+    );
+
+    const parsed = ToolsFeedbackResponseSchema.parse(feedback);
+    assert.equal(parsed.governance_preview?.form_pattern.review_result?.adjudication.confidence, 0.89);
+    assert.equal(parsed.governance_preview?.form_pattern.admissibility?.admissible, true);
+    assert.equal(parsed.governance_preview?.form_pattern.admissibility?.accepted_mutation_count, 1);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.review_supplied, true);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissibility_evaluated, true);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissible, true);
+    assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.stage_order, [
+      "review_packet_built",
+      "review_result_received",
+      "admissibility_evaluated",
+    ]);
+    assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.reason_codes, []);
+  } finally {
+    await liteWriteStore.close();
+  }
+});
+
+test("tools feedback form_pattern governance preview rejects low-confidence review results", async () => {
+  const dbPath = tmpDbPath("pattern-anchor-governance-rejected");
+  const { liteWriteStore } = await seedActiveRules(dbPath, ["edit", "edit"]);
+  const runId = randomUUID();
+  const context = {
+    task_kind: "repair_export",
+    goal: "repair export failure in node tests",
+    error: {
+      signature: "node-export-mismatch",
+    },
+  };
+  try {
+    const selection = await selectTools(null, {
+      tenant_id: "default",
+      scope: "default",
+      run_id: runId,
+      context,
+      candidates: ["bash", "edit", "test"],
+      include_shadow: false,
+      rules_limit: 20,
+      strict: true,
+      reorder_candidates: false,
+    }, "default", "default", {
+      liteWriteStore,
+    });
+
+    const feedback = await liteWriteStore.withTx(() =>
+      toolSelectionFeedback(null, {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: runId,
+        decision_id: selection.decision.decision_id,
+        outcome: "positive",
+        context,
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Edit-based repair produced uncertain grouped evidence",
+        input_text: "repair export failure in node tests",
+        governance_review: {
+          form_pattern: {
+            review_result: {
+              review_version: "form_pattern_semantic_review_v1",
+              adjudication: {
+                operation: "form_pattern",
+                disposition: "recommend",
+                target_kind: "pattern",
+                target_level: "L3",
+                reason: "This might be the same pattern",
+                confidence: 0.55,
+              },
+            },
+          },
+        },
+      }, "default", "default", {
+        maxTextLen: 10_000,
+        piiRedaction: false,
+        embedder: FakeEmbeddingProvider,
+        liteWriteStore,
+      }),
+    );
+
+    const parsed = ToolsFeedbackResponseSchema.parse(feedback);
+    assert.equal(parsed.governance_preview?.form_pattern.admissibility?.admissible, false);
+    assert.deepEqual(parsed.governance_preview?.form_pattern.admissibility?.reason_codes, ["confidence_too_low"]);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.review_supplied, true);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissibility_evaluated, true);
+    assert.equal(parsed.governance_preview?.form_pattern.decision_trace.admissible, false);
+    assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.stage_order, [
+      "review_packet_built",
+      "review_result_received",
+      "admissibility_evaluated",
+    ]);
+    assert.deepEqual(parsed.governance_preview?.form_pattern.decision_trace.reason_codes, ["confidence_too_low"]);
+  } finally {
+    await liteWriteStore.close();
+  }
+});
+
 test("selectTools does not trust provisional pattern anchors after the source rule is disabled", async () => {
   const dbPath = tmpDbPath("pattern-selector");
   const { liteWriteStore, ruleNodeId } = await seedActiveRule(dbPath);

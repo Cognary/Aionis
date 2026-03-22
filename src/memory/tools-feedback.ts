@@ -15,7 +15,9 @@ import {
   MemoryFormPatternRequest,
   ToolsFeedbackRequest,
   ToolsFeedbackResponseSchema,
+  type MemoryFormPatternSemanticReviewResult,
   type MemoryAnchorV1,
+  type ToolsFeedbackGovernanceInput,
   type ToolsFeedbackGovernancePreview,
   type ToolsFeedbackResponse,
 } from "./schemas.js";
@@ -23,7 +25,7 @@ import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
 import { writeToolsDecisionPatternAnchor } from "./tools-pattern-anchor.js";
-import { buildFormPatternSemanticReviewPacket } from "./form-pattern-governance.js";
+import { buildFormPatternSemanticReviewPacket, evaluateFormPatternSemanticReview } from "./form-pattern-governance.js";
 import type {
   EmbeddedExecutionDecisionView,
   EmbeddedMemoryRuntime,
@@ -116,6 +118,7 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
   inputSha256: string;
   sourceRuleIds: string[];
   anchor: MemoryAnchorV1;
+  governanceReview?: ToolsFeedbackGovernanceInput["form_pattern"] | null;
 }): Promise<ToolsFeedbackGovernancePreview | null> {
   const sourceNodeIds = uniqueRuleIds(args.sourceRuleIds).slice(0, 6);
   if (sourceNodeIds.length < 2) return null;
@@ -138,16 +141,31 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
     sourceExamples,
   });
 
+  const reviewResult: MemoryFormPatternSemanticReviewResult | null = args.governanceReview?.review_result ?? null;
+  const admissibility = reviewResult
+    ? evaluateFormPatternSemanticReview({
+        packet: reviewPacket,
+        review: reviewResult,
+      })
+    : null;
+  const stageOrder: Array<"review_packet_built" | "review_result_received" | "admissibility_evaluated"> = ["review_packet_built"];
+  if (reviewResult) {
+    stageOrder.push("review_result_received");
+    stageOrder.push("admissibility_evaluated");
+  }
+
   return {
     form_pattern: {
       review_packet: reviewPacket,
+      review_result: reviewResult,
+      admissibility,
       decision_trace: {
         trace_version: "form_pattern_governance_trace_v1",
-        review_supplied: false,
-        admissibility_evaluated: false,
-        admissible: null,
-        stage_order: ["review_packet_built"],
-        reason_codes: [],
+        review_supplied: !!reviewResult,
+        admissibility_evaluated: !!reviewResult,
+        admissible: admissibility?.admissible ?? null,
+        stage_order: stageOrder,
+        reason_codes: admissibility?.reason_codes ?? [],
       },
     },
   };
@@ -599,7 +617,13 @@ export async function toolSelectionFeedback(
           inputSha256: inputSha,
           sourceRuleIds: uniq,
           anchor: anchorOut.anchor,
+          governanceReview: parsed.governance_review?.form_pattern ?? null,
         });
+        if (parsed.governance_review?.form_pattern?.review_result && !governancePreview) {
+          badRequest("form_pattern_governance_preview_unavailable", "form_pattern governance review requires at least two source nodes", {
+            source_rule_count: uniq.length,
+          });
+        }
       }
     }
 
