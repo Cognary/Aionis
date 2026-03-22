@@ -25,10 +25,7 @@ import {
   type ReplayLearningProjectionResolvedConfig,
   type ReplayLearningProjectionResult,
 } from "./replay-learning.js";
-import {
-  buildGovernanceReasonCodes,
-  buildGovernanceTraceStageOrder,
-} from "./governance-shared.js";
+import { buildGovernanceDecisionTraceBase } from "./governance-shared.js";
 import { buildReplayCostSignals } from "./cost-signals.js";
 import {
   ReplayPlaybookDispatchRequest,
@@ -1092,33 +1089,30 @@ function buildReplayGovernanceDecisionTrace(args: {
   policyEffect: ReplayRepairReviewGovernancePreview["promote_memory"]["policy_effect"] | null;
   effectiveConfig: ReplayLearningProjectionResolvedConfig;
 }): ReplayRepairReviewGovernanceDecisionTrace {
-  const reviewSupplied = !!args.reviewResult;
   const admissibility = args.admissibility ?? null;
   const policyEffect = args.policyEffect ?? null;
-  const stageOrder: ReplayRepairReviewGovernanceDecisionTrace["stage_order"] = buildGovernanceTraceStageOrder({
-    reviewSupplied,
-    admissibilityEvaluated: admissibility != null,
+  const baseTargetRuleState = policyEffect?.base_target_rule_state ?? args.effectiveConfig.target_rule_state;
+  const effectiveTargetRuleState = args.effectiveConfig.target_rule_state;
+  const traceBase = buildGovernanceDecisionTraceBase({
+    reviewResult: args.reviewResult,
+    admissibility,
+    policyEffectApplies: policyEffect?.applies ?? false,
+    policyEffectReasonCode: policyEffect?.reason_code ?? null,
+    includePolicyEffectReasonCode: true,
     runtimePolicyApplied: true,
   });
 
-  const baseTargetRuleState = policyEffect?.base_target_rule_state ?? args.effectiveConfig.target_rule_state;
-  const effectiveTargetRuleState = args.effectiveConfig.target_rule_state;
-
   return {
     trace_version: "replay_governance_trace_v1",
-    review_supplied: reviewSupplied,
-    admissibility_evaluated: admissibility != null,
-    admissible: admissibility?.admissible ?? null,
-    policy_effect_applies: policyEffect?.applies ?? false,
+    review_supplied: traceBase.review_supplied,
+    admissibility_evaluated: traceBase.admissibility_evaluated,
+    admissible: traceBase.admissible,
+    policy_effect_applies: traceBase.policy_effect_applies,
     base_target_rule_state: baseTargetRuleState,
     effective_target_rule_state: effectiveTargetRuleState,
     runtime_apply_changed_target_rule_state: baseTargetRuleState !== effectiveTargetRuleState,
-    stage_order: stageOrder,
-    reason_codes: buildGovernanceReasonCodes({
-      admissibility,
-      policyEffectReasonCode: policyEffect?.reason_code ?? null,
-      includePolicyEffectReasonCode: true,
-    }),
+    stage_order: traceBase.stage_order as ReplayRepairReviewGovernanceDecisionTrace["stage_order"],
+    reason_codes: traceBase.reason_codes,
   };
 }
 

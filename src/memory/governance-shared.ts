@@ -37,3 +37,38 @@ export function appendGovernanceRuntimePolicyAppliedStage(stages: GovernanceTrac
     ? stages
     : [...stages, "runtime_policy_applied"];
 }
+
+export function buildGovernanceDecisionTraceBase(args: {
+  reviewResult: unknown | null;
+  admissibility: MemoryAdmissibilityResult | null;
+  policyEffectApplies: boolean;
+  policyEffectReasonCode?: string | null;
+  includePolicyEffectReasonCode: boolean;
+  runtimePolicyApplied?: boolean;
+}): {
+  review_supplied: boolean;
+  admissibility_evaluated: boolean;
+  admissible: boolean | null;
+  policy_effect_applies: boolean;
+  stage_order: GovernanceTraceStage[];
+  reason_codes: string[];
+} {
+  const reviewSupplied = args.reviewResult != null;
+  const admissibilityEvaluated = args.admissibility != null;
+  return {
+    review_supplied: reviewSupplied,
+    admissibility_evaluated: admissibilityEvaluated,
+    admissible: args.admissibility?.admissible ?? null,
+    policy_effect_applies: args.policyEffectApplies,
+    stage_order: buildGovernanceTraceStageOrder({
+      reviewSupplied,
+      admissibilityEvaluated,
+      runtimePolicyApplied: args.runtimePolicyApplied,
+    }),
+    reason_codes: buildGovernanceReasonCodes({
+      admissibility: args.admissibility,
+      policyEffectReasonCode: args.policyEffectReasonCode ?? null,
+      includePolicyEffectReasonCode: args.includePolicyEffectReasonCode,
+    }),
+  };
+}

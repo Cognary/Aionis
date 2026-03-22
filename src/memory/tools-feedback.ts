@@ -27,9 +27,8 @@ import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
 import { writeToolsDecisionPatternAnchor } from "./tools-pattern-anchor.js";
 import {
+  buildGovernanceDecisionTraceBase,
   appendGovernanceRuntimePolicyAppliedStage,
-  buildGovernanceReasonCodes,
-  buildGovernanceTraceStageOrder,
 } from "./governance-shared.js";
 import {
   buildFormPatternSemanticReviewPacket,
@@ -158,23 +157,31 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
           admissibility,
         }),
       buildDecisionTrace: ({ reviewResult, admissibility, policyEffect }) => ({
-        trace_version: "form_pattern_governance_trace_v1",
-        review_supplied: !!reviewResult,
-        admissibility_evaluated: !!reviewResult,
-        admissible: admissibility?.admissible ?? null,
-        policy_effect_applies: policyEffect.applies,
-        base_pattern_state: policyEffect.base_pattern_state,
-        effective_pattern_state: policyEffect.effective_pattern_state,
-        runtime_apply_changed_pattern_state: false,
-        stage_order: buildGovernanceTraceStageOrder({
-          reviewSupplied: !!reviewResult,
-          admissibilityEvaluated: !!reviewResult,
-        }) as ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"],
-        reason_codes: buildGovernanceReasonCodes({
+        ...buildGovernanceDecisionTraceBase({
+          reviewResult,
           admissibility,
+          policyEffectApplies: policyEffect.applies,
           policyEffectReasonCode: policyEffect.reason_code,
           includePolicyEffectReasonCode: !policyEffect.applies,
         }),
+        trace_version: "form_pattern_governance_trace_v1",
+        base_pattern_state: policyEffect.base_pattern_state,
+        effective_pattern_state: policyEffect.effective_pattern_state,
+        runtime_apply_changed_pattern_state: false,
+        stage_order: buildGovernanceDecisionTraceBase({
+          reviewResult,
+          admissibility,
+          policyEffectApplies: policyEffect.applies,
+          policyEffectReasonCode: policyEffect.reason_code,
+          includePolicyEffectReasonCode: !policyEffect.applies,
+        }).stage_order as ToolsFeedbackFormPatternGovernanceDecisionTrace["stage_order"],
+        reason_codes: buildGovernanceDecisionTraceBase({
+          reviewResult,
+          admissibility,
+          policyEffectApplies: policyEffect.applies,
+          policyEffectReasonCode: policyEffect.reason_code,
+          includePolicyEffectReasonCode: !policyEffect.applies,
+        }).reason_codes,
       }),
     }),
   };

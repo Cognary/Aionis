@@ -7,7 +7,7 @@ import {
   type WorkflowWriteProjectionGovernanceDecisionTrace,
   type WorkflowWriteProjectionGovernancePolicyEffect,
 } from "./schemas.js";
-import { buildGovernanceReasonCodes, buildGovernanceTraceStageOrder } from "./governance-shared.js";
+import { buildGovernanceDecisionTraceBase } from "./governance-shared.js";
 import {
   type PromoteMemoryCandidateExample,
 } from "./promote-memory-governance.js";
@@ -120,22 +120,30 @@ export function buildWorkflowPromotionGovernancePreview(args: {
           admissibility,
         }),
       buildDecisionTrace: ({ reviewResult, admissibility, policyEffect }) => ({
-        trace_version: "workflow_promotion_governance_trace_v1",
-        review_supplied: !!reviewResult,
-        admissibility_evaluated: admissibility != null,
-        admissible: admissibility?.admissible ?? null,
-        policy_effect_applies: policyEffect.applies,
-        base_promotion_state: "candidate",
-        effective_promotion_state: policyEffect.effective_promotion_state,
-        stage_order: buildGovernanceTraceStageOrder({
-          reviewSupplied: !!reviewResult,
-          admissibilityEvaluated: admissibility != null,
-        }) as WorkflowWriteProjectionGovernanceDecisionTrace["stage_order"],
-        reason_codes: buildGovernanceReasonCodes({
+        ...buildGovernanceDecisionTraceBase({
+          reviewResult,
           admissibility,
+          policyEffectApplies: policyEffect.applies,
           policyEffectReasonCode: policyEffect.reason_code,
           includePolicyEffectReasonCode: !policyEffect.applies,
         }),
+        trace_version: "workflow_promotion_governance_trace_v1",
+        base_promotion_state: "candidate",
+        effective_promotion_state: policyEffect.effective_promotion_state,
+        stage_order: buildGovernanceDecisionTraceBase({
+          reviewResult,
+          admissibility,
+          policyEffectApplies: policyEffect.applies,
+          policyEffectReasonCode: policyEffect.reason_code,
+          includePolicyEffectReasonCode: !policyEffect.applies,
+        }).stage_order as WorkflowWriteProjectionGovernanceDecisionTrace["stage_order"],
+        reason_codes: buildGovernanceDecisionTraceBase({
+          reviewResult,
+          admissibility,
+          policyEffectApplies: policyEffect.applies,
+          policyEffectReasonCode: policyEffect.reason_code,
+          includePolicyEffectReasonCode: !policyEffect.applies,
+        }).reason_codes,
       }),
     }),
   };
