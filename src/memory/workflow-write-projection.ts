@@ -306,7 +306,58 @@ export function assessWorkflowProjectionSourceNode(source: WriteProjectionSource
 }
 
 export function countDistinctWorkflowObservations(rows: Array<{ id: string; client_id?: string | null }>): number {
-  return Array.from(new Set(rows.map((row) => row.client_id ?? row.id))).length;
+  return Array.from(new Set(rows.map((row) => deriveWorkflowObservationIdentity(row)))).length;
+}
+
+function deriveWorkflowObservationIdentity(row: {
+  id: string;
+  client_id?: string | null;
+  slots?: Record<string, unknown> | null;
+}): string {
+  const projection = asRecord(asRecord(row.slots)?.workflow_write_projection);
+  return firstString(projection?.source_client_id)
+    ?? firstString(projection?.source_node_id)
+    ?? firstString(row.client_id)
+    ?? row.id;
+}
+
+async function findLinkedWorkflowProjection(args: {
+  liteWriteStore: LiteWorkflowProjectionStore;
+  scope: string;
+  source: WriteProjectionSourceNode;
+  consumerAgentId?: string | null;
+  consumerTeamId?: string | null;
+}): Promise<boolean> {
+  const queries: Array<Record<string, unknown>> = [];
+  if (args.source.client_id) {
+    queries.push({
+      workflow_write_projection: {
+        source_client_id: args.source.client_id,
+      },
+    });
+  }
+  queries.push({
+    workflow_write_projection: {
+      source_node_id: args.source.id,
+    },
+  });
+
+  for (const type of ["event", "procedure"] as const) {
+    for (const slotsContains of queries) {
+      const result = await args.liteWriteStore.findNodes({
+        scope: args.scope,
+        type,
+        slotsContains,
+        consumerAgentId: args.consumerAgentId,
+        consumerTeamId: args.consumerTeamId,
+        limit: 20,
+        offset: 0,
+      });
+      if (result.rows.length > 0) return true;
+    }
+  }
+
+  return false;
 }
 
 export async function explainWorkflowProjectionForSourceNode(args: {
@@ -344,61 +395,13 @@ export async function explainWorkflowProjectionForSourceNode(args: {
     offset: 0,
   });
   const existingProjection = await args.liteWriteStore.findLatestNodeByClientId(args.scope, "event", projectionClientId);
-  const linkedProjectionCandidates = await Promise.all([
-    args.liteWriteStore.findNodes({
-      scope: args.scope,
-      type: "event",
-      slotsContains: {
-        workflow_write_projection: {
-          source_client_id: args.source.client_id ?? null,
-        },
-      },
-      consumerAgentId: ownerAgentId,
-      consumerTeamId: ownerTeamId,
-      limit: 20,
-      offset: 0,
-    }),
-    args.liteWriteStore.findNodes({
-      scope: args.scope,
-      type: "event",
-      slotsContains: {
-        workflow_write_projection: {
-          source_node_id: args.source.id,
-        },
-      },
-      consumerAgentId: ownerAgentId,
-      consumerTeamId: ownerTeamId,
-      limit: 20,
-      offset: 0,
-    }),
-    args.liteWriteStore.findNodes({
-      scope: args.scope,
-      type: "procedure",
-      slotsContains: {
-        workflow_write_projection: {
-          source_client_id: args.source.client_id ?? null,
-        },
-      },
-      consumerAgentId: ownerAgentId,
-      consumerTeamId: ownerTeamId,
-      limit: 20,
-      offset: 0,
-    }),
-    args.liteWriteStore.findNodes({
-      scope: args.scope,
-      type: "procedure",
-      slotsContains: {
-        workflow_write_projection: {
-          source_node_id: args.source.id,
-        },
-      },
-      consumerAgentId: ownerAgentId,
-      consumerTeamId: ownerTeamId,
-      limit: 20,
-      offset: 0,
-    }),
-  ]);
-  const linkedProjection = linkedProjectionCandidates.some((result) => result.rows.length > 0);
+  const linkedProjection = await findLinkedWorkflowProjection({
+    liteWriteStore: args.liteWriteStore,
+    scope: args.scope,
+    source: args.source,
+    consumerAgentId: ownerAgentId,
+    consumerTeamId: ownerTeamId,
+  });
 
   if (existingProjection || linkedProjection) {
     return {
@@ -533,6 +536,14 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
 
     const existingProjection = await args.liteWriteStore.findLatestNodeByClientId(args.scope, "event", projectionClientId);
     if (existingProjection) continue;
+    const linkedProjection = await findLinkedWorkflowProjection({
+      liteWriteStore: args.liteWriteStore,
+      scope: args.scope,
+      source,
+      consumerAgentId: ownerAgentId,
+      consumerTeamId: ownerTeamId,
+    });
+    if (linkedProjection) continue;
 
     const existingCandidates = await args.liteWriteStore.findExecutionNativeNodes({
       scope: args.scope,

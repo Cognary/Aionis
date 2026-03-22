@@ -171,6 +171,7 @@ Current runtime reality:
 20. Lite now requires `3` distinct positive runs before a pattern becomes `trusted`, and contested recovery now requires `2` fresh post-contest runs before revalidation
 21. selector reuse now applies deterministic task-affinity weighting, so nearby cross-task recall can remain visible without inheriting flat trusted reuse
 22. selector and execution introspection route contracts now expose persisted pattern `trust_hardening` metadata directly, so operator/debug and benchmark surfaces no longer need to infer current gate and revalidation semantics indirectly from internal anchor payloads
+23. the generic workflow producer now has an explicit source-provenance observation contract, so equivalent continuity payloads stay in one workflow family and repeated writes from the same underlying source no longer inflate workflow maturity through duplicate projection rows
 
 Primary code:
 
