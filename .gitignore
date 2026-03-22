@@ -1,6 +1,8 @@
 .DS_Store
 .env
 .env.bak*
+.mcp.json
+tmp/
 node_modules
 **/node_modules
 .vscode-test

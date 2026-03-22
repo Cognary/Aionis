@@ -81,8 +81,10 @@ The benchmark baseline currently covers:
 Related report:
 
 1. [docs/LITE_REAL_TASK_BENCHMARK_REPORT.md](./LITE_REAL_TASK_BENCHMARK_REPORT.md)
-2. JSON artifact: `tmp/lite-benchmark-0.1.0.json`
-3. Markdown artifact: `tmp/lite-benchmark-0.1.0.md`
+2. Reproducible JSON artifact path: `tmp/lite-benchmark-0.1.0.json`
+3. Reproducible Markdown artifact path: `tmp/lite-benchmark-0.1.0.md`
+
+These benchmark artifacts are generated locally during release validation and are not committed to the repository.
 
 ## Current Readiness Judgment
 
