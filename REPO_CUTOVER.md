@@ -29,7 +29,7 @@ Current shrink status:
 1. `sdk_demo` direct residual runtime route targets are now **0**
 2. the public demo path no longer depends directly on the former audited residual route targets
 3. the next execution problem is no longer route-surface disentangling
-4. it is now **transitive source-tree shrinkage**
+4. the transitive public `src/` keep set has now also converged to `move candidates: 0`
 
 ## Recommended Direction
 
@@ -111,15 +111,15 @@ Phase 2 status:
 1. remove or replace the no-longer-needed deep runtime directories from public
 2. keep only the demo-capable public shell plus SDK/docs/examples
 
-Current Phase 3 entry condition:
+Current Phase 3 result:
 
 1. `npm run public:keep-manifest` computes the transitive `src/` keep set from `src/index-sdk-demo.ts`
 2. current manifest result:
-   - `src files: 164`
-   - `keep files: 158`
-   - `move candidates: 6`
-3. the first safe move batch is therefore narrow, not broad
-4. that first safe move batch has now been executed in public shrink
+   - `src files: 141`
+   - `keep files: 141`
+   - `move candidates: 0`
+3. the public repo no longer has outstanding transitive `src/` shrink candidates under the current `sdk_demo` root
+4. future runtime moat work should therefore land in `runtime`, not re-expand `origin`
 
 ## Validation
 
@@ -129,3 +129,4 @@ After cutover:
 2. `Cognary/Aionis` should still support a lightweight quickstart demo path
 3. `Cognary/Aionis-runtime` should be the main place where runtime internals evolve
 4. new moat-bearing runtime work should land in `runtime`, not `origin`
+5. `npm run -s test:lite` now includes a keep-manifest contract gate so public shrink regression fails fast

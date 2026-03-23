@@ -157,7 +157,7 @@ Current runtime reality:
 1. replay-learning candidates can progress to stable workflow guidance
 2. `/v1/memory/write` continuity writes can project governed workflow memory
 3. lightweight handoff-style continuity can enter the same workflow producer
-4. `handoff/store` and `memory/events` can flow through the generic workflow producer when continuity requirements are satisfied
+4. private-runtime continuity sources such as `handoff/store` and `memory/events` can still flow through the generic workflow producer, but they are no longer part of the public SDK demo surface
 5. the continuity-backed producer family shares one projected-write commit pipeline
 6. source-provenance and distinct-observation semantics are contract-tested
 7. workflow family identity now stays aligned across packet continuity and lightweight handoff continuity
@@ -170,7 +170,6 @@ Primary code:
 3. `src/memory/workflow-candidate-aggregation.ts`
 4. `src/memory/workflow-promotion-governance.ts`
 5. `scripts/ci/lite-memory-write-workflow-projection-route.test.ts`
-6. `scripts/ci/lite-session-event-workflow-projection-route.test.ts`
 
 ### 6. Runtime-Governed Adjudication On Live Paths
 

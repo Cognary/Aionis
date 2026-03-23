@@ -70,10 +70,10 @@ This is one of Lite's `Supported (Subset)` surfaces. The following routes are pr
 
 | Method | Path | Status | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/v1/memory/sessions` | Supported | Create a local session graph root. |
-| `GET` | `/v1/memory/sessions` | Supported | List sessions. |
-| `POST` | `/v1/memory/events` | Supported | Append a session event. |
-| `GET` | `/v1/memory/sessions/:session_id/events` | Supported | List events for a session. |
+| `POST` | `/v1/memory/sessions` | Unsupported in public Lite demo | Session graph routes have moved out of the public SDK demo surface. |
+| `GET` | `/v1/memory/sessions` | Unsupported in public Lite demo | Session graph routes have moved out of the public SDK demo surface. |
+| `POST` | `/v1/memory/events` | Unsupported in public Lite demo | Session-event writes are no longer part of the public SDK demo surface. |
+| `GET` | `/v1/memory/sessions/:session_id/events` | Unsupported in public Lite demo | Session graph routes have moved out of the public SDK demo surface. |
 | `POST` | `/v1/memory/packs/export` | Supported | Local pack export; no admin token required in Lite. |
 | `POST` | `/v1/memory/packs/import` | Supported | Local pack import; no admin token required in Lite. |
 | `POST` | `/v1/memory/find` | Supported | Local graph/search lookup. |

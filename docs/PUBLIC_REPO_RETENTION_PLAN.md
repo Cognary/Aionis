@@ -49,12 +49,12 @@ without keeping the full private runtime development surface public indefinitely
 
 ## Practical Problem
 
-Right now, the public demo shell still depends on the full root runtime tree.
+The public demo shell now depends only on the converged `sdk_demo` keep set, not the old full runtime wrappers.
 
 That means:
 
-1. `src/` is currently still public by dependency, not by ideal boundary
-2. a safe public shrink needs a replacement demo/runtime layer first
+1. the public `src/` tree is now defined by an explicit keep-manifest rather than by leftover full-runtime reachability
+2. future shrink risk is no longer "can we untangle this route?" but "do we accidentally reintroduce private runtime surfaces?"
 
 ## Recommended Next Execution Slice
 
@@ -79,8 +79,8 @@ Use:
 
 Current baseline:
 
-1. `src files: 164`
-2. `keep files: 158`
-3. `move candidates: 6`
+1. `src files: 141`
+2. `keep files: 141`
+3. `move candidates: 0`
 
-The first narrow migration batch has now been executed. The next public shrink slices should recompute the manifest and continue from the new baseline instead of reusing the original candidate list.
+The public shrink line has now converged under the current `sdk_demo` root. The next step is not another broad delete sweep; it is keeping this manifest stable while new runtime moat work moves to `Cognary/Aionis-runtime`.

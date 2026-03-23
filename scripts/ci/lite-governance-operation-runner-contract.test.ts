@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { runGovernedSemanticPreview } from "../../src/memory/governance-operation-runner.ts";
 
-test("generic governed operation runner keeps packet-only preview stable without review", () => {
-  const preview = runGovernedSemanticPreview({
+test("generic governed operation runner keeps packet-only preview stable without review", async () => {
+  const preview = await runGovernedSemanticPreview({
     buildPacket: () => ({ operation: "x", gate: true }),
     derivePolicyEffect: ({ review, admissibility }) => ({
       applies: false,
@@ -37,8 +37,8 @@ test("generic governed operation runner keeps packet-only preview stable without
   });
 });
 
-test("generic governed operation runner evaluates admissibility before policy derivation", () => {
-  const preview = runGovernedSemanticPreview({
+test("generic governed operation runner evaluates admissibility before policy derivation", async () => {
+  const preview = await runGovernedSemanticPreview({
     buildPacket: () => ({ operation: "x", gate: true }),
     reviewResult: { disposition: "recommend" },
     evaluateAdmissibility: ({ packet, review }) => ({
@@ -74,8 +74,8 @@ test("generic governed operation runner evaluates admissibility before policy de
   });
 });
 
-test("generic governed operation runner can resolve review results from an internal provider", () => {
-  const preview = runGovernedSemanticPreview({
+test("generic governed operation runner can resolve review results from an internal provider", async () => {
+  const preview = await runGovernedSemanticPreview({
     buildPacket: () => ({ operation: "x", gate: true }),
     resolveReviewResult: ({ reviewPacket, suppliedReviewResult }) => {
       assert.equal(suppliedReviewResult, null);
@@ -114,8 +114,8 @@ test("generic governed operation runner can resolve review results from an inter
   });
 });
 
-test("generic governed operation runner preserves explicit review result over provider output", () => {
-  const preview = runGovernedSemanticPreview({
+test("generic governed operation runner preserves explicit review result over provider output", async () => {
+  const preview = await runGovernedSemanticPreview({
     buildPacket: () => ({ operation: "x", gate: true }),
     reviewResult: { disposition: "reject" },
     resolveReviewResult: () => ({ disposition: "recommend" }),
