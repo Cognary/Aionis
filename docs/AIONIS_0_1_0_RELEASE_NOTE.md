@@ -35,6 +35,12 @@ The `0.1.0` baseline now includes:
 2. a strong fit for advanced users, agent builders, IDE and MCP integrations, and local runtime experiments
 3. a product that is closer to a credible `1.0` baseline for local execution memory than to a generic memory beta
 
+The current outward-facing packaging direction beyond `0.1.0` is:
+
+1. `@aionis/sdk` as the primary open developer surface
+2. runtime contracts as the stable integration boundary
+3. deeper runtime learning/governance implementation as a layer that can remain selectively distributed
+
 `Aionis 0.1.0` should not currently be understood as:
 
 1. a multi-user control plane

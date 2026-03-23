@@ -2,6 +2,8 @@
 
 First-party SDK for the Aionis execution-memory runtime.
 
+This package is meant to stay as the primary open developer surface for Aionis, even when stronger runtime learning and governance layers are distributed more selectively.
+
 Install:
 
 ```bash
@@ -60,6 +62,7 @@ Quickstart docs:
 1. [SDK Quickstart](/Volumes/ziel/Aionisgo/docs/SDK_QUICKSTART.md)
 2. [SDK Publishing Guide](/Volumes/ziel/Aionisgo/docs/SDK_PUBLISHING.md)
 3. [Repository SDK examples](/Volumes/ziel/Aionisgo/examples/sdk/README.md)
+4. [Open-core boundary](/Volumes/ziel/Aionisgo/docs/OPEN_CORE_BOUNDARY.md)
 
 This package is intentionally small at first.
 It wraps the most stable route-level product surfaces without exposing every internal runtime capability.

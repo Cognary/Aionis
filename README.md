@@ -10,6 +10,12 @@ Public product direction:
 2. Aionis SDK
 3. adapters and integrations later
 
+Planned distribution boundary:
+
+1. `@aionis/sdk` is the primary open developer surface
+2. runtime contracts and integration boundaries stay explicit
+3. the strongest runtime learning/governance layers can remain layered and selectively distributed
+
 SDK entry points:
 
 1. [packages/sdk/README.md](/Volumes/ziel/Aionisgo/packages/sdk/README.md)
@@ -27,6 +33,7 @@ Important product boundary:
 1. MCP, Codex, IDE, and host integrations are adapter layers
 2. they should not be treated as the primary Aionis identity
 3. the primary identity is the runtime plus SDK
+4. the public adoption wedge is the SDK, not full exposure of every runtime-internal capability
 
 Current repository focus:
 
@@ -92,6 +99,12 @@ It has already been validated against a real external governance backend in shad
 
 The next public-facing step for Aionis is a first-party SDK.
 
+Recommended release stance:
+
+1. keep `@aionis/sdk` open and easy to adopt
+2. keep runtime contracts explicit
+3. treat deeper runtime learning/governance implementation as a controlled layer, not a mandatory open-source surface
+
 Recommended SDK v1 surface:
 
 1. `memory.write`
@@ -114,6 +127,7 @@ For the current SDK release design, see:
 1. [docs/plans/2026-03-23-aionis-sdk-release-design.md](/Volumes/ziel/Aionisgo/docs/plans/2026-03-23-aionis-sdk-release-design.md)
 2. [docs/SDK_QUICKSTART.md](/Volumes/ziel/Aionisgo/docs/SDK_QUICKSTART.md)
 3. [docs/SDK_PUBLISHING.md](/Volumes/ziel/Aionisgo/docs/SDK_PUBLISHING.md)
+4. [docs/OPEN_CORE_BOUNDARY.md](/Volumes/ziel/Aionisgo/docs/OPEN_CORE_BOUNDARY.md)
 
 ## Local Identity
 
