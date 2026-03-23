@@ -24,6 +24,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
+    "test": "node ../../node_modules/tsx/dist/cli.mjs --test test/*.test.ts",
     "pack:dry-run": "npm pack --dry-run --cache /tmp/aionis-npm-cache"
   },
   "keywords": [

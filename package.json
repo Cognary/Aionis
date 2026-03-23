@@ -21,6 +21,7 @@
     "build:app:lite": "npm --prefix apps/lite run build",
     "runtime-core:build": "npm --prefix packages/runtime-core run build",
     "sdk:build": "npm --prefix packages/sdk run build",
+    "sdk:test": "npm --prefix packages/sdk run test",
     "sdk:example:workflow": "npx tsx examples/sdk/01-workflow-guidance.ts",
     "sdk:example:tools-feedback": "npx tsx examples/sdk/02-tools-feedback-pattern.ts",
     "sdk:example:introspect": "npx tsx examples/sdk/03-execution-introspect-and-rehydrate.ts",
