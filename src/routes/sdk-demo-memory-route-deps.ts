@@ -1,10 +1,10 @@
 import { getSharedExecutionStateStore } from "../execution/state-store.js";
 import type { RegisterSdkDemoRoutesArgs } from "../host/http-host-sdk-demo-args.js";
 import type { registerMemoryContextRuntimeRoutes } from "./memory-context-runtime.js";
-import type { registerMemoryFeedbackToolRoutes } from "./memory-feedback-tools.js";
 import type { registerMemoryReplayGovernedRoutes } from "./memory-replay-governed.js";
 import type { registerMemoryWriteRoutes } from "./memory-write.js";
 import type { registerSdkDemoMemoryAccessRoutes } from "./sdk-demo-memory-access.js";
+import type { registerSdkDemoMemoryFeedbackToolRoutes } from "./sdk-demo-memory-feedback-tools.js";
 
 export function buildSdkDemoMemoryWriteRouteArgs(
   args: RegisterSdkDemoRoutesArgs,
@@ -84,7 +84,7 @@ export function buildSdkDemoMemoryContextRuntimeRouteArgs(
 
 export function buildSdkDemoMemoryFeedbackToolRouteArgs(
   args: RegisterSdkDemoRoutesArgs,
-): Parameters<typeof registerMemoryFeedbackToolRoutes>[0] {
+): Parameters<typeof registerSdkDemoMemoryFeedbackToolRoutes>[0] {
   return {
     app: args.app,
     env: args.env,
