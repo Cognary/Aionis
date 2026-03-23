@@ -206,6 +206,7 @@ What is real:
 7. `tools/feedback` now also has a bounded `form_pattern` governance path when pattern-anchor formation has at least two matched source nodes, and that route can now optionally accept a bounded review result, evaluate runtime admissibility, derive a bounded `policy_effect` preview, and in one narrow case apply `provisional/candidate -> stable/trusted` to the persisted pattern anchor while returning a stable preview packet, admissibility result, policy-effect preview, decision trace, and explicit trust-hardening override markers
 8. Lite now has internal governance review-provider hooks threaded through replay, workflow auto-promotion, and tools feedback live paths; replay and workflow already use env-gated static `promote_memory` providers, and tools feedback now also has an env-gated static `form_pattern` provider fallback that can stabilize a pattern anchor without widening the public route contract
 9. the current replay/workflow/tools static provider gates are now built from one shared Lite runtime provider builder, so route/runtime wiring no longer duplicates provider construction or per-path env branching
+10. the shared Lite runtime provider builder can now also choose a mock-model-backed internal provider ahead of static fallback for replay, workflow, and tools, which keeps current behavior deterministic while establishing the runtime shape needed for a later real internal model client
 
 Primary code:
 

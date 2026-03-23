@@ -1,5 +1,13 @@
 import type { Env } from "../config.js";
 import {
+  createMockFormPatternGovernanceModelClient,
+  createMockPromoteMemoryGovernanceModelClient,
+} from "../memory/governance-model-client-mock.js";
+import {
+  createModelBackedFormPatternGovernanceReviewProvider,
+  createModelBackedPromoteMemoryGovernanceReviewProvider,
+} from "../memory/governance-provider-model.js";
+import {
   createStaticFormPatternGovernanceReviewProvider,
   createStaticPromoteMemoryGovernanceReviewProvider,
 } from "../memory/governance-provider-static.js";
@@ -21,17 +29,37 @@ export type LiteGovernanceRuntimeProviders = {
 };
 
 export function buildLiteGovernanceRuntimeProviders(env: Env): LiteGovernanceRuntimeProviders {
-  const replayPromoteMemoryProvider = env.REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED
-    ? createStaticPromoteMemoryGovernanceReviewProvider()
-    : undefined;
-  const workflowPromoteMemoryProvider = env.WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED
-    ? createStaticPromoteMemoryGovernanceReviewProvider({
-        confidence: 0.85,
-      })
-    : undefined;
-  const toolsFormPatternProvider = env.TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED
-    ? createStaticFormPatternGovernanceReviewProvider()
-    : undefined;
+  const replayPromoteMemoryProvider =
+    (env.REPLAY_GOVERNANCE_MOCK_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED
+      ? createModelBackedPromoteMemoryGovernanceReviewProvider({
+          modelClient: createMockPromoteMemoryGovernanceModelClient(),
+        })
+      : undefined)
+    ?? (env.REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED
+      ? createStaticPromoteMemoryGovernanceReviewProvider()
+      : undefined);
+  const workflowPromoteMemoryProvider =
+    (env.WORKFLOW_GOVERNANCE_MOCK_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED
+      ? createModelBackedPromoteMemoryGovernanceReviewProvider({
+          modelClient: createMockPromoteMemoryGovernanceModelClient({
+            confidence: 0.85,
+          }),
+        })
+      : undefined)
+    ?? (env.WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED
+      ? createStaticPromoteMemoryGovernanceReviewProvider({
+          confidence: 0.85,
+        })
+      : undefined);
+  const toolsFormPatternProvider =
+    (env.TOOLS_GOVERNANCE_MOCK_MODEL_FORM_PATTERN_PROVIDER_ENABLED
+      ? createModelBackedFormPatternGovernanceReviewProvider({
+          modelClient: createMockFormPatternGovernanceModelClient(),
+        })
+      : undefined)
+    ?? (env.TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED
+      ? createStaticFormPatternGovernanceReviewProvider()
+      : undefined);
 
   return {
     ...(replayPromoteMemoryProvider
