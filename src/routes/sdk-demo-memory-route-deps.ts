@@ -1,10 +1,10 @@
 import { getSharedExecutionStateStore } from "../execution/state-store.js";
 import type { RegisterSdkDemoRoutesArgs } from "../host/http-host-sdk-demo-args.js";
 import type { registerMemoryContextRuntimeRoutes } from "./memory-context-runtime.js";
-import type { registerMemoryReplayGovernedRoutes } from "./memory-replay-governed.js";
 import type { registerMemoryWriteRoutes } from "./memory-write.js";
 import type { registerSdkDemoMemoryAccessRoutes } from "./sdk-demo-memory-access.js";
 import type { registerSdkDemoMemoryFeedbackToolRoutes } from "./sdk-demo-memory-feedback-tools.js";
+import type { registerSdkDemoMemoryReplayGovernedRoutes } from "./sdk-demo-memory-replay-governed.js";
 
 export function buildSdkDemoMemoryWriteRouteArgs(
   args: RegisterSdkDemoRoutesArgs,
@@ -103,19 +103,19 @@ export function buildSdkDemoMemoryFeedbackToolRouteArgs(
 
 export function buildSdkDemoMemoryReplayGovernedRouteArgs(
   args: RegisterSdkDemoRoutesArgs,
-): Parameters<typeof registerMemoryReplayGovernedRoutes>[0] {
+): Parameters<typeof registerSdkDemoMemoryReplayGovernedRoutes>[0] {
   return {
     app: args.app,
     env: args.env,
     liteWriteStore: args.liteWriteStore,
     requireMemoryPrincipal: args.requireMemoryPrincipal,
     withIdentityFromRequest: args.withIdentityFromRequest,
-    enforceRateLimit: args.enforceRateLimit,
-    enforceTenantQuota: args.enforceTenantQuota,
+    enforceRateLimit: async (req, reply) => args.enforceRateLimit(req, reply, "write"),
+    enforceTenantQuota: async (req, reply, _kind, tenantId) =>
+      args.enforceTenantQuota(req, reply, "write", tenantId),
     tenantFromBody: args.tenantFromBody,
-    acquireInflightSlot: args.acquireInflightSlot,
+    acquireInflightSlot: async () => args.acquireInflightSlot("write"),
     withReplayRepairReviewDefaults: args.withReplayRepairReviewDefaults,
     buildReplayRepairReviewOptions: args.buildReplayRepairReviewOptions,
-    buildReplayPlaybookRunOptions: args.buildAutomationReplayRunOptions,
   };
 }

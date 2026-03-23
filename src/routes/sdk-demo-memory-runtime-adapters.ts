@@ -1,9 +1,9 @@
 import type { RegisterSdkDemoRoutesArgs } from "../host/http-host-sdk-demo-args.js";
 import { registerMemoryContextRuntimeRoutes } from "./memory-context-runtime.js";
-import { registerMemoryReplayGovernedRoutes } from "./memory-replay-governed.js";
 import { registerMemoryWriteRoutes } from "./memory-write.js";
 import { registerSdkDemoMemoryAccessRoutes } from "./sdk-demo-memory-access.js";
 import { registerSdkDemoMemoryFeedbackToolRoutes } from "./sdk-demo-memory-feedback-tools.js";
+import { registerSdkDemoMemoryReplayGovernedRoutes } from "./sdk-demo-memory-replay-governed.js";
 import {
   buildSdkDemoMemoryAccessRouteArgs,
   buildSdkDemoMemoryContextRuntimeRouteArgs,
@@ -29,5 +29,5 @@ export function registerSdkDemoMemoryFeedbackToolRuntimeAdapter(args: RegisterSd
 }
 
 export function registerSdkDemoMemoryReplayGovernedRuntimeAdapter(args: RegisterSdkDemoRoutesArgs) {
-  registerMemoryReplayGovernedRoutes(buildSdkDemoMemoryReplayGovernedRouteArgs(args));
+  registerSdkDemoMemoryReplayGovernedRoutes(buildSdkDemoMemoryReplayGovernedRouteArgs(args));
 }
