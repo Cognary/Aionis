@@ -77,9 +77,9 @@ Move to private mainline ownership:
 
 Important nuance:
 
-1. `apps/lite` currently launches root `src/index.ts`
-2. that means `src/` cannot disappear from public until the demo shell stops depending on the full runtime tree
-3. public shrink therefore needs a staged replacement, not a one-step delete
+1. `apps/lite` now launches root `src/index-sdk-demo.ts`
+2. public startup no longer depends on `src/index.ts` or `src/runtime-entry.ts`
+3. public shrink can therefore start executing the first safe move batch instead of only planning it
 
 ## Recommended Cutover Phases
 
@@ -113,19 +113,13 @@ Phase 2 status:
 
 Current Phase 3 entry condition:
 
-1. `npm run public:keep-manifest` now computes the transitive `src/` keep set from `src/index-sdk-demo.ts`
+1. `npm run public:keep-manifest` computes the transitive `src/` keep set from `src/index-sdk-demo.ts`
 2. current manifest result:
    - `src files: 164`
    - `keep files: 158`
    - `move candidates: 6`
 3. the first safe move batch is therefore narrow, not broad
-4. immediate move candidates currently are:
-   - `src/index.ts`
-   - `src/runtime-entry.ts`
-   - `src/routes/memory-lifecycle.ts`
-   - `src/memory/governance.ts`
-   - `src/memory/nodes-activate.ts`
-   - `src/memory/rehydrate.ts`
+4. that first safe move batch has now been executed in public shrink
 
 ## Validation
 

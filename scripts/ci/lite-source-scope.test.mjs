@@ -60,7 +60,7 @@ test("lite host does not statically import server-only routes", () => {
 
 test("lite route registration args drop server-only plumbing", () => {
   const hostFile = fs.readFileSync(path.join(ROOT, "src/host/http-host.ts"), "utf8");
-  const runtimeEntry = fs.readFileSync(path.join(ROOT, "src/runtime-entry.ts"), "utf8");
+  const runtimeEntry = fs.readFileSync(path.join(ROOT, "src/runtime-entry-sdk-demo.ts"), "utf8");
   const forbiddenSymbols = [
     "buildAutomationTestHook",
     "emitControlAudit",
@@ -120,7 +120,7 @@ test("lite runtime services do not wire postgres or embedded store constructors"
 
 test("lite request guards do not keep full auth or tenant quota plumbing", () => {
   const requestGuardsFile = fs.readFileSync(path.join(ROOT, "src", "app", "request-guards.ts"), "utf8");
-  const runtimeEntryFile = fs.readFileSync(path.join(ROOT, "src", "runtime-entry.ts"), "utf8");
+  const runtimeEntryFile = fs.readFileSync(path.join(ROOT, "src", "runtime-entry-sdk-demo.ts"), "utf8");
   const runtimeServicesFile = fs.readFileSync(path.join(ROOT, "src", "app", "runtime-services.ts"), "utf8");
   const forbiddenSymbols = [
     "recordControlAuditEvent",

@@ -41,7 +41,7 @@ async function seedAnchorFixture() {
           tool_name: "edit",
           step_index: 3,
           status: "succeeded",
-          tool_input: { file: "src/index.ts" },
+          tool_input: { file: "src/index-sdk-demo.ts" },
         },
       },
       {

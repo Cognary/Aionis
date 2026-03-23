@@ -20,7 +20,7 @@ npm --prefix apps/lite run start:print-env
 
 Current runtime model:
 
-1. root `src/index.ts` is the Lite runtime source entrypoint
+1. root `src/index-sdk-demo.ts` is the public Lite runtime source entrypoint
 2. `apps/lite/src/index.js` is the Lite app launcher
 3. `apps/lite/scripts/start-lite-app.sh` owns Lite startup behavior
 4. root `scripts/start-lite.sh` remains a compatibility shim

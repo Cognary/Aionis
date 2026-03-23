@@ -83,13 +83,4 @@ Current baseline:
 2. `keep files: 158`
 3. `move candidates: 6`
 
-Immediate move candidates:
-
-1. `src/index.ts`
-2. `src/runtime-entry.ts`
-3. `src/routes/memory-lifecycle.ts`
-4. `src/memory/governance.ts`
-5. `src/memory/nodes-activate.ts`
-6. `src/memory/rehydrate.ts`
-
-This means the first actual public shrink should be a narrow migration batch, not a sweeping delete of `src/`.
+The first narrow migration batch has now been executed. The next public shrink slices should recompute the manifest and continue from the new baseline instead of reusing the original candidate list.

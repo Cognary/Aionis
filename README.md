@@ -50,8 +50,8 @@ Core source areas:
 3. [src/memory](/Volumes/ziel/Aionisgo/src/memory)
 4. [src/routes](/Volumes/ziel/Aionisgo/src/routes)
 5. [src/store](/Volumes/ziel/Aionisgo/src/store)
-6. [src/runtime-entry.ts](/Volumes/ziel/Aionisgo/src/runtime-entry.ts)
-7. [src/index.ts](/Volumes/ziel/Aionisgo/src/index.ts)
+6. [src/runtime-entry-sdk-demo.ts](/Volumes/ziel/Aionisgo/src/runtime-entry-sdk-demo.ts)
+7. [src/index-sdk-demo.ts](/Volumes/ziel/Aionisgo/src/index-sdk-demo.ts)
 
 Primary docs:
 
@@ -142,7 +142,7 @@ By default:
 Override it when you want a stable local identity:
 
 ```bash
-LITE_LOCAL_ACTOR_ID=lucio npm run start:lite
+LITE_LOCAL_ACTOR_ID=lucio npm run start:lite:sdk-demo
 ```
 
 ## Sandbox
@@ -158,7 +158,7 @@ By default:
 If you want the old lock-back behavior:
 
 ```bash
-SANDBOX_ADMIN_ONLY=true npm run start:lite
+SANDBOX_ADMIN_ONLY=true npm run start:lite:sdk-demo
 ```
 
 If you want a practical local-process sandbox preset without writing raw JSON env by hand:

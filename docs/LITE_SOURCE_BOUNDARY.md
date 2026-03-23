@@ -5,7 +5,7 @@ This repository is intentionally slimmer than the monorepo export it came from.
 Current source boundary:
 - `apps/lite/` owns the product-facing Lite wrapper.
 - `apps/lite/src/index.js` is the source-owned launcher into the Lite runtime.
-- `src/runtime-entry.ts` is the runtime truth for Lite startup.
+- `src/runtime-entry-sdk-demo.ts` is the public runtime truth for Lite startup.
 - `src/app/runtime-services.ts` is narrowed to Lite-owned store/runtime wiring only.
 - `src/app/request-guards.ts` is narrowed to local-only identity and rate-limit guards.
 - `src/routes/memory-access.ts` is narrowed to Lite SQLite access only.

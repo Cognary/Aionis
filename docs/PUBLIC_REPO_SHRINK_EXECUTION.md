@@ -22,7 +22,7 @@ It is still blocked on transitive runtime reachability. In practice, that means:
 
 ## First Safe Move Batch
 
-The current manifest identifies these as the first narrow move candidates:
+The original first safe move batch was:
 
 1. `src/index.ts`
 2. `src/runtime-entry.ts`
@@ -30,6 +30,8 @@ The current manifest identifies these as the first narrow move candidates:
 4. `src/memory/governance.ts`
 5. `src/memory/nodes-activate.ts`
 6. `src/memory/rehydrate.ts`
+
+This batch has now been executed in the public repository tree.
 
 ## Recommended Next Cutover Slice
 
