@@ -27,10 +27,47 @@ test("lite governance model client factory can build promote_memory mock resolve
   assert.equal(review?.adjudication.reason, "mock model found workflow-signature evidence");
 });
 
+test("lite governance model client factory can build promote_memory builtin resolver", () => {
+  const client = buildLiteGovernanceModelClient({
+    promoteMemory: {
+      mode: "builtin",
+    },
+  });
+
+  const review = client.reviewPromoteMemory?.({
+    reviewPacket: {
+      deterministic_gate: { gate_satisfied: true },
+      requested_target_kind: "workflow",
+      requested_target_level: "L2",
+      candidate_examples: [{ workflow_signature: "wf:test" }],
+    } as any,
+    suppliedReviewResult: null,
+  });
+
+  assert.equal(review?.adjudication.reason, "mock model found workflow-signature evidence");
+});
+
 test("lite governance model client factory can build form_pattern mock resolver", () => {
   const client = buildLiteGovernanceModelClient({
     formPattern: {
       mode: "mock",
+    },
+  });
+
+  const review = client.reviewFormPattern?.({
+    reviewPacket: {
+      deterministic_gate: { gate_satisfied: true },
+    } as any,
+    suppliedReviewResult: null,
+  });
+
+  assert.equal(review?.adjudication.reason, "mock model found grouped signature evidence");
+});
+
+test("lite governance model client factory can build form_pattern builtin resolver", () => {
+  const client = buildLiteGovernanceModelClient({
+    formPattern: {
+      mode: "builtin",
     },
   });
 

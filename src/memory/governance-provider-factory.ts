@@ -29,7 +29,7 @@ export function buildPromoteMemoryGovernanceReviewProvider(args: {
       ? createModelBackedPromoteMemoryGovernanceReviewProvider({
           modelClient: buildLiteGovernanceModelClient({
             promoteMemory: {
-              mode: "mock",
+              mode: "builtin",
               confidence: args.mockModel?.confidence,
               reason: args.mockModel?.reason,
             },
@@ -62,7 +62,7 @@ export function buildFormPatternGovernanceReviewProvider(args: {
       ? createModelBackedFormPatternGovernanceReviewProvider({
           modelClient: buildLiteGovernanceModelClient({
             formPattern: {
-              mode: "mock",
+              mode: "builtin",
               confidence: args.mockModel?.confidence,
               reason: args.mockModel?.reason,
             },

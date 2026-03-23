@@ -209,6 +209,7 @@ What is real:
 10. the shared Lite runtime provider builder can now also choose a mock-model-backed internal provider ahead of static fallback for replay, workflow, and tools, which keeps current behavior deterministic while establishing the runtime shape needed for a later real internal model client
 11. provider selection precedence itself is now centralized in a shared Lite governance provider factory, so runtime builders no longer duplicate mock-model versus static fallback rules by path
 12. mock governance model-client construction is now also centralized in a shared Lite client factory, so a future real internal model client can replace the current mock baseline without changing provider factories or runtime wiring
+13. the current model-backed provider path now also has a first builtin internal governance model-client implementation for `promote_memory` and `form_pattern`, so internal model-backed review no longer has to be routed through static provider wrappers
 
 Primary code:
 
