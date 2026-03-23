@@ -13,7 +13,7 @@ Start the Lite runtime in another terminal:
 
 ```bash
 cd /Volumes/ziel/Aionisgo
-npm run start:lite
+npm run start:lite:sdk-demo
 ```
 
 Defaults:
@@ -22,6 +22,11 @@ Defaults:
 2. `AIONIS_TENANT_ID=default`
 3. `AIONIS_SCOPE=default`
 4. `AIONIS_ACTOR=local-user`
+
+Recommended public-demo runtime:
+
+1. `npm run start:lite:sdk-demo`
+2. this profile keeps the route surface closer to the future public demo shell
 
 Examples:
 

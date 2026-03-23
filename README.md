@@ -70,7 +70,7 @@ Quick start:
 ```bash
 nvm use
 npm install
-npm run start:lite
+npm run start:lite:sdk-demo
 ```
 
 `npm run build` is still available as a packaging/contract check, but Aionis startup no longer depends on a prebuilt wrapper artifact.
@@ -165,6 +165,12 @@ If you want a practical local-process sandbox preset without writing raw JSON en
 
 ```bash
 npm run start:lite:local-process
+```
+
+If you want the public SDK/demo route surface instead of the full Lite runtime profile:
+
+```bash
+npm run start:lite:sdk-demo
 ```
 
 That preset currently maps to:

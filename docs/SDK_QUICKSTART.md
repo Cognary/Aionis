@@ -9,7 +9,7 @@ From the repository:
 ```bash
 cd /Volumes/ziel/Aionisgo
 npm install
-npm run start:lite
+npm run start:lite:sdk-demo
 ```
 
 The default local SDK target is:
@@ -95,7 +95,7 @@ If you are working from this repository instead of npm:
 ```bash
 cd /Volumes/ziel/Aionisgo
 npm run sdk:build
-npm run start:lite
+npm run start:lite:sdk-demo
 ```
 
 Then in another terminal:

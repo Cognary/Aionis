@@ -5,8 +5,11 @@ import { fileURLToPath } from "node:url";
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(appDir, "..", "..", "..");
 const tsxCli = path.join(rootDir, "node_modules", "tsx", "dist", "cli.mjs");
+const entrypoint = process.env.AIONIS_RUNTIME_PROFILE === "sdk_demo"
+  ? "src/index-sdk-demo.ts"
+  : "src/index.ts";
 
-const child = spawn(process.execPath, [tsxCli, "src/index.ts", ...process.argv.slice(2)], {
+const child = spawn(process.execPath, [tsxCli, entrypoint, ...process.argv.slice(2)], {
   cwd: rootDir,
   stdio: "inherit",
   env: process.env,

@@ -52,6 +52,8 @@ async function main() {
 
   printStep(`Rehydrating workflow anchor ${anchorId}.`);
   const rehydrated = await aionis.memory.anchors.rehydratePayload({
+    tenant_id: "default",
+    scope,
     anchor_id: anchorId,
     mode: "partial",
   }) as Record<string, any>;

@@ -14,6 +14,7 @@ Current commands:
 ```bash
 npm --prefix apps/lite run build
 npm --prefix apps/lite run start
+npm --prefix apps/lite run start:sdk-demo
 npm --prefix apps/lite run start:print-env
 ```
 
@@ -24,6 +25,12 @@ Current runtime model:
 3. `apps/lite/scripts/start-lite-app.sh` owns Lite startup behavior
 4. root `scripts/start-lite.sh` remains a compatibility shim
 5. startup runs directly from source and does not require a prebuilt wrapper artifact
+
+SDK demo runtime profile:
+
+1. `npm --prefix apps/lite run start:sdk-demo`
+2. this profile starts a reduced route surface for SDK quickstart/examples
+3. it is meant to become the long-term public demo shell baseline as the full runtime mainline moves to the private repository
 
 Default local identity:
 

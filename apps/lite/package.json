@@ -7,6 +7,8 @@
   "scripts": {
     "build": "node --check src/index.js",
     "start": "bash ./scripts/start-lite-app.sh",
+    "start:sdk-demo": "AIONIS_RUNTIME_PROFILE=sdk_demo bash ./scripts/start-lite-app.sh",
+    "start:sdk-demo:print-env": "AIONIS_RUNTIME_PROFILE=sdk_demo bash ./scripts/start-lite-app.sh --print-env",
     "start:print-env": "bash ./scripts/start-lite-app.sh --print-env",
     "start:local-process": "LITE_SANDBOX_PROFILE=local_process_echo bash ./scripts/start-lite-app.sh",
     "start:local-process:print-env": "LITE_SANDBOX_PROFILE=local_process_echo bash ./scripts/start-lite-app.sh --print-env"

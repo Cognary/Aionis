@@ -586,8 +586,154 @@ function registerMemoryRoutes(args: RegisterApplicationRoutesArgs) {
   });
 }
 
+function registerSdkDemoMemoryRoutes(args: RegisterApplicationRoutesArgs) {
+  const {
+    app,
+    env,
+    store,
+    embedder,
+    embeddingSurfacePolicy,
+    embeddedRuntime,
+    liteReplayStore,
+    liteWriteStore,
+    recallTextEmbedBatcher,
+    liteRecallAccess,
+    writeStoreCapabilities,
+    requireStoreFeatureCapability,
+    requireMemoryPrincipal,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    enforceRecallTextEmbedQuota,
+    buildRecallAuth,
+    tenantFromBody,
+    acquireInflightSlot,
+    hasExplicitRecallKnobs,
+    resolveRecallProfile,
+    resolveExplicitRecallMode,
+    resolveClassAwareRecallProfile,
+    withRecallProfileDefaults,
+    resolveRecallStrategy,
+    resolveAdaptiveRecallProfile,
+    resolveAdaptiveRecallHardCap,
+    inferRecallStrategyFromKnobs,
+    buildRecallTrajectory,
+    embedRecallTextQuery,
+    mapRecallTextEmbeddingError,
+    recordContextAssemblyTelemetryBestEffort,
+    withReplayRepairReviewDefaults,
+    buildReplayRepairReviewOptions,
+    buildAutomationReplayRunOptions,
+    writeAccessForClient,
+    runTopicClusterForEventIds,
+  } = args;
+
+  registerMemoryWriteRoutes({
+    app,
+    env,
+    store,
+    embedder,
+    embeddingSurfacePolicy,
+    embeddedRuntime,
+    liteWriteStore,
+    writeAccessForClient,
+    requireMemoryPrincipal,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    tenantFromBody,
+    acquireInflightSlot,
+    runTopicClusterForEventIds,
+    executionStateStore: getSharedExecutionStateStore(),
+  });
+
+  registerMemoryAccessRoutes({
+    app,
+    env,
+    embedder,
+    embeddingSurfacePolicy,
+    liteWriteStore,
+    writeAccessShadowMirrorV2: writeStoreCapabilities.shadow_mirror_v2,
+    requireStoreFeatureCapability,
+    requireMemoryPrincipal,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    tenantFromBody,
+    acquireInflightSlot,
+  });
+
+  registerMemoryContextRuntimeRoutes({
+    app,
+    env,
+    embedder,
+    embeddingSurfacePolicy,
+    embeddedRuntime,
+    liteWriteStore,
+    liteRecallAccess,
+    recallTextEmbedBatcher,
+    requireMemoryPrincipal,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    enforceRecallTextEmbedQuota,
+    buildRecallAuth,
+    tenantFromBody,
+    acquireInflightSlot,
+    hasExplicitRecallKnobs,
+    resolveRecallProfile,
+    resolveExplicitRecallMode,
+    resolveClassAwareRecallProfile,
+    withRecallProfileDefaults,
+    resolveRecallStrategy,
+    resolveAdaptiveRecallProfile,
+    resolveAdaptiveRecallHardCap,
+    inferRecallStrategyFromKnobs,
+    buildRecallTrajectory,
+    embedRecallTextQuery,
+    mapRecallTextEmbeddingError,
+    recordContextAssemblyTelemetryBestEffort,
+  });
+
+  registerMemoryFeedbackToolRoutes({
+    app,
+    env,
+    embedder,
+    embeddedRuntime,
+    liteRecallAccess,
+    liteWriteStore,
+    requireMemoryPrincipal,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    tenantFromBody,
+    acquireInflightSlot,
+  });
+
+  registerMemoryReplayGovernedRoutes({
+    app,
+    env,
+    liteWriteStore,
+    requireMemoryPrincipal,
+    withIdentityFromRequest,
+    enforceRateLimit,
+    enforceTenantQuota,
+    tenantFromBody,
+    acquireInflightSlot,
+    withReplayRepairReviewDefaults,
+    buildReplayRepairReviewOptions,
+    buildReplayPlaybookRunOptions: buildAutomationReplayRunOptions,
+  });
+}
+
 export function registerApplicationRoutes(args: RegisterApplicationRoutesArgs) {
   assertLiteOnlySourceTree(args.env);
   registerAdminRoutes(args);
   registerMemoryRoutes(args);
+}
+
+export function registerSdkDemoRoutes(args: RegisterApplicationRoutesArgs) {
+  assertLiteOnlySourceTree(args.env);
+  registerAdminRoutes(args);
+  registerSdkDemoMemoryRoutes(args);
 }
