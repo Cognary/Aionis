@@ -6,7 +6,7 @@ import type { EmbeddingProvider } from "../embeddings/types.js";
 import { ExecutionStateV1Schema } from "../execution/types.js";
 import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
-import { createStaticPromoteMemoryGovernanceReviewProvider } from "../memory/governance-provider-static.js";
+import { buildLiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
 import type { TopicClusterParams, TopicClusterResult } from "../jobs/topicClusterLib.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "../memory/write.js";
 import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "./lite-projected-write.js";
@@ -137,11 +137,7 @@ export function registerMemoryWriteRoutes(args: {
   const embeddingSurfacePolicy =
     embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
   const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
-  const staticWorkflowPromoteMemoryGovernanceProvider = env.WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED
-    ? createStaticPromoteMemoryGovernanceReviewProvider({
-        confidence: 0.85,
-      })
-    : null;
+  const governanceProviders = buildLiteGovernanceRuntimeProviders(env);
   const topicClusterSurfaceEnabled = embeddingSurfacePolicy.isEnabled("topic_cluster");
   const resolveWritePolicy = (computedPolicy: EffectiveWritePolicyLike): EffectiveWritePolicyLike => ({
     ...computedPolicy,
@@ -167,11 +163,7 @@ export function registerMemoryWriteRoutes(args: {
             prepared: prepared as any,
             liteWriteStore: liteWriteStore!,
             embedder: writeEmbedder,
-            governanceReviewProviders: staticWorkflowPromoteMemoryGovernanceProvider
-              ? {
-                  promote_memory: staticWorkflowPromoteMemoryGovernanceProvider,
-                }
-              : undefined,
+            governanceReviewProviders: governanceProviders.workflowProjection,
             writeOptions: {
               maxTextLen: env.MAX_TEXT_LEN,
               piiRedaction: env.PII_REDACTION,

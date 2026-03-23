@@ -1,6 +1,6 @@
 import type { Env } from "../config.js";
 import type { EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
-import { createStaticPromoteMemoryGovernanceReviewProvider } from "../memory/governance-provider-static.js";
+import { buildLiteGovernanceRuntimeProviders } from "./governance-runtime-providers.js";
 import { buildReplayLearningProjectionDefaults } from "../memory/replay-learning.js";
 import { createSandboxSession, enqueueSandboxRun, getSandboxRun } from "../memory/sandbox.js";
 import { HttpError } from "../util/http.js";
@@ -161,9 +161,7 @@ export function createReplayRuntimeOptionBuilders(args: {
   const writeEmbedder = embeddingSurfacePolicy?.providerFor("write_auto_embed", embedder) ?? embedder;
   const replayLearningProjectionDefaultDelivery =
     env.AIONIS_EDITION === "lite" ? "sync_inline" : env.REPLAY_LEARNING_PROJECTION_DELIVERY;
-  const staticPromoteMemoryGovernanceProvider = env.REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED
-    ? createStaticPromoteMemoryGovernanceReviewProvider()
-    : null;
+  const governanceProviders = buildLiteGovernanceRuntimeProviders(env);
 
   function buildReplayRepairReviewOptions() {
     return {
@@ -205,11 +203,7 @@ export function createReplayRuntimeOptionBuilders(args: {
         maxToolPrefer: env.REPLAY_LEARNING_MAX_TOOL_PREFER,
         episodeTtlDays: env.EPISODE_GC_TTL_DAYS,
       }),
-      governanceReviewProviders: staticPromoteMemoryGovernanceProvider
-        ? {
-            promote_memory: staticPromoteMemoryGovernanceProvider,
-          }
-        : undefined,
+      governanceReviewProviders: governanceProviders.replayRepairReview,
       sandboxValidationExecutor: createSandboxRunExecutor({
         env,
         store,

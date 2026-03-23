@@ -11,7 +11,7 @@ import { getToolsDecisionById } from "../memory/tools-decision.js";
 import { getToolsRunLifecycle, listToolsRuns } from "../memory/tools-run.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
 import { suppressPatternAnchorLite, unsuppressPatternAnchorLite } from "../memory/pattern-operator-override.js";
-import { createStaticFormPatternGovernanceReviewProvider } from "../memory/governance-provider-static.js";
+import { buildLiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
@@ -85,9 +85,7 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
   if (env.AIONIS_EDITION !== "lite") {
     throw new Error("aionis-lite memory-feedback-tools routes only support AIONIS_EDITION=lite");
   }
-  const staticFormPatternGovernanceProvider = env.TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED
-    ? createStaticFormPatternGovernanceReviewProvider()
-    : null;
+  const governanceProviders = buildLiteGovernanceRuntimeProviders(env);
 
   const runFeedbackRoute = async <TResult>(args: {
     req: MemoryFeedbackToolRequest;
@@ -249,11 +247,7 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
               piiRedaction: env.PII_REDACTION,
               embedder,
               embeddedRuntime,
-              governanceReviewProviders: staticFormPatternGovernanceProvider
-                ? {
-                    form_pattern: staticFormPatternGovernanceProvider,
-                  }
-                : undefined,
+              governanceReviewProviders: governanceProviders.toolsFeedback,
               liteWriteStore: liteStore,
             }),
           ),
