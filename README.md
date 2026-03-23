@@ -1,13 +1,34 @@
 # Aionis
 
-`Aionisgo` is the local execution-memory runtime repository.
+`Aionis` is an execution-memory runtime for building agents that learn workflows, trust patterns, and govern memory updates.
+
+This repository is the runtime/core source of truth behind the future **Aionis SDK**.
+
+Public product direction:
+
+1. Aionis Runtime
+2. Aionis SDK
+3. adapters and integrations later
+
+Recommended mental model:
+
+1. Aionis captures execution evidence, not just chat history
+2. Aionis turns repeated execution into stable workflow guidance and trusted patterns
+3. Aionis exposes that behavior through a local runtime today and a first-party SDK surface next
+
+Important product boundary:
+
+1. MCP, Codex, IDE, and host integrations are adapter layers
+2. they should not be treated as the primary Aionis identity
+3. the primary identity is the runtime plus SDK
 
 Current repository focus:
 
 1. runtime/core
 2. SQLite-backed local memory
-3. execution-memory routes
-4. benchmark and validation
+3. execution-memory routes and contracts
+4. benchmark, regression gating, and real validation
+5. SDK-first release preparation
 
 Core source areas:
 
@@ -27,8 +48,9 @@ Primary docs:
 4. [docs/LITE_TESTING_STRATEGY.md](/Volumes/ziel/Aionisgo/docs/LITE_TESTING_STRATEGY.md)
 5. [docs/LITE_REAL_TASK_BENCHMARK_REPORT.md](/Volumes/ziel/Aionisgo/docs/LITE_REAL_TASK_BENCHMARK_REPORT.md)
 6. [docs/AIONIS_0_1_0_RELEASE_NOTE.md](/Volumes/ziel/Aionisgo/docs/AIONIS_0_1_0_RELEASE_NOTE.md)
+7. [docs/plans/2026-03-23-aionis-sdk-release-design.md](/Volumes/ziel/Aionisgo/docs/plans/2026-03-23-aionis-sdk-release-design.md)
 
-Everything else in this repository should be read as runtime/internal reference material, not as the primary product surface.
+Everything else in this repository should be read as runtime/internal reference material, not as the final public SDK surface.
 
 Quick start:
 
@@ -39,6 +61,51 @@ npm run start:lite
 ```
 
 `npm run build` is still available as a packaging/contract check, but Aionis startup no longer depends on a prebuilt wrapper artifact.
+
+## Why Aionis Exists
+
+Aionis is for agent and runtime builders who want memory to behave like execution infrastructure instead of a generic note store.
+
+Current mainlines:
+
+1. workflow learning from repeated execution continuity
+2. pattern learning from repeated tool feedback
+3. planner-visible workflow guidance and rehydration
+4. governed memory behavior on replay, workflow, and tools paths
+
+Current technical posture:
+
+1. real-task benchmark baseline currently passes `14/14`
+2. benchmark/profile regression gates are in place
+3. real external LLM governance shadow validation has already been run without governed outcome drift on the benchmark suite
+
+This means the runtime is no longer only internally self-consistent.
+It has already been validated against a real external governance backend in shadow mode.
+
+## SDK-First Direction
+
+The next public-facing step for Aionis is a first-party SDK.
+
+Recommended SDK v1 surface:
+
+1. `memory.write`
+2. `memory.planningContext`
+3. `memory.contextAssemble`
+4. `memory.executionIntrospect`
+5. `memory.tools.select`
+6. `memory.tools.feedback`
+7. `memory.replay.repairReview`
+8. `memory.anchors.rehydratePayload`
+
+Recommended public hierarchy:
+
+1. Aionis Runtime
+2. Aionis SDK
+3. adapters like MCP or Codex integrations later
+
+For the current SDK release design, see:
+
+1. [docs/plans/2026-03-23-aionis-sdk-release-design.md](/Volumes/ziel/Aionisgo/docs/plans/2026-03-23-aionis-sdk-release-design.md)
 
 ## Local Identity
 
@@ -89,8 +156,10 @@ That preset currently maps to:
 ```bash
 npm run test:lite
 npm run benchmark:lite:real
+npm run benchmark:lite:real:http-shadow
 npm run smoke:lite
 npm run smoke:lite:local-process
+npm run validate:lite:real
 ```
 
 `smoke:lite` now verifies:
@@ -111,12 +180,26 @@ npm run smoke:lite:local-process
 5. wrong-turn recovery
 6. workflow progression
 7. multi-step repair continuity
-8. slim planner/context boundary
+8. governed learning runtime loop
+9. governed replay runtime loop
+10. governance provider precedence
+11. custom model-client replacement
+12. HTTP model-client replacement
+13. HTTP external shadow compare
+14. slim planner/context boundary
+
+`benchmark:lite:real:http-shadow` runs the same benchmark surface with an external HTTP governance shadow compare when the relevant env vars are provided.
 
 You can also persist benchmark artifacts directly:
 
 ```bash
-npx tsx scripts/lite-real-task-benchmark.ts --out-json tmp/lite-benchmark.json --out-md tmp/lite-benchmark.md
+npx tsx scripts/lite-real-task-benchmark.ts --out-json /tmp/lite-benchmark.json --out-md /tmp/lite-benchmark.md
+```
+
+Or run a full isolated validation outside the repository:
+
+```bash
+bash scripts/lite-real-validation.sh --workdir /tmp/aionis_lite_real_validation
 ```
 
 ## Repository Operations
