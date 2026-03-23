@@ -22,6 +22,7 @@
     "runtime-core:build": "npm --prefix packages/runtime-core run build",
     "sdk:build": "npm --prefix packages/sdk run build",
     "sdk:test": "npm --prefix packages/sdk run test",
+    "sdk-demo:audit": "npx tsx scripts/sdk-demo-dependency-audit.ts",
     "sdk:pack:dry-run": "npm --prefix packages/sdk run pack:dry-run",
     "sdk:release:check": "bash scripts/sdk-release-baseline.sh",
     "sdk:example:workflow": "npx tsx examples/sdk/01-workflow-guidance.ts",
