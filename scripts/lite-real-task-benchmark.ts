@@ -374,6 +374,7 @@ function buildBenchmarkWritePayload(args: {
   taskBrief: string;
   stateId: string;
   filePath: string;
+  workflowPromotionGovernanceReview?: Record<string, unknown>;
 }) {
   return {
     tenant_id: "default",
@@ -389,6 +390,11 @@ function buildBenchmarkWritePayload(args: {
         text_summary: args.taskBrief,
         slots: {
           summary_kind: "handoff",
+          ...(args.workflowPromotionGovernanceReview
+            ? {
+                workflow_promotion_governance_review: args.workflowPromotionGovernanceReview,
+              }
+            : {}),
           execution_packet_v1: {
             version: 1,
             state_id: args.stateId,
@@ -2399,6 +2405,211 @@ async function runGovernedReplayRuntimeLoop(): Promise<Omit<BenchmarkScenarioRes
   }
 }
 
+async function runGovernanceProviderPrecedenceRuntimeLoop(): Promise<Omit<BenchmarkScenarioResult, "id" | "title" | "status" | "duration_ms">> {
+  const dbPath = tmpDbPath("governance-provider-precedence");
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  const assertions: AssertionResult[] = [];
+  try {
+    registerBenchmarkApp({
+      app,
+      liteWriteStore,
+      liteRecallStore,
+      envOverrides: {
+        WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+        TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED: true,
+      },
+    });
+
+    const taskBrief = "Fix export failure in node tests";
+    const filePath = "src/routes/export.ts";
+
+    const firstWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildBenchmarkWritePayload({
+        eventId: randomUUID(),
+        title: "Precedence inspect export path",
+        inputText: "precedence benchmark first execution continuity write",
+        taskBrief,
+        stateId: `state:${randomUUID()}`,
+        filePath,
+      }),
+    });
+    assert.equal(firstWrite.statusCode, 200);
+
+    const secondWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildBenchmarkWritePayload({
+        eventId: randomUUID(),
+        title: "Precedence patch export path with explicit review",
+        inputText: "precedence benchmark second execution continuity write",
+        taskBrief,
+        stateId: `state:${randomUUID()}`,
+        filePath,
+        workflowPromotionGovernanceReview: {
+          promote_memory: {
+            review_result: {
+              review_version: "promote_memory_semantic_review_v1",
+              adjudication: {
+                operation: "promote_memory",
+                disposition: "recommend",
+                target_kind: "workflow",
+                target_level: "L2",
+                reason: "explicit review keeps workflow promotion ungovened",
+                confidence: 0.55,
+                strategic_value: "high",
+              },
+            },
+          },
+        },
+      }),
+    });
+    assert.equal(secondWrite.statusCode, 200);
+
+    const storedStable = await liteWriteStore.findNodes({
+      scope: "default",
+      type: "procedure",
+      slotsContains: {
+        summary_kind: "workflow_anchor",
+      },
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 20,
+      offset: 0,
+    });
+    const stableWorkflowNode = storedStable.rows.find((row) => {
+      const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
+      return projection?.auto_promoted === true;
+    }) ?? null;
+    assert.ok(stableWorkflowNode);
+    const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, any>;
+    const workflowPreview = ((stableProjection.governance_preview ?? {}) as Record<string, any>).promote_memory as Record<string, any> | undefined;
+    assert.equal(workflowPreview?.review_result?.adjudication?.reason, "explicit review keeps workflow promotion ungovened");
+    assert.equal(workflowPreview?.admissibility?.admissible, false);
+    assert.equal(workflowPreview?.policy_effect?.applies, false);
+    assert.equal(workflowPreview?.decision_trace?.runtime_apply_changed_promotion_state, false);
+    assert.equal(stableProjection.governed_promotion_state_override ?? null, null);
+    assertions.push(pass("workflow path prefers explicit governance review over provider fallback"));
+
+    const ruleNodeIds = await seedActiveToolRules(liteWriteStore, ["edit", "edit"]);
+    const selectRes = await app.inject({
+      method: "POST",
+      url: "/v1/memory/tools/select",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        run_id: "precedence-tools-run-1",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+        strict: true,
+        reorder_candidates: false,
+      },
+    });
+    assert.equal(selectRes.statusCode, 200);
+    const selection = ToolsSelectRouteContractSchema.parse(selectRes.json());
+    assert.equal(selection.selection.selected, "edit");
+
+    const feedbackRes = await app.inject({
+      method: "POST",
+      url: "/v1/memory/tools/feedback",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: "precedence-tools-run-1",
+        decision_id: selection.decision.decision_id,
+        outcome: "positive",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Explicit review keeps grouped evidence provisional",
+        input_text: "repair export failure in node tests",
+        governance_review: {
+          form_pattern: {
+            review_result: {
+              review_version: "form_pattern_semantic_review_v1",
+              adjudication: {
+                operation: "form_pattern",
+                disposition: "recommend",
+                target_kind: "pattern",
+                target_level: "L3",
+                reason: "explicit review keeps grouped evidence provisional",
+                confidence: 0.55,
+              },
+            },
+          },
+        },
+      },
+    });
+    assert.equal(feedbackRes.statusCode, 200);
+    const feedback = ToolsFeedbackResponseSchema.parse(feedbackRes.json());
+    assert.equal(feedback.governance_preview?.form_pattern.review_result?.adjudication.reason, "explicit review keeps grouped evidence provisional");
+    assert.equal(feedback.governance_preview?.form_pattern.admissibility?.admissible, false);
+    assert.equal(feedback.governance_preview?.form_pattern.policy_effect?.applies, false);
+    assert.equal(feedback.governance_preview?.form_pattern.decision_trace?.runtime_apply_changed_pattern_state, false);
+    assert.equal(feedback.pattern_anchor?.pattern_state, "provisional");
+    assert.equal(feedback.pattern_anchor?.credibility_state, "candidate");
+    assertions.push(pass("tools path prefers explicit governance review over provider fallback"));
+
+    for (const ruleNodeId of ruleNodeIds) {
+      await liteWriteStore.withTx(() =>
+        updateRuleState(
+          {} as any,
+          {
+            tenant_id: "default",
+            scope: "default",
+            actor: "local-user",
+            rule_node_id: ruleNodeId,
+            state: "disabled",
+            input_text: "disable precedence benchmark source rules",
+          },
+          "default",
+          "default",
+          { liteWriteStore },
+        ),
+      );
+    }
+
+    return {
+      assertions,
+      metrics: {
+        workflow_explicit_reason: workflowPreview?.review_result?.adjudication?.reason ?? null,
+        workflow_provider_override_blocked: workflowPreview?.policy_effect?.applies ?? null,
+        workflow_governed_override_state: stableProjection.governed_promotion_state_override ?? null,
+        tools_explicit_reason: feedback.governance_preview?.form_pattern.review_result?.adjudication.reason ?? null,
+        tools_provider_override_blocked: feedback.governance_preview?.form_pattern.policy_effect?.applies ?? null,
+        tools_pattern_state: feedback.pattern_anchor?.pattern_state ?? null,
+        tools_credibility_state: feedback.pattern_anchor?.credibility_state ?? null,
+      },
+      notes: [
+        "Measures whether an explicit workflow governance review overrides the provider-backed fallback on the real write route.",
+        "Measures whether an explicit form-pattern governance review overrides the provider-backed fallback on the real tools feedback route.",
+      ],
+    };
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+}
+
 function printHuman(result: BenchmarkSuiteResult) {
   const lines: string[] = [];
   lines.push("Aionis Real-Task Benchmark Suite");
@@ -2523,6 +2734,7 @@ async function main() {
     runScenario("multi_step_repair_loop", "Multi-step repair continuity with stable workflow carry-forward", runMultiStepRepairLoop),
     runScenario("governed_learning_runtime_loop", "Governed learning through provider-backed runtime paths", runGovernedLearningRuntimeLoop),
     runScenario("governed_replay_runtime_loop", "Replay-governed learning through provider-backed repair review", runGovernedReplayRuntimeLoop),
+    runScenario("governance_provider_precedence_runtime_loop", "Explicit governance review precedence over provider fallback", runGovernanceProviderPrecedenceRuntimeLoop),
     runScenario("slim_surface_boundary", "Slim planner/context default surface", runSlimSurfaceBoundary),
   ]);
   const rawResult: BenchmarkSuiteResult = {
