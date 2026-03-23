@@ -1,7 +1,4 @@
-import {
-  createMockFormPatternGovernanceModelClient,
-  createMockPromoteMemoryGovernanceModelClient,
-} from "./governance-model-client-mock.js";
+import { buildLiteGovernanceModelClient } from "./governance-model-client-factory.js";
 import {
   createModelBackedFormPatternGovernanceReviewProvider,
   createModelBackedPromoteMemoryGovernanceReviewProvider,
@@ -30,9 +27,12 @@ export function buildPromoteMemoryGovernanceReviewProvider(args: {
   return (
     (args.mockModelEnabled
       ? createModelBackedPromoteMemoryGovernanceReviewProvider({
-          modelClient: createMockPromoteMemoryGovernanceModelClient({
-            confidence: args.mockModel?.confidence,
-            reason: args.mockModel?.reason,
+          modelClient: buildLiteGovernanceModelClient({
+            promoteMemory: {
+              mode: "mock",
+              confidence: args.mockModel?.confidence,
+              reason: args.mockModel?.reason,
+            },
           }),
         })
       : undefined)
@@ -60,9 +60,12 @@ export function buildFormPatternGovernanceReviewProvider(args: {
   return (
     (args.mockModelEnabled
       ? createModelBackedFormPatternGovernanceReviewProvider({
-          modelClient: createMockFormPatternGovernanceModelClient({
-            confidence: args.mockModel?.confidence,
-            reason: args.mockModel?.reason,
+          modelClient: buildLiteGovernanceModelClient({
+            formPattern: {
+              mode: "mock",
+              confidence: args.mockModel?.confidence,
+              reason: args.mockModel?.reason,
+            },
           }),
         })
       : undefined)
