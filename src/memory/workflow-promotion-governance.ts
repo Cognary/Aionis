@@ -7,7 +7,10 @@ import {
   type WorkflowWriteProjectionGovernanceDecisionTrace,
   type WorkflowWriteProjectionGovernancePolicyEffect,
 } from "./schemas.js";
-import { buildGovernanceDecisionTraceBase } from "./governance-shared.js";
+import {
+  buildGovernanceDecisionTraceBase,
+  deriveGovernedStateRaisePreview,
+} from "./governance-shared.js";
 import {
   type PromoteMemoryCandidateExample,
 } from "./promote-memory-governance.js";
@@ -22,65 +25,38 @@ export function deriveWorkflowPromotionSemanticPolicyEffect(args: {
   minPromotionConfidence?: number;
 }): WorkflowWriteProjectionGovernancePolicyEffect {
   const minPromotionConfidence = args.minPromotionConfidence ?? 0.85;
-
-  if (!args.review) {
-    return WorkflowWriteProjectionGovernancePolicyEffectSchema.parse({
-      source: "default_workflow_promotion_state",
-      applies: false,
-      base_promotion_state: args.basePromotionState,
-      review_suggested_promotion_state: null,
-      effective_promotion_state: args.basePromotionState,
-      reason_code: "review_not_supplied",
-    });
-  }
-
-  if (!args.admissibility?.admissible) {
-    return WorkflowWriteProjectionGovernancePolicyEffectSchema.parse({
-      source: "default_workflow_promotion_state",
-      applies: false,
-      base_promotion_state: args.basePromotionState,
-      review_suggested_promotion_state: null,
-      effective_promotion_state: args.basePromotionState,
-      reason_code: "review_not_admissible",
-    });
-  }
-
-  if (args.basePromotionState === "stable") {
-    return WorkflowWriteProjectionGovernancePolicyEffectSchema.parse({
-      source: "default_workflow_promotion_state",
-      applies: false,
-      base_promotion_state: args.basePromotionState,
-      review_suggested_promotion_state: "stable",
-      effective_promotion_state: args.basePromotionState,
-      reason_code: "already_stable",
-    });
-  }
-
-  const highConfidenceWorkflowPromotion =
-    args.review.adjudication.disposition === "recommend"
-    && args.review.adjudication.target_kind === "workflow"
-    && args.review.adjudication.target_level === "L2"
-    && args.review.adjudication.strategic_value === "high"
-    && args.review.adjudication.confidence >= minPromotionConfidence;
-
-  if (!highConfidenceWorkflowPromotion) {
-    return WorkflowWriteProjectionGovernancePolicyEffectSchema.parse({
-      source: "default_workflow_promotion_state",
-      applies: false,
-      base_promotion_state: args.basePromotionState,
-      review_suggested_promotion_state: args.basePromotionState,
-      effective_promotion_state: args.basePromotionState,
-      reason_code: "review_did_not_raise_promotion_state",
-    });
-  }
+  const derived = deriveGovernedStateRaisePreview({
+    baseState: args.basePromotionState,
+    review: args.review,
+    admissibility: args.admissibility,
+    defaultSource: "default_workflow_promotion_state",
+    reviewSource: "workflow_promotion_governance_review",
+    noReviewReason: "review_not_supplied",
+    notAdmissibleReason: "review_not_admissible",
+    noRaiseReason: "review_did_not_raise_promotion_state",
+    applyReason: "high_confidence_workflow_promotion",
+    noRaiseSuggestedState: args.basePromotionState,
+    appliedState: "stable",
+    extraNoApplyGuards: [{
+      when: args.basePromotionState === "stable",
+      reason: "already_stable",
+      reviewSuggestedState: "stable",
+    }],
+    shouldApply: (review) =>
+      review.adjudication.disposition === "recommend"
+      && review.adjudication.target_kind === "workflow"
+      && review.adjudication.target_level === "L2"
+      && review.adjudication.strategic_value === "high"
+      && review.adjudication.confidence >= minPromotionConfidence,
+  });
 
   return WorkflowWriteProjectionGovernancePolicyEffectSchema.parse({
-    source: "workflow_promotion_governance_review",
-    applies: true,
-    base_promotion_state: args.basePromotionState,
-    review_suggested_promotion_state: "stable",
-    effective_promotion_state: "stable",
-    reason_code: "high_confidence_workflow_promotion",
+    source: derived.source,
+    applies: derived.applies,
+    base_promotion_state: derived.baseState,
+    review_suggested_promotion_state: derived.reviewSuggestedState,
+    effective_promotion_state: derived.effectiveState,
+    reason_code: derived.reasonCode,
   });
 }
 

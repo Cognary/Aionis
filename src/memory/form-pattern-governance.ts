@@ -9,6 +9,7 @@ import {
   ToolsFeedbackFormPatternGovernancePolicyEffectSchema,
   type ToolsFeedbackFormPatternGovernancePolicyEffect,
 } from "./schemas.js";
+import { deriveGovernedStateRaisePreview } from "./governance-shared.js";
 
 export type FormPatternSourceExample = {
   node_id: string;
@@ -143,57 +144,32 @@ export function deriveFormPatternSemanticPolicyEffect(args: {
   minPromotionConfidence?: number;
 }): ToolsFeedbackFormPatternGovernancePolicyEffect {
   const minPromotionConfidence = args.minPromotionConfidence ?? 0.85;
-
-  if (!args.review) {
-    return ToolsFeedbackFormPatternGovernancePolicyEffectSchema.parse({
-      source: "default_pattern_anchor_state",
-      applies: false,
-      base_pattern_state: args.basePatternState,
-      review_suggested_pattern_state: null,
-      effective_pattern_state: args.basePatternState,
-      reason_code: "review_not_supplied",
-    });
-  }
-
-  if (!args.admissibility?.admissible) {
-    return ToolsFeedbackFormPatternGovernancePolicyEffectSchema.parse({
-      source: "default_pattern_anchor_state",
-      applies: false,
-      base_pattern_state: args.basePatternState,
-      review_suggested_pattern_state: null,
-      effective_pattern_state: args.basePatternState,
-      reason_code: "review_not_admissible",
-    });
-  }
-
-  if (args.basePatternState === "stable") {
-    return ToolsFeedbackFormPatternGovernancePolicyEffectSchema.parse({
-      source: "default_pattern_anchor_state",
-      applies: false,
-      base_pattern_state: args.basePatternState,
-      review_suggested_pattern_state: "stable",
-      effective_pattern_state: args.basePatternState,
-      reason_code: "already_stable",
-    });
-  }
-
-  if (args.review.adjudication.confidence < minPromotionConfidence) {
-    return ToolsFeedbackFormPatternGovernancePolicyEffectSchema.parse({
-      source: "default_pattern_anchor_state",
-      applies: false,
-      base_pattern_state: args.basePatternState,
-      review_suggested_pattern_state: "provisional",
-      effective_pattern_state: args.basePatternState,
-      reason_code: "review_did_not_raise_pattern_state",
-    });
-  }
+  const derived = deriveGovernedStateRaisePreview({
+    baseState: args.basePatternState,
+    review: args.review,
+    admissibility: args.admissibility,
+    defaultSource: "default_pattern_anchor_state",
+    reviewSource: "form_pattern_governance_review",
+    noReviewReason: "review_not_supplied",
+    notAdmissibleReason: "review_not_admissible",
+    noRaiseReason: "review_did_not_raise_pattern_state",
+    applyReason: "high_confidence_pattern_stabilization",
+    noRaiseSuggestedState: "provisional",
+    appliedState: "stable",
+    extraNoApplyGuards: [{
+      when: args.basePatternState === "stable",
+      reason: "already_stable",
+      reviewSuggestedState: "stable",
+    }],
+    shouldApply: (review) => review.adjudication.confidence >= minPromotionConfidence,
+  });
 
   return ToolsFeedbackFormPatternGovernancePolicyEffectSchema.parse({
-    source: "form_pattern_governance_review",
-    applies: true,
-    base_pattern_state: args.basePatternState,
-    review_suggested_pattern_state: "stable",
-    effective_pattern_state: "stable",
-    reason_code: "high_confidence_pattern_stabilization",
+    source: derived.source,
+    applies: derived.applies,
+    base_pattern_state: derived.baseState,
+    review_suggested_pattern_state: derived.reviewSuggestedState,
+    effective_pattern_state: derived.effectiveState,
+    reason_code: derived.reasonCode,
   });
 }

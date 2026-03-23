@@ -537,3 +537,4 @@ In short:
 7. replay repair review and workflow promotion now also share a common internal `promote_memory` preview/admissibility runner, reducing duplicated packet/review plumbing without widening governance semantics
 8. Lite now also has a generic governed semantic preview runner beneath both `promote_memory` and `form_pattern`, so operation families can share the same packet/review/admissibility/policy/trace skeleton while still keeping operation-specific gates and apply behavior
 9. replay repair review, tools feedback, and workflow promotion now also share a common internal governance decision-trace base, so trace flags, stage ordering, and reason-code collation no longer drift by call site
+10. replay repair review, tools feedback, and workflow promotion now also share a common internal governed state-raise preview helper for policy-effect derivation, so no-review/not-admissible/no-raise/raise branching no longer drifts by call site

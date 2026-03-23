@@ -72,3 +72,90 @@ export function buildGovernanceDecisionTraceBase(args: {
     }),
   };
 }
+
+export function deriveGovernedStateRaisePreview<
+  TState extends string,
+  TReview,
+  TReason extends string,
+  TSource extends string,
+>(args: {
+  baseState: TState;
+  review: TReview | null;
+  admissibility: MemoryAdmissibilityResult | null;
+  defaultSource: TSource;
+  reviewSource: TSource;
+  noReviewReason: TReason;
+  notAdmissibleReason: TReason;
+  noRaiseReason: TReason;
+  applyReason: TReason;
+  noRaiseSuggestedState: TState | null;
+  appliedState: TState;
+  extraNoApplyGuards?: Array<{
+    when: boolean;
+    reason: TReason;
+    reviewSuggestedState: TState | null;
+    effectiveState?: TState;
+  }>;
+  shouldApply: (review: TReview) => boolean;
+}): {
+  source: TSource;
+  applies: boolean;
+  baseState: TState;
+  reviewSuggestedState: TState | null;
+  effectiveState: TState;
+  reasonCode: TReason;
+} {
+  if (!args.review) {
+    return {
+      source: args.defaultSource,
+      applies: false,
+      baseState: args.baseState,
+      reviewSuggestedState: null,
+      effectiveState: args.baseState,
+      reasonCode: args.noReviewReason,
+    };
+  }
+
+  if (!args.admissibility?.admissible) {
+    return {
+      source: args.defaultSource,
+      applies: false,
+      baseState: args.baseState,
+      reviewSuggestedState: null,
+      effectiveState: args.baseState,
+      reasonCode: args.notAdmissibleReason,
+    };
+  }
+
+  for (const guard of args.extraNoApplyGuards ?? []) {
+    if (!guard.when) continue;
+    return {
+      source: args.defaultSource,
+      applies: false,
+      baseState: args.baseState,
+      reviewSuggestedState: guard.reviewSuggestedState,
+      effectiveState: guard.effectiveState ?? args.baseState,
+      reasonCode: guard.reason,
+    };
+  }
+
+  if (!args.shouldApply(args.review)) {
+    return {
+      source: args.defaultSource,
+      applies: false,
+      baseState: args.baseState,
+      reviewSuggestedState: args.noRaiseSuggestedState,
+      effectiveState: args.baseState,
+      reasonCode: args.noRaiseReason,
+    };
+  }
+
+  return {
+    source: args.reviewSource,
+    applies: true,
+    baseState: args.baseState,
+    reviewSuggestedState: args.appliedState,
+    effectiveState: args.appliedState,
+    reasonCode: args.applyReason,
+  };
+}

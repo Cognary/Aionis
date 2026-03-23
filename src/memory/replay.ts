@@ -25,7 +25,10 @@ import {
   type ReplayLearningProjectionResolvedConfig,
   type ReplayLearningProjectionResult,
 } from "./replay-learning.js";
-import { buildGovernanceDecisionTraceBase } from "./governance-shared.js";
+import {
+  buildGovernanceDecisionTraceBase,
+  deriveGovernedStateRaisePreview,
+} from "./governance-shared.js";
 import { buildReplayCostSignals } from "./cost-signals.js";
 import {
   ReplayPlaybookDispatchRequest,
@@ -1008,65 +1011,37 @@ function deriveReplayGovernancePolicyEffect(args: {
   const admissibility = args.admissibility ?? null;
   const review = args.review ?? null;
   const baseTargetRuleState = args.baseTargetRuleState;
-
-  if (!review) {
-    return {
-      source: "default_learning_projection",
-      applies: false,
-      base_target_rule_state: baseTargetRuleState,
-      review_suggested_target_rule_state: null,
-      effective_target_rule_state: baseTargetRuleState,
-      reason_code: "review_not_supplied",
-    };
-  }
-
-  if (!admissibility?.admissible) {
-    return {
-      source: "default_learning_projection",
-      applies: false,
-      base_target_rule_state: baseTargetRuleState,
-      review_suggested_target_rule_state: null,
-      effective_target_rule_state: baseTargetRuleState,
-      reason_code: "review_not_admissible",
-    };
-  }
-
-  if (args.explicitTargetRuleState) {
-    return {
-      source: "default_learning_projection",
-      applies: false,
-      base_target_rule_state: baseTargetRuleState,
-      review_suggested_target_rule_state: null,
-      effective_target_rule_state: baseTargetRuleState,
-      reason_code: "explicit_target_rule_state_preserved",
-    };
-  }
-
-  const highValueWorkflowPromotion =
-    review.adjudication.disposition === "recommend"
-    && review.adjudication.target_kind === "workflow"
-    && review.adjudication.target_level === "L2"
-    && review.adjudication.strategic_value === "high"
-    && baseTargetRuleState === "draft";
-
-  if (!highValueWorkflowPromotion) {
-    return {
-      source: "default_learning_projection",
-      applies: false,
-      base_target_rule_state: baseTargetRuleState,
-      review_suggested_target_rule_state: null,
-      effective_target_rule_state: baseTargetRuleState,
-      reason_code: "review_did_not_raise_target_rule_state",
-    };
-  }
-
+  const derived = deriveGovernedStateRaisePreview({
+    baseState: baseTargetRuleState,
+    review,
+    admissibility,
+    defaultSource: "default_learning_projection",
+    reviewSource: "promote_memory_governance_review",
+    noReviewReason: "review_not_supplied",
+    notAdmissibleReason: "review_not_admissible",
+    noRaiseReason: "review_did_not_raise_target_rule_state",
+    applyReason: "high_strategic_value_workflow_promotion",
+    noRaiseSuggestedState: null,
+    appliedState: "shadow",
+    extraNoApplyGuards: [{
+      when: args.explicitTargetRuleState,
+      reason: "explicit_target_rule_state_preserved",
+      reviewSuggestedState: null,
+    }],
+    shouldApply: (presentReview) =>
+      presentReview.adjudication.disposition === "recommend"
+      && presentReview.adjudication.target_kind === "workflow"
+      && presentReview.adjudication.target_level === "L2"
+      && presentReview.adjudication.strategic_value === "high"
+      && baseTargetRuleState === "draft",
+  });
   return {
-    source: "promote_memory_governance_review",
-    applies: true,
-    base_target_rule_state: baseTargetRuleState,
-    review_suggested_target_rule_state: "shadow",
-    effective_target_rule_state: "shadow",
-    reason_code: "high_strategic_value_workflow_promotion",
+    source: derived.source,
+    applies: derived.applies,
+    base_target_rule_state: derived.baseState,
+    review_suggested_target_rule_state: derived.reviewSuggestedState,
+    effective_target_rule_state: derived.effectiveState,
+    reason_code: derived.reasonCode,
   };
 }
 
