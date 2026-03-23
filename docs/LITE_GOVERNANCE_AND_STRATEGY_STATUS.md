@@ -207,6 +207,7 @@ What is real:
 8. Lite now has internal governance review-provider hooks threaded through replay, workflow auto-promotion, and tools feedback live paths; replay and workflow already use env-gated static `promote_memory` providers, and tools feedback now also has an env-gated static `form_pattern` provider fallback that can stabilize a pattern anchor without widening the public route contract
 9. the current replay/workflow/tools static provider gates are now built from one shared Lite runtime provider builder, so route/runtime wiring no longer duplicates provider construction or per-path env branching
 10. the shared Lite runtime provider builder can now also choose a mock-model-backed internal provider ahead of static fallback for replay, workflow, and tools, which keeps current behavior deterministic while establishing the runtime shape needed for a later real internal model client
+11. provider selection precedence itself is now centralized in a shared Lite governance provider factory, so runtime builders no longer duplicate mock-model versus static fallback rules by path
 
 Primary code:
 
