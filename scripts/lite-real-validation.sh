@@ -20,7 +20,7 @@ WORKDIR="${LITE_REAL_VALIDATION_WORKDIR:-}"
 BASELINE_JSON="${LITE_REAL_VALIDATION_BASELINE_JSON:-}"
 MAX_SUITE_SCORE_DROP="${LITE_REAL_VALIDATION_MAX_SUITE_SCORE_DROP:-0}"
 MAX_SCENARIO_SCORE_DROP="${LITE_REAL_VALIDATION_MAX_SCENARIO_SCORE_DROP:-0}"
-FAIL_ON_PROFILE_DRIFT="${LITE_REAL_VALIDATION_FAIL_ON_PROFILE_DRIFT:-true}"
+PROFILE_DRIFT_GATE_MODE="${LITE_REAL_VALIDATION_PROFILE_DRIFT_GATE_MODE:-hard}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --workdir)
@@ -83,8 +83,10 @@ run_step \
     if [[ -n "'"${BASELINE_JSON}"'" ]]; then
       cmd+=(--baseline-json "'"${BASELINE_JSON}"'")
       cmd+=(--fail-on-status-regression)
-      if [[ "'"${FAIL_ON_PROFILE_DRIFT}"'" == "true" ]]; then
+      if [[ "'"${PROFILE_DRIFT_GATE_MODE}"'" == "all" ]]; then
         cmd+=(--fail-on-profile-drift)
+      elif [[ "'"${PROFILE_DRIFT_GATE_MODE}"'" == "hard" ]]; then
+        cmd+=(--fail-on-hard-profile-drift)
       fi
       cmd+=(--max-suite-score-drop "'"${MAX_SUITE_SCORE_DROP}"'")
       cmd+=(--max-scenario-score-drop "'"${MAX_SCENARIO_SCORE_DROP}"'")
@@ -107,6 +109,7 @@ Workdir: ${WORKDIR}
 2. smoke local-process: ${SMOKE_LOCAL_DIR}
 3. benchmark: ${BENCHMARK_DIR}
 4. baseline: ${BASELINE_JSON:-none}
+5. profile drift gate mode: ${PROFILE_DRIFT_GATE_MODE}
 
 ## Key Artifacts
 

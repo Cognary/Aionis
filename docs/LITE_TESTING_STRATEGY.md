@@ -194,6 +194,7 @@ Baseline compare with regression gates:
 npx tsx scripts/lite-real-task-benchmark.ts \
   --baseline-json /tmp/lite-benchmark-baseline.json \
   --fail-on-status-regression \
+  --fail-on-hard-profile-drift \
   --fail-on-profile-drift \
   --max-suite-score-drop 0 \
   --max-scenario-score-drop 0
@@ -257,6 +258,7 @@ What this layer should catch:
 11. scenario status regressions against a stored baseline artifact
 12. scenario score regressions beyond an allowed threshold
 13. benchmark profile drift across the stable core execution-memory metrics
+14. hard-profile drift across the long-lived execution-memory product contract
 
 Current stable suite profile keys:
 
@@ -277,6 +279,31 @@ Current stable suite profile keys:
 15. `custom_model_client.replay_learning_rule_state`
 16. `slim_surface_boundary.planning_has_layered_context`
 17. `slim_surface_boundary.assemble_has_layered_context`
+
+Current benchmark profile policy:
+
+Hard regression indicators:
+
+1. `workflow_progression.stable_workflow_count_after_second`
+2. `multi_step_repair.stable_workflow_count_after_validate`
+3. `governed_learning.workflow_promotion_state`
+4. `governed_learning.tools_pattern_state`
+5. `governed_learning.tools_credibility_state`
+6. `governed_replay.replay_learning_rule_state`
+7. `governed_replay.stable_workflow_count_after_replay`
+8. `governance_provider_precedence.workflow_provider_override_blocked`
+9. `governance_provider_precedence.tools_provider_override_blocked`
+10. `custom_model_client.workflow_governed_state`
+11. `custom_model_client.tools_pattern_state`
+12. `custom_model_client.replay_learning_rule_state`
+13. `slim_surface_boundary.planning_has_layered_context`
+14. `slim_surface_boundary.assemble_has_layered_context`
+
+Soft profile indicators:
+
+1. `policy_learning.trusted_pattern_count_after_revalidation`
+2. `policy_learning.contested_revalidation_fresh_runs_needed`
+3. `governance_provider_precedence.tools_pattern_state`
 
 ## Current Command Model
 

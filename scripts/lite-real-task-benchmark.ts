@@ -99,6 +99,8 @@ type BenchmarkSuiteProfile = {
   };
 };
 
+type BenchmarkProfilePolicyLevel = "hard" | "soft";
+
 type BenchmarkSuiteResult = {
   generated_at: string;
   overall_status: "pass" | "fail";
@@ -111,8 +113,11 @@ type BenchmarkSuiteResult = {
   compare_summary?: {
     baseline_score_pct: number | null;
     score_delta_pct: number | null;
+    profile_policy_version: string;
     scenarios_with_status_change: string[];
     changed_profile_keys: string[];
+    hard_changed_profile_keys: string[];
+    soft_changed_profile_keys: string[];
   };
   scenarios: BenchmarkScenarioResult[];
 };
@@ -126,12 +131,35 @@ type CliOptions = {
   maxSuiteScoreDropPct: number | null;
   maxScenarioScoreDropPct: number | null;
   failOnProfileDrift: boolean;
+  failOnHardProfileDrift: boolean;
 };
 
 type BenchmarkRegressionGate = {
   ok: boolean;
   reasons: string[];
 };
+
+const BENCHMARK_PROFILE_POLICY_VERSION = "v1";
+const HARD_BENCHMARK_PROFILE_KEYS = new Set<string>([
+  "workflow_progression.stable_workflow_count_after_second",
+  "multi_step_repair.stable_workflow_count_after_validate",
+  "governed_learning.workflow_promotion_state",
+  "governed_learning.tools_pattern_state",
+  "governed_learning.tools_credibility_state",
+  "governed_replay.replay_learning_rule_state",
+  "governed_replay.stable_workflow_count_after_replay",
+  "governance_provider_precedence.workflow_provider_override_blocked",
+  "governance_provider_precedence.tools_provider_override_blocked",
+  "custom_model_client.workflow_governed_state",
+  "custom_model_client.tools_pattern_state",
+  "custom_model_client.replay_learning_rule_state",
+  "slim_surface_boundary.planning_has_layered_context",
+  "slim_surface_boundary.assemble_has_layered_context",
+]);
+
+function getBenchmarkProfilePolicyLevel(key: string): BenchmarkProfilePolicyLevel {
+  return HARD_BENCHMARK_PROFILE_KEYS.has(key) ? "hard" : "soft";
+}
 
 function tmpDbPath(name: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aionis-lite-real-benchmark-"));
@@ -151,6 +179,7 @@ function parseCliArgs(argv: string[]): CliOptions {
   let maxSuiteScoreDropPct: number | null = null;
   let maxScenarioScoreDropPct: number | null = null;
   let failOnProfileDrift = false;
+  let failOnHardProfileDrift = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -179,6 +208,10 @@ function parseCliArgs(argv: string[]): CliOptions {
     }
     if (arg === "--fail-on-profile-drift") {
       failOnProfileDrift = true;
+      continue;
+    }
+    if (arg === "--fail-on-hard-profile-drift") {
+      failOnHardProfileDrift = true;
       continue;
     }
     if (arg === "--max-suite-score-drop") {
@@ -232,6 +265,7 @@ function parseCliArgs(argv: string[]): CliOptions {
     maxSuiteScoreDropPct,
     maxScenarioScoreDropPct,
     failOnProfileDrift,
+    failOnHardProfileDrift,
   };
 }
 
@@ -391,6 +425,12 @@ function applyBaselineComparison(result: BenchmarkSuiteResult, baseline: Benchma
       : currentProfile
           .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(baselineProfile.get(key)))
           .map(([key]) => key);
+  const hardChangedProfileKeys = changedProfileKeys.filter(
+    (key) => getBenchmarkProfilePolicyLevel(key) === "hard",
+  );
+  const softChangedProfileKeys = changedProfileKeys.filter(
+    (key) => getBenchmarkProfilePolicyLevel(key) === "soft",
+  );
 
   return {
     ...result,
@@ -401,10 +441,13 @@ function applyBaselineComparison(result: BenchmarkSuiteResult, baseline: Benchma
         typeof baseline.suite_summary?.score_pct === "number"
           ? result.suite_summary.score_pct - baseline.suite_summary.score_pct
           : null,
+      profile_policy_version: BENCHMARK_PROFILE_POLICY_VERSION,
       scenarios_with_status_change: scenarios
         .filter((scenario) => scenario.compare_summary?.status_changed)
         .map((scenario) => scenario.id),
       changed_profile_keys: changedProfileKeys,
+      hard_changed_profile_keys: hardChangedProfileKeys,
+      soft_changed_profile_keys: softChangedProfileKeys,
     },
   };
 }
@@ -419,6 +462,7 @@ function evaluateRegressionGate(args: {
     || (
       !options.failOnStatusRegression
       && !options.failOnProfileDrift
+      && !options.failOnHardProfileDrift
       && options.maxSuiteScoreDropPct == null
       && options.maxScenarioScoreDropPct == null
     )
@@ -439,6 +483,13 @@ function evaluateRegressionGate(args: {
     const changedProfileKeys = result.compare_summary.changed_profile_keys;
     if (changedProfileKeys.length > 0) {
       reasons.push(`profile drift detected in keys: ${changedProfileKeys.join(", ")}`);
+    }
+  }
+
+  if (options.failOnHardProfileDrift) {
+    const hardChangedProfileKeys = result.compare_summary.hard_changed_profile_keys;
+    if (hardChangedProfileKeys.length > 0) {
+      reasons.push(`hard profile drift detected in keys: ${hardChangedProfileKeys.join(", ")}`);
     }
   }
 
@@ -3199,6 +3250,12 @@ function printHuman(result: BenchmarkSuiteResult) {
     lines.push(
       `Profile drift: ${result.compare_summary.changed_profile_keys.length === 0 ? "none" : result.compare_summary.changed_profile_keys.join(", ")}`,
     );
+    lines.push(
+      `Hard profile drift (${result.compare_summary.profile_policy_version}): ${result.compare_summary.hard_changed_profile_keys.length === 0 ? "none" : result.compare_summary.hard_changed_profile_keys.join(", ")}`,
+    );
+    lines.push(
+      `Soft profile drift (${result.compare_summary.profile_policy_version}): ${result.compare_summary.soft_changed_profile_keys.length === 0 ? "none" : result.compare_summary.soft_changed_profile_keys.join(", ")}`,
+    );
   }
   lines.push("Suite profile:");
   for (const [key, value] of flattenProfile(result.suite_profile as Record<string, unknown>)) {
@@ -3254,6 +3311,8 @@ function toMarkdown(result: BenchmarkSuiteResult): string {
         `${result.compare_summary.score_delta_pct == null ? "" : ` (delta \`${result.compare_summary.score_delta_pct >= 0 ? "+" : ""}${result.compare_summary.score_delta_pct}\`)`}`,
     );
     lines.push(`Profile drift: \`${result.compare_summary.changed_profile_keys.length === 0 ? "none" : result.compare_summary.changed_profile_keys.join(", ")}\``);
+    lines.push(`Hard profile drift (${result.compare_summary.profile_policy_version}): \`${result.compare_summary.hard_changed_profile_keys.length === 0 ? "none" : result.compare_summary.hard_changed_profile_keys.join(", ")}\``);
+    lines.push(`Soft profile drift (${result.compare_summary.profile_policy_version}): \`${result.compare_summary.soft_changed_profile_keys.length === 0 ? "none" : result.compare_summary.soft_changed_profile_keys.join(", ")}\``);
   }
   lines.push("");
   lines.push("Suite profile:");
