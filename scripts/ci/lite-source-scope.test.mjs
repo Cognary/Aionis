@@ -13,7 +13,14 @@ const FORBIDDEN_PATHS = [
   "src/sdk/index.ts",
   "src/memory/automation.ts",
   "src/memory/automation-lite.ts",
+  "src/memory/feedback.ts",
+  "src/memory/find.ts",
   "src/memory/handoff.ts",
+  "src/memory/packs.ts",
+  "src/memory/resolve.ts",
+  "src/memory/sessions.ts",
+  "src/memory/tools-decision.ts",
+  "src/memory/tools-run.ts",
   "src/routes/admin-control-alerts.ts",
   "src/routes/admin-control-config.ts",
   "src/routes/admin-control-dashboard.ts",
@@ -197,7 +204,6 @@ test("lite sdk-demo memory-access routes do not keep store fallback branches", (
 
 test("lite sdk-demo memory-feedback-tools routes do not keep store fallback branches", () => {
   const memoryFeedbackToolsFile = fs.readFileSync(path.join(ROOT, "src", "routes", "sdk-demo-memory-feedback-tools.ts"), "utf8");
-  const feedbackFile = fs.readFileSync(path.join(ROOT, "src", "memory", "feedback.ts"), "utf8");
   const forbiddenSymbols = [
     "type StoreLike",
     "store.withTx",
@@ -209,7 +215,7 @@ test("lite sdk-demo memory-feedback-tools routes do not keep store fallback bran
     assert.equal(memoryFeedbackToolsFile.includes(symbol), false, `${symbol} should be absent from lite memory-feedback-tools routes`);
   }
   assert.match(memoryFeedbackToolsFile, /aionis-lite sdk-demo memory-feedback routes only support AIONIS_EDITION=lite/);
-  assert.match(feedbackFile, /lite_write_store_required/);
+  assert.equal(memoryFeedbackToolsFile.includes("../memory/feedback.js"), false, "lite sdk-demo feedback routes should not keep legacy rule-feedback helpers");
 });
 
 test("lite memory-context-runtime routes do not keep store-client recall plumbing", () => {

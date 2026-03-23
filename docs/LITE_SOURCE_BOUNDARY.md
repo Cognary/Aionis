@@ -25,6 +25,7 @@ Explicitly removed from this repo:
 - benchmark, perf, hosted, and backfill jobs
 - dev, eval, MCP, SDK, and bench entrypoints
 - admin/control, automation, handoff, recall-core, and sandbox route source files
+- legacy feedback/find/resolve/sessions/packs/tool-run helper modules no longer required by the public SDK demo surface
 - benchmark fixtures and job docs tied to the full/server topology
 
 Still unsupported in Lite:
@@ -39,4 +40,5 @@ Still unsupported in Lite:
 
 Still pending before Lite becomes a clean source-built repo:
 - shrink the copied `src/` tree further so only the Lite/shared-core minimum remains
+- keep deleting legacy non-demo memory helper modules as they fall out of the `public:keep-manifest`
 - keep tightening shared-boundary metadata so public demo and private runtime surfaces are described separately

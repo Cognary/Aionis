@@ -197,10 +197,10 @@ Key modules:
    Replay, playbook, repair review, and governed execution machinery.
 5. `src/memory/replay-write.ts`
    Replay mirror write behavior.
-6. `src/memory/feedback.ts`
-   Feedback and rule-feedback persistence.
-7. `src/memory/packs.ts`
-   Pack import/export compatibility.
+6. `src/memory/tools-feedback.ts`
+   Tool feedback ingestion and governed pattern formation.
+7. `src/routes/sdk-demo-memory-routes.ts`
+   Public SDK demo route bundle over the narrowed Lite surface.
 
 Current architectural reality:
 
