@@ -84,6 +84,14 @@ type CliOptions = {
   outJson: string | null;
   outMarkdown: string | null;
   baselineJson: string | null;
+  failOnStatusRegression: boolean;
+  maxSuiteScoreDropPct: number | null;
+  maxScenarioScoreDropPct: number | null;
+};
+
+type BenchmarkRegressionGate = {
+  ok: boolean;
+  reasons: string[];
 };
 
 function tmpDbPath(name: string): string {
@@ -100,6 +108,9 @@ function parseCliArgs(argv: string[]): CliOptions {
   let outJson: string | null = null;
   let outMarkdown: string | null = null;
   let baselineJson: string | null = null;
+  let failOnStatusRegression = false;
+  let maxSuiteScoreDropPct: number | null = null;
+  let maxScenarioScoreDropPct: number | null = null;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -122,6 +133,28 @@ function parseCliArgs(argv: string[]): CliOptions {
       i += 1;
       continue;
     }
+    if (arg === "--fail-on-status-regression") {
+      failOnStatusRegression = true;
+      continue;
+    }
+    if (arg === "--max-suite-score-drop") {
+      const raw = argv[i + 1] ?? null;
+      if (raw == null) {
+        throw new Error("--max-suite-score-drop requires a numeric value");
+      }
+      maxSuiteScoreDropPct = Number(raw);
+      i += 1;
+      continue;
+    }
+    if (arg === "--max-scenario-score-drop") {
+      const raw = argv[i + 1] ?? null;
+      if (raw == null) {
+        throw new Error("--max-scenario-score-drop requires a numeric value");
+      }
+      maxScenarioScoreDropPct = Number(raw);
+      i += 1;
+      continue;
+    }
   }
 
   if (!outJson && argv.includes("--out-json")) {
@@ -133,8 +166,28 @@ function parseCliArgs(argv: string[]): CliOptions {
   if (!baselineJson && argv.includes("--baseline-json")) {
     throw new Error("--baseline-json requires a file path");
   }
+  if (
+    maxSuiteScoreDropPct != null
+    && (!Number.isFinite(maxSuiteScoreDropPct) || maxSuiteScoreDropPct < 0)
+  ) {
+    throw new Error("--max-suite-score-drop must be a non-negative number");
+  }
+  if (
+    maxScenarioScoreDropPct != null
+    && (!Number.isFinite(maxScenarioScoreDropPct) || maxScenarioScoreDropPct < 0)
+  ) {
+    throw new Error("--max-scenario-score-drop must be a non-negative number");
+  }
 
-  return { json, outJson, outMarkdown, baselineJson };
+  return {
+    json,
+    outJson,
+    outMarkdown,
+    baselineJson,
+    failOnStatusRegression,
+    maxSuiteScoreDropPct,
+    maxScenarioScoreDropPct,
+  };
 }
 
 function loadBaselineResult(filePath: string | null): BenchmarkSuiteResult | null {
@@ -175,6 +228,60 @@ function applyBaselineComparison(result: BenchmarkSuiteResult, baseline: Benchma
         .filter((scenario) => scenario.compare_summary?.status_changed)
         .map((scenario) => scenario.id),
     },
+  };
+}
+
+function evaluateRegressionGate(args: {
+  result: BenchmarkSuiteResult;
+  options: CliOptions;
+}): BenchmarkRegressionGate | null {
+  const { result, options } = args;
+  if (
+    !result.compare_summary
+    || (
+      !options.failOnStatusRegression
+      && options.maxSuiteScoreDropPct == null
+      && options.maxScenarioScoreDropPct == null
+    )
+  ) {
+    return null;
+  }
+
+  const reasons: string[] = [];
+
+  if (options.failOnStatusRegression) {
+    const changed = result.compare_summary.scenarios_with_status_change;
+    if (changed.length > 0) {
+      reasons.push(`status regression detected in scenarios: ${changed.join(", ")}`);
+    }
+  }
+
+  if (
+    options.maxSuiteScoreDropPct != null
+    && typeof result.compare_summary.score_delta_pct === "number"
+    && result.compare_summary.score_delta_pct < 0
+    && Math.abs(result.compare_summary.score_delta_pct) > options.maxSuiteScoreDropPct
+  ) {
+    reasons.push(
+      `suite score regressed by ${Math.abs(result.compare_summary.score_delta_pct)} which exceeds threshold ${options.maxSuiteScoreDropPct}`,
+    );
+  }
+
+  if (options.maxScenarioScoreDropPct != null) {
+    for (const scenario of result.scenarios) {
+      const delta = scenario.compare_summary?.score_delta_pct;
+      if (typeof delta !== "number" || delta >= 0) continue;
+      if (Math.abs(delta) > options.maxScenarioScoreDropPct) {
+        reasons.push(
+          `scenario ${scenario.id} regressed by ${Math.abs(delta)} which exceeds threshold ${options.maxScenarioScoreDropPct}`,
+        );
+      }
+    }
+  }
+
+  return {
+    ok: reasons.length === 0,
+    reasons,
   };
 }
 
@@ -3031,6 +3138,10 @@ async function main() {
     scenarios,
   };
   const result = applyBaselineComparison(rawResult, baseline);
+  const regressionGate = evaluateRegressionGate({
+    result,
+    options: cli,
+  });
 
   if (cli.outJson) {
     ensureParentDir(cli.outJson);
@@ -3048,6 +3159,12 @@ async function main() {
   }
 
   if (result.overall_status !== "pass") {
+    process.exitCode = 1;
+  }
+  if (regressionGate && !regressionGate.ok) {
+    for (const reason of regressionGate.reasons) {
+      console.error(`Regression gate failed: ${reason}`);
+    }
     process.exitCode = 1;
   }
 }

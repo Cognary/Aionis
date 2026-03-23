@@ -188,6 +188,16 @@ Current command:
 npm run benchmark:lite:real
 ```
 
+Baseline compare with regression gates:
+
+```bash
+npx tsx scripts/lite-real-task-benchmark.ts \
+  --baseline-json /tmp/lite-benchmark-baseline.json \
+  --fail-on-status-regression \
+  --max-suite-score-drop 0 \
+  --max-scenario-score-drop 0
+```
+
 Artifact mode:
 
 ```bash
@@ -198,6 +208,12 @@ Isolated full validation:
 
 ```bash
 npm run validate:lite:real
+```
+
+Isolated validation against a stored baseline:
+
+```bash
+bash scripts/lite-real-validation.sh --baseline-json /tmp/lite-benchmark-baseline.json
 ```
 
 Primary script:
@@ -231,6 +247,8 @@ What this layer should catch:
 8. selector/pattern regressions across candidate, trusted, contested, and revalidated states
 9. accidental reintroduction of heavy planner/context payload into default product surfaces
 10. benchmark score drift across the fixed scenario set
+11. scenario status regressions against a stored baseline artifact
+12. scenario score regressions beyond an allowed threshold
 
 ## Current Command Model
 

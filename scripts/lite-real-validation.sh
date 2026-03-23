@@ -7,7 +7,7 @@ cd "${ROOT_DIR}"
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/lite-real-validation.sh [--workdir /abs/path]
+  bash scripts/lite-real-validation.sh [--workdir /abs/path] [--baseline-json /abs/path]
 
 Behavior:
   - creates an external validation workdir by default
@@ -17,10 +17,17 @@ EOF
 }
 
 WORKDIR="${LITE_REAL_VALIDATION_WORKDIR:-}"
+BASELINE_JSON="${LITE_REAL_VALIDATION_BASELINE_JSON:-}"
+MAX_SUITE_SCORE_DROP="${LITE_REAL_VALIDATION_MAX_SUITE_SCORE_DROP:-0}"
+MAX_SCENARIO_SCORE_DROP="${LITE_REAL_VALIDATION_MAX_SCENARIO_SCORE_DROP:-0}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --workdir)
       WORKDIR="${2:-}"
+      shift 2
+      ;;
+    --baseline-json)
+      BASELINE_JSON="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -69,9 +76,19 @@ run_step \
 run_step \
   "benchmark:lite:real" \
   "${BENCHMARK_DIR}/run.log" \
-  npx tsx scripts/lite-real-task-benchmark.ts \
-    --out-json "${BENCHMARK_DIR}/lite-benchmark.json" \
-    --out-md "${BENCHMARK_DIR}/lite-benchmark.md"
+  bash -lc '
+    set -euo pipefail
+    cmd=(npx tsx scripts/lite-real-task-benchmark.ts)
+    if [[ -n "'"${BASELINE_JSON}"'" ]]; then
+      cmd+=(--baseline-json "'"${BASELINE_JSON}"'")
+      cmd+=(--fail-on-status-regression)
+      cmd+=(--max-suite-score-drop "'"${MAX_SUITE_SCORE_DROP}"'")
+      cmd+=(--max-scenario-score-drop "'"${MAX_SCENARIO_SCORE_DROP}"'")
+    fi
+    cmd+=(--out-json "'"${BENCHMARK_DIR}/lite-benchmark.json"'")
+    cmd+=(--out-md "'"${BENCHMARK_DIR}/lite-benchmark.md"'")
+    "${cmd[@]}"
+  '
 
 cat > "${SUMMARY_FILE}" <<EOF
 # Lite Real Validation Summary
@@ -85,6 +102,7 @@ Workdir: ${WORKDIR}
 1. smoke default: ${SMOKE_DEFAULT_DIR}
 2. smoke local-process: ${SMOKE_LOCAL_DIR}
 3. benchmark: ${BENCHMARK_DIR}
+4. baseline: ${BASELINE_JSON:-none}
 
 ## Key Artifacts
 
@@ -93,6 +111,7 @@ Workdir: ${WORKDIR}
 3. smoke default log: ${SMOKE_DEFAULT_DIR}/run.log
 4. smoke local-process log: ${SMOKE_LOCAL_DIR}/run.log
 5. benchmark log: ${BENCHMARK_DIR}/run.log
+6. baseline json: ${BASELINE_JSON:-none}
 EOF
 
 echo
