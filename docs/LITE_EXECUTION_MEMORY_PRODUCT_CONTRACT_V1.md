@@ -32,7 +32,7 @@ Primary runtime references:
 4. [src/memory/schemas.ts](/Volumes/ziel/Aionisgo/src/memory/schemas.ts)
 5. [src/memory/tools-select.ts](/Volumes/ziel/Aionisgo/src/memory/tools-select.ts)
 6. [src/memory/replay.ts](/Volumes/ziel/Aionisgo/src/memory/replay.ts)
-7. [src/routes/memory-replay-governed.ts](/Volumes/ziel/Aionisgo/src/routes/memory-replay-governed.ts)
+7. [src/routes/sdk-demo-memory-replay-governed.ts](/Volumes/ziel/Aionisgo/src/routes/sdk-demo-memory-replay-governed.ts)
 
 Primary test references:
 
@@ -143,7 +143,7 @@ Canonical selector-facing outputs:
 Primary runtime reference:
 
 1. [src/memory/replay.ts](/Volumes/ziel/Aionisgo/src/memory/replay.ts)
-2. [src/routes/memory-replay-governed.ts](/Volumes/ziel/Aionisgo/src/routes/memory-replay-governed.ts)
+2. [src/routes/sdk-demo-memory-replay-governed.ts](/Volumes/ziel/Aionisgo/src/routes/sdk-demo-memory-replay-governed.ts)
 
 Primary route contract:
 

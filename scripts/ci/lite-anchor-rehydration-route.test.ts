@@ -8,8 +8,8 @@ import Fastify from "fastify";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
 import { prepareMemoryWrite, applyMemoryWrite } from "../../src/memory/write.ts";
-import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
-import { registerMemoryFeedbackToolRoutes } from "../../src/routes/memory-feedback-tools.ts";
+import { registerSdkDemoMemoryAccessRoutes as registerMemoryAccessRoutes } from "../../src/routes/sdk-demo-memory-access.ts";
+import { registerSdkDemoMemoryFeedbackToolRoutes as registerMemoryFeedbackToolRoutes } from "../../src/routes/sdk-demo-memory-feedback-tools.ts";
 import { registerHostErrorHandler } from "../../src/host/http-host-bootstrap-shared.ts";
 import { buildAionisUri } from "../../src/memory/uri.ts";
 import { InflightGate } from "../../src/util/inflight_gate.ts";
@@ -164,10 +164,7 @@ test("lite memory-access route exposes anchor payload rehydration", async () => 
         MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
         MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
       } as any,
-      embedder: null,
       liteWriteStore: store,
-      writeAccessShadowMirrorV2: false,
-      requireStoreFeatureCapability: () => {},
       requireMemoryPrincipal: guards.requireMemoryPrincipal,
       withIdentityFromRequest: guards.withIdentityFromRequest,
       enforceRateLimit: guards.enforceRateLimit,
@@ -222,10 +219,7 @@ test("lite memory-feedback-tools routes expose rehydrate_payload as a runtime to
         MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
         MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
       } as any,
-      embedder: null,
       liteWriteStore: store,
-      writeAccessShadowMirrorV2: false,
-      requireStoreFeatureCapability: () => {},
       requireMemoryPrincipal: guards.requireMemoryPrincipal,
       withIdentityFromRequest: guards.withIdentityFromRequest,
       enforceRateLimit: guards.enforceRateLimit,

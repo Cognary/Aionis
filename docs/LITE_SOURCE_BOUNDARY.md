@@ -8,13 +8,13 @@ Current source boundary:
 - `src/runtime-entry-sdk-demo.ts` is the public runtime truth for Lite startup.
 - `src/app/runtime-services.ts` is narrowed to Lite-owned store/runtime wiring only.
 - `src/app/request-guards.ts` is narrowed to local-only identity and rate-limit guards.
-- `src/routes/memory-access.ts` is narrowed to Lite SQLite access only.
-- `src/routes/memory-access.ts` also exposes Lite-only anchor payload rehydration without restoring server lifecycle routes.
-- `src/routes/memory-feedback-tools.ts` is narrowed to Lite SQLite feedback/rules/tools access only.
+- `src/routes/sdk-demo-memory-access.ts` is the public Lite demo access surface.
+- `src/routes/sdk-demo-memory-access.ts` also exposes Lite-only anchor payload rehydration without restoring server lifecycle routes.
+- `src/routes/sdk-demo-memory-feedback-tools.ts` is the public Lite demo feedback/rules/tools surface.
 - `src/routes/handoff.ts` is narrowed to Lite SQLite handoff store/recover only.
 - `src/routes/memory-recall.ts` is narrowed to direct Lite recall access plus Lite rule evaluation.
 - `src/routes/memory-context-runtime.ts` is narrowed to direct Lite recall access plus Lite rule/tool assembly.
-- `src/routes/memory-replay-governed.ts` is narrowed to Lite replay access plus Lite write-backed governed replay flows.
+- `src/routes/sdk-demo-memory-replay-governed.ts` is the public Lite replay-governed demo surface.
 - `src/routes/memory-sandbox.ts` stays Lite-only while preserving `SANDBOX_ADMIN_ONLY`.
 - `packages/runtime-core/` is the shared extraction seam.
 - `src/host/http-host-bootstrap-shared.ts` holds the public demo host bootstrap helpers.

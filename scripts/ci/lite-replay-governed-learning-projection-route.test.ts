@@ -12,7 +12,7 @@ import { createReplayRuntimeOptionBuilders } from "../../src/app/replay-runtime-
 import { registerHostErrorHandler } from "../../src/host/http-host-bootstrap-shared.ts";
 import { PlanningContextRouteContractSchema, ReplayPlaybookRepairReviewResponseSchema } from "../../src/memory/schemas.ts";
 import { registerMemoryContextRuntimeRoutes } from "../../src/routes/memory-context-runtime.ts";
-import { registerMemoryReplayGovernedRoutes } from "../../src/routes/memory-replay-governed.ts";
+import { registerSdkDemoMemoryReplayGovernedRoutes as registerMemoryReplayGovernedRoutes } from "../../src/routes/sdk-demo-memory-replay-governed.ts";
 import { applyReplayMemoryWrite } from "../../src/memory/replay-write.ts";
 import { createLiteRecallStore } from "../../src/store/lite-recall-store.ts";
 import { createLiteReplayStore } from "../../src/store/lite-replay-store.ts";
@@ -248,7 +248,6 @@ function registerReplayReviewRoute(args: {
     acquireInflightSlot: guards.acquireInflightSlot,
     withReplayRepairReviewDefaults,
     buildReplayRepairReviewOptions: runtimeOptions.buildReplayRepairReviewOptions,
-    buildReplayPlaybookRunOptions: runtimeOptions.buildAutomationReplayRunOptions,
   });
 
   if (args.liteRecallStore) {

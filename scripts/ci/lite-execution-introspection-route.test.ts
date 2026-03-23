@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { registerHostErrorHandler } from "../../src/host/http-host-bootstrap-shared.ts";
-import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
+import { registerSdkDemoMemoryAccessRoutes as registerMemoryAccessRoutes } from "../../src/routes/sdk-demo-memory-access.ts";
 import {
   ExecutionMemoryIntrospectionResponseSchema,
   MemoryAnchorV1Schema,
@@ -652,10 +652,7 @@ test("execution introspection route exposes demo-friendly workflow and pattern s
         MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
         MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
       } as any,
-      embedder: null,
       liteWriteStore,
-      writeAccessShadowMirrorV2: false,
-      requireStoreFeatureCapability: () => {},
       requireMemoryPrincipal: guards.requireMemoryPrincipal,
       withIdentityFromRequest: guards.withIdentityFromRequest,
       enforceRateLimit: guards.enforceRateLimit,
@@ -762,10 +759,7 @@ test("execution introspection demo workflow lines keep source and tools for exec
         MEMORY_SHADOW_DUAL_WRITE_ENABLED: false,
         MEMORY_SHADOW_DUAL_WRITE_STRICT: false,
       } as any,
-      embedder: null,
       liteWriteStore,
-      writeAccessShadowMirrorV2: false,
-      requireStoreFeatureCapability: () => {},
       requireMemoryPrincipal: guards.requireMemoryPrincipal,
       withIdentityFromRequest: guards.withIdentityFromRequest,
       enforceRateLimit: guards.enforceRateLimit,

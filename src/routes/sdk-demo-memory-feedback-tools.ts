@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Env } from "../config.js";
 import type { EmbeddingProvider } from "../embeddings/types.js";
+import { suppressPatternAnchorLite, unsuppressPatternAnchorLite } from "../memory/pattern-operator-override.js";
+import { rehydrateAnchorPayloadLite } from "../memory/rehydrate-anchor.js";
 import { selectTools } from "../memory/tools-select.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
 import {
@@ -12,13 +14,20 @@ import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { AuthPrincipal } from "../util/auth.js";
 import type { InflightGateToken } from "../util/inflight_gate.js";
 
-type SdkDemoMemoryFeedbackToolKind = "tools_select" | "tools_feedback";
+type SdkDemoMemoryFeedbackToolKind =
+  | "tools_select"
+  | "tools_feedback"
+  | "patterns_suppress"
+  | "patterns_unsuppress"
+  | "rehydrate_payload";
 type SdkDemoMemoryFeedbackInflightKind = "write" | "recall";
 type SdkDemoMemoryFeedbackRequest = FastifyRequest<{ Body: unknown }>;
 
 type SdkDemoLiteFeedbackStoreLike =
   NonNullable<NonNullable<Parameters<typeof selectTools>[4]>["liteWriteStore"]>
   & NonNullable<NonNullable<Parameters<typeof toolSelectionFeedback>[4]>["liteWriteStore"]>
+  & Pick<Parameters<typeof suppressPatternAnchorLite>[0]["liteWriteStore"], "findNodes" | "updateNodeAnchorState">
+  & Parameters<typeof rehydrateAnchorPayloadLite>[0]
   & {
     withTx: <T>(fn: () => Promise<T>) => Promise<T>;
   };
@@ -130,6 +139,64 @@ export function registerSdkDemoMemoryFeedbackToolRoutes(args: {
             governanceReviewProviders: governanceProviders.toolsFeedback,
             liteWriteStore,
           }),
+        ),
+    });
+    return reply.code(200).send(out);
+  });
+
+  app.post("/v1/memory/patterns/suppress", async (req: SdkDemoMemoryFeedbackRequest, reply: FastifyReply) => {
+    const out = await runSdkDemoFeedbackRoute({
+      req,
+      reply,
+      requestKind: "patterns_suppress",
+      inflightKind: "write",
+      withGate: false,
+      execute: (body) =>
+        liteWriteStore.withTx(() =>
+          suppressPatternAnchorLite({
+            body,
+            defaultScope: env.MEMORY_SCOPE,
+            defaultTenantId: env.MEMORY_TENANT_ID,
+            liteWriteStore,
+          }),
+        ),
+    });
+    return reply.code(200).send(out);
+  });
+
+  app.post("/v1/memory/patterns/unsuppress", async (req: SdkDemoMemoryFeedbackRequest, reply: FastifyReply) => {
+    const out = await runSdkDemoFeedbackRoute({
+      req,
+      reply,
+      requestKind: "patterns_unsuppress",
+      inflightKind: "write",
+      withGate: false,
+      execute: (body) =>
+        liteWriteStore.withTx(() =>
+          unsuppressPatternAnchorLite({
+            body,
+            defaultScope: env.MEMORY_SCOPE,
+            defaultTenantId: env.MEMORY_TENANT_ID,
+            liteWriteStore,
+          }),
+        ),
+    });
+    return reply.code(200).send(out);
+  });
+
+  app.post("/v1/memory/tools/rehydrate_payload", async (req: SdkDemoMemoryFeedbackRequest, reply: FastifyReply) => {
+    const out = await runSdkDemoFeedbackRoute({
+      req,
+      reply,
+      requestKind: "rehydrate_payload",
+      inflightKind: "recall",
+      execute: (body) =>
+        rehydrateAnchorPayloadLite(
+          liteWriteStore,
+          body,
+          env.MEMORY_SCOPE,
+          env.MEMORY_TENANT_ID,
+          env.LITE_LOCAL_ACTOR_ID,
         ),
     });
     return reply.code(200).send(out);

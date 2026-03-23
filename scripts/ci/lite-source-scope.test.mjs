@@ -16,6 +16,10 @@ const FORBIDDEN_PATHS = [
   "src/routes/admin-control-config.ts",
   "src/routes/admin-control-dashboard.ts",
   "src/routes/admin-control-entities.ts",
+  "src/routes/memory-access.ts",
+  "src/routes/memory-feedback-tools.ts",
+  "src/routes/memory-replay-governed.ts",
+  "src/routes/memory-write.ts",
   "src/util/error-format.ts",
 ];
 
@@ -159,13 +163,13 @@ test("lite health surface avoids backend implementation detail fields", () => {
 });
 
 test("lite pack routes do not keep admin-token-only gating", () => {
-  const memoryAccessFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-access.ts"), "utf8");
+  const memoryAccessFile = fs.readFileSync(path.join(ROOT, "src", "routes", "sdk-demo-memory-access.ts"), "utf8");
   assert.equal(memoryAccessFile.includes("requireAdmin: true"), false, "pack routes should not require admin token in lite");
   assert.equal(memoryAccessFile.includes("requireAdminToken"), false, "memory-access should not depend on admin token helper in lite");
 });
 
-test("lite memory-access routes do not keep store fallback branches", () => {
-  const memoryAccessFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-access.ts"), "utf8");
+test("lite sdk-demo memory-access routes do not keep store fallback branches", () => {
+  const memoryAccessFile = fs.readFileSync(path.join(ROOT, "src", "routes", "sdk-demo-memory-access.ts"), "utf8");
   const forbiddenSymbols = [
     "store.withTx",
     "store.withClient",
@@ -176,7 +180,7 @@ test("lite memory-access routes do not keep store fallback branches", () => {
   for (const symbol of forbiddenSymbols) {
     assert.equal(memoryAccessFile.includes(symbol), false, `${symbol} should be absent from lite memory-access routes`);
   }
-  assert.match(memoryAccessFile, /aionis-lite memory-access routes only support AIONIS_EDITION=lite/);
+  assert.match(memoryAccessFile, /aionis-lite sdk-demo memory-access routes only support AIONIS_EDITION=lite/);
 });
 
 test("lite memory-sandbox routes keep optional admin-only guard but default to local direct use", () => {
@@ -190,8 +194,8 @@ test("lite memory-sandbox routes keep optional admin-only guard but default to l
   assert.match(configFile, /SANDBOX_ADMIN_ONLY:[\s\S]*v \?\? "false"/);
 });
 
-test("lite memory-feedback-tools routes do not keep store fallback branches", () => {
-  const memoryFeedbackToolsFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-feedback-tools.ts"), "utf8");
+test("lite sdk-demo memory-feedback-tools routes do not keep store fallback branches", () => {
+  const memoryFeedbackToolsFile = fs.readFileSync(path.join(ROOT, "src", "routes", "sdk-demo-memory-feedback-tools.ts"), "utf8");
   const feedbackFile = fs.readFileSync(path.join(ROOT, "src", "memory", "feedback.ts"), "utf8");
   const forbiddenSymbols = [
     "type StoreLike",
@@ -203,7 +207,7 @@ test("lite memory-feedback-tools routes do not keep store fallback branches", ()
   for (const symbol of forbiddenSymbols) {
     assert.equal(memoryFeedbackToolsFile.includes(symbol), false, `${symbol} should be absent from lite memory-feedback-tools routes`);
   }
-  assert.match(memoryFeedbackToolsFile, /aionis-lite memory-feedback-tools routes only support AIONIS_EDITION=lite/);
+  assert.match(memoryFeedbackToolsFile, /aionis-lite sdk-demo memory-feedback routes only support AIONIS_EDITION=lite/);
   assert.match(feedbackFile, /lite_write_store_required/);
 });
 
@@ -255,8 +259,8 @@ test("lite host does not register broken memory lifecycle routes and exposes the
   assert.match(liteEditionFile, /\/v1\/memory\/nodes\/activate/);
 });
 
-test("lite memory-replay-governed routes do not keep store fallback branches", () => {
-  const replayGovernedFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-replay-governed.ts"), "utf8");
+test("lite sdk-demo memory-replay-governed routes do not keep store fallback branches", () => {
+  const replayGovernedFile = fs.readFileSync(path.join(ROOT, "src", "routes", "sdk-demo-memory-replay-governed.ts"), "utf8");
   const forbiddenSymbols = [
     "type StoreLike",
     "store.withTx",
@@ -266,5 +270,5 @@ test("lite memory-replay-governed routes do not keep store fallback branches", (
   for (const symbol of forbiddenSymbols) {
     assert.equal(replayGovernedFile.includes(symbol), false, `${symbol} should be absent from lite memory-replay-governed routes`);
   }
-  assert.match(replayGovernedFile, /aionis-lite memory-replay-governed routes only support AIONIS_EDITION=lite/);
+  assert.match(replayGovernedFile, /aionis-lite sdk-demo replay routes only support AIONIS_EDITION=lite/);
 });

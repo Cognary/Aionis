@@ -103,7 +103,7 @@ Primary code:
 1. `src/memory/replay.ts`
 2. `src/memory/runtime-tool-hints.ts`
 3. `src/memory/rehydrate-anchor.ts`
-4. `src/routes/memory-access.ts`
+4. `src/routes/sdk-demo-memory-access.ts`
 
 ### 3. Execution Policy Learning Loop
 

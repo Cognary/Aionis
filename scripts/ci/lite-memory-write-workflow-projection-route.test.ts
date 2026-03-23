@@ -8,9 +8,9 @@ import Fastify from "fastify";
 import { FakeEmbeddingProvider } from "../../src/embeddings/fake.ts";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { registerHostErrorHandler } from "../../src/host/http-host-bootstrap-shared.ts";
-import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
+import { registerSdkDemoMemoryAccessRoutes as registerMemoryAccessRoutes } from "../../src/routes/sdk-demo-memory-access.ts";
 import { registerMemoryContextRuntimeRoutes } from "../../src/routes/memory-context-runtime.ts";
-import { registerMemoryWriteRoutes } from "../../src/routes/memory-write.ts";
+import { registerSdkDemoMemoryWriteRoutes as registerMemoryWriteRoutes } from "../../src/routes/sdk-demo-memory-write.ts";
 import {
   ExecutionMemoryIntrospectionResponseSchema,
   PlanningContextRouteContractSchema,
@@ -163,10 +163,7 @@ function registerApp(args: {
   registerMemoryAccessRoutes({
     app: args.app,
     env,
-    embedder: null,
     liteWriteStore: args.liteWriteStore,
-    writeAccessShadowMirrorV2: false,
-    requireStoreFeatureCapability: () => {},
     requireMemoryPrincipal: guards.requireMemoryPrincipal,
     withIdentityFromRequest: guards.withIdentityFromRequest,
     enforceRateLimit: guards.enforceRateLimit,

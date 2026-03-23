@@ -19,11 +19,11 @@ import { createReplayRepairReviewPolicy } from "../src/app/replay-repair-review-
 import { createReplayRuntimeOptionBuilders } from "../src/app/replay-runtime-options.ts";
 import type { LiteGovernanceRuntimeProviderBuilderOptions } from "../src/app/governance-runtime-providers.ts";
 import { registerHostErrorHandler } from "../src/host/http-host-bootstrap-shared.ts";
-import { registerMemoryAccessRoutes } from "../src/routes/memory-access.ts";
+import { registerSdkDemoMemoryAccessRoutes as registerMemoryAccessRoutes } from "../src/routes/sdk-demo-memory-access.ts";
 import { registerMemoryContextRuntimeRoutes } from "../src/routes/memory-context-runtime.ts";
-import { registerMemoryFeedbackToolRoutes } from "../src/routes/memory-feedback-tools.ts";
-import { registerMemoryReplayGovernedRoutes } from "../src/routes/memory-replay-governed.ts";
-import { registerMemoryWriteRoutes } from "../src/routes/memory-write.ts";
+import { registerSdkDemoMemoryFeedbackToolRoutes as registerMemoryFeedbackToolRoutes } from "../src/routes/sdk-demo-memory-feedback-tools.ts";
+import { registerSdkDemoMemoryReplayGovernedRoutes as registerMemoryReplayGovernedRoutes } from "../src/routes/sdk-demo-memory-replay-governed.ts";
+import { registerSdkDemoMemoryWriteRoutes as registerMemoryWriteRoutes } from "../src/routes/sdk-demo-memory-write.ts";
 import {
   ExecutionMemoryIntrospectionResponseSchema,
   PlanningContextRouteContractSchema,
@@ -942,10 +942,7 @@ function registerBenchmarkApp(args: {
   registerMemoryAccessRoutes({
     app: args.app,
     env,
-    embedder: FakeEmbeddingProvider,
     liteWriteStore: args.liteWriteStore,
-    writeAccessShadowMirrorV2: false,
-    requireStoreFeatureCapability: () => {},
     requireMemoryPrincipal: guards.requireMemoryPrincipal,
     withIdentityFromRequest: guards.withIdentityFromRequest,
     enforceRateLimit: guards.enforceRateLimit,
@@ -2914,7 +2911,6 @@ function registerReplayBenchmarkApp(args: {
     acquireInflightSlot: guards.acquireInflightSlot,
     withReplayRepairReviewDefaults,
     buildReplayRepairReviewOptions: runtimeOptions.buildReplayRepairReviewOptions,
-    buildReplayPlaybookRunOptions: runtimeOptions.buildAutomationReplayRunOptions,
   });
 
   registerMemoryContextRuntimeRoutes({
@@ -2981,10 +2977,7 @@ function registerReplayBenchmarkApp(args: {
   registerMemoryAccessRoutes({
     app: args.app,
     env,
-    embedder: FakeEmbeddingProvider,
     liteWriteStore: args.liteWriteStore,
-    writeAccessShadowMirrorV2: false,
-    requireStoreFeatureCapability: () => {},
     requireMemoryPrincipal: guards.requireMemoryPrincipal,
     withIdentityFromRequest: guards.withIdentityFromRequest,
     enforceRateLimit: guards.enforceRateLimit,
