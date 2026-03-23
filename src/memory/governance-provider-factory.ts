@@ -1,4 +1,8 @@
 import { buildLiteGovernanceModelClient } from "./governance-model-client-factory.js";
+import type {
+  GovernanceModelClientFactory,
+  GovernanceModelClientMode,
+} from "./governance-model-client.js";
 import {
   createModelBackedFormPatternGovernanceReviewProvider,
   createModelBackedPromoteMemoryGovernanceReviewProvider,
@@ -13,8 +17,9 @@ import type {
 } from "./governance-provider-types.js";
 
 export function buildPromoteMemoryGovernanceReviewProvider(args: {
-  mockModelEnabled?: boolean;
+  modelClientMode?: GovernanceModelClientMode;
   staticEnabled?: boolean;
+  modelClientFactory?: GovernanceModelClientFactory;
   mockModel?: {
     confidence?: number;
     reason?: string;
@@ -25,14 +30,16 @@ export function buildPromoteMemoryGovernanceReviewProvider(args: {
   };
 }): PromoteMemoryGovernanceReviewProvider | undefined {
   return (
-    (args.mockModelEnabled
+    (args.modelClientMode && args.modelClientMode !== "off"
       ? createModelBackedPromoteMemoryGovernanceReviewProvider({
           modelClient: buildLiteGovernanceModelClient({
             promoteMemory: {
-              mode: "builtin",
+              mode: args.modelClientMode,
               confidence: args.mockModel?.confidence,
               reason: args.mockModel?.reason,
             },
+          }, {
+            modelClientFactory: args.modelClientFactory,
           }),
         })
       : undefined)
@@ -46,8 +53,9 @@ export function buildPromoteMemoryGovernanceReviewProvider(args: {
 }
 
 export function buildFormPatternGovernanceReviewProvider(args: {
-  mockModelEnabled?: boolean;
+  modelClientMode?: GovernanceModelClientMode;
   staticEnabled?: boolean;
+  modelClientFactory?: GovernanceModelClientFactory;
   mockModel?: {
     confidence?: number;
     reason?: string;
@@ -58,14 +66,16 @@ export function buildFormPatternGovernanceReviewProvider(args: {
   };
 }): FormPatternGovernanceReviewProvider | undefined {
   return (
-    (args.mockModelEnabled
+    (args.modelClientMode && args.modelClientMode !== "off"
       ? createModelBackedFormPatternGovernanceReviewProvider({
           modelClient: buildLiteGovernanceModelClient({
             formPattern: {
-              mode: "builtin",
+              mode: args.modelClientMode,
               confidence: args.mockModel?.confidence,
               reason: args.mockModel?.reason,
             },
+          }, {
+            modelClientFactory: args.modelClientFactory,
           }),
         })
       : undefined)

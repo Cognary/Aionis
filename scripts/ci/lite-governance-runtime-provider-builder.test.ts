@@ -70,3 +70,44 @@ test("lite governance runtime builder prefers mock-model-backed providers over s
   assert.equal(workflowReview?.adjudication.reason, "mock model found workflow-signature evidence");
   assert.equal(toolsReview?.adjudication.reason, "mock model found grouped signature evidence");
 });
+
+test("lite governance runtime builder can use injected custom model client factory override", () => {
+  const providers = buildLiteGovernanceRuntimeProviders(buildEnv({
+    REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+  }), {
+    modelClientFactory: ({ operation }) =>
+      operation === "promote_memory"
+        ? {
+            reviewPromoteMemory: () => ({
+              review_version: "promote_memory_semantic_review_v1",
+              adjudication: {
+                operation: "promote_memory",
+                disposition: "recommend",
+                target_kind: "workflow",
+                target_level: "L2",
+                reason: "runtime custom factory",
+                confidence: 0.95,
+                strategic_value: "high",
+              },
+            }),
+          }
+        : undefined,
+    modelClientModes: {
+      replayRepairReview: {
+        promote_memory: "custom",
+      },
+    },
+  });
+
+  const review = providers.replayRepairReview?.promote_memory?.resolveReviewResult({
+    reviewPacket: {
+      deterministic_gate: { gate_satisfied: true },
+      requested_target_kind: "workflow",
+      requested_target_level: "L2",
+      candidate_examples: [{ workflow_signature: "wf:test" }],
+    } as any,
+    suppliedReviewResult: null,
+  });
+
+  assert.equal(review?.adjudication.reason, "runtime custom factory");
+});

@@ -29,7 +29,7 @@ test("promote_memory provider factory falls back to static provider", () => {
 
 test("promote_memory provider factory prefers mock-model-backed provider", () => {
   const provider = buildPromoteMemoryGovernanceReviewProvider({
-    mockModelEnabled: true,
+    modelClientMode: "builtin",
     staticEnabled: true,
   });
   const review = provider?.resolveReviewResult({
@@ -47,7 +47,7 @@ test("promote_memory provider factory prefers mock-model-backed provider", () =>
 
 test("form_pattern provider factory prefers mock-model-backed provider", () => {
   const provider = buildFormPatternGovernanceReviewProvider({
-    mockModelEnabled: true,
+    modelClientMode: "builtin",
     staticEnabled: true,
   });
   const review = provider?.resolveReviewResult({

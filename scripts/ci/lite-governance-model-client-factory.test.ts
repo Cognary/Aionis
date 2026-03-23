@@ -94,3 +94,36 @@ test("lite governance model client factory can build combined mock client", () =
   assert.equal(typeof client.reviewPromoteMemory, "function");
   assert.equal(typeof client.reviewFormPattern, "function");
 });
+
+test("lite governance model client factory can use injected custom factory", () => {
+  const client = buildLiteGovernanceModelClient({
+    promoteMemory: {
+      mode: "custom",
+    },
+  }, {
+    modelClientFactory: ({ operation }) =>
+      operation === "promote_memory"
+        ? {
+            reviewPromoteMemory: () => ({
+              review_version: "promote_memory_semantic_review_v1",
+              adjudication: {
+                operation: "promote_memory",
+                disposition: "recommend",
+                target_kind: "workflow",
+                target_level: "L2",
+                reason: "custom factory",
+                confidence: 0.99,
+                strategic_value: "high",
+              },
+            }),
+          }
+        : undefined,
+  });
+
+  const review = client.reviewPromoteMemory?.({
+    reviewPacket: {} as any,
+    suppliedReviewResult: null,
+  });
+
+  assert.equal(review?.adjudication.reason, "custom factory");
+});

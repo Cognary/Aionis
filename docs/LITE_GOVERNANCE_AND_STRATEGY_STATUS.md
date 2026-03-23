@@ -211,6 +211,7 @@ What is real:
 12. mock governance model-client construction is now also centralized in a shared Lite client factory, so a future real internal model client can replace the current mock baseline without changing provider factories or runtime wiring
 13. the current model-backed provider path now also has a first builtin internal governance model-client implementation for `promote_memory` and `form_pattern`, so internal model-backed review no longer has to be routed through static provider wrappers
 14. builtin internal governance review generation for `promote_memory` and `form_pattern` is now also extracted into shared adjudication modules, so builtin clients are thin wrappers and future internal clients can reuse the same bounded review logic
+15. Lite now has an explicit internal governance model-client contract and runtime replacement hook, so a future real internal model implementation can be injected through the shared client/provider/runtime factories without changing public route contracts
 
 Primary code:
 

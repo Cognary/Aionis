@@ -1,4 +1,8 @@
 import type { Env } from "../config.js";
+import type {
+  GovernanceModelClientFactory,
+  GovernanceModelClientMode,
+} from "../memory/governance-model-client.js";
 import {
   buildFormPatternGovernanceReviewProvider,
   buildPromoteMemoryGovernanceReviewProvider,
@@ -20,14 +24,38 @@ export type LiteGovernanceRuntimeProviders = {
   };
 };
 
-export function buildLiteGovernanceRuntimeProviders(env: Env): LiteGovernanceRuntimeProviders {
+export type LiteGovernanceRuntimeProviderBuilderOptions = {
+  modelClientFactory?: GovernanceModelClientFactory;
+  modelClientModes?: {
+    replayRepairReview?: {
+      promote_memory?: GovernanceModelClientMode;
+    };
+    workflowProjection?: {
+      promote_memory?: GovernanceModelClientMode;
+    };
+    toolsFeedback?: {
+      form_pattern?: GovernanceModelClientMode;
+    };
+  };
+};
+
+export function buildLiteGovernanceRuntimeProviders(
+  env: Env,
+  options?: LiteGovernanceRuntimeProviderBuilderOptions,
+): LiteGovernanceRuntimeProviders {
   const replayPromoteMemoryProvider = buildPromoteMemoryGovernanceReviewProvider({
-    mockModelEnabled: env.REPLAY_GOVERNANCE_MOCK_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED,
+    modelClientMode:
+      options?.modelClientModes?.replayRepairReview?.promote_memory
+      ?? (env.REPLAY_GOVERNANCE_MOCK_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED ? "builtin" : "off"),
     staticEnabled: env.REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED,
+    modelClientFactory: options?.modelClientFactory,
   });
   const workflowPromoteMemoryProvider = buildPromoteMemoryGovernanceReviewProvider({
-    mockModelEnabled: env.WORKFLOW_GOVERNANCE_MOCK_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED,
+    modelClientMode:
+      options?.modelClientModes?.workflowProjection?.promote_memory
+      ?? (env.WORKFLOW_GOVERNANCE_MOCK_MODEL_PROMOTE_MEMORY_PROVIDER_ENABLED ? "builtin" : "off"),
     staticEnabled: env.WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED,
+    modelClientFactory: options?.modelClientFactory,
     mockModel: {
       confidence: 0.85,
     },
@@ -36,8 +64,11 @@ export function buildLiteGovernanceRuntimeProviders(env: Env): LiteGovernanceRun
     },
   });
   const toolsFormPatternProvider = buildFormPatternGovernanceReviewProvider({
-    mockModelEnabled: env.TOOLS_GOVERNANCE_MOCK_MODEL_FORM_PATTERN_PROVIDER_ENABLED,
+    modelClientMode:
+      options?.modelClientModes?.toolsFeedback?.form_pattern
+      ?? (env.TOOLS_GOVERNANCE_MOCK_MODEL_FORM_PATTERN_PROVIDER_ENABLED ? "builtin" : "off"),
     staticEnabled: env.TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED,
+    modelClientFactory: options?.modelClientFactory,
   });
 
   return {
