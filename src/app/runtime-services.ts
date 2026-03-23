@@ -291,3 +291,82 @@ export async function createRuntimeServices(env: Env) {
     writeInflightGate,
   };
 }
+
+export type RuntimeServices = Awaited<ReturnType<typeof createRuntimeServices>>;
+
+export type RuntimeBootstrapServices = Pick<
+  RuntimeServices,
+  | "sandboxRemoteAllowedHosts"
+  | "sandboxRemoteAllowedCidrs"
+  | "sandboxAllowedCommands"
+  | "store"
+  | "db"
+  | "embeddedRuntime"
+  | "liteRecallStore"
+  | "liteRecallAccess"
+  | "liteReplayStore"
+  | "liteReplayAccess"
+  | "liteWriteStore"
+  | "liteAutomationStore"
+  | "liteAutomationRunStore"
+  | "embedder"
+  | "sandboxExecutor"
+  | "writeStoreCapabilities"
+  | "recallAccessForClient"
+  | "replayAccessForClient"
+  | "writeAccessForClient"
+  | "requireStoreFeatureCapability"
+  | "recallLimiter"
+  | "debugEmbedLimiter"
+  | "writeLimiter"
+  | "sandboxWriteLimiter"
+  | "sandboxReadLimiter"
+  | "recallTextEmbedLimiter"
+  | "sandboxTenantBudgetPolicy"
+  | "recallTextEmbedCache"
+  | "recallTextEmbedInflight"
+  | "recallTextEmbedBatcher"
+  | "embeddingSurfacePolicy"
+  | "recallInflightGate"
+  | "writeInflightGate"
+>;
+
+export function selectRuntimeBootstrapServices(
+  services: RuntimeServices,
+): RuntimeBootstrapServices {
+  return {
+    sandboxRemoteAllowedHosts: services.sandboxRemoteAllowedHosts,
+    sandboxRemoteAllowedCidrs: services.sandboxRemoteAllowedCidrs,
+    sandboxAllowedCommands: services.sandboxAllowedCommands,
+    store: services.store,
+    db: services.db,
+    embeddedRuntime: services.embeddedRuntime,
+    liteRecallStore: services.liteRecallStore,
+    liteRecallAccess: services.liteRecallAccess,
+    liteReplayStore: services.liteReplayStore,
+    liteReplayAccess: services.liteReplayAccess,
+    liteWriteStore: services.liteWriteStore,
+    liteAutomationStore: services.liteAutomationStore,
+    liteAutomationRunStore: services.liteAutomationRunStore,
+    embedder: services.embedder,
+    sandboxExecutor: services.sandboxExecutor,
+    writeStoreCapabilities: services.writeStoreCapabilities,
+    recallAccessForClient: services.recallAccessForClient,
+    replayAccessForClient: services.replayAccessForClient,
+    writeAccessForClient: services.writeAccessForClient,
+    requireStoreFeatureCapability: services.requireStoreFeatureCapability,
+    recallLimiter: services.recallLimiter,
+    debugEmbedLimiter: services.debugEmbedLimiter,
+    writeLimiter: services.writeLimiter,
+    sandboxWriteLimiter: services.sandboxWriteLimiter,
+    sandboxReadLimiter: services.sandboxReadLimiter,
+    recallTextEmbedLimiter: services.recallTextEmbedLimiter,
+    sandboxTenantBudgetPolicy: services.sandboxTenantBudgetPolicy,
+    recallTextEmbedCache: services.recallTextEmbedCache,
+    recallTextEmbedInflight: services.recallTextEmbedInflight,
+    recallTextEmbedBatcher: services.recallTextEmbedBatcher,
+    embeddingSurfacePolicy: services.embeddingSurfacePolicy,
+    recallInflightGate: services.recallInflightGate,
+    writeInflightGate: services.writeInflightGate,
+  };
+}

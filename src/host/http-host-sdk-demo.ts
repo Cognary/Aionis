@@ -231,7 +231,7 @@ function registerSdkDemoMemoryRoutes(args: RegisterSdkDemoRoutesArgs) {
   });
 }
 
-export function registerSdkDemoRoutes(args: RegisterApplicationRoutesArgs) {
+export function registerSdkDemoRoutes(args: RegisterSdkDemoRoutesArgs) {
   registerLiteServerOnlyRoutes(args.app);
-  registerSdkDemoMemoryRoutes(buildSdkDemoRouteArgs(args));
+  registerSdkDemoMemoryRoutes(args);
 }

@@ -18,18 +18,28 @@ import { createRecallTextEmbedRuntime } from "./app/recall-text-embed.js";
 import { createReplayRepairReviewPolicy } from "./app/replay-repair-review-policy.js";
 import { createReplayRuntimeOptionBuilders } from "./app/replay-runtime-options.js";
 import { createSandboxBudgetService } from "./app/sandbox-budget.js";
-import { createRuntimeServices } from "./app/runtime-services.js";
+import {
+  createRuntimeServices,
+  selectRuntimeBootstrapServices,
+  type RuntimeBootstrapServices,
+  type RuntimeServices,
+} from "./app/runtime-services.js";
 import { loadEnv } from "./config.js";
 import { recordMemoryContextAssemblyTelemetry } from "./control-plane.js";
 import { runTopicClusterForEventIds } from "./jobs/topicClusterLib.js";
 
-export async function startAionisRuntimeWithRouteRegistrar<TRouteArgs = RegisterApplicationRoutesArgs>(
+export async function startAionisRuntimeWithRouteRegistrar<
+  TRouteArgs = RegisterApplicationRoutesArgs,
+  TServices extends RuntimeBootstrapServices = RuntimeBootstrapServices,
+>(
   options: {
+    selectServices?: (services: RuntimeServices) => TServices;
     selectRouteArgs?: (args: RegisterApplicationRoutesArgs) => TRouteArgs;
     registerRoutes: (args: TRouteArgs) => void;
   },
 ): Promise<void> {
   const env = loadEnv();
+  const runtimeServices = await createRuntimeServices(env);
   const {
     sandboxRemoteAllowedHosts,
     sandboxRemoteAllowedCidrs,
@@ -66,7 +76,9 @@ export async function startAionisRuntimeWithRouteRegistrar<TRouteArgs = Register
     embeddingSurfacePolicy,
     recallInflightGate,
     writeInflightGate,
-  } = await createRuntimeServices(env);
+  } = options.selectServices
+    ? options.selectServices(runtimeServices)
+    : selectRuntimeBootstrapServices(runtimeServices);
   const {
     buildRecallAuth,
     acquireInflightSlot,
