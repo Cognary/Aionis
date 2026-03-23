@@ -72,6 +72,7 @@ function buildEnv(overrides: Record<string, unknown> = {}) {
     REPLAY_LEARNING_MIN_SUCCESS_RATIO: 1,
     REPLAY_LEARNING_MAX_MATCHER_BYTES: 16384,
     REPLAY_LEARNING_MAX_TOOL_PREFER: 8,
+    REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: false,
     EPISODE_GC_TTL_DAYS: 30,
     REPLAY_GUIDED_REPAIR_STRATEGY: "off",
     REPLAY_GUIDED_REPAIR_ALLOW_REQUEST_BUILTIN_LLM: false,
@@ -108,6 +109,7 @@ async function seedPendingReviewPlaybook(args: {
   writeDbPath: string;
   replayDbPath: string;
   playbookId: string;
+  workflowSignature?: string | null;
 }) {
   const liteWriteStore = createLiteWriteStore(args.writeDbPath);
   const liteReplayStore = createLiteReplayStore(args.replayDbPath);
@@ -141,6 +143,7 @@ async function seedPendingReviewPlaybook(args: {
             source_run_id: randomUUID(),
             created_from_run_ids: [randomUUID()],
             policy_constraints: {},
+            ...(args.workflowSignature ? { workflow_signature: args.workflowSignature } : {}),
             steps_template: [
               {
                 step_index: 1,
@@ -190,8 +193,9 @@ function registerReplayReviewRoute(args: {
   liteWriteStore: ReturnType<typeof createLiteWriteStore>;
   liteReplayStore: ReturnType<typeof createLiteReplayStore>;
   liteRecallStore?: ReturnType<typeof createLiteRecallStore> | null;
+  envOverrides?: Record<string, unknown>;
 }) {
-  const env = buildEnv();
+  const env = buildEnv(args.envOverrides);
   const app = Fastify();
   registerHostErrorHandler(app);
   const guards = createRequestGuards({
@@ -491,6 +495,60 @@ test("lite replay repair review applies learning projection inline by default", 
     });
     assert.equal(generatedRuleRows.length, 1);
     assert.equal(generatedRuleRows[0]?.owner_agent_id, "local-user");
+  } finally {
+    await app.close();
+    await liteReplayStore.close();
+    await liteWriteStore.close();
+  }
+});
+
+test("lite replay repair review can use internal static governance provider without explicit review", async () => {
+  const dbPath = tmpDbPath("repair-review-inline-static-provider");
+  const playbookId = randomUUID();
+  const { liteWriteStore, liteReplayStore } = await seedPendingReviewPlaybook({
+    writeDbPath: dbPath,
+    replayDbPath: tmpDbPath("repair-review-inline-static-provider-replay"),
+    playbookId,
+    workflowSignature: "wf:replay:export-fix",
+  });
+  const { app } = registerReplayReviewRoute({
+    liteWriteStore,
+    liteReplayStore,
+    envOverrides: {
+      REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+    },
+  });
+  try {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/memory/replay/playbooks/repair/review",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        playbook_id: playbookId,
+        action: "approve",
+        auto_shadow_validate: false,
+        target_status_on_approve: "shadow",
+        learning_projection: {
+          enabled: true,
+        },
+      },
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = ReplayPlaybookRepairReviewResponseSchema.parse(res.json());
+    assert.equal(body.learning_projection_result.status, "applied");
+    assert.equal(body.learning_projection_result.rule_state, "shadow");
+    assert.equal(
+      body.governance_preview?.promote_memory.review_result?.adjudication.reason,
+      "static provider found workflow-signature evidence",
+    );
+    assert.equal(body.governance_preview?.promote_memory.review_result?.adjudication.confidence, 0.84);
+    assert.equal(body.governance_preview?.promote_memory.admissibility?.admissible, true);
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.applies, true);
+    assert.equal(body.governance_preview?.promote_memory.policy_effect?.effective_target_rule_state, "shadow");
+    assert.equal(body.governance_preview?.promote_memory.decision_trace?.review_supplied, true);
+    assert.equal(body.governance_preview?.promote_memory.decision_trace?.runtime_apply_changed_target_rule_state, true);
   } finally {
     await app.close();
     await liteReplayStore.close();

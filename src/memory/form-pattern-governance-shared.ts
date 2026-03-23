@@ -12,7 +12,10 @@ import {
 } from "./form-pattern-governance.js";
 import { runGovernedSemanticPreview } from "./governance-operation-runner.js";
 
-export function runFormPatternGovernancePreview<TPolicyEffect, TDecisionTrace>(args: {
+export function runFormPatternGovernancePreview<
+  TPolicyEffect extends { applies: boolean; reason_code?: string | null },
+  TDecisionTrace,
+>(args: {
   input: MemoryFormPatternInput;
   sourceExamples: FormPatternSourceExample[];
   reviewResult?: MemoryFormPatternSemanticReviewResult | null;

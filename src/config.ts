@@ -441,6 +441,12 @@ const EnvSchema = z.object({
     .transform((v) => (v ?? "false").toLowerCase())
     .pipe(z.enum(["true", "false"]))
     .transform((v) => v === "true"),
+  REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "false").toLowerCase())
+    .pipe(z.enum(["true", "false"]))
+    .transform((v) => v === "true"),
   EPISODE_GC_TTL_DAYS: z.coerce.number().int().positive().max(3650).default(30),
   EPISODE_GC_RULE_STABLE_POSITIVE_MIN: z.coerce.number().int().min(1).max(100000).default(10),
   EPISODE_GC_RULE_STABLE_NEGATIVE_WINDOW_DAYS: z.coerce.number().int().min(1).max(365).default(7),

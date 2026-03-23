@@ -12,7 +12,10 @@ import {
 } from "./promote-memory-governance.js";
 import { runGovernedSemanticPreview } from "./governance-operation-runner.js";
 
-export function runPromoteMemoryGovernancePreview<TPolicyEffect, TDecisionTrace>(args: {
+export function runPromoteMemoryGovernancePreview<
+  TPolicyEffect extends { applies: boolean; reason_code?: string | null },
+  TDecisionTrace,
+>(args: {
   input: MemoryPromoteInput;
   candidateExamples: PromoteMemoryCandidateExample[];
   reviewResult?: MemoryPromoteSemanticReviewResult | null;
