@@ -8,7 +8,12 @@ function hasWorkflowSignature(packet: {
   );
 }
 
-export function createStaticPromoteMemoryGovernanceReviewProvider(): PromoteMemoryGovernanceReviewProvider {
+export function createStaticPromoteMemoryGovernanceReviewProvider(args?: {
+  confidence?: number;
+  reason?: string;
+}): PromoteMemoryGovernanceReviewProvider {
+  const confidence = args?.confidence ?? 0.84;
+  const reason = args?.reason ?? "static provider found workflow-signature evidence";
   return {
     resolveReviewResult: ({ reviewPacket, suppliedReviewResult }) => {
       if (suppliedReviewResult) {
@@ -30,8 +35,8 @@ export function createStaticPromoteMemoryGovernanceReviewProvider(): PromoteMemo
           disposition: "recommend",
           target_kind: "workflow",
           target_level: "L2",
-          reason: "static provider found workflow-signature evidence",
-          confidence: 0.84,
+          reason,
+          confidence,
           strategic_value: "high",
         },
       };

@@ -705,7 +705,12 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
             workflow_signature: workflowSignature,
             auto_promoted: true,
             observed_count: observedCount,
-            governance_preview: governancePreview,
+            ...(governancePreview.runtime_apply.promotion_state_override
+              ? { governed_promotion_state_override: governancePreview.runtime_apply.promotion_state_override }
+              : {}),
+            governance_preview: {
+              promote_memory: governancePreview.promote_memory,
+            },
           },
         },
       });

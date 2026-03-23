@@ -1244,12 +1244,14 @@ export const WorkflowWriteProjectionGovernanceDecisionTraceSchema = z.object({
   policy_effect_applies: z.boolean(),
   base_promotion_state: z.enum(["candidate", "stable"]),
   effective_promotion_state: z.enum(["candidate", "stable"]),
+  runtime_apply_changed_promotion_state: z.boolean(),
   stage_order: z.array(z.enum([
     "review_packet_built",
     "review_result_received",
     "admissibility_evaluated",
     "policy_effect_derived",
-  ])).min(2).max(4),
+    "runtime_policy_applied",
+  ])).min(2).max(5),
   reason_codes: z.array(z.string().min(1).max(128)).max(8).default([]),
 }).passthrough();
 

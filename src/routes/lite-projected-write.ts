@@ -34,6 +34,7 @@ export async function commitLitePreparedWriteWithProjection(args: {
   prepared: PreparedProjectionWrite;
   liteWriteStore: LiteProjectedWriteStore;
   embedder: EmbeddingProvider | null;
+  governanceReviewProviders?: Parameters<typeof appendLiteWorkflowProjection>[0]["governanceReviewProviders"];
   writeOptions: {
     maxTextLen: number;
     piiRedaction: boolean;
@@ -46,6 +47,7 @@ export async function commitLitePreparedWriteWithProjection(args: {
   await appendLiteWorkflowProjection({
     prepared: args.prepared,
     liteWriteStore: args.liteWriteStore,
+    governanceReviewProviders: args.governanceReviewProviders,
   });
   const out = await args.liteWriteStore.withTx(() =>
     applyMemoryWrite({} as pg.PoolClient, args.prepared as any, {

@@ -1,5 +1,6 @@
 import {
   MemoryPromoteRequest,
+  WorkflowWriteProjectionGovernanceDecisionTraceSchema,
   WorkflowWriteProjectionGovernancePolicyEffectSchema,
   type MemoryAdmissibilityResult,
   type MemoryPromoteSemanticReviewResult,
@@ -10,6 +11,8 @@ import {
 import type { PromoteMemoryGovernanceReviewProvider } from "./governance-provider-types.js";
 import {
   buildGovernedStateDecisionTrace,
+  appendGovernanceRuntimePolicyAppliedStage,
+  deriveGovernedStateRaiseRuntimeApply,
   deriveGovernedStateRaisePreview,
 } from "./governance-shared.js";
 import {
@@ -76,6 +79,10 @@ export function buildWorkflowPromotionGovernancePreview(args: {
     policy_effect: WorkflowWriteProjectionGovernancePolicyEffect;
     decision_trace: WorkflowWriteProjectionGovernanceDecisionTrace;
   };
+  runtime_apply: {
+    promotion_state_override: "stable" | null;
+    changed_promotion_state: boolean;
+  };
 } {
   const input = MemoryPromoteRequest.parse({
     candidate_node_ids: args.candidateNodeIds,
@@ -86,8 +93,7 @@ export function buildWorkflowPromotionGovernancePreview(args: {
     input_sha256: args.inputSha256,
   });
 
-  return {
-    promote_memory: runPromoteMemoryGovernancePreview({
+  const promotePreview = runPromoteMemoryGovernancePreview({
       input,
       candidateExamples: args.candidateExamples,
       reviewResult: args.reviewResult ?? null,
@@ -107,15 +113,39 @@ export function buildWorkflowPromotionGovernancePreview(args: {
           baseState: "candidate",
           effectiveState: policyEffect.effective_promotion_state,
         });
-        return {
-          ...trace,
+        return WorkflowWriteProjectionGovernanceDecisionTraceSchema.parse({
           trace_version: "workflow_promotion_governance_trace_v1",
+          review_supplied: trace.review_supplied,
+          admissibility_evaluated: trace.admissibility_evaluated,
+          admissible: trace.admissible,
+          policy_effect_applies: trace.policy_effect_applies,
           base_promotion_state: trace.baseState,
           effective_promotion_state: trace.effectiveState,
+          runtime_apply_changed_promotion_state: false,
           stage_order: trace.stage_order as WorkflowWriteProjectionGovernanceDecisionTrace["stage_order"],
           reason_codes: trace.reason_codes,
-        };
+        });
       },
-    }),
+    });
+  const applyGate = deriveGovernedStateRaiseRuntimeApply({
+    policyEffect: promotePreview.policy_effect,
+    effectiveState: promotePreview.policy_effect?.effective_promotion_state,
+    appliedState: "stable",
+  });
+  if (applyGate.runtimeApplyRequested) {
+    promotePreview.decision_trace.runtime_apply_changed_promotion_state =
+      applyGate.governedOverrideState === "stable";
+    promotePreview.decision_trace.stage_order =
+      appendGovernanceRuntimePolicyAppliedStage(
+        promotePreview.decision_trace.stage_order,
+      ) as WorkflowWriteProjectionGovernanceDecisionTrace["stage_order"];
+  }
+
+  return {
+    promote_memory: promotePreview,
+    runtime_apply: {
+      promotion_state_override: applyGate.governedOverrideState === "stable" ? "stable" : null,
+      changed_promotion_state: applyGate.governedOverrideState === "stable",
+    },
   };
 }
