@@ -5,6 +5,16 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Cognary/Aionis.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/Cognary/Aionis/tree/main/packages/sdk",
+  "bugs": {
+    "url": "https://github.com/Cognary/Aionis/issues"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -25,7 +35,7 @@
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
     "test": "node ../../node_modules/tsx/dist/cli.mjs --test test/*.test.ts",
-    "pack:dry-run": "npm pack --dry-run --cache /tmp/aionis-npm-cache"
+    "pack:dry-run": "npm run build && npm pack --dry-run --json --cache /tmp/aionis-npm-cache"
   },
   "keywords": [
     "aionis",

@@ -49,3 +49,11 @@ Local package verification:
 ```bash
 npm --prefix packages/sdk run test
 ```
+
+Release baseline verification:
+
+```bash
+npm run sdk:release:check
+```
+
+That flow builds the SDK, runs package tests, creates a tarball from `packages/sdk`, and verifies a clean install/import smoke test in an isolated `/tmp` workspace outside the repository.
