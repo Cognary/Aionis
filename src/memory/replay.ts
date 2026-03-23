@@ -65,6 +65,7 @@ import {
   type ReplayStepAfterInput,
   type ReplayStepBeforeInput,
 } from "./schemas.js";
+import type { PromoteMemoryGovernanceReviewProvider } from "./governance-provider-types.js";
 import { runPromoteMemoryGovernancePreview } from "./promote-memory-governance-shared.js";
 import { resolveTenantScope } from "./tenant.js";
 import { summarizeToolResult } from "./tool-result-summary.js";
@@ -159,6 +160,9 @@ type ReplayPlaybookReviewOptions = ReplayWriteOptions & {
   localExecutor?: ReplayLocalExecutorOptions;
   shadowValidationPolicy?: ReplayShadowValidationPolicyOptions;
   learningProjectionDefaults?: ReplayLearningProjectionResolvedConfig;
+  governanceReviewProviders?: {
+    promote_memory?: PromoteMemoryGovernanceReviewProvider | null;
+  };
   sandboxValidationExecutor?: (input: {
     tenant_id: string;
     scope: string;
@@ -4512,6 +4516,7 @@ export async function replayPlaybookRepairReview(client: pg.PoolClient, body: un
         input: promoteInput,
         candidateExamples,
         reviewResult: (suppliedReview as any) ?? null,
+        reviewProvider: opts.governanceReviewProviders?.promote_memory ?? undefined,
         derivePolicyEffect: ({ review, admissibility }) =>
           deriveReplayGovernancePolicyEffect({
             baseTargetRuleState: learningProjectionConfig.target_rule_state,

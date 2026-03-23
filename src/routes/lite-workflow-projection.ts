@@ -47,11 +47,13 @@ type PreparedProjectionWrite = {
 export async function appendLiteWorkflowProjection(args: {
   prepared: PreparedProjectionWrite;
   liteWriteStore: LiteWorkflowProjectionStore;
+  governanceReviewProviders?: Parameters<typeof projectWorkflowCandidatesFromPreparedWrite>[0]["governanceReviewProviders"];
 }): Promise<void> {
   const projection = await projectWorkflowCandidatesFromPreparedWrite({
     scope: args.prepared.scope,
     nodes: args.prepared.nodes,
     liteWriteStore: args.liteWriteStore,
+    governanceReviewProviders: args.governanceReviewProviders,
   });
   if (projection.nodes.length > 0) {
     args.prepared.nodes.push(...projection.nodes);

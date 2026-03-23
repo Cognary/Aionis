@@ -3,6 +3,7 @@ import { ExecutionPacketV1Schema, ExecutionStateV1Schema, type ExecutionPacketV1
 import { ExecutionNativeV1Schema, MemoryAnchorV1Schema } from "./schemas.js";
 import { sha256Hex } from "../util/crypto.js";
 import { stableUuid } from "../util/uuid.js";
+import type { PromoteMemoryGovernanceReviewProvider } from "./governance-provider-types.js";
 import { buildWorkflowPromotionGovernancePreview } from "./workflow-promotion-governance.js";
 
 type WriteProjectionSourceNode = {
@@ -509,6 +510,9 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
   scope: string;
   nodes: WriteProjectionSourceNode[];
   liteWriteStore: LiteWorkflowProjectionStore;
+  governanceReviewProviders?: {
+    promote_memory?: PromoteMemoryGovernanceReviewProvider | null;
+  };
   now?: string;
 }): Promise<ProjectionResult> {
   const nodes: WriteProjectionSourceNode[] = [];
@@ -648,6 +652,7 @@ export async function projectWorkflowCandidatesFromPreparedWrite(args: {
           },
         ],
         reviewResult: (promoteMemoryGovernanceReview?.review_result ?? null) as any,
+        reviewProvider: args.governanceReviewProviders?.promote_memory ?? undefined,
       });
       const stableAnchor = buildStableWorkflowAnchor({
         scope: args.scope,

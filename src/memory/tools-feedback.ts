@@ -22,6 +22,7 @@ import {
   type ToolsFeedbackGovernancePreview,
   type ToolsFeedbackResponse,
 } from "./schemas.js";
+import type { FormPatternGovernanceReviewProvider } from "./governance-provider-types.js";
 import { evaluateRulesAppliedOnly } from "./rules-evaluate.js";
 import { resolveTenantScope } from "./tenant.js";
 import { buildAionisUri, parseAionisUri } from "./uri.js";
@@ -52,6 +53,9 @@ type FeedbackOptions = {
   piiRedaction: boolean;
   embedder?: EmbeddingProvider | null;
   embeddedRuntime?: EmbeddedMemoryRuntime | null;
+  governanceReviewProviders?: {
+    form_pattern?: FormPatternGovernanceReviewProvider | null;
+  };
   liteWriteStore?: Pick<
     LiteWriteStore,
     | "findExecutionDecisionForFeedback"
@@ -130,6 +134,7 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
   sourceRuleIds: string[];
   anchor: MemoryAnchorV1;
   governanceReview?: ToolsFeedbackGovernanceInput["form_pattern"] | null;
+  reviewProvider?: FormPatternGovernanceReviewProvider | null;
 }): Promise<ToolsFeedbackGovernancePreview | null> {
   const sourceNodeIds = uniqueRuleIds(args.sourceRuleIds).slice(0, 6);
   if (sourceNodeIds.length < 2) return null;
@@ -152,6 +157,7 @@ async function buildToolsFeedbackFormPatternGovernancePreview(args: {
       input,
       sourceExamples,
       reviewResult: args.governanceReview?.review_result ?? null,
+      reviewProvider: args.reviewProvider ?? undefined,
       derivePolicyEffect: ({ review, admissibility }) =>
         deriveFormPatternSemanticPolicyEffect({
           basePatternState: args.anchor.pattern_state ?? "provisional",
@@ -612,6 +618,7 @@ export async function toolSelectionFeedback(
           sourceRuleIds: uniq,
           anchor: anchorOut.anchor,
           governanceReview: parsed.governance_review?.form_pattern ?? null,
+          reviewProvider: opts.governanceReviewProviders?.form_pattern ?? undefined,
         });
         if (parsed.governance_review?.form_pattern?.review_result && !governancePreview) {
           badRequest("form_pattern_governance_preview_unavailable", "form_pattern governance review requires at least two source nodes", {
@@ -1001,6 +1008,7 @@ export async function toolSelectionFeedback(
             sourceRuleIds: uniq,
             anchor: anchorOut.anchor,
             governanceReview: parsed.governance_review?.form_pattern ?? null,
+            reviewProvider: opts.governanceReviewProviders?.form_pattern ?? undefined,
           })
         : null;
       if (parsed.governance_review?.form_pattern?.review_result && !governancePreview) {

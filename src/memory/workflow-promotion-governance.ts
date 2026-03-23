@@ -7,6 +7,7 @@ import {
   type WorkflowWriteProjectionGovernanceDecisionTrace,
   type WorkflowWriteProjectionGovernancePolicyEffect,
 } from "./schemas.js";
+import type { PromoteMemoryGovernanceReviewProvider } from "./governance-provider-types.js";
 import {
   buildGovernedStateDecisionTrace,
   deriveGovernedStateRaisePreview,
@@ -66,6 +67,7 @@ export function buildWorkflowPromotionGovernancePreview(args: {
   inputSha256: string;
   candidateExamples: WorkflowPromotionCandidateExample[];
   reviewResult?: MemoryPromoteSemanticReviewResult | null;
+  reviewProvider?: PromoteMemoryGovernanceReviewProvider | null;
 }): {
   promote_memory: {
     review_packet: MemoryPromoteSemanticReviewPacket;
@@ -89,6 +91,7 @@ export function buildWorkflowPromotionGovernancePreview(args: {
       input,
       candidateExamples: args.candidateExamples,
       reviewResult: args.reviewResult ?? null,
+      reviewProvider: args.reviewProvider ?? undefined,
       derivePolicyEffect: ({ review, admissibility }) =>
         deriveWorkflowPromotionSemanticPolicyEffect({
           basePromotionState: "candidate",
