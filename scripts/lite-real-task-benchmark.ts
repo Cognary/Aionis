@@ -6,23 +6,29 @@ import path from "node:path";
 import Fastify from "fastify";
 import { FakeEmbeddingProvider } from "../src/embeddings/fake.ts";
 import { createRequestGuards } from "../src/app/request-guards.ts";
+import { createReplayRepairReviewPolicy } from "../src/app/replay-repair-review-policy.ts";
+import { createReplayRuntimeOptionBuilders } from "../src/app/replay-runtime-options.ts";
 import { registerHostErrorHandler } from "../src/host/http-host.ts";
 import { registerMemoryAccessRoutes } from "../src/routes/memory-access.ts";
 import { registerMemoryContextRuntimeRoutes } from "../src/routes/memory-context-runtime.ts";
 import { registerMemoryFeedbackToolRoutes } from "../src/routes/memory-feedback-tools.ts";
+import { registerMemoryReplayGovernedRoutes } from "../src/routes/memory-replay-governed.ts";
 import { registerMemoryWriteRoutes } from "../src/routes/memory-write.ts";
 import {
   ExecutionMemoryIntrospectionResponseSchema,
   PlanningContextRouteContractSchema,
+  ReplayPlaybookRepairReviewResponseSchema,
   ToolsFeedbackResponseSchema,
   ToolsSelectRouteContractSchema,
 } from "../src/memory/schemas.ts";
+import { applyReplayMemoryWrite } from "../src/memory/replay-write.ts";
 import { updateRuleState } from "../src/memory/rules.ts";
 import { createStaticFormPatternGovernanceReviewProvider } from "../src/memory/governance-provider-static.ts";
 import { toolSelectionFeedback } from "../src/memory/tools-feedback.ts";
 import { selectTools } from "../src/memory/tools-select.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../src/memory/write.ts";
 import { createLiteRecallStore } from "../src/store/lite-recall-store.ts";
+import { createLiteReplayStore } from "../src/store/lite-replay-store.ts";
 import { createLiteWriteStore } from "../src/store/lite-write-store.ts";
 import { InflightGate } from "../src/util/inflight_gate.ts";
 
@@ -199,6 +205,25 @@ function buildEnv(overrides: Record<string, unknown> = {}) {
     MEMORY_RECALL_ADAPTIVE_HARD_CAP_WAIT_MS: 0,
     MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT: "balanced",
     MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT: "balanced",
+    REPLAY_LEARNING_PROJECTION_ENABLED: false,
+    REPLAY_LEARNING_PROJECTION_MODE: "rule_and_episode",
+    REPLAY_LEARNING_PROJECTION_DELIVERY: "async_outbox",
+    REPLAY_LEARNING_TARGET_RULE_STATE: "draft",
+    REPLAY_LEARNING_MIN_TOTAL_STEPS: 1,
+    REPLAY_LEARNING_MIN_SUCCESS_RATIO: 1,
+    REPLAY_LEARNING_MAX_MATCHER_BYTES: 16_384,
+    REPLAY_LEARNING_MAX_TOOL_PREFER: 8,
+    EPISODE_GC_TTL_DAYS: 30,
+    REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_PROFILE: "custom",
+    REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_DEFAULT: false,
+    REPLAY_REPAIR_REVIEW_AUTO_PROMOTE_TARGET_STATUS: "active",
+    REPLAY_REPAIR_REVIEW_GATE_REQUIRE_SHADOW_PASS: false,
+    REPLAY_REPAIR_REVIEW_GATE_MIN_TOTAL_STEPS: 0,
+    REPLAY_REPAIR_REVIEW_GATE_MAX_FAILED_STEPS: 0,
+    REPLAY_REPAIR_REVIEW_GATE_MAX_BLOCKED_STEPS: 0,
+    REPLAY_REPAIR_REVIEW_GATE_MAX_UNKNOWN_STEPS: 0,
+    REPLAY_REPAIR_REVIEW_GATE_MIN_SUCCESS_RATIO: 1,
+    REPLAY_REPAIR_REVIEW_POLICY_JSON: "{}",
     WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: false,
     TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED: false,
     ...overrides,
@@ -2057,6 +2082,323 @@ async function runGovernedLearningRuntimeLoop(): Promise<Omit<BenchmarkScenarioR
   }
 }
 
+async function seedPendingReplayBenchmarkPlaybook(args: {
+  liteWriteStore: ReturnType<typeof createLiteWriteStore>;
+  liteReplayStore: ReturnType<typeof createLiteReplayStore>;
+  playbookId: string;
+  workflowSignature?: string | null;
+}) {
+  const sourceClientId = `replay:playbook:${args.playbookId}:v1`;
+  const out = await applyReplayMemoryWrite(
+    {} as any,
+    {
+      tenant_id: "default",
+      scope: "default",
+      actor: "local-user",
+      input_text: `seed pending review playbook ${args.playbookId}`,
+      auto_embed: false,
+      memory_lane: "private",
+      producer_agent_id: "local-user",
+      owner_agent_id: "local-user",
+      nodes: [
+        {
+          client_id: sourceClientId,
+          type: "procedure",
+          title: "Fix export failure",
+          text_summary: "Replay playbook pending review",
+          slots: {
+            replay_kind: "playbook",
+            playbook_id: args.playbookId,
+            name: "Fix export failure",
+            version: 1,
+            status: "draft",
+            matchers: { task_kind: "repair_export" },
+            success_criteria: { status: "success" },
+            risk_profile: "medium",
+            source_run_id: randomUUID(),
+            created_from_run_ids: [randomUUID()],
+            policy_constraints: {},
+            ...(args.workflowSignature ? { workflow_signature: args.workflowSignature } : {}),
+            steps_template: [
+              { step_index: 1, tool_name: "edit", preconditions: [], postconditions: [], safety_level: "needs_confirm" },
+              { step_index: 2, tool_name: "test", preconditions: [], postconditions: [], safety_level: "observe_only" },
+            ],
+            repair_patch: { note: "normalize export path" },
+            repair_review: { state: "pending_review" },
+          },
+        },
+      ],
+      edges: [],
+    },
+    {
+      defaultScope: "default",
+      defaultTenantId: "default",
+      maxTextLen: 10_000,
+      piiRedaction: false,
+      allowCrossScopeEdges: false,
+      shadowDualWriteEnabled: false,
+      shadowDualWriteStrict: false,
+      writeAccessShadowMirrorV2: false,
+      embedder: null,
+      replayMirror: args.liteReplayStore,
+      writeAccess: args.liteWriteStore,
+    },
+  );
+  assert.ok(out.out.nodes[0]?.id);
+}
+
+function registerReplayBenchmarkApp(args: {
+  app: ReturnType<typeof Fastify>;
+  liteWriteStore: ReturnType<typeof createLiteWriteStore>;
+  liteReplayStore: ReturnType<typeof createLiteReplayStore>;
+  liteRecallStore: ReturnType<typeof createLiteRecallStore>;
+  envOverrides?: Record<string, unknown>;
+}) {
+  const env = buildEnv({
+    REPLAY_LEARNING_PROJECTION_ENABLED: true,
+    REPLAY_LEARNING_PROJECTION_MODE: "rule_and_episode",
+    REPLAY_LEARNING_PROJECTION_DELIVERY: "sync_inline",
+    REPLAY_LEARNING_TARGET_RULE_STATE: "draft",
+    REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: false,
+    ...args.envOverrides,
+  });
+  const guards = buildRequestGuards(env);
+  registerHostErrorHandler(args.app);
+
+  const runtimeOptions = createReplayRuntimeOptionBuilders({
+    env,
+    store: {
+      withTx: async <T>(fn: (client: any) => Promise<T>) => await fn({} as any),
+      withClient: async <T>(fn: (client: any) => Promise<T>) => await fn({} as any),
+    },
+    embedder: FakeEmbeddingProvider,
+    embeddingSurfacePolicy: undefined,
+    embeddedRuntime: null,
+    liteWriteStore: args.liteWriteStore,
+    liteReplayAccess: args.liteReplayStore.createReplayAccess(),
+    liteReplayStore: args.liteReplayStore,
+    sandboxAllowedCommands: [],
+    sandboxExecutor: {
+      enqueue: () => {},
+      executeSync: async () => {},
+    },
+    writeAccessShadowMirrorV2: false,
+    enforceSandboxTenantBudget: async () => {},
+  });
+  const { withReplayRepairReviewDefaults } = createReplayRepairReviewPolicy({
+    env,
+    tenantFromBody: guards.tenantFromBody,
+    scopeFromBody: guards.scopeFromBody,
+  });
+
+  registerMemoryReplayGovernedRoutes({
+    app: args.app,
+    env,
+    liteWriteStore: args.liteWriteStore as any,
+    requireMemoryPrincipal: guards.requireMemoryPrincipal,
+    withIdentityFromRequest: guards.withIdentityFromRequest,
+    enforceRateLimit: guards.enforceRateLimit,
+    enforceTenantQuota: guards.enforceTenantQuota,
+    tenantFromBody: guards.tenantFromBody,
+    acquireInflightSlot: guards.acquireInflightSlot,
+    withReplayRepairReviewDefaults,
+    buildReplayRepairReviewOptions: runtimeOptions.buildReplayRepairReviewOptions,
+    buildReplayPlaybookRunOptions: runtimeOptions.buildAutomationReplayRunOptions,
+  });
+
+  registerMemoryContextRuntimeRoutes({
+    app: args.app,
+    env,
+    embedder: FakeEmbeddingProvider,
+    embeddedRuntime: null,
+    liteWriteStore: args.liteWriteStore,
+    liteRecallAccess: args.liteRecallStore.createRecallAccess(),
+    recallTextEmbedBatcher: { stats: () => null },
+    requireMemoryPrincipal: guards.requireMemoryPrincipal,
+    withIdentityFromRequest: guards.withIdentityFromRequest,
+    enforceRateLimit: guards.enforceRateLimit,
+    enforceTenantQuota: guards.enforceTenantQuota,
+    enforceRecallTextEmbedQuota: guards.enforceRecallTextEmbedQuota,
+    buildRecallAuth: guards.buildRecallAuth,
+    tenantFromBody: guards.tenantFromBody,
+    acquireInflightSlot: guards.acquireInflightSlot,
+    hasExplicitRecallKnobs: () => false,
+    resolveRecallProfile: () => ({ profile: "balanced", source: "benchmark" }),
+    resolveExplicitRecallMode: () => ({
+      mode: null,
+      profile: "balanced",
+      defaults: {},
+      applied: false,
+      reason: "benchmark_default",
+      source: "benchmark",
+    }),
+    resolveClassAwareRecallProfile: (_endpoint, _body, baseProfile) => ({
+      profile: baseProfile,
+      defaults: {},
+      enabled: false,
+      applied: false,
+      reason: "benchmark_default",
+      source: "benchmark",
+      workload_class: null,
+      signals: [],
+    }),
+    withRecallProfileDefaults: (body) => ({ ...(body as Record<string, unknown>) }),
+    resolveRecallStrategy: () => ({ strategy: "local", defaults: {}, applied: false }),
+    resolveAdaptiveRecallProfile: (profile) => ({ profile, defaults: {}, applied: false, reason: "benchmark_default" }),
+    resolveAdaptiveRecallHardCap: () => ({ defaults: {}, applied: false, reason: "benchmark_default" }),
+    inferRecallStrategyFromKnobs: () => "local",
+    buildRecallTrajectory: () => ({ strategy: "local" }),
+    embedRecallTextQuery: async (provider, queryText) => {
+      const [vec] = await provider.embed([queryText]);
+      return {
+        vec,
+        ms: 0,
+        cache_hit: false,
+        singleflight_join: false,
+        queue_wait_ms: 0,
+        batch_size: 1,
+      };
+    },
+    mapRecallTextEmbeddingError: () => ({
+      statusCode: 500,
+      code: "embed_failed",
+      message: "embed failed",
+    }),
+    recordContextAssemblyTelemetryBestEffort: async () => {},
+  });
+
+  registerMemoryAccessRoutes({
+    app: args.app,
+    env,
+    embedder: FakeEmbeddingProvider,
+    liteWriteStore: args.liteWriteStore,
+    writeAccessShadowMirrorV2: false,
+    requireStoreFeatureCapability: () => {},
+    requireMemoryPrincipal: guards.requireMemoryPrincipal,
+    withIdentityFromRequest: guards.withIdentityFromRequest,
+    enforceRateLimit: guards.enforceRateLimit,
+    enforceTenantQuota: guards.enforceTenantQuota,
+    tenantFromBody: guards.tenantFromBody,
+    acquireInflightSlot: guards.acquireInflightSlot,
+  });
+}
+
+async function runGovernedReplayRuntimeLoop(): Promise<Omit<BenchmarkScenarioResult, "id" | "title" | "status" | "duration_ms">> {
+  const writeDbPath = tmpDbPath("governed-replay-write");
+  const replayDbPath = tmpDbPath("governed-replay-store");
+  const playbookId = randomUUID();
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(writeDbPath);
+  const liteReplayStore = createLiteReplayStore(replayDbPath);
+  const liteRecallStore = createLiteRecallStore(writeDbPath);
+  const assertions: AssertionResult[] = [];
+  try {
+    await seedPendingReplayBenchmarkPlaybook({
+      liteWriteStore,
+      liteReplayStore,
+      playbookId,
+      workflowSignature: "wf:replay:export-fix",
+    });
+    registerReplayBenchmarkApp({
+      app,
+      liteWriteStore,
+      liteReplayStore,
+      liteRecallStore,
+      envOverrides: {
+        REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+      },
+    });
+
+    const reviewRes = await app.inject({
+      method: "POST",
+      url: "/v1/memory/replay/playbooks/repair/review",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        playbook_id: playbookId,
+        action: "approve",
+        auto_shadow_validate: false,
+        target_status_on_approve: "shadow",
+        learning_projection: {
+          enabled: true,
+        },
+      },
+    });
+    assert.equal(reviewRes.statusCode, 200);
+    const reviewBody = ReplayPlaybookRepairReviewResponseSchema.parse(reviewRes.json());
+    assert.equal(reviewBody.learning_projection_result.status, "applied");
+    assert.equal(reviewBody.learning_projection_result.rule_state, "shadow");
+    assertions.push(pass("replay review applies provider-backed learning projection inline"));
+
+    assert.equal(reviewBody.governance_preview?.promote_memory.admissibility?.admissible, true);
+    assert.equal(reviewBody.governance_preview?.promote_memory.policy_effect?.applies, true);
+    assert.equal(reviewBody.governance_preview?.promote_memory.decision_trace?.runtime_apply_changed_target_rule_state, true);
+    assertions.push(pass("replay governance preview records admissible runtime apply"));
+
+    const generatedRuleId = reviewBody.learning_projection_result.generated_rule_node_id;
+    assert.ok(generatedRuleId);
+    const { rows: ruleRows } = await liteWriteStore.findNodes({
+      scope: "default",
+      id: generatedRuleId,
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 10,
+      offset: 0,
+    });
+    assert.equal(ruleRows.length, 1);
+    assertions.push(pass("replay review materializes a governed replay-learning rule"));
+
+    const planningRes = await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        query_text: "repair export failure",
+        context: {
+          goal: "repair export failure in node tests",
+          task_kind: "repair_export",
+        },
+        tool_candidates: ["bash", "edit", "test"],
+      },
+    });
+    assert.equal(planningRes.statusCode, 200);
+    const planningBody = PlanningContextRouteContractSchema.parse(planningRes.json());
+    assert.ok(planningBody.planner_packet.sections.recommended_workflows.length >= 1);
+    assert.match(planningBody.planning_summary.planner_explanation, /workflow guidance:/i);
+    assertions.push(pass("planning surface consumes replay-learned workflow guidance"));
+
+    const introspect = ExecutionMemoryIntrospectionResponseSchema.parse((await app.inject({
+      method: "POST",
+      url: "/v1/memory/execution/introspect",
+      payload: { tenant_id: "default", scope: "default", limit: 20 },
+    })).json());
+    assert.ok(introspect.workflow_signal_summary.stable_workflow_count >= 1);
+    assertions.push(pass("execution introspection reflects replay-governed stable workflow state"));
+
+    return {
+      assertions,
+      metrics: {
+        replay_learning_rule_state: reviewBody.learning_projection_result.rule_state,
+        replay_governance_reason: reviewBody.governance_preview?.promote_memory.review_result?.adjudication.reason ?? null,
+        replay_generated_rule_id: generatedRuleId,
+        planning_recommended_workflows: planningBody.planner_packet.sections.recommended_workflows.length,
+        planning_explanation: planningBody.planning_summary.planner_explanation,
+        stable_workflow_count_after_replay: introspect.workflow_signal_summary.stable_workflow_count,
+      },
+      notes: [
+        "Measures provider-backed replay repair review on the real Lite runtime route.",
+        "Confirms replay-governed learning projection produces planner-visible workflow guidance.",
+      ],
+    };
+  } finally {
+    await app.close();
+    await liteRecallStore.close();
+    await liteReplayStore.close();
+    await liteWriteStore.close();
+  }
+}
+
 function printHuman(result: BenchmarkSuiteResult) {
   const lines: string[] = [];
   lines.push("Aionis Real-Task Benchmark Suite");
@@ -2180,6 +2522,7 @@ async function main() {
     runScenario("workflow_progression_loop", "Workflow guidance from repeated execution continuity", runWorkflowProgressionLoop),
     runScenario("multi_step_repair_loop", "Multi-step repair continuity with stable workflow carry-forward", runMultiStepRepairLoop),
     runScenario("governed_learning_runtime_loop", "Governed learning through provider-backed runtime paths", runGovernedLearningRuntimeLoop),
+    runScenario("governed_replay_runtime_loop", "Replay-governed learning through provider-backed repair review", runGovernedReplayRuntimeLoop),
     runScenario("slim_surface_boundary", "Slim planner/context default surface", runSlimSurfaceBoundary),
   ]);
   const rawResult: BenchmarkSuiteResult = {
