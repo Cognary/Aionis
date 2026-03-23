@@ -1,10 +1,10 @@
 import { getSharedExecutionStateStore } from "../execution/state-store.js";
 import type { RegisterSdkDemoRoutesArgs } from "../host/http-host-sdk-demo-args.js";
-import type { registerMemoryAccessRoutes } from "./memory-access.js";
 import type { registerMemoryContextRuntimeRoutes } from "./memory-context-runtime.js";
 import type { registerMemoryFeedbackToolRoutes } from "./memory-feedback-tools.js";
 import type { registerMemoryReplayGovernedRoutes } from "./memory-replay-governed.js";
 import type { registerMemoryWriteRoutes } from "./memory-write.js";
+import type { registerSdkDemoMemoryAccessRoutes } from "./sdk-demo-memory-access.js";
 
 export function buildSdkDemoMemoryWriteRouteArgs(
   args: RegisterSdkDemoRoutesArgs,
@@ -31,21 +31,18 @@ export function buildSdkDemoMemoryWriteRouteArgs(
 
 export function buildSdkDemoMemoryAccessRouteArgs(
   args: RegisterSdkDemoRoutesArgs,
-): Parameters<typeof registerMemoryAccessRoutes>[0] {
+): Parameters<typeof registerSdkDemoMemoryAccessRoutes>[0] {
   return {
     app: args.app,
     env: args.env,
-    embedder: args.embedder,
-    embeddingSurfacePolicy: args.embeddingSurfacePolicy,
     liteWriteStore: args.liteWriteStore,
-    writeAccessShadowMirrorV2: args.writeStoreCapabilities.shadow_mirror_v2,
-    requireStoreFeatureCapability: args.requireStoreFeatureCapability,
     requireMemoryPrincipal: args.requireMemoryPrincipal,
     withIdentityFromRequest: args.withIdentityFromRequest,
-    enforceRateLimit: args.enforceRateLimit,
-    enforceTenantQuota: args.enforceTenantQuota,
+    enforceRateLimit: async (req, reply) => args.enforceRateLimit(req, reply, "recall"),
+    enforceTenantQuota: async (req, reply, _kind, tenantId) =>
+      args.enforceTenantQuota(req, reply, "recall", tenantId),
     tenantFromBody: args.tenantFromBody,
-    acquireInflightSlot: args.acquireInflightSlot,
+    acquireInflightSlot: async () => args.acquireInflightSlot("recall"),
   };
 }
 
