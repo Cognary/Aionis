@@ -170,8 +170,7 @@ Primary code:
 3. `src/memory/workflow-candidate-aggregation.ts`
 4. `src/memory/workflow-promotion-governance.ts`
 5. `scripts/ci/lite-memory-write-workflow-projection-route.test.ts`
-6. `scripts/ci/lite-handoff-workflow-projection-route.test.ts`
-7. `scripts/ci/lite-session-event-workflow-projection-route.test.ts`
+6. `scripts/ci/lite-session-event-workflow-projection-route.test.ts`
 
 ### 6. Runtime-Governed Adjudication On Live Paths
 

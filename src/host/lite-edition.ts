@@ -21,14 +21,11 @@ export function buildLiteRouteMatrix() {
   return {
     kernel_required_routes: [
       "memory-write",
-      "memory-handoff",
-      "memory-recall",
       "memory-context-runtime",
       "memory-access-partial",
-      "memory-replay-core",
       "memory-feedback-tools",
     ],
-    optional_routes: ["memory-sandbox", "memory-replay-governed-partial", "automations-lite-kernel"],
+    optional_routes: ["memory-replay-governed-partial"],
     server_only_route_groups: Object.entries(LITE_SERVER_ONLY_ROUTE_GROUPS).map(([group, value]) => ({
       group,
       prefixes: value.prefixes,

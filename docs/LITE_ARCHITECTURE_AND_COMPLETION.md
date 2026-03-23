@@ -197,11 +197,9 @@ Key modules:
    Replay, playbook, repair review, and governed execution machinery.
 5. `src/memory/replay-write.ts`
    Replay mirror write behavior.
-6. `src/memory/handoff.ts`
-   Handoff store/recover flow.
-7. `src/memory/feedback.ts`
+6. `src/memory/feedback.ts`
    Feedback and rule-feedback persistence.
-8. `src/memory/packs.ts`
+7. `src/memory/packs.ts`
    Pack import/export compatibility.
 
 Current architectural reality:
@@ -212,20 +210,10 @@ Current architectural reality:
 4. replay repair review policy in Lite is narrowed to global-plus-endpoint overlays only
 5. stable workflow anchor production is now consistent for both newly promoted stable playbooks and already-stable latest playbooks
 
-## Automation Kernel
+## Public Repo Boundary
 
-Lite now includes a local automation kernel implemented by:
-
-1. `src/routes/automations.ts`
-2. `src/memory/automation-lite.ts`
-3. `src/store/lite-automation-store.ts`
-4. `src/store/lite-automation-run-store.ts`
-
-Supported node kinds:
-
-1. `playbook`
-2. `approval`
-3. `condition`
+The public repo no longer exposes the local automation or handoff route surfaces.
+Those are now part of the private-runtime cutover path rather than the public SDK demo shell.
 4. `artifact_gate`
 
 Supported route surface:
@@ -253,34 +241,7 @@ These remain out of Lite by design:
 
 ## Sandbox
 
-Lite now includes a real local sandbox path implemented by:
-
-1. `src/routes/memory-sandbox.ts`
-2. `src/memory/sandbox.ts`
-3. `src/store/lite-host-store.ts`
-
-Current sandbox behavior:
-
-1. enabled by default in Lite
-2. available to ordinary local users by default
-3. still supports explicit relock through `SANDBOX_ADMIN_ONLY=true`
-4. defaults to `SANDBOX_EXECUTOR_MODE=mock`
-5. now exposes a convenience local-process preset through `LITE_SANDBOX_PROFILE=local_process_echo`
-
-Supported sandbox routes:
-
-1. `POST /v1/memory/sandbox/sessions`
-2. `POST /v1/memory/sandbox/execute`
-3. `POST /v1/memory/sandbox/runs/get`
-4. `POST /v1/memory/sandbox/runs/logs`
-5. `POST /v1/memory/sandbox/runs/artifact`
-6. `POST /v1/memory/sandbox/runs/cancel`
-
-Current caveat:
-
-1. the default executor is intentionally `mock`
-2. the route surface is real and persistent, but default sandbox execution is still optimized for local validation rather than hardened production execution
-3. the current local-process preset is intentionally narrow and only allows `echo` by default
+Sandbox internals still exist in Lite shared code, but the public repo no longer exposes a public sandbox route surface.
 
 ## Execution Memory Runtime Notes
 

@@ -49,7 +49,7 @@ test("apps/lite wrapper launches the source runtime through tsx", () => {
   const entry = fs.readFileSync(path.join(ROOT, "apps", "lite", "src", "index.js"), "utf8");
   const startScript = fs.readFileSync(path.join(ROOT, "apps", "lite", "scripts", "start-lite-app.sh"), "utf8");
   assert.match(entry, /tsx/);
-  assert.match(entry, /src\/index\.ts/);
+  assert.match(entry, /src\/index-sdk-demo\.ts/);
   assert.equal(entry.includes("../../../dist/runtime-entry.js"), false);
   assert.equal(startScript.includes("dist/index.js"), false);
 });

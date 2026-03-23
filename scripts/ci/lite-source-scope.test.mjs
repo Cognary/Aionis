@@ -12,13 +12,20 @@ const FORBIDDEN_PATHS = [
   "src/eval/score.ts",
   "src/sdk/index.ts",
   "src/memory/automation.ts",
+  "src/memory/automation-lite.ts",
+  "src/memory/handoff.ts",
   "src/routes/admin-control-alerts.ts",
   "src/routes/admin-control-config.ts",
   "src/routes/admin-control-dashboard.ts",
   "src/routes/admin-control-entities.ts",
+  "src/routes/automations.ts",
+  "src/routes/handoff.ts",
   "src/routes/memory-access.ts",
   "src/routes/memory-feedback-tools.ts",
+  "src/routes/memory-recall.ts",
+  "src/routes/memory-replay-core.ts",
   "src/routes/memory-replay-governed.ts",
+  "src/routes/memory-sandbox.ts",
   "src/routes/memory-write.ts",
   "src/util/error-format.ts",
 ];
@@ -90,11 +97,16 @@ test("lite route registration args drop server-only plumbing", () => {
   assert.match(sandboxBudgetFile, /enforceSandboxTenantBudget/);
 });
 
-test("lite repo keeps local automation kernel sources and removes server-only lite automation blockers", () => {
-  assert.equal(fs.existsSync(path.join(ROOT, "src/routes/automations.ts")), true, "lite automations route should exist");
+test("lite public route matrix matches the sdk_demo surface", () => {
   const liteEdition = fs.readFileSync(path.join(ROOT, "src/host/lite-edition.ts"), "utf8");
-  assert.equal(liteEdition.includes("automation orchestration remains server-only"), false);
-  assert.match(liteEdition, /automations-lite-kernel/);
+  assert.equal(liteEdition.includes("memory-handoff"), false);
+  assert.equal(liteEdition.includes("memory-recall"), false);
+  assert.equal(liteEdition.includes("automations-lite-kernel"), false);
+  assert.equal(liteEdition.includes("memory-sandbox"), false);
+  assert.match(liteEdition, /memory-write/);
+  assert.match(liteEdition, /memory-context-runtime/);
+  assert.match(liteEdition, /memory-access-partial/);
+  assert.match(liteEdition, /memory-feedback-tools/);
 });
 
 test("lite replay repair review policy is endpoint-only", () => {
@@ -183,17 +195,6 @@ test("lite sdk-demo memory-access routes do not keep store fallback branches", (
   assert.match(memoryAccessFile, /aionis-lite sdk-demo memory-access routes only support AIONIS_EDITION=lite/);
 });
 
-test("lite memory-sandbox routes keep optional admin-only guard but default to local direct use", () => {
-  const memorySandboxFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-sandbox.ts"), "utf8");
-  const configFile = fs.readFileSync(path.join(ROOT, "src", "config.ts"), "utf8");
-  assert.match(memorySandboxFile, /aionis-lite memory-sandbox routes only support AIONIS_EDITION=lite/);
-  assert.match(memorySandboxFile, /if \(env\.SANDBOX_ADMIN_ONLY\)/);
-  assert.match(memorySandboxFile, /requireAdminToken\(req\)/);
-  assert.equal(memorySandboxFile.includes("requireMemoryPrincipal"), false, "memory-sandbox should not depend on principal plumbing in lite");
-  assert.match(configFile, /SANDBOX_ENABLED:[\s\S]*v \?\? "true"/);
-  assert.match(configFile, /SANDBOX_ADMIN_ONLY:[\s\S]*v \?\? "false"/);
-});
-
 test("lite sdk-demo memory-feedback-tools routes do not keep store fallback branches", () => {
   const memoryFeedbackToolsFile = fs.readFileSync(path.join(ROOT, "src", "routes", "sdk-demo-memory-feedback-tools.ts"), "utf8");
   const feedbackFile = fs.readFileSync(path.join(ROOT, "src", "memory", "feedback.ts"), "utf8");
@@ -211,19 +212,6 @@ test("lite sdk-demo memory-feedback-tools routes do not keep store fallback bran
   assert.match(feedbackFile, /lite_write_store_required/);
 });
 
-test("lite memory-recall routes do not keep store-client recall plumbing", () => {
-  const memoryRecallFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-recall.ts"), "utf8");
-  const forbiddenSymbols = [
-    "type StoreLike",
-    "store.withClient",
-    "recallAccessForClient",
-  ];
-  for (const symbol of forbiddenSymbols) {
-    assert.equal(memoryRecallFile.includes(symbol), false, `${symbol} should be absent from lite memory-recall routes`);
-  }
-  assert.match(memoryRecallFile, /aionis-lite memory-recall routes only support AIONIS_EDITION=lite/);
-});
-
 test("lite memory-context-runtime routes do not keep store-client recall plumbing", () => {
   const memoryContextRuntimeFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-context-runtime.ts"), "utf8");
   const forbiddenSymbols = [
@@ -236,20 +224,6 @@ test("lite memory-context-runtime routes do not keep store-client recall plumbin
     assert.equal(memoryContextRuntimeFile.includes(symbol), false, `${symbol} should be absent from lite memory-context-runtime routes`);
   }
   assert.match(memoryContextRuntimeFile, /aionis-lite memory-context-runtime routes only support AIONIS_EDITION=lite/);
-});
-
-test("lite handoff routes do not keep store fallback branches", () => {
-  const handoffFile = fs.readFileSync(path.join(ROOT, "src", "routes", "handoff.ts"), "utf8");
-  const forbiddenSymbols = [
-    "type StoreLike",
-    "store.withTx",
-    "store.withClient",
-    "writeAccessForClient",
-  ];
-  for (const symbol of forbiddenSymbols) {
-    assert.equal(handoffFile.includes(symbol), false, `${symbol} should be absent from lite handoff routes`);
-  }
-  assert.match(handoffFile, /aionis-lite handoff routes only support AIONIS_EDITION=lite/);
 });
 
 test("lite host does not register broken memory lifecycle routes and exposes them as unsupported", () => {
