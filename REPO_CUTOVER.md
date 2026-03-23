@@ -24,6 +24,13 @@ The full current `main` history has already been pushed to both:
 That means the next cutover step is no longer repository creation.
 It is **public repository shrinkage** and **private repository mainline ownership**.
 
+Current shrink status:
+
+1. `sdk_demo` direct residual runtime route targets are now **0**
+2. the public demo path no longer depends directly on the former audited residual route targets
+3. the next execution problem is no longer route-surface disentangling
+4. it is now **transitive source-tree shrinkage**
+
 ## Recommended Direction
 
 ### Public `Cognary/Aionis`
@@ -88,10 +95,37 @@ Important nuance:
 2. introduce a smaller public demo/runtime shim
 3. prove SDK quickstart still works
 
+Phase 2 status:
+
+1. completed for direct route residuals
+2. `npm run sdk-demo:audit` now reports `residual runtime edges: 0`
+3. the public demo shell now runs through demo-specific wrappers for:
+   - access
+   - tools feedback
+   - replay governed review
+   - context runtime
+   - write
+
 ### Phase 3
 
 1. remove or replace the no-longer-needed deep runtime directories from public
 2. keep only the demo-capable public shell plus SDK/docs/examples
+
+Current Phase 3 entry condition:
+
+1. `npm run public:keep-manifest` now computes the transitive `src/` keep set from `src/index-sdk-demo.ts`
+2. current manifest result:
+   - `src files: 164`
+   - `keep files: 158`
+   - `move candidates: 6`
+3. the first safe move batch is therefore narrow, not broad
+4. immediate move candidates currently are:
+   - `src/index.ts`
+   - `src/runtime-entry.ts`
+   - `src/routes/memory-lifecycle.ts`
+   - `src/memory/governance.ts`
+   - `src/memory/nodes-activate.ts`
+   - `src/memory/rehydrate.ts`
 
 ## Validation
 

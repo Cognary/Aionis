@@ -63,3 +63,33 @@ The next real implementation slice should be:
 1. define the minimum route/runtime subset needed by SDK quickstart
 2. extract or replace that subset with a smaller public demo shell
 3. only then remove the rest of the deep runtime tree from the public repository
+
+## Current Execution Status
+
+That minimum demo route/runtime subset has now been separated enough that:
+
+1. `npm run sdk-demo:audit` reports `residual runtime edges: 0`
+2. the public problem has moved from direct route-target disentangling to transitive `src/` shrinkage
+
+## Current Keep Manifest Baseline
+
+Use:
+
+1. `npm run public:keep-manifest`
+
+Current baseline:
+
+1. `src files: 164`
+2. `keep files: 158`
+3. `move candidates: 6`
+
+Immediate move candidates:
+
+1. `src/index.ts`
+2. `src/runtime-entry.ts`
+3. `src/routes/memory-lifecycle.ts`
+4. `src/memory/governance.ts`
+5. `src/memory/nodes-activate.ts`
+6. `src/memory/rehydrate.ts`
+
+This means the first actual public shrink should be a narrow migration batch, not a sweeping delete of `src/`.
