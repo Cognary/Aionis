@@ -141,7 +141,7 @@ function attachRecallRules(base: MemoryRecallOutput, rulesRes: RulesEvaluationLi
   };
 }
 
-export function registerMemoryContextRuntimeRoutes(args: {
+export function registerMemoryContextRuntimeRoutesSelected(args: {
   app: FastifyInstance;
   env: Env;
   embedder: EmbeddingProvider | null;
@@ -213,7 +213,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
       requested_allowed_layers?: string[];
     } | null;
   }) => Promise<void>;
-}) {
+}, enabledSurfaces: ContextRuntimeSurface[]) {
   const {
     app,
     env,
@@ -245,6 +245,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     mapRecallTextEmbeddingError,
     recordContextAssemblyTelemetryBestEffort,
   } = args;
+  const enabledSurfaceSet = new Set<ContextRuntimeSurface>(enabledSurfaces);
   if (env.AIONIS_EDITION !== "lite") {
     throw new Error("aionis-lite memory-context-runtime routes only support AIONIS_EDITION=lite");
   }
@@ -626,14 +627,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
   const buildEffectiveStaticBlocks = (args: {
     parsed: ParsedPlanningContext | ParsedContextAssemble;
     executionKernel: ReturnType<typeof resolveExecutionKernelContext>;
-  }) =>
-    args.executionKernel.packet
-      ? [
-          ...executionPacketToStaticBlocks(args.executionKernel.packet),
-          ...executionContinuityToStaticBlocks(args.parsed).blocks,
-          ...(Array.isArray(args.parsed.static_context_blocks) ? args.parsed.static_context_blocks : []),
-        ]
-      : mergeExecutionPacketStaticBlocks(args.parsed);
+  }) => mergeExecutionPacketStaticBlocks(args.parsed);
   const recordContextAssemblyTelemetrySafe = async (args: {
     req: ContextRuntimeRequest;
     tenantId: string;
@@ -714,7 +708,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     };
   };
 
-  app.post("/v1/memory/recall_text", async (req: ContextRuntimeRequest, reply: FastifyReply) => {
+  if (enabledSurfaceSet.has("recall_text")) app.post("/v1/memory/recall_text", async (req: ContextRuntimeRequest, reply: FastifyReply) => {
     const surfaceEmbedder = resolveSurfaceEmbedder("recall_text", reply);
     if (!surfaceEmbedder) return;
 
@@ -909,7 +903,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     });
   });
 
-  app.post("/v1/memory/planning/context", async (req: ContextRuntimeRequest, reply: FastifyReply) => {
+  if (enabledSurfaceSet.has("planning_context")) app.post("/v1/memory/planning/context", async (req: ContextRuntimeRequest, reply: FastifyReply) => {
     const surfaceEmbedder = resolveSurfaceEmbedder("planning_context", reply);
     if (!surfaceEmbedder) return;
 
@@ -1151,7 +1145,7 @@ export function registerMemoryContextRuntimeRoutes(args: {
     });
   });
 
-  app.post("/v1/memory/context/assemble", async (req: ContextRuntimeRequest, reply: FastifyReply) => {
+  if (enabledSurfaceSet.has("context_assemble")) app.post("/v1/memory/context/assemble", async (req: ContextRuntimeRequest, reply: FastifyReply) => {
     const surfaceEmbedder = resolveSurfaceEmbedder("context_assemble", reply);
     if (!surfaceEmbedder) return;
 
@@ -1396,4 +1390,80 @@ export function registerMemoryContextRuntimeRoutes(args: {
       cost_signals: costSignals,
     });
   });
+}
+
+export function registerMemoryContextRuntimeRoutes(args: {
+  app: FastifyInstance;
+  env: Env;
+  embedder: EmbeddingProvider | null;
+  embeddingSurfacePolicy?: EmbeddingSurfacePolicy;
+  embeddedRuntime: EmbeddedMemoryRuntime | null;
+  liteWriteStore: ContextRuntimeLiteStoreLike;
+  liteRecallAccess: RecallStoreAccess;
+  recallTextEmbedBatcher: unknown;
+  requireMemoryPrincipal: (req: FastifyRequest) => Promise<AuthPrincipal | null>;
+  withIdentityFromRequest: (
+    req: FastifyRequest,
+    body: unknown,
+    principal: AuthPrincipal | null,
+    kind: ContextRuntimeRequestKind,
+  ) => unknown;
+  enforceRateLimit: (req: FastifyRequest, reply: FastifyReply, kind: "recall" | "debug_embeddings") => Promise<void>;
+  enforceTenantQuota: (req: FastifyRequest, reply: FastifyReply, kind: "recall" | "debug_embeddings", tenantId: string) => Promise<void>;
+  enforceRecallTextEmbedQuota: (req: FastifyRequest, reply: FastifyReply, tenantId: string) => Promise<void>;
+  buildRecallAuth: (req: FastifyRequest, allowEmbeddings: boolean) => RecallAuth;
+  tenantFromBody: (body: unknown) => string;
+  acquireInflightSlot: (kind: "recall") => Promise<InflightGateToken>;
+  hasExplicitRecallKnobs: (body: unknown) => boolean;
+  resolveRecallProfile: (endpoint: "recall_text", tenantId: string) => RecallProfileLike;
+  resolveExplicitRecallMode: (body: unknown, baseProfile: string, explicitRecallKnobs: boolean) => ExplicitRecallModeLike;
+  resolveClassAwareRecallProfile: (
+    endpoint: ContextRuntimeSurface,
+    body: unknown,
+    baseProfile: string,
+    explicitRecallKnobs: boolean,
+  ) => ClassAwareRecallProfileLike;
+  withRecallProfileDefaults: (body: unknown, defaults: Record<string, unknown>) => Record<string, unknown>;
+  resolveRecallStrategy: (body: unknown, explicitRecallKnobs: boolean) => RecallStrategyResolutionLike;
+  resolveAdaptiveRecallProfile: (profile: string, waitMs: number, explicitRecallKnobs: boolean) => RecallAdaptiveProfileLike;
+  resolveAdaptiveRecallHardCap: (
+    knobs: ContextRuntimeRecallKnobs,
+    waitMs: number,
+    explicitRecallKnobs: boolean,
+  ) => RecallAdaptiveHardCapLike;
+  inferRecallStrategyFromKnobs: (knobs: ContextRuntimeRecallKnobs) => unknown;
+  buildRecallTrajectory: (args: unknown) => unknown;
+  embedRecallTextQuery: (provider: EmbeddingProvider, queryText: string) => Promise<{
+    vec: number[];
+    ms: number;
+    cache_hit: boolean;
+    singleflight_join: boolean;
+    queue_wait_ms: number;
+    batch_size: number;
+  }>;
+  mapRecallTextEmbeddingError: (err: unknown) => {
+    statusCode: number;
+    code: string;
+    message: string;
+    retry_after_sec?: number;
+    details?: Record<string, unknown>;
+  };
+  recordContextAssemblyTelemetryBestEffort: (args: {
+    req: FastifyRequest;
+    tenant_id: string;
+    scope: string;
+    endpoint: "planning_context" | "context_assemble";
+    latency_ms: number;
+    layered_output: boolean;
+    layered_context: unknown;
+    selected_memory_layers?: string[];
+    selection_policy?: {
+      name?: string | null;
+      source?: string | null;
+      trust_anchor_layers?: string[];
+      requested_allowed_layers?: string[];
+    } | null;
+  }) => Promise<void>;
+}) {
+  return registerMemoryContextRuntimeRoutesSelected(args, ["recall_text", "planning_context", "context_assemble"]);
 }
