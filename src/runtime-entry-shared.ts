@@ -23,8 +23,11 @@ import { loadEnv } from "./config.js";
 import { recordMemoryContextAssemblyTelemetry } from "./control-plane.js";
 import { runTopicClusterForEventIds } from "./jobs/topicClusterLib.js";
 
-export async function startAionisRuntimeWithRouteRegistrar(
-  registerRoutes: (args: RegisterApplicationRoutesArgs) => void,
+export async function startAionisRuntimeWithRouteRegistrar<TRouteArgs = RegisterApplicationRoutesArgs>(
+  options: {
+    selectRouteArgs?: (args: RegisterApplicationRoutesArgs) => TRouteArgs;
+    registerRoutes: (args: TRouteArgs) => void;
+  },
 ): Promise<void> {
   const env = loadEnv();
   const {
@@ -232,7 +235,10 @@ export async function startAionisRuntimeWithRouteRegistrar(
     writeAccessForClient,
     runTopicClusterForEventIds,
   };
-  registerRoutes(applicationRouteArgs);
+  const routeArgs = options.selectRouteArgs
+    ? options.selectRouteArgs(applicationRouteArgs)
+    : applicationRouteArgs;
+  options.registerRoutes(routeArgs);
 
   registerBootstrapLifecycle({
     app,

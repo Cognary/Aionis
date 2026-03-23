@@ -4,5 +4,7 @@ import {
 import { startAionisRuntimeWithRouteRegistrar } from "./runtime-entry-shared.js";
 
 export async function startAionisRuntime(): Promise<void> {
-  await startAionisRuntimeWithRouteRegistrar(registerApplicationRoutes);
+  await startAionisRuntimeWithRouteRegistrar({
+    registerRoutes: registerApplicationRoutes,
+  });
 }
