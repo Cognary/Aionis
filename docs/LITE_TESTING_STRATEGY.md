@@ -216,7 +216,8 @@ Current benchmark scenarios:
 8. `governed_learning_runtime_loop`
 9. `governed_replay_runtime_loop`
 10. `governance_provider_precedence_runtime_loop`
-11. `slim_surface_boundary`
+11. `custom_model_client_runtime_loop`
+12. `slim_surface_boundary`
 
 What this layer should catch:
 

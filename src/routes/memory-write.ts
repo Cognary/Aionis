@@ -6,7 +6,10 @@ import type { EmbeddingProvider } from "../embeddings/types.js";
 import { ExecutionStateV1Schema } from "../execution/types.js";
 import { ExecutionStateTransitionV1Schema } from "../execution/transitions.js";
 import { createEmbeddingSurfacePolicy, type EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
-import { buildLiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
+import {
+  buildLiteGovernanceRuntimeProviders,
+  type LiteGovernanceRuntimeProviderBuilderOptions,
+} from "../app/governance-runtime-providers.js";
 import type { TopicClusterParams, TopicClusterResult } from "../jobs/topicClusterLib.js";
 import { applyMemoryWrite, computeEffectiveWritePolicy, prepareMemoryWrite } from "../memory/write.js";
 import { commitLitePreparedWriteWithProjection, type LiteProjectedWriteStore } from "./lite-projected-write.js";
@@ -115,6 +118,7 @@ export function registerMemoryWriteRoutes(args: {
   acquireInflightSlot: (kind: "write") => Promise<InflightGateToken>;
   runTopicClusterForEventIds: (client: pg.PoolClient, args: TopicClusterParams) => Promise<TopicClusterResult>;
   executionStateStore?: InMemoryExecutionStateStore | null;
+  governanceRuntimeProviderBuilderOptions?: LiteGovernanceRuntimeProviderBuilderOptions;
 }) {
   const {
     app,
@@ -137,7 +141,10 @@ export function registerMemoryWriteRoutes(args: {
   const embeddingSurfacePolicy =
     embeddingSurfacePolicyArg ?? createEmbeddingSurfacePolicy({ providerConfigured: !!embedder });
   const writeEmbedder = embeddingSurfacePolicy.providerFor("write_auto_embed", embedder);
-  const governanceProviders = buildLiteGovernanceRuntimeProviders(env);
+  const governanceProviders = buildLiteGovernanceRuntimeProviders(
+    env,
+    args.governanceRuntimeProviderBuilderOptions,
+  );
   const topicClusterSurfaceEnabled = embeddingSurfacePolicy.isEnabled("topic_cluster");
   const resolveWritePolicy = (computedPolicy: EffectiveWritePolicyLike): EffectiveWritePolicyLike => ({
     ...computedPolicy,

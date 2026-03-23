@@ -11,7 +11,10 @@ import { getToolsDecisionById } from "../memory/tools-decision.js";
 import { getToolsRunLifecycle, listToolsRuns } from "../memory/tools-run.js";
 import { toolSelectionFeedback } from "../memory/tools-feedback.js";
 import { suppressPatternAnchorLite, unsuppressPatternAnchorLite } from "../memory/pattern-operator-override.js";
-import { buildLiteGovernanceRuntimeProviders } from "../app/governance-runtime-providers.js";
+import {
+  buildLiteGovernanceRuntimeProviders,
+  type LiteGovernanceRuntimeProviderBuilderOptions,
+} from "../app/governance-runtime-providers.js";
 import type { EmbeddedMemoryRuntime } from "../store/embedded-memory-runtime.js";
 import type { RecallStoreAccess } from "../store/recall-access.js";
 import type { LiteWriteStore } from "../store/lite-write-store.js";
@@ -65,6 +68,7 @@ type RegisterMemoryFeedbackToolRoutesArgs = {
   enforceTenantQuota: (req: FastifyRequest, reply: FastifyReply, kind: "write" | "recall", tenantId: string) => Promise<void>;
   tenantFromBody: (body: unknown) => string;
   acquireInflightSlot: (kind: "write" | "recall") => Promise<InflightGateToken>;
+  governanceRuntimeProviderBuilderOptions?: LiteGovernanceRuntimeProviderBuilderOptions;
 };
 
 export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToolRoutesArgs) {
@@ -85,7 +89,10 @@ export function registerMemoryFeedbackToolRoutes(args: RegisterMemoryFeedbackToo
   if (env.AIONIS_EDITION !== "lite") {
     throw new Error("aionis-lite memory-feedback-tools routes only support AIONIS_EDITION=lite");
   }
-  const governanceProviders = buildLiteGovernanceRuntimeProviders(env);
+  const governanceProviders = buildLiteGovernanceRuntimeProviders(
+    env,
+    args.governanceRuntimeProviderBuilderOptions,
+  );
 
   const runFeedbackRoute = async <TResult>(args: {
     req: MemoryFeedbackToolRequest;

@@ -1,6 +1,9 @@
 import type { Env } from "../config.js";
 import type { EmbeddingSurfacePolicy } from "../embeddings/surface-policy.js";
-import { buildLiteGovernanceRuntimeProviders } from "./governance-runtime-providers.js";
+import {
+  buildLiteGovernanceRuntimeProviders,
+  type LiteGovernanceRuntimeProviderBuilderOptions,
+} from "./governance-runtime-providers.js";
 import { buildReplayLearningProjectionDefaults } from "../memory/replay-learning.js";
 import { createSandboxSession, enqueueSandboxRun, getSandboxRun } from "../memory/sandbox.js";
 import { HttpError } from "../util/http.js";
@@ -143,6 +146,7 @@ export function createReplayRuntimeOptionBuilders(args: {
   sandboxExecutor: SandboxExecutorLike;
   writeAccessShadowMirrorV2: boolean;
   enforceSandboxTenantBudget: (reply: any, tenantId: string, scope: string, projectId: string | null) => Promise<void>;
+  governanceRuntimeProviderBuilderOptions?: LiteGovernanceRuntimeProviderBuilderOptions;
 }) {
   const {
     env,
@@ -161,7 +165,10 @@ export function createReplayRuntimeOptionBuilders(args: {
   const writeEmbedder = embeddingSurfacePolicy?.providerFor("write_auto_embed", embedder) ?? embedder;
   const replayLearningProjectionDefaultDelivery =
     env.AIONIS_EDITION === "lite" ? "sync_inline" : env.REPLAY_LEARNING_PROJECTION_DELIVERY;
-  const governanceProviders = buildLiteGovernanceRuntimeProviders(env);
+  const governanceProviders = buildLiteGovernanceRuntimeProviders(
+    env,
+    args.governanceRuntimeProviderBuilderOptions,
+  );
 
   function buildReplayRepairReviewOptions() {
     return {

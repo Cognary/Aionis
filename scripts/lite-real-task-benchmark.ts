@@ -8,6 +8,7 @@ import { FakeEmbeddingProvider } from "../src/embeddings/fake.ts";
 import { createRequestGuards } from "../src/app/request-guards.ts";
 import { createReplayRepairReviewPolicy } from "../src/app/replay-repair-review-policy.ts";
 import { createReplayRuntimeOptionBuilders } from "../src/app/replay-runtime-options.ts";
+import type { LiteGovernanceRuntimeProviderBuilderOptions } from "../src/app/governance-runtime-providers.ts";
 import { registerHostErrorHandler } from "../src/host/http-host.ts";
 import { registerMemoryAccessRoutes } from "../src/routes/memory-access.ts";
 import { registerMemoryContextRuntimeRoutes } from "../src/routes/memory-context-runtime.ts";
@@ -31,6 +32,7 @@ import { createLiteRecallStore } from "../src/store/lite-recall-store.ts";
 import { createLiteReplayStore } from "../src/store/lite-replay-store.ts";
 import { createLiteWriteStore } from "../src/store/lite-write-store.ts";
 import { InflightGate } from "../src/util/inflight_gate.ts";
+import type { GovernanceModelClientFactory } from "../src/memory/governance-model-client.ts";
 
 type AssertionResult = {
   name: string;
@@ -250,6 +252,7 @@ function registerBenchmarkApp(args: {
   liteWriteStore: ReturnType<typeof createLiteWriteStore>;
   liteRecallStore: ReturnType<typeof createLiteRecallStore>;
   envOverrides?: Record<string, unknown>;
+  governanceRuntimeProviderBuilderOptions?: LiteGovernanceRuntimeProviderBuilderOptions;
 }) {
   const env = buildEnv(args.envOverrides);
   const guards = buildRequestGuards(env);
@@ -273,6 +276,7 @@ function registerBenchmarkApp(args: {
     acquireInflightSlot: guards.acquireInflightSlot,
     runTopicClusterForEventIds: async () => ({ processed_events: 0 }),
     executionStateStore: null,
+    governanceRuntimeProviderBuilderOptions: args.governanceRuntimeProviderBuilderOptions,
   });
 
   registerMemoryContextRuntimeRoutes({
@@ -364,6 +368,7 @@ function registerBenchmarkApp(args: {
     enforceTenantQuota: guards.enforceTenantQuota,
     tenantFromBody: guards.tenantFromBody,
     acquireInflightSlot: guards.acquireInflightSlot,
+    governanceRuntimeProviderBuilderOptions: args.governanceRuntimeProviderBuilderOptions,
   });
 }
 
@@ -423,6 +428,43 @@ function buildBenchmarkWritePayload(args: {
       },
     ],
     edges: [],
+  };
+}
+
+function createBenchmarkCustomGovernanceModelClientFactory(): GovernanceModelClientFactory {
+  return ({ operation }) => {
+    if (operation === "promote_memory") {
+      return {
+        reviewPromoteMemory: () => ({
+          review_version: "promote_memory_semantic_review_v1",
+          adjudication: {
+            operation: "promote_memory",
+            disposition: "recommend",
+            target_kind: "workflow",
+            target_level: "L2",
+            reason: "benchmark custom promote_memory client",
+            confidence: 0.96,
+            strategic_value: "high",
+          },
+        }),
+      };
+    }
+    if (operation === "form_pattern") {
+      return {
+        reviewFormPattern: () => ({
+          review_version: "form_pattern_semantic_review_v1",
+          adjudication: {
+            operation: "form_pattern",
+            disposition: "recommend",
+            target_kind: "pattern",
+            target_level: "L3",
+            reason: "benchmark custom form_pattern client",
+            confidence: 0.96,
+          },
+        }),
+      };
+    }
+    return undefined;
   };
 }
 
@@ -2159,6 +2201,7 @@ function registerReplayBenchmarkApp(args: {
   liteReplayStore: ReturnType<typeof createLiteReplayStore>;
   liteRecallStore: ReturnType<typeof createLiteRecallStore>;
   envOverrides?: Record<string, unknown>;
+  governanceRuntimeProviderBuilderOptions?: LiteGovernanceRuntimeProviderBuilderOptions;
 }) {
   const env = buildEnv({
     REPLAY_LEARNING_PROJECTION_ENABLED: true,
@@ -2190,6 +2233,7 @@ function registerReplayBenchmarkApp(args: {
     },
     writeAccessShadowMirrorV2: false,
     enforceSandboxTenantBudget: async () => {},
+    governanceRuntimeProviderBuilderOptions: args.governanceRuntimeProviderBuilderOptions,
   });
   const { withReplayRepairReviewDefaults } = createReplayRepairReviewPolicy({
     env,
@@ -2610,6 +2654,244 @@ async function runGovernanceProviderPrecedenceRuntimeLoop(): Promise<Omit<Benchm
   }
 }
 
+async function runCustomModelClientRuntimeLoop(): Promise<Omit<BenchmarkScenarioResult, "id" | "title" | "status" | "duration_ms">> {
+  const customFactory = createBenchmarkCustomGovernanceModelClientFactory();
+
+  const runtimeDbPath = tmpDbPath("custom-model-client-runtime");
+  const runtimeApp = Fastify();
+  const runtimeWriteStore = createLiteWriteStore(runtimeDbPath);
+  const runtimeRecallStore = createLiteRecallStore(runtimeDbPath);
+
+  const replayWriteDbPath = tmpDbPath("custom-model-client-replay-write");
+  const replayDbPath = tmpDbPath("custom-model-client-replay-store");
+  const replayApp = Fastify();
+  const replayWriteStore = createLiteWriteStore(replayWriteDbPath);
+  const replayStore = createLiteReplayStore(replayDbPath);
+  const replayRecallStore = createLiteRecallStore(replayWriteDbPath);
+
+  const assertions: AssertionResult[] = [];
+  try {
+    registerBenchmarkApp({
+      app: runtimeApp,
+      liteWriteStore: runtimeWriteStore,
+      liteRecallStore: runtimeRecallStore,
+      envOverrides: {
+        WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+        TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED: true,
+      },
+      governanceRuntimeProviderBuilderOptions: {
+        modelClientFactory: customFactory,
+        modelClientModes: {
+          workflowProjection: {
+            promote_memory: "custom",
+          },
+          toolsFeedback: {
+            form_pattern: "custom",
+          },
+        },
+      },
+    });
+
+    const taskBrief = "Fix export failure in node tests";
+    const filePath = "src/routes/export.ts";
+
+    const firstWrite = await runtimeApp.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildBenchmarkWritePayload({
+        eventId: randomUUID(),
+        title: "Custom client inspect export path",
+        inputText: "custom client benchmark first continuity write",
+        taskBrief,
+        stateId: `state:${randomUUID()}`,
+        filePath,
+      }),
+    });
+    assert.equal(firstWrite.statusCode, 200);
+
+    const secondWrite = await runtimeApp.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildBenchmarkWritePayload({
+        eventId: randomUUID(),
+        title: "Custom client patch export path",
+        inputText: "custom client benchmark second continuity write",
+        taskBrief,
+        stateId: `state:${randomUUID()}`,
+        filePath,
+      }),
+    });
+    assert.equal(secondWrite.statusCode, 200);
+
+    const storedStable = await runtimeWriteStore.findNodes({
+      scope: "default",
+      type: "procedure",
+      slotsContains: {
+        summary_kind: "workflow_anchor",
+      },
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 20,
+      offset: 0,
+    });
+    const stableWorkflowNode = storedStable.rows.find((row) => {
+      const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
+      return projection?.auto_promoted === true;
+    }) ?? null;
+    assert.ok(stableWorkflowNode);
+    const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, any>;
+    const workflowPreview = ((stableProjection.governance_preview ?? {}) as Record<string, any>).promote_memory as Record<string, any> | undefined;
+    assert.equal(workflowPreview?.review_result?.adjudication?.reason, "benchmark custom promote_memory client");
+    assert.equal(workflowPreview?.policy_effect?.applies, true);
+    assert.equal(stableProjection.governed_promotion_state_override, "stable");
+    assertions.push(pass("workflow runtime path uses custom model client replacement"));
+
+    const toolRuleNodeIds = await seedActiveToolRules(runtimeWriteStore, ["edit", "edit"]);
+    const toolsSelectRes = await runtimeApp.inject({
+      method: "POST",
+      url: "/v1/memory/tools/select",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        run_id: "custom-client-tools-run",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        candidates: ["bash", "edit", "test"],
+        include_shadow: false,
+        rules_limit: 20,
+        strict: true,
+        reorder_candidates: false,
+      },
+    });
+    assert.equal(toolsSelectRes.statusCode, 200);
+    const toolsSelection = ToolsSelectRouteContractSchema.parse(toolsSelectRes.json());
+    const toolsFeedbackRes = await runtimeApp.inject({
+      method: "POST",
+      url: "/v1/memory/tools/feedback",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        actor: "local-user",
+        run_id: "custom-client-tools-run",
+        decision_id: toolsSelection.decision.decision_id,
+        outcome: "positive",
+        context: {
+          task_kind: "repair_export",
+          goal: "repair export failure in node tests",
+          error: {
+            signature: "node-export-mismatch",
+          },
+        },
+        candidates: ["bash", "edit", "test"],
+        selected_tool: "edit",
+        target: "tool",
+        note: "Custom client grouped evidence benchmark",
+        input_text: "repair export failure in node tests",
+      },
+    });
+    assert.equal(toolsFeedbackRes.statusCode, 200);
+    const toolsFeedback = ToolsFeedbackResponseSchema.parse(toolsFeedbackRes.json());
+    assert.equal(toolsFeedback.governance_preview?.form_pattern.review_result?.adjudication.reason, "benchmark custom form_pattern client");
+    assert.equal(toolsFeedback.governance_preview?.form_pattern.policy_effect?.applies, true);
+    assert.equal(toolsFeedback.pattern_anchor?.pattern_state, "stable");
+    assert.equal(toolsFeedback.pattern_anchor?.credibility_state, "trusted");
+    assertions.push(pass("tools runtime path uses custom model client replacement"));
+
+    for (const ruleNodeId of toolRuleNodeIds) {
+      await runtimeWriteStore.withTx(() =>
+        updateRuleState(
+          {} as any,
+          {
+            tenant_id: "default",
+            scope: "default",
+            actor: "local-user",
+            rule_node_id: ruleNodeId,
+            state: "disabled",
+            input_text: "disable custom client benchmark tool source rules",
+          },
+          "default",
+          "default",
+          { liteWriteStore: runtimeWriteStore },
+        ),
+      );
+    }
+
+    const replayPlaybookId = randomUUID();
+    await seedPendingReplayBenchmarkPlaybook({
+      liteWriteStore: replayWriteStore,
+      liteReplayStore: replayStore,
+      playbookId: replayPlaybookId,
+      workflowSignature: "wf:replay:custom-client-export-fix",
+    });
+    registerReplayBenchmarkApp({
+      app: replayApp,
+      liteWriteStore: replayWriteStore,
+      liteReplayStore: replayStore,
+      liteRecallStore: replayRecallStore,
+      envOverrides: {
+        REPLAY_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+      },
+      governanceRuntimeProviderBuilderOptions: {
+        modelClientFactory: customFactory,
+        modelClientModes: {
+          replayRepairReview: {
+            promote_memory: "custom",
+          },
+        },
+      },
+    });
+
+    const replayReviewRes = await replayApp.inject({
+      method: "POST",
+      url: "/v1/memory/replay/playbooks/repair/review",
+      payload: {
+        tenant_id: "default",
+        scope: "default",
+        playbook_id: replayPlaybookId,
+        action: "approve",
+        auto_shadow_validate: false,
+        target_status_on_approve: "shadow",
+        learning_projection: {
+          enabled: true,
+        },
+      },
+    });
+    assert.equal(replayReviewRes.statusCode, 200);
+    const replayReview = ReplayPlaybookRepairReviewResponseSchema.parse(replayReviewRes.json());
+    assert.equal(replayReview.governance_preview?.promote_memory.review_result?.adjudication.reason, "benchmark custom promote_memory client");
+    assert.equal(replayReview.learning_projection_result.status, "applied");
+    assert.equal(replayReview.learning_projection_result.rule_state, "shadow");
+    assertions.push(pass("replay runtime path uses custom model client replacement"));
+
+    return {
+      assertions,
+      metrics: {
+        workflow_custom_reason: workflowPreview?.review_result?.adjudication?.reason ?? null,
+        workflow_governed_state: stableProjection.governed_promotion_state_override ?? null,
+        tools_custom_reason: toolsFeedback.governance_preview?.form_pattern.review_result?.adjudication.reason ?? null,
+        tools_pattern_state: toolsFeedback.pattern_anchor?.pattern_state ?? null,
+        replay_custom_reason: replayReview.governance_preview?.promote_memory.review_result?.adjudication.reason ?? null,
+        replay_learning_rule_state: replayReview.learning_projection_result.rule_state ?? null,
+      },
+      notes: [
+        "Measures whether workflow runtime wiring honors a custom modelClientFactory replacement.",
+        "Measures whether tools runtime wiring honors a custom modelClientFactory replacement.",
+        "Measures whether replay runtime wiring honors a custom modelClientFactory replacement.",
+      ],
+    };
+  } finally {
+    await runtimeApp.close();
+    await replayApp.close();
+    await runtimeWriteStore.close();
+    await replayWriteStore.close();
+  }
+}
+
 function printHuman(result: BenchmarkSuiteResult) {
   const lines: string[] = [];
   lines.push("Aionis Real-Task Benchmark Suite");
@@ -2735,6 +3017,7 @@ async function main() {
     runScenario("governed_learning_runtime_loop", "Governed learning through provider-backed runtime paths", runGovernedLearningRuntimeLoop),
     runScenario("governed_replay_runtime_loop", "Replay-governed learning through provider-backed repair review", runGovernedReplayRuntimeLoop),
     runScenario("governance_provider_precedence_runtime_loop", "Explicit governance review precedence over provider fallback", runGovernanceProviderPrecedenceRuntimeLoop),
+    runScenario("custom_model_client_runtime_loop", "Custom model-client replacement through live runtime paths", runCustomModelClientRuntimeLoop),
     runScenario("slim_surface_boundary", "Slim planner/context default surface", runSlimSurfaceBoundary),
   ]);
   const rawResult: BenchmarkSuiteResult = {
