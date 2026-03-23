@@ -1,9 +1,9 @@
 import type { RegisterSdkDemoRoutesArgs } from "../host/http-host-sdk-demo-args.js";
-import { registerMemoryWriteRoutes } from "./memory-write.js";
 import { registerSdkDemoMemoryAccessRoutes } from "./sdk-demo-memory-access.js";
 import { registerSdkDemoMemoryContextRuntimeRoutes } from "./sdk-demo-memory-context-runtime.js";
 import { registerSdkDemoMemoryFeedbackToolRoutes } from "./sdk-demo-memory-feedback-tools.js";
 import { registerSdkDemoMemoryReplayGovernedRoutes } from "./sdk-demo-memory-replay-governed.js";
+import { registerSdkDemoMemoryWriteRoutes } from "./sdk-demo-memory-write.js";
 import {
   buildSdkDemoMemoryAccessRouteArgs,
   buildSdkDemoMemoryContextRuntimeRouteArgs,
@@ -13,7 +13,7 @@ import {
 } from "./sdk-demo-memory-route-deps.js";
 
 export function registerSdkDemoMemoryWriteRuntimeAdapter(args: RegisterSdkDemoRoutesArgs) {
-  registerMemoryWriteRoutes(buildSdkDemoMemoryWriteRouteArgs(args));
+  registerSdkDemoMemoryWriteRoutes(buildSdkDemoMemoryWriteRouteArgs(args));
 }
 
 export function registerSdkDemoMemoryAccessRuntimeAdapter(args: RegisterSdkDemoRoutesArgs) {

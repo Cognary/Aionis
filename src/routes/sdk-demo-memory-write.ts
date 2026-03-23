@@ -1,5 +1,5 @@
 import { registerMemoryWriteRoute, type RegisterMemoryWriteRoutesArgs } from "./memory-write-shared.js";
 
-export function registerMemoryWriteRoutes(args: RegisterMemoryWriteRoutesArgs) {
+export function registerSdkDemoMemoryWriteRoutes(args: RegisterMemoryWriteRoutesArgs) {
   registerMemoryWriteRoute(args);
 }
