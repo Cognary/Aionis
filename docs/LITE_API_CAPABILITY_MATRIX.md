@@ -27,7 +27,7 @@ It is intentionally stricter than the full runtime. When a surface is not part o
 
 Primary routing sources:
 
-1. `src/host/http-host.ts`
+1. `src/host/http-host-sdk-demo.ts`
 2. `src/host/lite-edition.ts`
 3. `src/routes/*.ts`
 

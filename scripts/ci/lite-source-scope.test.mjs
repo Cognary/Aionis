@@ -43,8 +43,8 @@ test("lite repo does not keep a copied apps/lite dist launcher", () => {
   assert.equal(fs.existsSync(path.join(ROOT, "apps", "lite", "dist")), false, "apps/lite/dist should be absent");
 });
 
-test("lite host does not statically import server-only routes", () => {
-  const hostFile = fs.readFileSync(path.join(ROOT, "src/host/http-host.ts"), "utf8");
+test("lite sdk demo host stays on demo and lite-edition surfaces", () => {
+  const hostFile = fs.readFileSync(path.join(ROOT, "src/host/http-host-sdk-demo.ts"), "utf8");
   const forbiddenImports = [
     "../routes/admin-control-alerts.js",
     "../routes/admin-control-config.js",
@@ -52,14 +52,15 @@ test("lite host does not statically import server-only routes", () => {
     "../routes/admin-control-entities.js",
   ];
   for (const specifier of forbiddenImports) {
-    assert.equal(hostFile.includes(specifier), false, `${specifier} should not be imported by lite http-host`);
+    assert.equal(hostFile.includes(specifier), false, `${specifier} should not be imported by lite sdk-demo host`);
   }
-  assert.equal(hostFile.includes("../routes/automations.js"), true, "lite http-host should import the lite automations route");
-  assert.match(hostFile, /assertLiteOnlySourceTree/);
+  assert.equal(hostFile.includes("../routes/sdk-demo-memory-routes.js"), true, "lite sdk-demo host should import the demo route bundle");
+  assert.equal(hostFile.includes("./lite-edition.js"), true, "lite sdk-demo host should import lite-edition server-only routes");
 });
 
 test("lite route registration args drop server-only plumbing", () => {
-  const hostFile = fs.readFileSync(path.join(ROOT, "src/host/http-host.ts"), "utf8");
+  const routeArgsFile = fs.readFileSync(path.join(ROOT, "src/host/application-route-args.ts"), "utf8");
+  const demoArgsFile = fs.readFileSync(path.join(ROOT, "src/host/http-host-sdk-demo-args.ts"), "utf8");
   const runtimeEntry = fs.readFileSync(path.join(ROOT, "src/runtime-entry-sdk-demo.ts"), "utf8");
   const forbiddenSymbols = [
     "buildAutomationTestHook",
@@ -74,7 +75,8 @@ test("lite route registration args drop server-only plumbing", () => {
     "deleteSandboxProjectBudgetProfile",
   ];
   for (const symbol of forbiddenSymbols) {
-    assert.equal(hostFile.includes(symbol), false, `${symbol} should be absent from lite http-host route args`);
+    assert.equal(routeArgsFile.includes(symbol), false, `${symbol} should be absent from lite application route args`);
+    assert.equal(demoArgsFile.includes(symbol), false, `${symbol} should be absent from lite sdk-demo route args`);
     assert.equal(runtimeEntry.includes(symbol), false, `${symbol} should not be passed through lite runtime-entry route wiring`);
   }
   const sandboxBudgetFile = fs.readFileSync(path.join(ROOT, "src", "app", "sandbox-budget.ts"), "utf8");
@@ -140,7 +142,7 @@ test("lite request guards do not keep full auth or tenant quota plumbing", () =>
 });
 
 test("lite health surface avoids backend implementation detail fields", () => {
-  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
+  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host-bootstrap-shared.ts"), "utf8");
   const forbiddenSymbols = [
     "configured_backend",
     "database_target_hash",
@@ -164,7 +166,6 @@ test("lite pack routes do not keep admin-token-only gating", () => {
 
 test("lite memory-access routes do not keep store fallback branches", () => {
   const memoryAccessFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-access.ts"), "utf8");
-  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
   const forbiddenSymbols = [
     "store.withTx",
     "store.withClient",
@@ -175,19 +176,16 @@ test("lite memory-access routes do not keep store fallback branches", () => {
   for (const symbol of forbiddenSymbols) {
     assert.equal(memoryAccessFile.includes(symbol), false, `${symbol} should be absent from lite memory-access routes`);
   }
-  assert.equal(hostFile.includes("registerMemoryAccessRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-access routes");
   assert.match(memoryAccessFile, /aionis-lite memory-access routes only support AIONIS_EDITION=lite/);
 });
 
 test("lite memory-sandbox routes keep optional admin-only guard but default to local direct use", () => {
   const memorySandboxFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-sandbox.ts"), "utf8");
-  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
   const configFile = fs.readFileSync(path.join(ROOT, "src", "config.ts"), "utf8");
   assert.match(memorySandboxFile, /aionis-lite memory-sandbox routes only support AIONIS_EDITION=lite/);
   assert.match(memorySandboxFile, /if \(env\.SANDBOX_ADMIN_ONLY\)/);
   assert.match(memorySandboxFile, /requireAdminToken\(req\)/);
   assert.equal(memorySandboxFile.includes("requireMemoryPrincipal"), false, "memory-sandbox should not depend on principal plumbing in lite");
-  assert.equal(hostFile.includes("registerMemorySandboxRoutes({\n    app,\n    env,\n    store,\n    sandboxExecutor,\n    requireAdminToken,\n    requireMemoryPrincipal,"), false, "lite host should not pass requireMemoryPrincipal into memory-sandbox routes");
   assert.match(configFile, /SANDBOX_ENABLED:[\s\S]*v \?\? "true"/);
   assert.match(configFile, /SANDBOX_ADMIN_ONLY:[\s\S]*v \?\? "false"/);
 });
@@ -195,7 +193,6 @@ test("lite memory-sandbox routes keep optional admin-only guard but default to l
 test("lite memory-feedback-tools routes do not keep store fallback branches", () => {
   const memoryFeedbackToolsFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-feedback-tools.ts"), "utf8");
   const feedbackFile = fs.readFileSync(path.join(ROOT, "src", "memory", "feedback.ts"), "utf8");
-  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
   const forbiddenSymbols = [
     "type StoreLike",
     "store.withTx",
@@ -206,14 +203,12 @@ test("lite memory-feedback-tools routes do not keep store fallback branches", ()
   for (const symbol of forbiddenSymbols) {
     assert.equal(memoryFeedbackToolsFile.includes(symbol), false, `${symbol} should be absent from lite memory-feedback-tools routes`);
   }
-  assert.equal(hostFile.includes("registerMemoryFeedbackToolRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-feedback-tools routes");
   assert.match(memoryFeedbackToolsFile, /aionis-lite memory-feedback-tools routes only support AIONIS_EDITION=lite/);
   assert.match(feedbackFile, /lite_write_store_required/);
 });
 
 test("lite memory-recall routes do not keep store-client recall plumbing", () => {
   const memoryRecallFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-recall.ts"), "utf8");
-  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
   const forbiddenSymbols = [
     "type StoreLike",
     "store.withClient",
@@ -222,13 +217,11 @@ test("lite memory-recall routes do not keep store-client recall plumbing", () =>
   for (const symbol of forbiddenSymbols) {
     assert.equal(memoryRecallFile.includes(symbol), false, `${symbol} should be absent from lite memory-recall routes`);
   }
-  assert.equal(hostFile.includes("registerMemoryRecallRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-recall routes");
   assert.match(memoryRecallFile, /aionis-lite memory-recall routes only support AIONIS_EDITION=lite/);
 });
 
 test("lite memory-context-runtime routes do not keep store-client recall plumbing", () => {
   const memoryContextRuntimeFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-context-runtime.ts"), "utf8");
-  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
   const forbiddenSymbols = [
     "type StoreLike",
     "store.withClient",
@@ -238,13 +231,11 @@ test("lite memory-context-runtime routes do not keep store-client recall plumbin
   for (const symbol of forbiddenSymbols) {
     assert.equal(memoryContextRuntimeFile.includes(symbol), false, `${symbol} should be absent from lite memory-context-runtime routes`);
   }
-  assert.equal(hostFile.includes("registerMemoryContextRuntimeRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-context-runtime routes");
   assert.match(memoryContextRuntimeFile, /aionis-lite memory-context-runtime routes only support AIONIS_EDITION=lite/);
 });
 
 test("lite handoff routes do not keep store fallback branches", () => {
   const handoffFile = fs.readFileSync(path.join(ROOT, "src", "routes", "handoff.ts"), "utf8");
-  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
   const forbiddenSymbols = [
     "type StoreLike",
     "store.withTx",
@@ -254,14 +245,11 @@ test("lite handoff routes do not keep store fallback branches", () => {
   for (const symbol of forbiddenSymbols) {
     assert.equal(handoffFile.includes(symbol), false, `${symbol} should be absent from lite handoff routes`);
   }
-  assert.equal(hostFile.includes("registerHandoffRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into handoff routes");
   assert.match(handoffFile, /aionis-lite handoff routes only support AIONIS_EDITION=lite/);
 });
 
 test("lite host does not register broken memory lifecycle routes and exposes them as unsupported", () => {
-  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
   const liteEditionFile = fs.readFileSync(path.join(ROOT, "src", "host", "lite-edition.ts"), "utf8");
-  assert.equal(hostFile.includes("registerMemoryLifecycleRoutes"), false, "lite host should not register PG-only memory lifecycle routes");
   assert.match(liteEditionFile, /memory lifecycle routes are unavailable in lite edition/);
   assert.match(liteEditionFile, /\/v1\/memory\/archive\/rehydrate/);
   assert.match(liteEditionFile, /\/v1\/memory\/nodes\/activate/);
@@ -269,7 +257,6 @@ test("lite host does not register broken memory lifecycle routes and exposes the
 
 test("lite memory-replay-governed routes do not keep store fallback branches", () => {
   const replayGovernedFile = fs.readFileSync(path.join(ROOT, "src", "routes", "memory-replay-governed.ts"), "utf8");
-  const hostFile = fs.readFileSync(path.join(ROOT, "src", "host", "http-host.ts"), "utf8");
   const forbiddenSymbols = [
     "type StoreLike",
     "store.withTx",
@@ -279,6 +266,5 @@ test("lite memory-replay-governed routes do not keep store fallback branches", (
   for (const symbol of forbiddenSymbols) {
     assert.equal(replayGovernedFile.includes(symbol), false, `${symbol} should be absent from lite memory-replay-governed routes`);
   }
-  assert.equal(hostFile.includes("registerMemoryReplayGovernedRoutes({\n    app,\n    env,\n    store,"), false, "lite host should not pass store into memory-replay-governed routes");
   assert.match(replayGovernedFile, /aionis-lite memory-replay-governed routes only support AIONIS_EDITION=lite/);
 });

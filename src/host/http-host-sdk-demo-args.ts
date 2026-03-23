@@ -1,4 +1,4 @@
-import type { RegisterApplicationRoutesArgs } from "./http-host.js";
+import type { RegisterApplicationRoutesArgs } from "./application-route-args.js";
 
 export type RegisterSdkDemoRoutesArgs = Pick<
   RegisterApplicationRoutesArgs,

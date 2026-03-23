@@ -9,7 +9,7 @@ import { FakeEmbeddingProvider } from "../../src/embeddings/fake.ts";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
 import { createReplayRepairReviewPolicy } from "../../src/app/replay-repair-review-policy.ts";
 import { createReplayRuntimeOptionBuilders } from "../../src/app/replay-runtime-options.ts";
-import { registerHostErrorHandler } from "../../src/host/http-host.ts";
+import { registerHostErrorHandler } from "../../src/host/http-host-bootstrap-shared.ts";
 import { PlanningContextRouteContractSchema, ReplayPlaybookRepairReviewResponseSchema } from "../../src/memory/schemas.ts";
 import { registerMemoryContextRuntimeRoutes } from "../../src/routes/memory-context-runtime.ts";
 import { registerMemoryReplayGovernedRoutes } from "../../src/routes/memory-replay-governed.ts";

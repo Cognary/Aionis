@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
 import { z } from "zod";
-import { registerHostErrorHandler } from "../../src/host/http-host.ts";
+import { registerHostErrorHandler } from "../../src/host/http-host-bootstrap-shared.ts";
 import { registerLiteServerOnlyRoutes } from "../../src/host/lite-edition.ts";
 import { registerAutomationRoutes } from "../../src/routes/automations.ts";
 

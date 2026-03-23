@@ -79,7 +79,7 @@ Current runtime reality:
 Primary code:
 
 1. `src/app/runtime-services.ts`
-2. `src/host/http-host.ts`
+2. `src/host/http-host-sdk-demo.ts`
 3. `src/routes/memory-context-runtime.ts`
 4. `src/memory/replay.ts`
 

@@ -18,7 +18,7 @@ import { createRequestGuards } from "../src/app/request-guards.ts";
 import { createReplayRepairReviewPolicy } from "../src/app/replay-repair-review-policy.ts";
 import { createReplayRuntimeOptionBuilders } from "../src/app/replay-runtime-options.ts";
 import type { LiteGovernanceRuntimeProviderBuilderOptions } from "../src/app/governance-runtime-providers.ts";
-import { registerHostErrorHandler } from "../src/host/http-host.ts";
+import { registerHostErrorHandler } from "../src/host/http-host-bootstrap-shared.ts";
 import { registerMemoryAccessRoutes } from "../src/routes/memory-access.ts";
 import { registerMemoryContextRuntimeRoutes } from "../src/routes/memory-context-runtime.ts";
 import { registerMemoryFeedbackToolRoutes } from "../src/routes/memory-feedback-tools.ts";

@@ -6,7 +6,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { createRequestGuards } from "../../src/app/request-guards.ts";
-import { registerHostErrorHandler } from "../../src/host/http-host.ts";
+import { registerHostErrorHandler } from "../../src/host/http-host-bootstrap-shared.ts";
 import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
 import {
   ExecutionMemoryIntrospectionResponseSchema,

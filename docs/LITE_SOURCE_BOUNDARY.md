@@ -17,7 +17,8 @@ Current source boundary:
 - `src/routes/memory-replay-governed.ts` is narrowed to Lite replay access plus Lite write-backed governed replay flows.
 - `src/routes/memory-sandbox.ts` stays Lite-only while preserving `SANDBOX_ADMIN_ONLY`.
 - `packages/runtime-core/` is the shared extraction seam.
-- `src/host/http-host.ts` is Lite-only and rejects non-lite source startup.
+- `src/host/http-host-bootstrap-shared.ts` holds the public demo host bootstrap helpers.
+- `src/host/http-host-sdk-demo.ts` is the public Lite host surface for SDK demo route registration.
 - `src/routes/automations.ts` is reintroduced as a Lite-local automation kernel surface.
 - `src/app/replay-repair-review-policy.ts` is narrowed to global plus endpoint defaults only.
 - `src/jobs/` is reduced to kernel-linked helpers only:

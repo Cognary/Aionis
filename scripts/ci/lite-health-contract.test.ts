@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
-import { registerHealthRoute } from "../../src/host/http-host.ts";
+import { registerHealthRoute } from "../../src/host/http-host-bootstrap-shared.ts";
 
 test("health route exposes stable runtime/storage/lite/sandbox envelopes", async () => {
   const app = Fastify();

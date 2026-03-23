@@ -96,7 +96,7 @@ Important current constraints:
 
 ## Host Layer
 
-The HTTP host is defined by `src/host/http-host.ts` and `src/host/lite-edition.ts`.
+The public Lite HTTP host is defined by `src/host/http-host-sdk-demo.ts`, `src/host/http-host-bootstrap-shared.ts`, and `src/host/lite-edition.ts`.
 
 The host layer does four things:
 

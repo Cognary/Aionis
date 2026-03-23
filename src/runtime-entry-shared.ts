@@ -11,8 +11,8 @@ import {
   registerHealthRoute,
   registerHostErrorHandler,
   registerHostRequestHooks,
-  type RegisterApplicationRoutesArgs,
-} from "./host/http-host.js";
+} from "./host/http-host-bootstrap-shared.js";
+import type { RegisterApplicationRoutesArgs } from "./host/application-route-args.js";
 import { createRecallPolicy } from "./app/recall-policy.js";
 import { createRecallTextEmbedRuntime } from "./app/recall-text-embed.js";
 import { createReplayRepairReviewPolicy } from "./app/replay-repair-review-policy.js";

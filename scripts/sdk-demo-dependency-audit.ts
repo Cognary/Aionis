@@ -25,7 +25,8 @@ const auditedFiles = [
 
 const sharedBoundarySuffixes = new Set([
   "src/runtime-entry-shared.ts",
-  "src/host/http-host.ts",
+  "src/host/application-route-args.ts",
+  "src/host/http-host-bootstrap-shared.ts",
   "src/host/lite-edition.ts",
   "src/app/runtime-services.ts",
   "src/execution/state-store.ts",

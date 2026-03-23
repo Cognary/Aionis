@@ -10,7 +10,7 @@ import { createLiteWriteStore } from "../../src/store/lite-write-store.ts";
 import { prepareMemoryWrite, applyMemoryWrite } from "../../src/memory/write.ts";
 import { registerMemoryAccessRoutes } from "../../src/routes/memory-access.ts";
 import { registerMemoryFeedbackToolRoutes } from "../../src/routes/memory-feedback-tools.ts";
-import { registerHostErrorHandler } from "../../src/host/http-host.ts";
+import { registerHostErrorHandler } from "../../src/host/http-host-bootstrap-shared.ts";
 import { buildAionisUri } from "../../src/memory/uri.ts";
 import { InflightGate } from "../../src/util/inflight_gate.ts";
 
