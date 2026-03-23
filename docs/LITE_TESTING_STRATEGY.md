@@ -213,7 +213,8 @@ Current benchmark scenarios:
 5. `wrong_turn_recovery`
 6. `workflow_progression_loop`
 7. `multi_step_repair_loop`
-8. `slim_surface_boundary`
+8. `governed_learning_runtime_loop`
+9. `slim_surface_boundary`
 
 What this layer should catch:
 

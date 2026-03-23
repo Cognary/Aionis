@@ -14,9 +14,13 @@ import { registerMemoryWriteRoutes } from "../src/routes/memory-write.ts";
 import {
   ExecutionMemoryIntrospectionResponseSchema,
   PlanningContextRouteContractSchema,
+  ToolsFeedbackResponseSchema,
   ToolsSelectRouteContractSchema,
 } from "../src/memory/schemas.ts";
 import { updateRuleState } from "../src/memory/rules.ts";
+import { createStaticFormPatternGovernanceReviewProvider } from "../src/memory/governance-provider-static.ts";
+import { toolSelectionFeedback } from "../src/memory/tools-feedback.ts";
+import { selectTools } from "../src/memory/tools-select.ts";
 import { applyMemoryWrite, prepareMemoryWrite } from "../src/memory/write.ts";
 import { createLiteRecallStore } from "../src/store/lite-recall-store.ts";
 import { createLiteWriteStore } from "../src/store/lite-write-store.ts";
@@ -166,7 +170,7 @@ function applyBaselineComparison(result: BenchmarkSuiteResult, baseline: Benchma
   };
 }
 
-function buildEnv() {
+function buildEnv(overrides: Record<string, unknown> = {}) {
   return {
     AIONIS_EDITION: "lite",
     MEMORY_AUTH_MODE: "off",
@@ -195,6 +199,9 @@ function buildEnv() {
     MEMORY_RECALL_ADAPTIVE_HARD_CAP_WAIT_MS: 0,
     MEMORY_PLANNING_CONTEXT_OPTIMIZATION_PROFILE_DEFAULT: "balanced",
     MEMORY_CONTEXT_ASSEMBLE_OPTIMIZATION_PROFILE_DEFAULT: "balanced",
+    WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: false,
+    TOOLS_GOVERNANCE_STATIC_FORM_PATTERN_PROVIDER_ENABLED: false,
+    ...overrides,
   } as any;
 }
 
@@ -217,8 +224,9 @@ function registerBenchmarkApp(args: {
   app: ReturnType<typeof Fastify>;
   liteWriteStore: ReturnType<typeof createLiteWriteStore>;
   liteRecallStore: ReturnType<typeof createLiteRecallStore>;
+  envOverrides?: Record<string, unknown>;
 }) {
-  const env = buildEnv();
+  const env = buildEnv(args.envOverrides);
   const guards = buildRequestGuards(env);
 
   registerHostErrorHandler(args.app);
@@ -460,28 +468,36 @@ function buildBenchmarkSessionEventPayload(args: {
   };
 }
 
-async function seedActiveToolRule(liteWriteStore: ReturnType<typeof createLiteWriteStore>) {
+async function seedActiveToolRule(
+  liteWriteStore: ReturnType<typeof createLiteWriteStore>,
+  args: {
+    preferredTool?: string;
+    suffix?: string;
+  } = {},
+) {
+  const preferredTool = args.preferredTool ?? "edit";
+  const suffix = args.suffix ?? "benchmark";
   const prepared = await prepareMemoryWrite(
     {
       tenant_id: "default",
       scope: "default",
       actor: "local-user",
-      input_text: "seed benchmark prefer-edit rule",
+      input_text: `seed benchmark prefer-${preferredTool} rule`,
       auto_embed: false,
       memory_lane: "shared",
       nodes: [
         {
-          client_id: "rule:prefer-edit:repair-export:benchmark",
+          client_id: `rule:prefer-${preferredTool}:repair-export:${suffix}`,
           type: "rule",
-          title: "Prefer edit for repair export",
-          text_summary: "For repair_export tasks, prefer edit over bash and test.",
+          title: `Prefer ${preferredTool} for repair export`,
+          text_summary: `For repair_export tasks, prefer ${preferredTool} over the other tools.`,
           slots: {
             if: {
               task_kind: { $eq: "repair_export" },
             },
             then: {
               tool: {
-                prefer: ["edit"],
+                prefer: [preferredTool],
               },
             },
             exceptions: [],
@@ -524,7 +540,7 @@ async function seedActiveToolRule(liteWriteStore: ReturnType<typeof createLiteWr
         actor: "local-user",
         rule_node_id: ruleNodeId,
         state: "active",
-        input_text: "activate benchmark prefer-edit rule",
+        input_text: `activate benchmark prefer-${preferredTool} rule`,
       },
       "default",
       "default",
@@ -532,6 +548,22 @@ async function seedActiveToolRule(liteWriteStore: ReturnType<typeof createLiteWr
     ),
   );
   return ruleNodeId;
+}
+
+async function seedActiveToolRules(
+  liteWriteStore: ReturnType<typeof createLiteWriteStore>,
+  preferredTools: string[],
+) {
+  const ruleNodeIds: string[] = [];
+  for (const [index, preferredTool] of preferredTools.entries()) {
+    ruleNodeIds.push(
+      await seedActiveToolRule(liteWriteStore, {
+        preferredTool,
+        suffix: `benchmark-${preferredTool}-${index + 1}`,
+      }),
+    );
+  }
+  return ruleNodeIds;
 }
 
 function pass(name: string, detail?: string): AssertionResult {
@@ -921,7 +953,7 @@ async function runCrossTaskIsolationLoop(): Promise<Omit<BenchmarkScenarioResult
         include_shadow: false,
         rules_limit: 20,
         strict: true,
-        reorder_candidates: true,
+        reorder_candidates: false,
       },
     });
     assert.equal(differentTaskResponse.statusCode, 200);
@@ -1804,6 +1836,227 @@ async function runSlimSurfaceBoundary(): Promise<Omit<BenchmarkScenarioResult, "
   }
 }
 
+async function runGovernedLearningRuntimeLoop(): Promise<Omit<BenchmarkScenarioResult, "id" | "title" | "status" | "duration_ms">> {
+  const dbPath = tmpDbPath("governed-learning-runtime");
+  const app = Fastify();
+  const liteWriteStore = createLiteWriteStore(dbPath);
+  const liteRecallStore = createLiteRecallStore(dbPath);
+  const assertions: AssertionResult[] = [];
+  try {
+    registerBenchmarkApp({
+      app,
+      liteWriteStore,
+      liteRecallStore,
+      envOverrides: {
+        WORKFLOW_GOVERNANCE_STATIC_PROMOTE_MEMORY_PROVIDER_ENABLED: true,
+      },
+    });
+
+    const taskBrief = "Fix export failure in node tests";
+    const filePath = "src/routes/export.ts";
+    const planningPayload = {
+      tenant_id: "default",
+      scope: "default",
+      query_text: "fix export failure in node tests",
+      context: { goal: "fix export failure in node tests" },
+      tool_candidates: ["bash", "edit", "test"],
+    };
+
+    const firstWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildBenchmarkWritePayload({
+        eventId: randomUUID(),
+        title: "Governed inspect export path",
+        inputText: "governed benchmark first execution continuity write",
+        taskBrief,
+        stateId: `state:${randomUUID()}`,
+        filePath,
+      }),
+    });
+    assert.equal(firstWrite.statusCode, 200);
+
+    const afterFirstPlanning = PlanningContextRouteContractSchema.parse((await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: planningPayload,
+    })).json());
+    assert.equal(afterFirstPlanning.planner_packet.sections.candidate_workflows.length, 1);
+    assert.equal(afterFirstPlanning.planner_packet.sections.recommended_workflows.length, 0);
+    assertions.push(pass("first write stays candidate before governed promotion"));
+
+    const secondWrite = await app.inject({
+      method: "POST",
+      url: "/v1/memory/write",
+      payload: buildBenchmarkWritePayload({
+        eventId: randomUUID(),
+        title: "Governed patch export path",
+        inputText: "governed benchmark second execution continuity write",
+        taskBrief,
+        stateId: `state:${randomUUID()}`,
+        filePath,
+      }),
+    });
+    assert.equal(secondWrite.statusCode, 200);
+
+    const storedStable = await liteWriteStore.findNodes({
+      scope: "default",
+      type: "procedure",
+      slotsContains: {
+        summary_kind: "workflow_anchor",
+      },
+      consumerAgentId: "local-user",
+      consumerTeamId: null,
+      limit: 20,
+      offset: 0,
+    });
+    const stableWorkflowNode = storedStable.rows.find((row) => {
+      const projection = (row.slots?.workflow_write_projection ?? null) as Record<string, unknown> | null;
+      return projection?.auto_promoted === true;
+    }) ?? null;
+    assert.ok(stableWorkflowNode);
+    const stableProjection = (stableWorkflowNode.slots?.workflow_write_projection ?? {}) as Record<string, unknown>;
+    const workflowPreview = ((stableProjection.governance_preview ?? {}) as Record<string, unknown>).promote_memory as Record<string, any> | undefined;
+    assert.equal(stableProjection.governed_promotion_state_override, "stable");
+    assert.equal(workflowPreview?.admissibility?.admissible, true);
+    assert.equal(workflowPreview?.policy_effect?.applies, true);
+    assert.equal(workflowPreview?.decision_trace?.runtime_apply_changed_promotion_state, true);
+    assertions.push(pass("second write yields governed stable workflow apply"));
+
+    const afterSecondPlanning = PlanningContextRouteContractSchema.parse((await app.inject({
+      method: "POST",
+      url: "/v1/memory/planning/context",
+      payload: planningPayload,
+    })).json());
+    assert.equal(afterSecondPlanning.planner_packet.sections.recommended_workflows.length, 1);
+    assert.match(afterSecondPlanning.planning_summary.planner_explanation, /workflow guidance:/i);
+    assertions.push(pass("planning surface exposes workflow guidance after governed promotion"));
+
+    const ruleNodeIds = await seedActiveToolRules(liteWriteStore, ["edit", "edit"]);
+    const runId = "governed-pattern-run-1";
+    const toolContext = {
+      task_kind: "repair_export",
+      goal: "repair export failure in node tests",
+      error: {
+        signature: "node-export-mismatch",
+      },
+    };
+
+    const selection = ToolsSelectRouteContractSchema.parse(await selectTools(null, {
+      tenant_id: "default",
+      scope: "default",
+      run_id: runId,
+      context: toolContext,
+      candidates: ["bash", "edit", "test"],
+      include_shadow: false,
+      rules_limit: 20,
+      strict: true,
+      reorder_candidates: false,
+    }, "default", "default", {
+      liteWriteStore,
+    }));
+    assert.equal(selection.selection.selected, "edit");
+
+    const feedback = ToolsFeedbackResponseSchema.parse(
+      await liteWriteStore.withTx(() =>
+        toolSelectionFeedback(null, {
+          tenant_id: "default",
+          scope: "default",
+          actor: "local-user",
+          run_id: runId,
+          decision_id: selection.decision.decision_id,
+        outcome: "positive",
+        context: toolContext,
+        candidates: ["bash", "edit", "test"],
+          selected_tool: "edit",
+          target: "tool",
+          note: "Governed benchmark provider-backed edit repair succeeded",
+          input_text: "repair export failure in node tests",
+        }, "default", "default", {
+          maxTextLen: 10_000,
+          piiRedaction: false,
+          embedder: FakeEmbeddingProvider,
+          liteWriteStore,
+          governanceReviewProviders: {
+            form_pattern: createStaticFormPatternGovernanceReviewProvider(),
+          },
+        }),
+      ),
+    );
+    assert.equal(feedback.pattern_anchor?.pattern_state, "stable");
+    assert.equal(feedback.pattern_anchor?.credibility_state, "trusted");
+    assertions.push(pass("provider-backed tools feedback yields trusted stable pattern state"));
+
+    assert.equal(feedback.governance_preview?.form_pattern?.admissibility?.admissible, true);
+    assert.equal(feedback.governance_preview?.form_pattern?.policy_effect?.applies, true);
+    assert.equal(feedback.governance_preview?.form_pattern?.decision_trace?.runtime_apply_changed_pattern_state, true);
+    assertions.push(pass("tools governance preview reports runtime apply"));
+
+    for (const ruleNodeId of ruleNodeIds) {
+      await liteWriteStore.withTx(() =>
+        updateRuleState(
+          {} as any,
+          {
+            tenant_id: "default",
+            scope: "default",
+            actor: "local-user",
+            rule_node_id: ruleNodeId,
+            state: "disabled",
+            input_text: "disable benchmark provider source rule after trusted pattern formation",
+          },
+          "default",
+          "default",
+          { liteWriteStore },
+        ),
+      );
+    }
+
+    const reused = ToolsSelectRouteContractSchema.parse(await selectTools(null, {
+      tenant_id: "default",
+      scope: "default",
+      run_id: "governed-pattern-run-2",
+      context: toolContext,
+      candidates: ["bash", "edit", "test"],
+      include_shadow: false,
+      rules_limit: 20,
+      strict: true,
+      reorder_candidates: true,
+    }, "default", "default", {
+      liteWriteStore,
+    }));
+    const afterRuleDisableIntrospect = ExecutionMemoryIntrospectionResponseSchema.parse((await app.inject({
+      method: "POST",
+      url: "/v1/memory/execution/introspect",
+      payload: { tenant_id: "default", scope: "default", limit: 20 },
+    })).json());
+    assert.ok(afterRuleDisableIntrospect.pattern_signal_summary.trusted_pattern_count >= 1);
+    assertions.push(pass("trusted pattern remains present after source rules are disabled"));
+
+    return {
+      assertions,
+      metrics: {
+        workflow_governed_promotion_state_override: stableProjection.governed_promotion_state_override ?? null,
+        workflow_governance_reason: workflowPreview?.review_result?.adjudication?.reason ?? null,
+        workflow_recommended_count: afterSecondPlanning.planner_packet.sections.recommended_workflows.length,
+        tools_pattern_state: feedback.pattern_anchor?.pattern_state ?? null,
+        tools_pattern_credibility_state: feedback.pattern_anchor?.credibility_state ?? null,
+        tools_governance_reason: feedback.governance_preview?.form_pattern?.review_result?.adjudication?.reason ?? null,
+        reused_selected_tool: reused.selection.selected,
+        reused_trusted_pattern_tools: reused.selection_summary.used_trusted_pattern_tools,
+        trusted_pattern_count_after_rule_disable: afterRuleDisableIntrospect.pattern_signal_summary.trusted_pattern_count,
+      },
+      notes: [
+        "Measures provider-backed governed workflow promotion through the runtime write path.",
+        "Measures provider-backed governed pattern formation through the runtime tools feedback path.",
+        "Confirms the provider-backed trusted pattern remains in the execution-memory surface after the source rules are removed.",
+      ],
+    };
+  } finally {
+    await app.close();
+    await liteWriteStore.close();
+  }
+}
+
 function printHuman(result: BenchmarkSuiteResult) {
   const lines: string[] = [];
   lines.push("Aionis Real-Task Benchmark Suite");
@@ -1926,6 +2179,7 @@ async function main() {
     runScenario("wrong_turn_recovery", "Wrong-turn recovery after contested counter-evidence", runWrongTurnRecoveryLoop),
     runScenario("workflow_progression_loop", "Workflow guidance from repeated execution continuity", runWorkflowProgressionLoop),
     runScenario("multi_step_repair_loop", "Multi-step repair continuity with stable workflow carry-forward", runMultiStepRepairLoop),
+    runScenario("governed_learning_runtime_loop", "Governed learning through provider-backed runtime paths", runGovernedLearningRuntimeLoop),
     runScenario("slim_surface_boundary", "Slim planner/context default surface", runSlimSurfaceBoundary),
   ]);
   const rawResult: BenchmarkSuiteResult = {
