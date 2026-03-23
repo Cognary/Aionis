@@ -1,7 +1,7 @@
 import {
-  buildSdkDemoRouteArgs,
   registerSdkDemoRoutes,
 } from "./host/http-host-sdk-demo.js";
+import { buildSdkDemoRouteArgs } from "./host/http-host-sdk-demo-args.js";
 import { selectSdkDemoRuntimeServices } from "./app/runtime-services-sdk-demo.js";
 import { startAionisRuntimeWithRouteRegistrar } from "./runtime-entry-shared.js";
 
