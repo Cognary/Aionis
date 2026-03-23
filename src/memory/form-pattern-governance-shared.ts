@@ -4,6 +4,7 @@ import type {
   MemoryFormPatternSemanticReviewPacket,
   MemoryFormPatternSemanticReviewResult,
 } from "./schemas.js";
+import type { GovernanceReviewProvider } from "./governance-model-provider.js";
 import {
   buildFormPatternSemanticReviewPacket,
   evaluateFormPatternSemanticReview,
@@ -15,6 +16,7 @@ export function runFormPatternGovernancePreview<TPolicyEffect, TDecisionTrace>(a
   input: MemoryFormPatternInput;
   sourceExamples: FormPatternSourceExample[];
   reviewResult?: MemoryFormPatternSemanticReviewResult | null;
+  reviewProvider?: GovernanceReviewProvider<MemoryFormPatternSemanticReviewPacket, MemoryFormPatternSemanticReviewResult>;
   derivePolicyEffect: (args: {
     review: MemoryFormPatternSemanticReviewResult | null;
     admissibility: MemoryAdmissibilityResult | null;
@@ -39,6 +41,7 @@ export function runFormPatternGovernancePreview<TPolicyEffect, TDecisionTrace>(a
         sourceExamples: args.sourceExamples,
       }),
     reviewResult: args.reviewResult ?? null,
+    resolveReviewResult: args.reviewProvider?.resolveReviewResult,
     evaluateAdmissibility: ({ packet, review }) =>
       evaluateFormPatternSemanticReview({
         packet,

@@ -73,3 +73,81 @@ test("generic governed operation runner evaluates admissibility before policy de
     },
   });
 });
+
+test("generic governed operation runner can resolve review results from an internal provider", () => {
+  const preview = runGovernedSemanticPreview({
+    buildPacket: () => ({ operation: "x", gate: true }),
+    resolveReviewResult: ({ reviewPacket, suppliedReviewResult }) => {
+      assert.equal(suppliedReviewResult, null);
+      return { disposition: reviewPacket.operation === "x" ? "recommend" : "reject" };
+    },
+    evaluateAdmissibility: ({ packet, review }) => ({
+      operation: packet.operation,
+      admissible: review.disposition === "recommend",
+    }),
+    derivePolicyEffect: ({ review, admissibility }) => ({
+      applies: admissibility?.admissible ?? false,
+      disposition: review?.disposition ?? null,
+    }),
+    buildDecisionTrace: ({ reviewPacket, reviewResult, admissibility, policyEffect }) => ({
+      operation: reviewPacket.operation,
+      review_supplied: reviewResult != null,
+      admissible: admissibility?.admissible ?? null,
+      policy_effect_applies: policyEffect.applies,
+    }),
+  });
+
+  assert.deepEqual(preview, {
+    review_packet: { operation: "x", gate: true },
+    review_result: { disposition: "recommend" },
+    admissibility: { operation: "x", admissible: true },
+    policy_effect: {
+      applies: true,
+      disposition: "recommend",
+    },
+    decision_trace: {
+      operation: "x",
+      review_supplied: true,
+      admissible: true,
+      policy_effect_applies: true,
+    },
+  });
+});
+
+test("generic governed operation runner preserves explicit review result over provider output", () => {
+  const preview = runGovernedSemanticPreview({
+    buildPacket: () => ({ operation: "x", gate: true }),
+    reviewResult: { disposition: "reject" },
+    resolveReviewResult: () => ({ disposition: "recommend" }),
+    evaluateAdmissibility: ({ packet, review }) => ({
+      operation: packet.operation,
+      admissible: review.disposition === "recommend",
+    }),
+    derivePolicyEffect: ({ review, admissibility }) => ({
+      applies: admissibility?.admissible ?? false,
+      disposition: review?.disposition ?? null,
+    }),
+    buildDecisionTrace: ({ reviewPacket, reviewResult, admissibility, policyEffect }) => ({
+      operation: reviewPacket.operation,
+      review_supplied: reviewResult != null,
+      admissible: admissibility?.admissible ?? null,
+      policy_effect_applies: policyEffect.applies,
+    }),
+  });
+
+  assert.deepEqual(preview, {
+    review_packet: { operation: "x", gate: true },
+    review_result: { disposition: "reject" },
+    admissibility: { operation: "x", admissible: false },
+    policy_effect: {
+      applies: false,
+      disposition: "reject",
+    },
+    decision_trace: {
+      operation: "x",
+      review_supplied: true,
+      admissible: false,
+      policy_effect_applies: false,
+    },
+  });
+});

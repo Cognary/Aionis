@@ -540,3 +540,4 @@ In short:
 10. replay repair review, tools feedback, and workflow promotion now also share a common internal governed state-raise preview helper for policy-effect derivation, so no-review/not-admissible/no-raise/raise branching no longer drifts by call site
 11. replay repair review and tools feedback now also share a common internal governed runtime-apply gate, so narrow `applies + effective-state-match` branching no longer drifts by call site
 12. replay repair review, tools feedback, and workflow promotion now also share a common internal stateful decision-trace helper, so base/effective state attachment and runtime-change delta calculation no longer drift by call site
+13. Lite now has a first internal governance review-provider interface under the generic governed preview runner, so bounded semantic review results can come either from explicit request payloads or internal provider resolution without widening public route contracts

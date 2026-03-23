@@ -1,6 +1,9 @@
+import type { GovernanceReviewResolver } from "./governance-model-provider.js";
+
 export function runGovernedSemanticPreview<TPacket, TReview, TAdmissibility, TPolicyEffect, TDecisionTrace>(args: {
   buildPacket: () => TPacket;
   reviewResult?: TReview | null;
+  resolveReviewResult?: GovernanceReviewResolver<TPacket, TReview>;
   evaluateAdmissibility: (args: { packet: TPacket; review: TReview }) => TAdmissibility;
   derivePolicyEffect: (args: {
     review: TReview | null;
@@ -20,7 +23,13 @@ export function runGovernedSemanticPreview<TPacket, TReview, TAdmissibility, TPo
   decision_trace: TDecisionTrace;
 } {
   const reviewPacket = args.buildPacket();
-  const reviewResult = args.reviewResult ?? null;
+  const suppliedReviewResult = args.reviewResult ?? null;
+  const reviewResult = suppliedReviewResult
+    ?? args.resolveReviewResult?.({
+      reviewPacket,
+      suppliedReviewResult,
+    })
+    ?? null;
   const admissibility = reviewResult
     ? args.evaluateAdmissibility({
         packet: reviewPacket,

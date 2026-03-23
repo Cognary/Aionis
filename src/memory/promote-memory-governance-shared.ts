@@ -4,6 +4,7 @@ import type {
   MemoryPromoteSemanticReviewPacket,
   MemoryPromoteSemanticReviewResult,
 } from "./schemas.js";
+import type { GovernanceReviewProvider } from "./governance-model-provider.js";
 import {
   buildPromoteMemorySemanticReviewPacket,
   type PromoteMemoryCandidateExample,
@@ -15,6 +16,7 @@ export function runPromoteMemoryGovernancePreview<TPolicyEffect, TDecisionTrace>
   input: MemoryPromoteInput;
   candidateExamples: PromoteMemoryCandidateExample[];
   reviewResult?: MemoryPromoteSemanticReviewResult | null;
+  reviewProvider?: GovernanceReviewProvider<MemoryPromoteSemanticReviewPacket, MemoryPromoteSemanticReviewResult>;
   derivePolicyEffect: (args: {
     review: MemoryPromoteSemanticReviewResult | null;
     admissibility: MemoryAdmissibilityResult | null;
@@ -39,6 +41,7 @@ export function runPromoteMemoryGovernancePreview<TPolicyEffect, TDecisionTrace>
         candidateExamples: args.candidateExamples,
       }),
     reviewResult: args.reviewResult ?? null,
+    resolveReviewResult: args.reviewProvider?.resolveReviewResult,
     evaluateAdmissibility: ({ packet, review }) =>
       evaluatePromoteMemorySemanticReview({
         packet,
